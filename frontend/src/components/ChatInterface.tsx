@@ -35,7 +35,6 @@ export default function ChatInterface() {
       const parsedCommand = await response.json();
       
       if (!parsedCommand.success) {
-        // If parsing fails, show the error and stop
         throw new Error(parsedCommand.errorMessage);
       }
       
@@ -55,10 +54,9 @@ export default function ChatInterface() {
       
       const quote = await quoteResponse.json();
       
-      // CRITICAL FIX: Check if the response was an error, even with a 200 status.
-      // Your API route likely sends back a JSON with an `error` field on failure.
-      if (!quoteResponse.ok || quote.error) {
-        throw new Error(quote.error || 'An unknown error occurred while fetching the quote.');
+      // Check if the response contains an error
+      if (quote.error) {
+        throw new Error(quote.error);
       }
       
       // If the quote is successful, create the confirmation message.
@@ -71,7 +69,6 @@ export default function ChatInterface() {
       
     } catch (error) {
       console.error('Error processing command:', error);
-      // This will now catch network errors AND specific API errors.
       const errorMessage: Message = { 
         role: 'assistant', 
         content: (error as Error).message,
