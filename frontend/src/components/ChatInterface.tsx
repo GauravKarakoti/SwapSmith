@@ -3,18 +3,22 @@
 import { useState } from 'react';
 import { useAccount } from 'wagmi';
 import SwapConfirmation from './SwapConfirmation';
+// ✅ FIX: Import the SideShiftQuote type for type safety.
+import { SideShiftQuote } from '@/utils/sideshift-client';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
-  quoteData?: any;
+  // ✅ FIX: Replaced `any` with the specific `SideShiftQuote` type.
+  quoteData?: SideShiftQuote;
 }
 
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { address, isConnected } = useAccount();
+  // ✅ FIX: Removed the unused `address` variable.
+  const { isConnected } = useAccount();
   
   const handleSend = async () => {
     if (!input.trim() || !isConnected) return;
@@ -86,7 +90,6 @@ export default function ChatInterface() {
           <div key={index} className={`mb-4 ${msg.role === 'user' ? 'text-right' : ''}`}>
             <div className={`inline-block p-3 rounded-lg ${msg.role === 'user' ? 'bg-blue-500' : 'bg-gray-500'}`}>
               {msg.content}
-              {console.log("Message quote data:", msg.quoteData)}
               {/* Only show confirmation if there's no error */}
               {msg.quoteData && !msg.quoteData.error && <SwapConfirmation quote={msg.quoteData} />}
             </div>
