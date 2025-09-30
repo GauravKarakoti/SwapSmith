@@ -1,12 +1,12 @@
 'use client'
 
-import { CheckCircle, AlertCircle, ExternalLink, Copy, Check, Info } from 'lucide-react'
+import { CheckCircle, AlertCircle, ExternalLink, Copy, Check } from 'lucide-react' // Removed unused 'Info'
 import { useState } from 'react'
 import { useAccount, useSendTransaction, useSwitchChain } from 'wagmi'
-import { parseEther } from 'viem'
+import { parseEther, type Chain } from 'viem' // Import Chain type
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
 
-// --- Interface and Constants remain the same ---
+// --- Interface and Constants ---
 interface QuoteData {
   depositAmount: string;
   depositCoin: string;
@@ -39,9 +39,8 @@ const EXPLORER_URLS: { [key: string]: string } = {
 
 const SIDESHIFT_TRACKING_URL = 'https://sideshift.ai/transactions'
 
-
 // Map network names from your API to wagmi chain objects
-const CHAIN_MAP: { [key: string]: any } = {
+const CHAIN_MAP: { [key: string]: Chain } = { // Use the specific Chain type
   ethereum: mainnet,
   polygon: polygon,
   arbitrum: arbitrum,
@@ -58,11 +57,14 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
 
   const { address, isConnected, chain: connectedChain } = useAccount()
   const { data: hash, error, isPending, isSuccess, sendTransaction } = useSendTransaction()
-  // ✅ FIX: Destructure switchChainAsync from the hook
   const { switchChainAsync } = useSwitchChain()
 
-  // ✅ FIX: Refactored handleConfirm to use async/await for network switching
   const handleConfirm = async () => {
+    if (!quote) {
+        alert("Error: Deposit address is missing. Cannot proceed.");
+        return;
+    }
+
     const depositChainId = CHAIN_MAP[quote.depositNetwork.toLowerCase()]?.id;
 
     if (!depositChainId) {
@@ -83,7 +85,6 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
     };
 
     try {
-      // If not on the correct network, await the switch
       if (connectedChain?.id !== depositChainId) {
         if (!switchChainAsync) {
           alert("Could not switch network. Please do it manually in your wallet.");
@@ -91,12 +92,10 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
         }
         await switchChainAsync({ chainId: depositChainId });
       }
-      // Now that we are on the correct chain (or already were), send the transaction
       sendTransaction(transactionDetails);
     } catch (e) {
       const switchError = e as Error;
       console.error('Failed to switch network or send transaction:', switchError);
-      // Provide a more specific error message if the user rejects the switch
       if (switchError.message.includes('User rejected the request')) {
         alert('You rejected the network switch request. Please approve it to continue.');
       } else {
@@ -104,7 +103,6 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
       }
     }
   };
-
 
   const copyToClipboard = async (text: string, type: 'address' | 'memo') => {
     try {
@@ -139,13 +137,14 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
     }
     return null
   }
-
+  
   const getNetworkName = (network: string) => {
     return CHAIN_MAP[network.toLowerCase()]?.name || network;
   }
 
   const explorerUrl = getExplorerUrl()
-
+  
+  // --- JSX remains the same ---
   if (isSuccess) {
     return (
       <div className="mt-4 bg-white border border-green-300 rounded-lg p-6 shadow-sm text-center">
@@ -187,9 +186,8 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
           </div>
           <div className="flex justify-between mt-1">
             <span className="text-gray-600">At your address:</span>
-            {/* ✅ UI FIX: Changed background color for better readability */}
             <span className="font-mono text-xs bg-gray-100 text-gray-800 px-1 py-0.5 rounded">
-              {isConnected ? `${address?.substring(0, 6)}...${address?.substring(address.length - 4)}` : 'Wallet not connected'}
+              {isConnected && address ? `${address.substring(0, 6)}...${address.substring(address.length - 4)}` : 'Wallet not connected'}
             </span>
           </div>
         </div>
@@ -242,7 +240,7 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
       <div className="mt-4 space-y-2">
         <button
           onClick={handleConfirm}
-          disabled={!isConnected || isPending}
+          disabled={!isConnected || isPending || !address}
           className="w-full py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isPending ? 'Check Your Wallet...' : 'Confirm and Send'}

@@ -6,6 +6,7 @@ import SwapConfirmation from './SwapConfirmation';
 import TrustIndicators from './TrustIndicators';
 import IntentConfirmation from './IntentConfirmation';
 import { SideShiftQuote } from '@/utils/sideshift-client';
+import { ParsedCommand } from '@/utils/groq-client'; // Import the new type
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
@@ -13,7 +14,7 @@ interface Message {
   timestamp: Date;
   type?: 'message' | 'intent_confirmation' | 'swap_confirmation';
   data?: {
-    parsedCommand?: any;
+    parsedCommand?: ParsedCommand; // Use the specific type
     quoteData?: SideShiftQuote;
     confidence?: number;
   };
@@ -23,7 +24,7 @@ export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [pendingCommand, setPendingCommand] = useState<any>(null);
+  const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null); // Use the specific type
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { isConnected } = useAccount();
 
@@ -56,7 +57,7 @@ export default function ChatInterface() {
         body: JSON.stringify({ message: input }),
       });
       
-      const parsedCommand = await response.json();
+      const parsedCommand: ParsedCommand = await response.json();
       
       if (!parsedCommand.success) {
         addMessage({
@@ -94,7 +95,7 @@ export default function ChatInterface() {
     }
   };
 
-  const executeSwap = async (command: any) => {
+  const executeSwap = async (command: ParsedCommand) => { // Use the specific type
     try {
       const quoteResponse = await fetch('/api/create-swap', {
         method: 'POST',
@@ -110,7 +111,6 @@ export default function ChatInterface() {
       
       const quote = await quoteResponse.json();
       
-      // ✅ FIX: Check for a specific error from the API and throw it
       if (quote.error) {
         throw new Error(quote.error);
       }
@@ -123,7 +123,6 @@ export default function ChatInterface() {
       });
       
     } catch (error) {
-      // ✅ FIX: Catch the error and display it to the user in the chat
       const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
       addMessage({
         role: 'assistant',
@@ -143,7 +142,7 @@ export default function ChatInterface() {
       setIsLoading(true);
       await executeSwap(pendingCommand);
       setIsLoading(false);
-    } else {
+    } else if (!confirmed) {
       addMessage({
         role: 'assistant',
         content: 'Got it. Please rephrase your request with more specific details.',
@@ -152,7 +151,8 @@ export default function ChatInterface() {
     }
     setPendingCommand(null);
   };
-
+  
+  // --- JSX remains the same ---
   return (
     <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden">
       <TrustIndicators />
@@ -222,7 +222,7 @@ export default function ChatInterface() {
           </button>
         </div>
         <div className="text-xs text-gray-500 mt-2 text-center">
-          {!isConnected ? 'Connect your wallet to start trading' : 'Example: "Swap 0.1 ETH for USDC on Polygon"'}
+          {!isConnected ? 'Connect your wallet to start trading' : 'Example: "Swap 0.1 ETH on Ethereum for USDC on BSC"'}
         </div>
       </div>
     </div>

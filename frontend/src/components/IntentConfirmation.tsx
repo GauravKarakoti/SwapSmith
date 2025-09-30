@@ -1,9 +1,10 @@
 'use client'
 
 import { CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
+import { ParsedCommand } from '@/utils/groq-client'; // Import the new type
 
 interface IntentConfirmationProps {
-  command: any;
+  command?: ParsedCommand; // Use the specific type
   onConfirm: (confirmed: boolean) => void;
 }
 
@@ -11,7 +12,7 @@ export default function IntentConfirmation({ command, onConfirm }: IntentConfirm
   if (!command) return null;
 
   const confidenceColor = command.confidence >= 80 ? 'text-green-600' : 
-                         command.confidence >= 60 ? 'text-yellow-600' : 'text-red-600';
+                          command.confidence >= 60 ? 'text-yellow-600' : 'text-red-600';
 
   return (
     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 max-w-md">

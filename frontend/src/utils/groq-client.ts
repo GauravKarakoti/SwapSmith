@@ -2,6 +2,23 @@ import Groq from "groq-sdk";
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
+// Type definition for the parsed command object
+export interface ParsedCommand {
+  success: boolean;
+  intent: "swap" | "unknown";
+  fromAsset: string | null;
+  fromChain: string | null;
+  toAsset: string | null;
+  toChain: string | null;
+  amount: number | null;
+  amountType: "exact" | "percentage" | "all" | null;
+  confidence: number;
+  validationErrors: string[];
+  parsedMessage: string;
+  requiresConfirmation: boolean;
+  originalInput?: string;
+}
+
 // Enhanced system prompt with better validation
 const systemPrompt = `
 You are a precise cryptocurrency trading assistant. Your role is to extract swap parameters from user messages with high accuracy.
@@ -39,7 +56,7 @@ VALIDATION CHECKS:
 - Cross-chain swaps must have both chains specified
 `;
 
-export async function parseUserCommand(userInput: string) {
+export async function parseUserCommand(userInput: string): Promise<ParsedCommand> {
   try {
     const completion = await groq.chat.completions.create({
       messages: [
@@ -64,12 +81,13 @@ export async function parseUserCommand(userInput: string) {
       confidence: 0,
       validationErrors: ["Failed to process your request"],
       parsedMessage: "Error occurred during parsing",
-      requiresConfirmation: false
+      requiresConfirmation: false,
+      fromAsset: null, fromChain: null, toAsset: null, toChain: null, amount: null, amountType: null,
     };
   }
 }
 
-function validateParsedCommand(parsed: any, userInput: string) {
+function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string): ParsedCommand {
   const errors: string[] = [];
   
   // Validate required fields for swap intent
@@ -78,21 +96,29 @@ function validateParsedCommand(parsed: any, userInput: string) {
     if (!parsed.toAsset) errors.push("Destination asset not specified");
     if (!parsed.amount || parsed.amount <= 0) errors.push("Invalid amount specified");
     
-    // Validate amount type
-    if (parsed.amountType === "percentage" && (parsed.amount > 100 || parsed.amount < 0)) {
+    // ✅ FIX: Added a null check for parsed.amount before comparison
+    if (parsed.amountType === "percentage" && parsed.amount != null && (parsed.amount > 100 || parsed.amount < 0)) {
       errors.push("Percentage must be between 0-100");
     }
   }
   
   // Update success status based on validation
-  const success = parsed.success && errors.length === 0;
-  const confidence = errors.length > 0 ? Math.max(0, parsed.confidence - 30) : parsed.confidence;
+  const success = parsed.success !== false && errors.length === 0;
+  const confidence = errors.length > 0 ? Math.max(0, (parsed.confidence || 0) - 30) : parsed.confidence;
   
   return {
-    ...parsed,
     success,
+    intent: parsed.intent || 'unknown',
+    fromAsset: parsed.fromAsset || null,
+    fromChain: parsed.fromChain || null,
+    toAsset: parsed.toAsset || null,
+    toChain: parsed.toChain || null,
+    amount: parsed.amount || null,
+    amountType: parsed.amountType || null,
     confidence: confidence || 0,
-    validationErrors: errors,
+    validationErrors: [...(parsed.validationErrors || []), ...errors],
+    parsedMessage: parsed.parsedMessage || '',
+    requiresConfirmation: parsed.requiresConfirmation || false,
     originalInput: userInput
   };
 }
