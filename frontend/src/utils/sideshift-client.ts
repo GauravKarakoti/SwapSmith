@@ -16,6 +16,7 @@ export interface SideShiftPair {
 }
 
 export interface SideShiftQuote {
+  id?: string; // Add quote ID for tracking
   depositCoin: string;
   depositNetwork: string;
   settleCoin: string;
@@ -24,9 +25,9 @@ export interface SideShiftQuote {
   settleAmount: string;
   rate: string;
   affiliateId: string;
-  depositAddress: string;
   error?: { code: string; message: string; };
   memo?: string;
+  expiry?: string; // Add expiry if available
 }
 
 export async function getPairs(): Promise<SideShiftPair[]> {
@@ -58,7 +59,7 @@ export async function createQuote(
   userIP: string
 ): Promise<SideShiftQuote> {
   try {
-    const response = await axios.post<SideShiftQuote>(
+    const response = await axios.post<SideShiftQuote & { id?: string }>(
       `${SIDESHIFT_BASE_URL}/quotes`,
       {
         depositCoin: fromAsset,
@@ -81,7 +82,11 @@ export async function createQuote(
       throw new Error(response.data.error.message);
     }
 
-    return response.data;
+    // Include the quote ID in the response
+    return {
+      ...response.data,
+      id: response.data.id // This will be used for tracking
+    };
   } catch (error) {
     if (axios.isAxiosError(error)) {
       throw new Error(error.response?.data?.error?.message || `Failed to create quote for ${fromAsset} to ${toAsset}`);

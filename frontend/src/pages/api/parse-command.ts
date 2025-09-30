@@ -8,16 +8,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { message } = req.body;
 
-  if (!message) {
-    return res.status(400).json({ error: 'Message is required' });
+  if (!message || typeof message !== 'string') {
+    return res.status(400).json({ 
+      success: false,
+      error: 'Valid message is required',
+      validationErrors: ['Message must be a non-empty string']
+    });
+  }
+
+  // Basic spam/abuse protection
+  if (message.length > 500) {
+    return res.status(400).json({
+      success: false,
+      error: 'Message too long',
+      validationErrors: ['Message must be under 500 characters']
+    });
   }
 
   try {
     const parsedCommand = await parseUserCommand(message);
-    console.log("Parsed command:", parsedCommand);
+    
+    // Log for monitoring and improvement
+    console.log('Command parsed:', {
+      input: message,
+      output: parsedCommand,
+      timestamp: new Date().toISOString()
+    });
+
     res.status(200).json(parsedCommand);
   } catch (error) {
     console.error('Error parsing command:', error);
-    res.status(500).json({ error: 'Failed to parse command' });
+    
+    // Differentiate between Groq API errors and other errors
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    const isGroqError = errorMessage.includes('GROQ') || errorMessage.includes('API');
+    
+    res.status(isGroqError ? 503 : 500).json({ 
+      success: false,
+      error: isGroqError ? 'Service temporarily unavailable' : 'Failed to parse command',
+      validationErrors: [errorMessage]
+    });
   }
 }

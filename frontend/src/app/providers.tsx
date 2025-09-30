@@ -2,25 +2,31 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { WagmiProvider, createConfig, http } from 'wagmi'
-import { mainnet } from 'wagmi/chains'
+import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
 import { injected } from 'wagmi/connectors'
 
-// 1. Create a TanStack Query client
 const queryClient = new QueryClient()
 
-// 2. Create a wagmi config
+// Add all supported chains to this array and use "as const"
+const supportedChains = [mainnet, polygon, arbitrum, avalanche, optimism, bsc, base] as const;
+
 const config = createConfig({
-  chains: [mainnet],
+  chains: supportedChains,
   connectors: [
     injected(),
   ],
   transports: {
     [mainnet.id]: http(),
+    [polygon.id]: http(),
+    [arbitrum.id]: http(),
+    [avalanche.id]: http(),
+    [optimism.id]: http(),
+    [bsc.id]: http(),
+    [base.id]: http(),
   },
   ssr: true,
 })
 
-// 3. Create the providers component
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <WagmiProvider config={config}>
