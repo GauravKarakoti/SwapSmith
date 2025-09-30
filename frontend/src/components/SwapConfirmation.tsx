@@ -127,7 +127,7 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
         return `${baseUrl}/tx/${hash}`;
     }
     if (quote.id) {
-      return `${SIDESHIFT_TRACKING_URL}/${quote.id}`
+      return `${SIDESHIFT_TRACKING_URL}/${address}`
     }
     if (baseUrl) {
       if (networkKey === 'bitcoin') {
@@ -203,7 +203,7 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
               {copiedAddress ? 'Copied!' : 'Copy'}
             </button>
           </div>
-          <div className="bg-gray-50 p-2 rounded text-xs font-mono break-all">
+          <div className="bg-gray-500 p-2 rounded text-xs font-mono break-all">
             {address}
           </div>
         </div>

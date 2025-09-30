@@ -4,7 +4,7 @@ import { Shield, Lock, Eye, CheckCircle } from 'lucide-react'
 
 export default function TrustIndicators() {
   return (
-    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold text-blue-800 flex items-center gap-2">
           <Shield className="w-5 h-5" />
