@@ -18,7 +18,7 @@ export interface SideShiftPair {
 }
 
 export interface SideShiftQuote {
-  id?: string; // Add quote ID for tracking
+  id?: string;
   depositCoin: string;
   depositNetwork: string;
   settleCoin: string;
@@ -29,7 +29,15 @@ export interface SideShiftQuote {
   affiliateId: string;
   error?: { code: string; message: string; };
   memo?: string;
-  expiry?: string; // Add expiry if available
+  expiry?: string;
+}
+
+export interface SideShiftOrder {
+    id: string;
+    depositAddress: {
+        address: string;
+        memo: string;
+    };
 }
 
 export async function getPairs(): Promise<SideShiftPair[]> {
@@ -39,7 +47,7 @@ export async function getPairs(): Promise<SideShiftPair[]> {
       {
         headers: { 
           'x-sideshift-secret': API_KEY,
-          'x-user-ip': '0.0.0.0' // Will be set dynamically from API route
+          'x-user-ip': '0.0.0.0'
         },
       }
     );
@@ -84,10 +92,9 @@ export async function createQuote(
       throw new Error(response.data.error.message);
     }
 
-    // Include the quote ID in the response
     return {
       ...response.data,
-      id: response.data.id // This will be used for tracking
+      id: response.data.id
     };
   } catch (error) {
     if (axios.isAxiosError(error)) {
@@ -95,4 +102,31 @@ export async function createQuote(
     }
     throw new Error(`Failed to create quote for ${fromAsset} to ${toAsset}`);
   }
+}
+
+export async function createOrder(quoteId: string, settleAddress: string, refundAddress: string): Promise<SideShiftOrder> {
+    try {
+        const response = await axios.post<SideShiftOrder>(
+            `${SIDESHIFT_BASE_URL}/orders`,
+            {
+                quoteId,
+                settleAddress,
+                refundAddress,
+                affiliateId: AFFILIATE_ID,
+            },
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-sideshift-secret': API_KEY,
+                    'x-user-ip': '1.1.1.1' 
+                }
+            }
+        );
+        return response.data;
+    } catch (error) {
+        if (axios.isAxiosError(error)) {
+            throw new Error(error.response?.data?.error?.message || 'Failed to create order');
+        }
+        throw new Error('Failed to create order');
+    }
 }
