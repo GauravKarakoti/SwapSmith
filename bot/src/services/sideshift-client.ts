@@ -107,7 +107,7 @@ export async function createQuote(
 export async function createOrder(quoteId: string, settleAddress: string, refundAddress: string): Promise<SideShiftOrder> {
     try {
         const response = await axios.post<SideShiftOrder>(
-            `${SIDESHIFT_BASE_URL}/orders`,
+            `${SIDESHIFT_BASE_URL}/shifts/fixed`,
             {
                 quoteId,
                 settleAddress,
