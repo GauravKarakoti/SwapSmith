@@ -57,6 +57,7 @@ export function setConversationState(telegramId: number, state: any) {
     VALUES (?, ?)
     ON CONFLICT(telegram_id) DO UPDATE SET state = excluded.state;
   `);
+  console.log('Setting state for', telegramId, 'to', state);
   stmt.run(telegramId, JSON.stringify(state));
 }
 

@@ -72,6 +72,7 @@ export async function parseUserCommand(userInput: string): Promise<ParsedCommand
     });
 
     const parsed = JSON.parse(completion.choices[0].message.content || '{}');
+    console.log("Raw parsed command:", parsed);
     
     // Additional client-side validation
     return validateParsedCommand(parsed, userInput);
