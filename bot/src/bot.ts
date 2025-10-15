@@ -36,10 +36,7 @@ async function initializeWalletConnect() {
     console.log("WalletConnect session connected:", session);
     const address = session.namespaces.eip155.accounts[0].split(':')[2];
     if (tempTelegramId) {
-      db.setUserWalletAddress(tempTelegramId, address);
-      const state = db.getConversationState(tempTelegramId) || {};
-      db.setConversationState(tempTelegramId, { ...state, sessionTopic: session.topic });
-      console.log("State in start:",db.getConversationState(tempTelegramId))
+      db.setUserWalletAndSession(tempTelegramId, address, session.topic);
       bot.telegram.sendMessage(tempTelegramId, `✅ Wallet connected! Your address is: ${address}`);
       tempTelegramId = null;
     }
@@ -48,6 +45,9 @@ async function initializeWalletConnect() {
 
   signClient.on("session_delete", ({ id, topic }: { id: number; topic: string }) => {
     console.log("WalletConnect session deleted:", id, topic);
+    // Find user by topic and clear their wallet info
+    // This is not efficient, would be better to have a lookup table from topic to user
+    // For now, this is a placeholder for a more robust implementation
   });
 }
 
@@ -57,10 +57,18 @@ initializeWalletConnect().catch(err => console.error("Failed to initialize Walle
 
 bot.start((ctx) => {
   ctx.reply('Welcome to SwapSmith Bot! 🤖');
-  ctx.reply("Use /connect to connect your wallet.\n\nThen, tell me what you want to swap, like 'Swap 0.1 ETH on Ethereum for USDC on BSC'");
+  ctx.reply("Use /connect to connect your wallet.\nUse /disconnect to disconnect your wallet.\n\nThen, tell me what you want to swap, like 'Swap 0.1 ETH on Ethereum for USDC on BSC'");
 });
 
 bot.command('connect', async (ctx) => {
+  const user = db.getUser(ctx.from.id);
+  if (user && user.wallet_address && user.session_topic) {
+      const isConnected = signClient.session.getAll().some(s => s.topic === user.session_topic);
+      if (isConnected) {
+        return ctx.reply(`You are already connected with address: ${user.wallet_address}`);
+      }
+  }
+
   tempTelegramId = ctx.from.id;
   try {
     const { uri, approval } = await signClient.connect({
@@ -95,6 +103,23 @@ bot.command('connect', async (ctx) => {
   }
 });
 
+bot.command('disconnect', async (ctx) => {
+    const userId = ctx.from.id;
+    const user = db.getUser(userId);
+    if (user && user.session_topic) {
+        try {
+            await signClient.disconnect({
+                topic: user.session_topic,
+                reason: { code: 6000, message: "User disconnected" },
+            });
+        } catch (error) {
+            console.error("Error disconnecting wallet:", error);
+        }
+    }
+    db.clearUserWallet(userId);
+    ctx.reply('Wallet disconnected.');
+});
+
 // --- Main Message Handler ---
 bot.on(message('text'), async (ctx) => {
   const userInput = ctx.message.text;
@@ -103,7 +128,7 @@ bot.on(message('text'), async (ctx) => {
   if (userInput.startsWith('/')) return;
 
   const user = db.getUser(userId);
-  if (!user || !user.wallet_address) {
+  if (!user || !user.wallet_address || !user.session_topic) {
       return ctx.reply('Please connect your wallet first using the /connect command.');
   }
 
@@ -113,10 +138,7 @@ bot.on(message('text'), async (ctx) => {
     if (!parsedCommand.success || !parsedCommand.fromAsset || !parsedCommand.toAsset || !parsedCommand.amount) {
       return ctx.reply(`I couldn't understand that. ${parsedCommand.validationErrors?.join(', ')}`);
     }
-    const state = db.getConversationState(userId) || {};
-    console.log('Current state before setting command:', state);
-    db.setConversationState(userId, { parsedCommand, sessionTopic: state.sessionTopic });
-    console.log('Updated state with parsed command:', db.getConversationState(userId));
+    db.setConversationState(userId, { parsedCommand });
 
     const confirmationMessage = `You want to swap *${parsedCommand.amount} ${parsedCommand.fromAsset}* for *${parsedCommand.toAsset}*. Correct?`;
 
@@ -190,7 +212,7 @@ bot.action('place_order', async (ctx) => {
     const user = db.getUser(userId);
     console.log('Current state:', state);
 
-    if (!state || !state.id || !user || !user.wallet_address || !state.parsedCommand || !state.sessionTopic) {
+    if (!state || !state.id || !user || !user.wallet_address || !state.parsedCommand || !user.session_topic) {
         return ctx.answerCbQuery('Something went wrong. Please start over.');
     }
 
@@ -237,14 +259,14 @@ ${memo ? `With this memo/tag: \`${memo}\`` : ''}`;
             value: '0x' + ethers.parseEther(amount.toString()).toString(16),
             data: memo ? ethers.hexlify(ethers.toUtf8Bytes(memo)) : '0x',
         };
-        const session = signClient.session.get(state.sessionTopic);
+        const session = signClient.session.get(user.session_topic);
         console.log('Retrieved session:', session);
         if(!session) {
             return ctx.editMessageText('Could not find active WalletConnect session. Please reconnect.');
         }
 
         await signClient.request({
-            topic: state.sessionTopic,
+            topic: user.session_topic,
             chainId: `eip155:${chainId}`,
             request: {
                 method: 'eth_sendTransaction',

@@ -7,6 +7,7 @@ export interface User {
   id: number;
   telegram_id: number;
   wallet_address: string;
+  session_topic: string | null; // Add session_topic
 }
 
 // Create tables if they don't exist
@@ -14,7 +15,8 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY,
     telegram_id INTEGER UNIQUE NOT NULL,
-    wallet_address TEXT
+    wallet_address TEXT,
+    session_topic TEXT
   );
 `);
 
@@ -34,14 +36,21 @@ export function getUser(telegramId: number): User | null {
   return stmt.get(telegramId) as User | null;
 }
 
-export function setUserWalletAddress(telegramId: number, walletAddress: string) {
+export function setUserWalletAndSession(telegramId: number, walletAddress: string, sessionTopic: string) {
   const stmt = db.prepare(`
-    INSERT INTO users (telegram_id, wallet_address) 
-    VALUES (?, ?)
-    ON CONFLICT(telegram_id) DO UPDATE SET wallet_address = excluded.wallet_address;
+    INSERT INTO users (telegram_id, wallet_address, session_topic)
+    VALUES (?, ?, ?)
+    ON CONFLICT(telegram_id) DO UPDATE SET wallet_address = excluded.wallet_address, session_topic = excluded.session_topic;
   `);
-  stmt.run(telegramId, walletAddress);
+  stmt.run(telegramId, walletAddress, sessionTopic);
 }
+
+
+export function clearUserWallet(telegramId: number) {
+    const stmt = db.prepare('UPDATE users SET wallet_address = NULL, session_topic = NULL WHERE telegram_id = ?');
+    stmt.run(telegramId);
+}
+
 
 // --- Conversation State Functions ---
 
@@ -53,7 +62,7 @@ export function getConversationState(telegramId: number) {
 
 export function setConversationState(telegramId: number, state: any) {
   const stmt = db.prepare(`
-    INSERT INTO conversations (telegram_id, state) 
+    INSERT INTO conversations (telegram_id, state)
     VALUES (?, ?)
     ON CONFLICT(telegram_id) DO UPDATE SET state = excluded.state;
   `);
