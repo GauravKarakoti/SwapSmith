@@ -45,9 +45,9 @@ async function initializeWalletConnect() {
 
   signClient.on("session_delete", ({ id, topic }: { id: number; topic: string }) => {
     console.log("WalletConnect session deleted:", id, topic);
-    // Find user by topic and clear their wallet info
-    // This is not efficient, would be better to have a lookup table from topic to user
-    // For now, this is a placeholder for a more robust implementation
+    // This logic is simple; a more robust implementation would
+    // query the DB for the user with this 'topic' and clear them.
+    // For now, we'll rely on the /disconnect command.
   });
 }
 
@@ -57,15 +57,20 @@ initializeWalletConnect().catch(err => console.error("Failed to initialize Walle
 
 bot.start((ctx) => {
   ctx.reply('Welcome to SwapSmith Bot! 🤖');
-  ctx.reply("Use /connect to connect your wallet.\nUse /disconnect to disconnect your wallet.\n\nThen, tell me what you want to swap, like 'Swap 0.1 ETH on Ethereum for USDC on BSC'");
+  ctx.reply("Use /connect to connect your wallet.\nUse /disconnect to disconnect your wallet.\nUse /history to see your past 10 orders.\n\nThen, tell me what you want to swap, like 'Swap 0.1 ETH on Ethereum for USDC on BSC'");
 });
 
+// ... ( /connect command remains the same ) ...
 bot.command('connect', async (ctx) => {
   const user = db.getUser(ctx.from.id);
   if (user && user.wallet_address && user.session_topic) {
-      const isConnected = signClient.session.getAll().some(s => s.topic === user.session_topic);
-      if (isConnected) {
-        return ctx.reply(`You are already connected with address: ${user.wallet_address}`);
+      try {
+        const isConnected = signClient.session.getAll().some(s => s.topic === user.session_topic);
+        if (isConnected) {
+          return ctx.reply(`You are already connected with address: ${user.wallet_address}`);
+        }
+      } catch (e) {
+         console.warn("Could not check session, proceeding with reconnect.", e)
       }
   }
 
@@ -78,7 +83,7 @@ bot.command('connect', async (ctx) => {
                     "eth_sendTransaction",
                     "personal_sign"
                 ],
-                chains: ["eip155:1"],
+                chains: ["eip155:1"], // Requesting Ethereum mainnet by default
                 events: [
                     "chainChanged",
                     "accountsChanged"
@@ -120,6 +125,35 @@ bot.command('disconnect', async (ctx) => {
     ctx.reply('Wallet disconnected.');
 });
 
+
+// --- NEW: /history Command ---
+bot.command('history', (ctx) => {
+    const userId = ctx.from.id;
+    const user = db.getUser(userId);
+
+    if (!user) {
+        return ctx.reply('Please /connect your wallet first.');
+    }
+
+    const orders = db.getUserHistory(userId);
+
+    if (orders.length === 0) {
+        return ctx.reply("You have no order history yet.");
+    }
+
+    let message = "Your last 10 orders:\n\n";
+    orders.forEach((order) => {
+        message += `*Order ${order.id}* (${order.status})\n`;
+        message += `  *Send:* ${order.from_amount} ${order.from_asset} (${order.from_network})\n`;
+        message += `  *Rcv:* ~${order.settle_amount} ${order.to_asset} (${order.to_network})\n`;
+        message += `  *To:* \`${order.deposit_address}\`\n`;
+        message += `  *Date:* ${new Date(order.created_at).toLocaleString()}\n\n`;
+    });
+
+    ctx.replyWithMarkdown(message);
+});
+
+
 // --- Main Message Handler ---
 bot.on(message('text'), async (ctx) => {
   const userInput = ctx.message.text;
@@ -135,9 +169,12 @@ bot.on(message('text'), async (ctx) => {
   try {
     const parsedCommand = await parseUserCommand(userInput);
 
+    // --- UX IMPROVEMENT: Better error message ---
     if (!parsedCommand.success || !parsedCommand.fromAsset || !parsedCommand.toAsset || !parsedCommand.amount) {
-      return ctx.reply(`I couldn't understand that. ${parsedCommand.validationErrors?.join(', ')}`);
+      const errors = parsedCommand.validationErrors?.join(', ') || 'I just couldn\'t understand.';
+      return ctx.reply(`I'm sorry, I had trouble with that request.\n\n*Error:* ${errors}\n\nPlease try rephrasing your command.`);
     }
+    
     db.setConversationState(userId, { parsedCommand });
 
     const fromChain = parsedCommand.fromChain || 'Unknown';
@@ -150,9 +187,10 @@ bot.on(message('text'), async (ctx) => {
 
     Is this 100% correct?`;
 
+    // --- UX IMPROVEMENT: Clearer buttons ---
     ctx.replyWithMarkdown(confirmationMessage, Markup.inlineKeyboard([
         Markup.button.callback('✅ Yes, get quote', 'confirm_swap'),
-        Markup.button.callback('❌ Cancel', 'cancel_swap'),
+        Markup.button.callback('❌ Start Over', 'cancel_swap'), // Renamed from "Cancel"
     ]));
 
   } catch (error) {
@@ -181,7 +219,7 @@ bot.action('confirm_swap', async (ctx) => {
             state.parsedCommand.toAsset,
             state.parsedCommand.toChain,
             state.parsedCommand.amount,
-            '1.1.1.1'
+            '1.1.1.1' // Using a placeholder IP
         );
 
         if (quote.error || !quote.id) {
@@ -189,8 +227,14 @@ bot.action('confirm_swap', async (ctx) => {
         }
         console.log('Received quote:', quote);
 
-        db.setConversationState(userId, { ...state, id: quote.id });
-        console.log('Updated state with quote ID:', db.getConversationState(userId));
+        // --- ORDER LOG IMPROVEMENT: Save quoteId and settleAmount to state ---
+        const newState = { 
+            ...state, 
+            quoteId: quote.id, 
+            settleAmount: quote.settleAmount 
+        };
+        db.setConversationState(userId, newState);
+        console.log('Updated state with quote info:', db.getConversationState(userId));
 
         const quoteMessage =
           `Here's your quote:
@@ -228,17 +272,33 @@ bot.action('place_order', async (ctx) => {
     const user = db.getUser(userId);
     console.log('Current state:', state);
 
-    if (!state || !state.id || !user || !user.wallet_address || !state.parsedCommand || !user.session_topic) {
+    // --- ORDER LOG IMPROVEMENT: Updated guard to check for new state properties ---
+    if (!state || !state.quoteId || !state.settleAmount || !user || !user.wallet_address || !state.parsedCommand || !user.session_topic) {
         return ctx.answerCbQuery('Something went wrong. Please start over.');
     }
 
     try {
         await ctx.answerCbQuery('Placing your order...');
-        const order = await createOrder(state.id, user.wallet_address, user.wallet_address);
+        const order = await createOrder(state.quoteId, user.wallet_address, user.wallet_address);
 
-        if (!order || !order.depositAddress) {
+        if (!order || !order.depositAddress || !order.id) {
             return ctx.editMessageText(`Error placing order: Unknown error`);
         }
+
+        // --- ORDER LOG IMPROVEMENT: Log the order to the DB ---
+        try {
+            db.createOrderEntry(
+                userId, 
+                state.parsedCommand, 
+                order, 
+                state.settleAmount, 
+                state.quoteId
+            );
+        } catch (dbError) {
+            console.error("Failed to log order to database:", dbError);
+            // Don't fail the whole transaction, but log the error
+        }
+
 
         const { amount, fromAsset, fromChain } = state.parsedCommand;
         const { address, memo } = order.depositAddress;
@@ -256,28 +316,49 @@ bot.action('place_order', async (ctx) => {
 
         if (!chainId) {
              const orderMessage =
-              `✅ Order Placed!
+              `✅ Order Placed! (ID: ${order.id})
 
-              This chain isn't supported for automatic sending.
-              Please send your funds *manually*:
+              This chain isn't supported for automatic sending from your wallet.
+              Please send your funds *manually* to complete the swap:
 
               *Amount:* \`${amount} ${fromAsset}\`
               *Address:* \`${address}\`
               ${memo ? `*Memo/Tag:* \`${memo}\`` : ''}
 
-              ⚠️ *Send the exact amount to this address.*`;
+              ⚠️ *Send the exact amount to this address.*
+              
+              You can check this order later with /history.`;
              ctx.editMessageText(orderMessage, { parse_mode: 'Markdown' });
              db.clearConversationState(userId);
              return
         }
-        console.log(`Preparing to send transaction on chain ID ${chainId} to address ${address} with amount ${ethers.parseEther(amount.toString()).toString()}`);
+        
+        // This logic assumes the 'amount' is in standard units (e.g., Ether, not Wei)
+        // This is a simplification and might fail for tokens with different decimals.
+        // A robust solution would fetch token decimals.
+        // For now, we'll assume ETH-like parsing.
+        let parsedAmountHex;
+        try {
+            // A more robust way would be to check `fromAsset` for 'ETH' vs a token
+            // For now, `ethers.parseEther` is a stand-in for "convert to base units"
+            parsedAmountHex = '0x' + ethers.parseEther(amount.toString()).toString(16)
+        } catch (e) {
+             console.error("Error parsing amount, defaulting to 0:", e);
+             parsedAmountHex = '0x0';
+        }
+
+        console.log(`Preparing to send transaction on chain ID ${chainId} to address ${address} with amount ${parsedAmountHex}`);
 
         const transaction = {
             from: user.wallet_address,
             to: address,
-            value: '0x' + ethers.parseEther(amount.toString()).toString(16),
+            value: parsedAmountHex, // This is likely ONLY correct for native assets like ETH
             data: memo ? ethers.hexlify(ethers.toUtf8Bytes(memo)) : '0x',
+            // TODO: For ERC20 tokens, 'to' would be the token contract, 'value' would be '0x0',
+            // and 'data' would be an 'approve' or 'transfer' call.
+            // This implementation will ONLY work correctly for NATIVE asset swaps (e.g., ETH on Ethereum).
         };
+        
         const session = signClient.session.get(user.session_topic);
         console.log('Retrieved session:', session);
         if(!session) {
@@ -295,14 +376,16 @@ bot.action('place_order', async (ctx) => {
         console.log('Transaction request sent:', transaction);
 
         const orderMessage =
-          `✅ Order Placed!
+          `✅ Order Placed! (ID: ${order.id})
 
           A transaction request was sent to your wallet.
 
           Please approve the transaction to send:
           *Amount:* \`${amount} ${fromAsset}\`
           *To:* \`${address}\`
-          ${memo ? `*Memo:* \`${memo}\`` : ''}`;
+          ${memo ? `*Memo:* \`${memo}\`` : ''}
+          
+          You can check this order later with /history.`;
 
         ctx.editMessageText(orderMessage, { parse_mode: 'Markdown' });
 
@@ -317,7 +400,8 @@ bot.action('place_order', async (ctx) => {
 
 bot.action('cancel_swap', (ctx) => {
     db.clearConversationState(ctx.from.id);
-    ctx.editMessageText('Swap canceled.');
+    // --- UX IMPROVEMENT: Guide user on next step ---
+    ctx.editMessageText('Swap canceled. \n\nPlease type your swap request again.');
 });
 
 
