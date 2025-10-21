@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import type { SideShiftOrder } from './sideshift-client'; // Import type
+import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client'; // Import types
 import type { ParsedCommand } from './groq-client'; // Import type
 
 const db = new Database('swapsmith.db');
@@ -12,7 +12,7 @@ export interface User {
   session_topic: string | null; // Add session_topic
 }
 
-// Define the Order interface
+// Define the Order interface (for swaps)
 export interface Order {
   id: number;
   telegram_id: number;
@@ -29,6 +29,21 @@ export interface Order {
   status: 'pending' | 'completed' | 'failed'; // Basic status tracking
   created_at: string;
 }
+
+// --- NEW: Define the Checkout interface ---
+export interface Checkout {
+  id: number;
+  telegram_id: number;
+  checkout_id: string; // The ID from SideShift
+  settle_asset: string;
+  settle_network: string;
+  settle_amount: number;
+  settle_address: string;
+  status: 'pending' | 'completed' | 'settled' | 'cancelled'; // From docs
+  created_at: string;
+}
+// --- END NEW ---
+
 
 // Create tables if they don't exist
 db.exec(`
@@ -48,7 +63,7 @@ db.exec(`
   );
 `);
 
-// --- NEW: Create the 'orders' table ---
+// --- This is the 'orders' table for SWAPS/SHIFTS ---
 db.exec(`
   CREATE TABLE IF NOT EXISTS orders (
     id INTEGER PRIMARY KEY,
@@ -67,6 +82,22 @@ db.exec(`
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
 `);
+
+// --- NEW: Create the 'checkouts' table for PAYMENTS ---
+db.exec(`
+  CREATE TABLE IF NOT EXISTS checkouts (
+    id INTEGER PRIMARY KEY,
+    telegram_id INTEGER NOT NULL REFERENCES users(telegram_id),
+    checkout_id TEXT UNIQUE NOT NULL,
+    settle_asset TEXT NOT NULL,
+    settle_network TEXT NOT NULL,
+    settle_amount REAL NOT NULL,
+    settle_address TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+// --- END NEW ---
 
 
 // --- User Functions ---
@@ -116,7 +147,7 @@ export function clearConversationState(telegramId: number) {
     stmt.run(telegramId);
 }
 
-// --- NEW: Order Log Functions ---
+// --- Order Log Functions (for Swaps) ---
 
 export function createOrderEntry(
   telegramId: number, 
@@ -154,6 +185,35 @@ export function getUserHistory(telegramId: number): Order[] {
   const stmt = db.prepare('SELECT * FROM orders WHERE telegram_id = ? ORDER BY created_at DESC LIMIT 10');
   return stmt.all(telegramId) as Order[];
 }
+
+// --- NEW: Checkout Log Functions ---
+export function createCheckoutEntry(
+  telegramId: number, 
+  checkout: SideShiftCheckoutResponse 
+) {
+  const stmt = db.prepare(`
+    INSERT INTO checkouts (
+      telegram_id, checkout_id, settle_asset, 
+      settle_network, settle_amount, settle_address
+    ) 
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  
+  stmt.run(
+    telegramId,
+    checkout.id,
+    checkout.settleCoin,
+    checkout.settleNetwork,
+    parseFloat(checkout.settleAmount), // Store as number
+    checkout.settleAddress
+  );
+}
+
+export function getUserCheckouts(telegramId: number): Checkout[] {
+  const stmt = db.prepare('SELECT * FROM checkouts WHERE telegram_id = ? ORDER BY created_at DESC LIMIT 10');
+  return stmt.all(telegramId) as Checkout[];
+}
+// --- END NEW ---
 
 // TODO: Add a function like updateOrderStatus(sideshift_order_id, new_status)
 // This would likely be called from a webhook handler, which is a more advanced feature.

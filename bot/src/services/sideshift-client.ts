@@ -40,6 +40,33 @@ export interface SideShiftOrder {
     };
 }
 
+// --- NEW: Types for SideShift Pay API ---
+export interface SideShiftCheckoutRequest {
+  settleCoin: string;
+  settleNetwork: string;
+  settleAmount: string;
+  settleAddress: string;
+  affiliateId: string;
+  successUrl: string;
+  cancelUrl: string;
+}
+
+export interface SideShiftCheckoutResponse {
+  id: string;
+  settleCoin: string;
+  settleNetwork: string;
+  settleAddress: string;
+  settleAmount: string;
+  affiliateId: string;
+  successUrl: string;
+  cancelUrl: string;
+  createdAt: string;
+  updatedAt: string;
+  error?: { code: string; message: string; };
+}
+// --- END NEW ---
+
+
 export async function getPairs(): Promise<SideShiftPair[]> {
   try {
     const response = await axios.get<SideShiftPair[]>(
@@ -130,3 +157,50 @@ export async function createOrder(quoteId: string, settleAddress: string, refund
         throw new Error('Failed to create order');
     }
 }
+
+// --- NEW: Function for SideShift Pay API ---
+export async function createCheckout(
+  settleCoin: string,
+  settleNetwork: string,
+  settleAmount: number,
+  settleAddress: string,
+  userIP: string
+): Promise<SideShiftCheckoutResponse> {
+  const payload: Partial<SideShiftCheckoutRequest> = {
+    settleCoin,
+    settleNetwork,
+    settleAmount: settleAmount.toString(),
+    settleAddress,
+    affiliateId: AFFILIATE_ID || '',
+    // Using placeholder URLs as this is a bot and we just need the link
+    successUrl: 'https://sideshift.ai/success',
+    cancelUrl: 'https://sideshift.ai/cancel',
+  };
+
+  try {
+    const response = await axios.post<SideShiftCheckoutResponse>(
+      `${SIDESHIFT_BASE_URL}/checkout`,
+      payload,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'x-sideshift-secret': API_KEY,
+          'x-user-ip': userIP,
+        },
+      }
+    );
+
+    if (response.data.error) {
+      throw new Error(response.data.error.message);
+    }
+
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      throw new Error(error.response?.data?.error?.message || 'Failed to create checkout');
+    }
+    throw new Error('Failed to create checkout');
+  }
+}
+// --- END NEW ---
