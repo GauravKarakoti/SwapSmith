@@ -31,6 +31,7 @@ CRITICAL RULES:
 3.  Confirm amounts are numeric and positive.
 4.  DO NOT assume default chains. If the user does not specify a chain for 'fromAsset' or 'toAsset', you MUST set 'fromChain' or 'toChain' to null.
 5.  **AMBIGUITY RULE**: If an asset (like USDC, USDT) is mentioned without a chain, and it's not clear which chain is intended, you MUST set success: false and add a validationError explaining that the chain is required for that asset.
+6.  **NO CHAIN INFERENCE**: Never infer a 'fromChain' from a 'toChain' or vice-versa. If the user says "Swap USDC to ETH on Base", the 'fromChain' for USDC is null, and the request MUST fail validation.
 
 "STANDARDIZED MAPPINGS":
 - Chains: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana
