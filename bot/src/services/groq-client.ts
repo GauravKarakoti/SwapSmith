@@ -7,10 +7,13 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 // Type definition for the parsed command object
 export interface ParsedCommand {
   success: boolean;
-  intent: "checkout" | "unknown";
-  settleAsset: string | null;
-  settleNetwork: string | null;
-  settleAmount: number | null;
+  intent: "swap" | "unknown";
+  fromAsset: string | null;
+  fromChain: string | null;
+  toAsset: string | null;
+  toChain: string | null;
+  amount: number | null;
+  amountType: "exact" | "percentage" | "all" | null;
   confidence: number;
   validationErrors: string[];
   parsedMessage: string;
@@ -18,17 +21,17 @@ export interface ParsedCommand {
   originalInput?: string;
 }
 
-// Enhanced system prompt for SideShift Pay (settleAmount focused)
+// Enhanced system prompt with better validation
 const systemPrompt = `
-You are a precise cryptocurrency payment assistant. Your role is to extract what asset and amount the user wants to *RECEIVE*.
+You are a precise cryptocurrency trading assistant. Your role is to extract swap parameters from user messages with high accuracy.
 
 CRITICAL RULES:
 1.  Always respond with valid JSON in this exact format.
-2.  The user's intent is to create a 'checkout'.
-3.  You must extract the 'settleAsset' (what they want to receive), 'settleNetwork' (the chain they want to receive on), and 'settleAmount' (how much they want to receive).
-4.  If ANY of these three parameters (settleAsset, settleNetwork, settleAmount) are missing or ambiguous, you MUST set success: false.
-5.  DO NOT assume default chains. If a user says "I want 50 USDC" it is ambiguous. They must say "I want 50 USDC on Polygon".
-6.  The 'from' asset (what the user is paying with) is IRRELEVANT. Do not try to parse it. The user will choose what to pay with on the payment page.
+2.  If ANY parameter is ambiguous, set success: false.
+3.  Confirm amounts are numeric and positive.
+4.  DO NOT assume default chains. If the user does not specify a chain for 'fromAsset' or 'toAsset', you MUST set 'fromChain' or 'toChain' to null.
+5.  **AMBIGUITY RULE**: If an asset (like USDC, USDT) is mentioned without a chain, and it's not clear which chain is intended, you MUST set success: false and add a validationError explaining that the chain is required for that asset.
+6.  **NO CHAIN INFERENCE**: Never infer a 'fromChain' from a 'toChain' or vice-versa. If the user says "Swap USDC to ETH on Base", the 'fromChain' for USDC is null, and the request MUST fail validation.
 
 "STANDARDIZED MAPPINGS":
 - Chains: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana
@@ -37,10 +40,13 @@ CRITICAL RULES:
 RESPONSE FORMAT:
 {
   "success": boolean,
-  "intent": "checkout" | "unknown",
-  "settleAsset": string | null,
-  "settleNetwork": string | null,
-  "settleAmount": number | null,
+  "intent": "swap" | "unknown",
+  "fromAsset": string | null,
+  "fromChain": string | null,
+  "toAsset": string | null,
+  "toChain": string | null,
+  "amount": number | null,
+  "amountType": "exact" | "percentage" | "all" | null,
   "confidence": number, // 0-100 scale
   "validationErrors": string[],
   "parsedMessage": string, // How you interpreted the request
@@ -48,55 +54,64 @@ RESPONSE FORMAT:
 }
 
 VALIDATION CHECKS:
-- settleAmount must be a positive number.
-- settleAsset must be a valid cryptocurrency symbol.
-- settleNetwork must be in the standardized list.
+- Amount must be positive number.
+- Assets must be valid cryptocurrency symbols.
+- Chains must be in standardized list.
 
 EXAMPLES OF AMBIGUOUS (FAILING) REQUESTS:
 
 1.  User: "Swap 0.1 ETH for USDC"
-    Reasoning: The user is specifying what they want to *send* (0.1 ETH), not what they want to *receive*. The 'settleAmount' is unknown.
+    Reasoning: ETH implies 'ethereum' chain, but USDC exists on many chains (ethereum, polygon, bsc, etc.). The 'toChain' is missing and ambiguous.
     Response:
     {
       "success": false,
-      "intent": "checkout",
-      "settleAsset": "USDC",
-      "settleNetwork": null,
-      "settleAmount": null,
-      "confidence": 20,
-      "validationErrors": ["Please specify the amount you want to *receive* (e.g., 'I want 150 USDC on Polygon').", "The destination chain for USDC is missing."],
-      "parsedMessage": "User wants to receive an unknown amount of USDC on an unknown chain.",
+      "intent": "swap",
+      "fromAsset": "ETH",
+      "fromChain": "ethereum",
+      "toAsset": "USDC",
+      "toChain": null,
+      "amount": 0.1,
+      "amountType": "exact",
+      "confidence": 50,
+      "validationErrors": ["'toChain' is required for USDC. Please specify the destination chain (e.g., 'USDC on Polygon')."],
+      "parsedMessage": "Swap 0.1 ETH on ethereum for USDC on an unknown chain.",
       "requiresConfirmation": true
     }
 
-2.  User: "I want 100 USDC"
-    Reasoning: 'settleAmount' (100) and 'settleAsset' (USDC) are clear. But 'settleNetwork' is missing and ambiguous.
+2.  User: "Swap 100 USDC for ETH on Base"
+    Reasoning: 'toAsset' (ETH) and 'toChain' (Base) are clear. But 'fromAsset' (USDC) has no specified chain ('fromChain').
     Response:
     {
       "success": false,
-      "intent": "checkout",
-      "settleAsset": "USDC",
-      "settleNetwork": null,
-      "settleAmount": 100,
+      "intent": "swap",
+      "fromAsset": "USDC",
+      "fromChain": null,
+      "toAsset": "ETH",
+      "toChain": "base",
+      "amount": 100,
+      "amountType": "exact",
       "confidence": 50,
-      "validationErrors": ["'settleNetwork' is required for USDC. Please specify the destination chain (e.g., '100 USDC on Polygon')."],
-      "parsedMessage": "User wants 100 USDC on an unknown chain.",
+      "validationErrors": ["'fromChain' is required for USDC. Please specify the source chain (e.g., '100 USDC on Polygon')."],
+      "parsedMessage": "Swap 100 USDC on an unknown chain for ETH on Base.",
       "requiresConfirmation": true
     }
 
 EXAMPLE OF A GOOD (SUCCESSFUL) REQUEST:
 
-1.  User: "I need 50 MATIC on Polygon"
+1.  User: "Swap 0.1 ETH on Ethereum for USDC on BSC"
     Response:
     {
       "success": true,
-      "intent": "checkout",
-      "settleAsset": "MATIC",
-      "settleNetwork": "polygon",
-      "settleAmount": 50,
+      "intent": "swap",
+      "fromAsset": "ETH",
+      "fromChain": "ethereum",
+      "toAsset": "USDC",
+      "toChain": "bsc",
+      "amount": 0.1,
+      "amountType": "exact",
       "confidence": 95,
       "validationErrors": [],
-      "parsedMessage": "Creating a checkout to receive 50 MATIC on Polygon.",
+      "parsedMessage": "Swapping 0.1 ETH on Ethereum for USDC on BSC.",
       "requiresConfirmation": false
     }
 `;
@@ -106,9 +121,9 @@ export async function parseUserCommand(userInput: string): Promise<ParsedCommand
     const completion = await groq.chat.completions.create({
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `Parse this payment request: "${userInput}"` }
+        { role: "user", content: `Parse this trading request: "${userInput}"` }
       ],
-      model: "openai/gpt-oss-20b", // Using a recommended model
+      model: "openai/gpt-oss-20b",
       response_format: { type: "json_object" },
       temperature: 0.1,
       max_tokens: 500,
@@ -128,7 +143,7 @@ export async function parseUserCommand(userInput: string): Promise<ParsedCommand
       validationErrors: ["Failed to process your request"],
       parsedMessage: "Error occurred during parsing",
       requiresConfirmation: false,
-      settleAsset: null, settleNetwork: null, settleAmount: null,
+      fromAsset: null, fromChain: null, toAsset: null, toChain: null, amount: null, amountType: null,
     };
   }
 }
@@ -136,14 +151,16 @@ export async function parseUserCommand(userInput: string): Promise<ParsedCommand
 function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string): ParsedCommand {
   const errors: string[] = [];
   
-  // Validate required fields for checkout intent
-  if (parsed.intent === "checkout") {
-    if (!parsed.settleAsset) errors.push("Destination asset not specified (e.g., 'USDC')");
-    if (!parsed.settleNetwork) errors.push("Destination network not specified (e.g., 'on Polygon')");
-    if (!parsed.settleAmount || parsed.settleAmount <= 0) errors.push("Invalid amount specified (e.g., '50 USDC')");
-  } else if (parsed.success) {
-      // If Groq succeeded but didn't set intent to checkout, force fail
-      errors.push("I could not determine the asset and amount you want to receive.");
+  // Validate required fields for swap intent
+  if (parsed.intent === "swap") {
+    if (!parsed.fromAsset) errors.push("Source asset not specified");
+    if (!parsed.toAsset) errors.push("Destination asset not specified");
+    if (!parsed.amount || parsed.amount <= 0) errors.push("Invalid amount specified");
+    
+    // ✅ FIX: Added a null check for parsed.amount before comparison
+    if (parsed.amountType === "percentage" && parsed.amount != null && (parsed.amount > 100 || parsed.amount < 0)) {
+      errors.push("Percentage must be between 0-100");
+    }
   }
   
   // Update success status based on validation
@@ -154,9 +171,12 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
   return {
     success,
     intent: parsed.intent || 'unknown',
-    settleAsset: parsed.settleAsset || null,
-    settleNetwork: parsed.settleNetwork || null,
-    settleAmount: parsed.settleAmount || null,
+    fromAsset: parsed.fromAsset || null,
+    fromChain: parsed.fromChain || null,
+    toAsset: parsed.toAsset || null,
+    toChain: parsed.toChain || null,
+    amount: parsed.amount || null,
+    amountType: parsed.amountType || null,
     confidence: confidence || 0,
     validationErrors: [...(parsed.validationErrors || []), ...errors],
     parsedMessage: parsed.parsedMessage || '',

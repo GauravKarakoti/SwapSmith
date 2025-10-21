@@ -17,33 +17,28 @@ export interface SideShiftPair {
   hasMemo: boolean;
 }
 
-// Interface for the new /checkout request
-export interface SideShiftCheckout {
+export interface SideShiftQuote {
+  id?: string;
+  depositCoin: string;
+  depositNetwork: string;
   settleCoin: string;
   settleNetwork: string;
+  depositAmount: string;
   settleAmount: string;
-  settleAddress: string;
+  rate: string;
   affiliateId: string;
-  successUrl: string;
-  cancelUrl: string;
-  settleMemo?: string;
-}
-
-// Interface for the new /checkout response
-export interface SideShiftCheckoutResponse {
-  id: string;
-  settleCoin: string;
-  settleNetwork: string;
-  settleAddress: string;
-  settleAmount: string;
-  affiliateId: string;
-  successUrl: string;
-  cancelUrl: string;
-  createdAt: string;
-  updatedAt: string;
   error?: { code: string; message: string; };
+  memo?: string;
+  expiry?: string;
 }
 
+export interface SideShiftOrder {
+    id: string;
+    depositAddress: {
+        address: string;
+        memo: string;
+    };
+}
 
 export async function getPairs(): Promise<SideShiftPair[]> {
   try {
@@ -65,41 +60,30 @@ export async function getPairs(): Promise<SideShiftPair[]> {
   }
 }
 
-/**
- * Creates a new SideShift Pay checkout
- * https://pay.sideshift.ai/
- */
-export async function createCheckout(
-  settleCoin: string,
-  settleNetwork: string,
-  settleAmount: string,
-  settleAddress: string,
-  userIp: string, // The end-user's IP
-  settleMemo?: string
-): Promise<SideShiftCheckoutResponse> {
+export async function createQuote(
+  fromAsset: string, 
+  fromNetwork: string, 
+  toAsset: string, 
+  toNetwork: string, 
+  amount: number,
+  userIP: string
+): Promise<SideShiftQuote> {
   try {
-    // For the bot, we can use placeholder URLs.
-    // In a real web-app, these would be your success/cancel pages.
-    const botUrl = "https://t.me/SwapSmithBot"; // Placeholder
-
-    const response = await axios.post<SideShiftCheckoutResponse>(
-      `${SIDESHIFT_BASE_URL}/checkout`,
+    const response = await axios.post<SideShiftQuote & { id?: string }>(
+      `${SIDESHIFT_BASE_URL}/quotes`,
       {
-        settleCoin,
-        settleNetwork,
-        settleAmount,
-        settleAddress,
-        settleMemo,
+        depositCoin: fromAsset,
+        depositNetwork: fromNetwork,
+        settleCoin: toAsset,
+        settleNetwork: toNetwork,
+        depositAmount: amount.toString(),
         affiliateId: AFFILIATE_ID,
-        successUrl: `${botUrl}?status=success&id=${Date.now()}`,
-        cancelUrl: `${botUrl}?status=cancel`
       },
       {
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
           'x-sideshift-secret': API_KEY,
-          'x-user-ip': userIp 
+          'x-user-ip': userIP
         }
       }
     );
@@ -108,11 +92,41 @@ export async function createCheckout(
       throw new Error(response.data.error.message);
     }
 
-    return response.data;
+    return {
+      ...response.data,
+      id: response.data.id
+    };
   } catch (error) {
     if (axios.isAxiosError(error)) {
-      throw new Error(error.response?.data?.error?.message || `Failed to create checkout`);
+      throw new Error(error.response?.data?.error?.message || `Failed to create quote for ${fromAsset} to ${toAsset}`);
     }
-    throw new Error(`Failed to create checkout`);
+    throw new Error(`Failed to create quote for ${fromAsset} to ${toAsset}`);
   }
+}
+
+export async function createOrder(quoteId: string, settleAddress: string, refundAddress: string): Promise<SideShiftOrder> {
+    try {
+        const response = await axios.post<SideShiftOrder>(
+            `${SIDESHIFT_BASE_URL}/shifts/fixed`,
+            {
+                quoteId,
+                settleAddress,
+                refundAddress,
+                affiliateId: AFFILIATE_ID,
+            },
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-sideshift-secret': API_KEY,
+                    'x-user-ip': '1.1.1.1' 
+                }
+            }
+        );
+        return response.data;
+    } catch (error) {
+        if (axios.isAxiosError(error)) {
+            throw new Error(error.response?.data?.error?.message || 'Failed to create order');
+        }
+        throw new Error('Failed to create order');
+    }
 }
