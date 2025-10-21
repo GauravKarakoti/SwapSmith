@@ -60,11 +60,10 @@ initializeWalletConnect().catch(err => console.error("Failed to initialize Walle
 bot.start((ctx) => {
   ctx.reply('Welcome to SwapSmith Bot! 🤖');
   // --- MODIFIED: Updated start message ---
-  ctx.reply("Use /connect to connect your wallet.\nUse /disconnect to disconnect your wallet.\nUse /history to see your past 10 orders.\nUse /checkouts to see your past 10 payment links.\n\nThen, tell me what you want to swap, like 'Swap 0.1 ETH on Ethereum for USDC on BSC' or 'I need to receive 50 USDC on Polygon'");
+  ctx.reply("Use /connect to connect your wallet.\nUse /disconnect to disconnect your wallet.\nUse /history to see your past 10 orders.\nUse /checkouts to see your past 10 payment links.\n\nThen, tell me what you want to swap, like 'Swap 0.1 ETH on Ethereum for USDC on BSC' or 'I need to receive 50 USDC on Polygon' or 'Send 20 USDC on BSC to 0x...'.");
   // --- END MODIFIED ---
 });
 
-// ... ( /connect command remains the same ) ...
 bot.command('connect', async (ctx) => {
   const user = db.getUser(ctx.from.id);
   if (user && user.wallet_address && user.session_topic) {
@@ -177,6 +176,7 @@ bot.command('checkouts', (ctx) => {
         const paymentUrl = `https://pay.sideshift.ai/checkout/${checkout.checkout_id}`;
         message += `*Checkout ${checkout.id}* (${checkout.status})\n`;
         message += `  *Receive:* ${checkout.settle_amount} ${checkout.settle_asset} (${checkout.settle_network})\n`;
+        message += `  *To Address:* \`${checkout.settle_address}\`\n`; // <-- Show the destination address
         message += `  *Link:* [Pay Here](${paymentUrl})\n`;
         message += `  *Date:* ${new Date(checkout.created_at).toLocaleString()}\n\n`;
     });
@@ -208,10 +208,9 @@ bot.on(message('text'), async (ctx) => {
       return ctx.reply(`I'm sorry, I had trouble with that request.\n\n*Error:* ${errors}\n\nPlease try rephrasing your command.`);
     }
     
-    db.setConversationState(userId, { parsedCommand });
-
-    // --- NEW: Route based on intent ---
+    // --- Route based on intent ---
     if (parsedCommand.intent === 'swap') {
+        db.setConversationState(userId, { parsedCommand }); // Save state for swap
         const fromChain = parsedCommand.fromChain || 'Unknown';
         const toChain = parsedCommand.toChain || 'Unknown';
 
@@ -228,14 +227,20 @@ bot.on(message('text'), async (ctx) => {
         ]));
 
     } else if (parsedCommand.intent === 'checkout') {
+        // --- MODIFICATION: Use specified address or fallback to user's wallet ---
         const { settleAsset, settleNetwork, settleAmount } = parsedCommand;
-        
+        const destinationAddress = parsedCommand.settleAddress || user.wallet_address;
+
+        // Save the final address to state for the button handler
+        db.setConversationState(userId, { parsedCommand, checkoutAddress: destinationAddress });
+
         const confirmationMessage = `Please confirm your checkout:
 
         💰 *You Receive:* ${settleAmount} ${settleAsset} (on *${settleNetwork}*)
-        📬 *To Address:* \`${user.wallet_address}\`
+        📬 *To Address:* \`${destinationAddress}\`
 
         I will generate a payment link for this. Is this correct?`;
+        // --- END MODIFICATION ---
 
         ctx.replyWithMarkdown(confirmationMessage, Markup.inlineKeyboard([
             Markup.button.callback('✅ Yes, create link', 'confirm_checkout'),
@@ -457,19 +462,24 @@ bot.action('confirm_checkout', async (ctx) => {
     const state = db.getConversationState(userId);
     const user = db.getUser(userId);
 
-    if (!state || !state.parsedCommand || state.parsedCommand.intent !== 'checkout' || !user || !user.wallet_address) {
+    // --- MODIFICATION: Update guard to check for checkoutAddress ---
+    if (!state || !state.parsedCommand || state.parsedCommand.intent !== 'checkout' || !user || !state.checkoutAddress) {
         return ctx.answerCbQuery('Something went wrong. Please start over.');
     }
+    // --- END MODIFICATION ---
 
     try {
         await ctx.answerCbQuery('Creating your payment link...');
         const { settleAsset, settleNetwork, settleAmount } = state.parsedCommand;
+        // --- MODIFICATION: Get final address from state ---
+        const finalSettleAddress = state.checkoutAddress;
+        // --- END MODIFICATION ---
 
         const checkout = await createCheckout(
             settleAsset!,
             settleNetwork!,
             settleAmount!,
-            user.wallet_address,
+            finalSettleAddress, // <-- Use the final address
             '1.1.1.1' // Placeholder IP
         );
 
@@ -493,7 +503,7 @@ bot.action('confirm_checkout', async (ctx) => {
           You can send this link to anyone to receive your payment:
           
           💰 *Receiving:* ${checkout.settleAmount} ${checkout.settleCoin} (on *${checkout.settleNetwork}*)
-          📬 *To Your Address:* \`${checkout.settleAddress}\`
+          📬 *To Address:* \`${checkout.settleAddress}\`
           
           *Payment Link:*
           ${paymentUrl}
@@ -520,7 +530,7 @@ bot.action('confirm_checkout', async (ctx) => {
 bot.action('cancel_swap', (ctx) => {
     db.clearConversationState(ctx.from.id);
     // --- UX IMPROVEMENT: Guide user on next step ---
-    ctx.editMessageText('Swap canceled. \n\nPlease type your swap request again.');
+    ctx.editMessageText('Swap canceled. \n\nPlease type your request again.');
 });
 
 

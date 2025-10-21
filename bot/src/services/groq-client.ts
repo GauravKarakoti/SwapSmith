@@ -19,6 +19,7 @@ export interface ParsedCommand {
   settleAsset: string | null;
   settleNetwork: string | null;
   settleAmount: number | null;
+  settleAddress: string | null; // <-- ADDED THIS FIELD
   // Common fields
   confidence: number;
   validationErrors: string[];
@@ -45,7 +46,7 @@ CRITICAL RULES:
 
 INTENTS:
 - "swap": User wants to exchange one asset for another (e.g., "Swap 0.1 ETH for BTC").
-- "checkout": User wants to *receive* a payment and needs a payment link (e.g., "I need 50 USDC on Polygon").
+- "checkout": User wants to generate a payment link for a specific amount and asset. This can be for *themselves* (e.g., "I need 50 USDC on Polygon") or for *someone else* (e.g., "Send 50 USDC on Polygon to 0x123...").
 
 RESPONSE FORMAT:
 {
@@ -60,6 +61,7 @@ RESPONSE FORMAT:
   "settleAsset": string | null,
   "settleNetwork": string | null,
   "settleAmount": number | null,
+  "settleAddress": string | null, // <-- ADDED THIS FIELD
   "confidence": number, // 0-100 scale
   "validationErrors": string[],
   "parsedMessage": string, // How you interpreted the request
@@ -87,6 +89,7 @@ Response:
   "settleAsset": null,
   "settleNetwork": null,
   "settleAmount": null,
+  "settleAddress": null,
   "confidence": 95,
   "validationErrors": [],
   "parsedMessage": "Swapping 0.1 ETH on Ethereum for USDC on BSC.",
@@ -108,13 +111,14 @@ Response:
   "settleAsset": null,
   "settleNetwork": null,
   "settleAmount": null,
+  "settleAddress": null,
   "confidence": 50,
   "validationErrors": ["'fromChain' is required for USDC. Please specify the source chain (e.g., '100 USDC on Polygon')."],
   "parsedMessage": "Swap 100 USDC on an unknown chain for ETH on Base.",
   "requiresConfirmation": true
 }
 ---
-EXAMPLE 3: GOOD CHECKOUT
+EXAMPLE 3: GOOD CHECKOUT (for self)
 User: "I want 50 USDC on Polygon"
 Response:
 {
@@ -129,6 +133,7 @@ Response:
   "settleAsset": "USDC",
   "settleNetwork": "polygon",
   "settleAmount": 50,
+  "settleAddress": null, // <-- User's own address will be used
   "confidence": 95,
   "validationErrors": [],
   "parsedMessage": "Creating a checkout to receive 50 USDC on Polygon.",
@@ -150,10 +155,33 @@ Response:
   "settleAsset": "USDC",
   "settleNetwork": null,
   "settleAmount": 50,
+  "settleAddress": null,
   "confidence": 40,
   "validationErrors": ["'settleNetwork' is required for USDC. Please specify the chain (e.g., '50 USDC on Polygon')."],
   "parsedMessage": "Creating a checkout to receive 50 USDC on an unknown chain.",
   "requiresConfirmation": true
+}
+---
+EXAMPLE 5: GOOD CHECKOUT (with specific address)
+User: "Send 50 USDC on Polygon to 0x1234567890abcdef1234567890abcdef12345678"
+Response:
+{
+  "success": true,
+  "intent": "checkout",
+  "fromAsset": null,
+  "fromChain": null,
+  "toAsset": null,
+  "toChain": null,
+  "amount": null,
+  "amountType": null,
+  "settleAsset": "USDC",
+  "settleNetwork": "polygon",
+  "settleAmount": 50,
+  "settleAddress": "0x1234567890abcdef1234567890abcdef12345678",
+  "confidence": 95,
+  "validationErrors": [],
+  "parsedMessage": "Creating a checkout to send 50 USDC on Polygon to 0x1234...",
+  "requiresConfirmation": false
 }
 `;
 
@@ -185,7 +213,7 @@ export async function parseUserCommand(userInput: string): Promise<ParsedCommand
       parsedMessage: "Error occurred during parsing",
       requiresConfirmation: false,
       fromAsset: null, fromChain: null, toAsset: null, toChain: null, amount: null, amountType: null,
-      settleAsset: null, settleNetwork: null, settleAmount: null,
+      settleAsset: null, settleNetwork: null, settleAmount: null, settleAddress: null, // <-- ADDED
     };
   }
 }
@@ -205,6 +233,7 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     if (!parsed.settleAsset) errors.push("Asset to receive not specified");
     if (!parsed.settleNetwork) errors.push("Network to receive on not specified");
     if (!parsed.settleAmount || parsed.settleAmount <= 0) errors.push("Invalid amount specified");
+    // We don't validate settleAddress here, as null is acceptable (it means 'use my wallet')
   } else if (!parsed.intent || parsed.intent === "unknown") {
       if (!parsed.success) {
         // Keep prompt-level validation errors if they exist
@@ -229,6 +258,7 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     settleAsset: parsed.settleAsset || null,
     settleNetwork: parsed.settleNetwork || null,
     settleAmount: parsed.settleAmount || null,
+    settleAddress: parsed.settleAddress || null, // <-- ADDED
     confidence: confidence || 0,
     validationErrors: [...(parsed.validationErrors || []), ...errors],
     parsedMessage: parsed.parsedMessage || '',
