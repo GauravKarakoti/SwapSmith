@@ -140,7 +140,15 @@ bot.on(message('text'), async (ctx) => {
     }
     db.setConversationState(userId, { parsedCommand });
 
-    const confirmationMessage = `You want to swap *${parsedCommand.amount} ${parsedCommand.fromAsset}* for *${parsedCommand.toAsset}*. Correct?`;
+    const fromChain = parsedCommand.fromChain || 'Unknown';
+    const toChain = parsedCommand.toChain || 'Unknown';
+
+    const confirmationMessage = `Please confirm your swap:
+
+    ➡️ *Send:* ${parsedCommand.amount} ${parsedCommand.fromAsset} (on *${fromChain}*)
+    ⬅️ *Receive:* ${parsedCommand.toAsset} (on *${toChain}*)
+
+    Is this 100% correct?`;
 
     ctx.replyWithMarkdown(confirmationMessage, Markup.inlineKeyboard([
         Markup.button.callback('✅ Yes, get quote', 'confirm_swap'),
@@ -185,11 +193,19 @@ bot.action('confirm_swap', async (ctx) => {
         console.log('Updated state with quote ID:', db.getConversationState(userId));
 
         const quoteMessage =
-`Here is your quote:
-- You send: *${quote.depositAmount} ${quote.depositCoin}*
-- You receive: *${quote.settleAmount} ${quote.settleCoin}*
+          `Here's your quote:
 
-Your receiving address is: \`${user.wallet_address}\``;
+          ➡️ *You Send:*
+          \`${quote.depositAmount} ${quote.depositCoin}\`
+
+          ⬅️ *You Receive:*
+          \`${quote.settleAmount} ${quote.settleCoin}\`
+
+          *Your receiving address:*
+          \`${user.wallet_address}\`
+
+          This quote is valid for a limited time.
+          `;
 
         ctx.editMessageText(quoteMessage, {
             parse_mode: 'Markdown',
@@ -240,13 +256,16 @@ bot.action('place_order', async (ctx) => {
 
         if (!chainId) {
              const orderMessage =
-`✅ Order placed!
+              `✅ Order Placed!
 
-This bot currently only supports sending transaction requests for EVM chains. Please send *${amount} ${fromAsset}* to the following address manually:
+              This chain isn't supported for automatic sending.
+              Please send your funds *manually*:
 
-\`${address}\`
+              *Amount:* \`${amount} ${fromAsset}\`
+              *Address:* \`${address}\`
+              ${memo ? `*Memo/Tag:* \`${memo}\`` : ''}
 
-${memo ? `With this memo/tag: \`${memo}\`` : ''}`;
+              ⚠️ *Send the exact amount to this address.*`;
              ctx.editMessageText(orderMessage, { parse_mode: 'Markdown' });
              db.clearConversationState(userId);
              return
@@ -276,13 +295,14 @@ ${memo ? `With this memo/tag: \`${memo}\`` : ''}`;
         console.log('Transaction request sent:', transaction);
 
         const orderMessage =
-`✅ Order placed!
+          `✅ Order Placed!
 
-A transaction request has been sent to your wallet to send *${amount} ${fromAsset}* to the following address:
+          A transaction request was sent to your wallet.
 
-\`${address}\`
-
-${memo ? `With this memo/tag: \`${memo}\`` : ''}`;
+          Please approve the transaction to send:
+          *Amount:* \`${amount} ${fromAsset}\`
+          *To:* \`${address}\`
+          ${memo ? `*Memo:* \`${memo}\`` : ''}`;
 
         ctx.editMessageText(orderMessage, { parse_mode: 'Markdown' });
 

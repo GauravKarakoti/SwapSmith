@@ -30,8 +30,9 @@ CRITICAL RULES:
 2. If ANY parameter is ambiguous, set success: false
 3. Confirm amounts are numeric and positive
 4. Validate asset/chain combinations exist
+5. DO NOT assume default chains. If the user does not specify a chain for 'fromAsset' or 'toAsset', you MUST set 'fromChain' or 'toChain' to null.
 
-STANDARDIZED MAPPINGS:
+"STANDARDIZED MAPPINGS":
 - Chains: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana
 - Assets: Use uppercase symbols (BTC, ETH, USDC, etc.)
 
