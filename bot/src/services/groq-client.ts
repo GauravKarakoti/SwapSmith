@@ -26,11 +26,11 @@ const systemPrompt = `
 You are a precise cryptocurrency trading assistant. Your role is to extract swap parameters from user messages with high accuracy.
 
 CRITICAL RULES:
-1. Always respond with valid JSON in this exact format
-2. If ANY parameter is ambiguous, set success: false
-3. Confirm amounts are numeric and positive
-4. Validate asset/chain combinations exist
-5. DO NOT assume default chains. If the user does not specify a chain for 'fromAsset' or 'toAsset', you MUST set 'fromChain' or 'toChain' to null.
+1.  Always respond with valid JSON in this exact format.
+2.  If ANY parameter is ambiguous, set success: false.
+3.  Confirm amounts are numeric and positive.
+4.  DO NOT assume default chains. If the user does not specify a chain for 'fromAsset' or 'toAsset', you MUST set 'fromChain' or 'toChain' to null.
+5.  **AMBIGUITY RULE**: If an asset (like USDC, USDT) is mentioned without a chain, and it's not clear which chain is intended, you MUST set success: false and add a validationError explaining that the chain is required for that asset.
 
 "STANDARDIZED MAPPINGS":
 - Chains: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana
@@ -53,10 +53,66 @@ RESPONSE FORMAT:
 }
 
 VALIDATION CHECKS:
-- Amount must be positive number
-- Assets must be valid cryptocurrency symbols
-- Chains must be in standardized list
-- Cross-chain swaps must have both chains specified
+- Amount must be positive number.
+- Assets must be valid cryptocurrency symbols.
+- Chains must be in standardized list.
+
+EXAMPLES OF AMBIGUOUS (FAILING) REQUESTS:
+
+1.  User: "Swap 0.1 ETH for USDC"
+    Reasoning: ETH implies 'ethereum' chain, but USDC exists on many chains (ethereum, polygon, bsc, etc.). The 'toChain' is missing and ambiguous.
+    Response:
+    {
+      "success": false,
+      "intent": "swap",
+      "fromAsset": "ETH",
+      "fromChain": "ethereum",
+      "toAsset": "USDC",
+      "toChain": null,
+      "amount": 0.1,
+      "amountType": "exact",
+      "confidence": 50,
+      "validationErrors": ["'toChain' is required for USDC. Please specify the destination chain (e.g., 'USDC on Polygon')."],
+      "parsedMessage": "Swap 0.1 ETH on ethereum for USDC on an unknown chain.",
+      "requiresConfirmation": true
+    }
+
+2.  User: "Swap 100 USDC for ETH on Base"
+    Reasoning: 'toAsset' (ETH) and 'toChain' (Base) are clear. But 'fromAsset' (USDC) has no specified chain ('fromChain').
+    Response:
+    {
+      "success": false,
+      "intent": "swap",
+      "fromAsset": "USDC",
+      "fromChain": null,
+      "toAsset": "ETH",
+      "toChain": "base",
+      "amount": 100,
+      "amountType": "exact",
+      "confidence": 50,
+      "validationErrors": ["'fromChain' is required for USDC. Please specify the source chain (e.g., '100 USDC on Polygon')."],
+      "parsedMessage": "Swap 100 USDC on an unknown chain for ETH on Base.",
+      "requiresConfirmation": true
+    }
+
+EXAMPLE OF A GOOD (SUCCESSFUL) REQUEST:
+
+1.  User: "Swap 0.1 ETH on Ethereum for USDC on BSC"
+    Response:
+    {
+      "success": true,
+      "intent": "swap",
+      "fromAsset": "ETH",
+      "fromChain": "ethereum",
+      "toAsset": "USDC",
+      "toChain": "bsc",
+      "amount": 0.1,
+      "amountType": "exact",
+      "confidence": 95,
+      "validationErrors": [],
+      "parsedMessage": "Swapping 0.1 ETH on Ethereum for USDC on BSC.",
+      "requiresConfirmation": false
+    }
 `;
 
 export async function parseUserCommand(userInput: string): Promise<ParsedCommand> {
@@ -107,6 +163,7 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
   }
   
   // Update success status based on validation
+  // If the prompt itself set success: false, keep it false.
   const success = parsed.success !== false && errors.length === 0;
   const confidence = errors.length > 0 ? Math.max(0, (parsed.confidence || 0) - 30) : parsed.confidence;
   
