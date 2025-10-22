@@ -40,6 +40,33 @@ export interface SideShiftOrder {
     };
 }
 
+// --- NEW: Type for Order Status ---
+export interface SideShiftOrderStatus {
+  id: string;
+  status: string;
+  depositCoin: string;
+  depositNetwork: string;
+  settleCoin: string;
+  settleNetwork: string;
+  depositAddress: {
+    address: string;
+    memo: string | null;
+  };
+  settleAddress: {
+    address: string;
+    memo: string | null;
+  };
+  depositAmount: string | null;
+  settleAmount: string | null;
+  depositHash: string | null;
+  settleHash: string | null;
+  createdAt: string;
+  updatedAt: string;
+  error?: { code: string; message: string; };
+}
+// --- END NEW ---
+
+
 // --- NEW: Types for SideShift Pay API ---
 export interface SideShiftCheckoutRequest {
   settleCoin: string;
@@ -157,6 +184,29 @@ export async function createOrder(quoteId: string, settleAddress: string, refund
         throw new Error('Failed to create order');
     }
 }
+
+// --- NEW: Function to get order status ---
+export async function getOrderStatus(orderId: string): Promise<SideShiftOrderStatus> {
+    try {
+        const response = await axios.get<SideShiftOrderStatus>(
+            `${SIDESHIFT_BASE_URL}/shifts/${orderId}`,
+            {
+                headers: {
+                    'Accept': 'application/json',
+                    'x-sideshift-secret': API_KEY,
+                    'x-user-ip': '1.1.1.1' 
+                }
+            }
+        );
+        return response.data;
+    } catch (error) {
+        if (axios.isAxiosError(error)) {
+            throw new Error(error.response?.data?.error?.message || 'Failed to get order status');
+        }
+        throw new Error('Failed to get order status');
+    }
+}
+// --- END NEW ---
 
 // --- NEW: Function for SideShift Pay API ---
 export async function createCheckout(

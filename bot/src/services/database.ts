@@ -26,7 +26,8 @@ export interface Order {
   settle_amount: string | number; // Store the expected settle amount
   deposit_address: string;
   deposit_memo: string | null;
-  status: 'pending' | 'completed' | 'failed'; // Basic status tracking
+  status: string; // --- MODIFIED: More generic status ---
+  tx_hash: string | null; // --- NEW: Store user's TX hash ---
   created_at: string;
 }
 
@@ -64,6 +65,7 @@ db.exec(`
 `);
 
 // --- This is the 'orders' table for SWAPS/SHIFTS ---
+// --- MODIFIED: Added tx_hash column ---
 db.exec(`
   CREATE TABLE IF NOT EXISTS orders (
     id INTEGER PRIMARY KEY,
@@ -79,9 +81,11 @@ db.exec(`
     deposit_address TEXT NOT NULL,
     deposit_memo TEXT,
     status TEXT NOT NULL DEFAULT 'pending',
+    tx_hash TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
 `);
+// --- END MODIFIED ---
 
 // --- NEW: Create the 'checkouts' table for PAYMENTS ---
 db.exec(`
@@ -185,6 +189,25 @@ export function getUserHistory(telegramId: number): Order[] {
   const stmt = db.prepare('SELECT * FROM orders WHERE telegram_id = ? ORDER BY created_at DESC LIMIT 10');
   return stmt.all(telegramId) as Order[];
 }
+
+// --- NEW: Function to get latest order ---
+export function getLatestUserOrder(telegramId: number): Order | null {
+  const stmt = db.prepare('SELECT * FROM orders WHERE telegram_id = ? ORDER BY created_at DESC LIMIT 1');
+  return stmt.get(telegramId) as Order | null;
+}
+
+// --- NEW: Function to update TX hash ---
+export function setOrderTxHash(sideshiftOrderId: string, txHash: string) {
+  const stmt = db.prepare('UPDATE orders SET tx_hash = ? WHERE sideshift_order_id = ?');
+  stmt.run(txHash, sideshiftOrderId);
+}
+
+// --- NEW: Function to update order status ---
+export function updateOrderStatus(sideshiftOrderId: string, newStatus: string) {
+  const stmt = db.prepare('UPDATE orders SET status = ? WHERE sideshift_order_id = ?');
+  stmt.run(newStatus, sideshiftOrderId);
+}
+
 
 // --- NEW: Checkout Log Functions ---
 export function createCheckoutEntry(

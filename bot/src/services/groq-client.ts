@@ -1,5 +1,9 @@
 import Groq from "groq-sdk";
 import dotenv from 'dotenv';
+// --- NEW: Import fs for audio ---
+import fs from 'fs';
+// --- END NEW ---
+
 dotenv.config();
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -39,6 +43,7 @@ CRITICAL RULES:
 4.  DO NOT assume default chains. If the user does not specify a chain for an asset, you MUST set its corresponding chain to null.
 5.  **AMBIGUITY RULE**: If an asset (like USDC, USDT) is mentioned without a chain (for 'fromChain', 'toChain', or 'settleNetwork'), you MUST set success: false and add a validationError explaining that the chain is required.
 6.  **NO CHAIN INFERENCE**: Never infer a 'fromChain' from a 'toChain' or vice-versa.
+7.  **CONTEXT RULE**: If previous messages are provided, use them to resolve ambiguity. If the user provides info that was previously missing, set success: true.
 
 "STANDARDIZED MAPPINGS":
 - Chains: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana
@@ -183,15 +188,48 @@ Response:
   "parsedMessage": "Creating a checkout to send 50 USDC on Polygon to 0x1234...",
   "requiresConfirmation": false
 }
+---
+EXAMPLE 6: CONTEXTUAL FOLLOW-UP
+(The following messages are in sequence)
+
+Message 1 (User): "Swap 100 USDC for ETH on Base"
+Message 2 (Assistant): "'fromChain' is required for USDC. Please specify the source chain (e.g., '100 USDC on Polygon')."
+Message 3 (User): "on polygon"
+Response:
+{
+  "success": true,
+  "intent": "swap",
+  "fromAsset": "USDC",
+  "fromChain": "polygon",
+  "toAsset": "ETH",
+  "toChain": "base",
+  "amount": 100,
+  "amountType": "exact",
+  "settleAsset": null,
+  "settleNetwork": null,
+  "settleAmount": null,
+  "settleAddress": null,
+  "confidence": 90,
+  "validationErrors": [],
+  "parsedMessage": "Swapping 100 USDC on Polygon for ETH on Base.",
+  "requiresConfirmation": false
+}
 `;
 
-export async function parseUserCommand(userInput: string): Promise<ParsedCommand> {
+// --- MODIFIED: Accept conversation history for context ---
+export async function parseUserCommand(
+  userInput: string,
+  conversationHistory: Groq.Chat.Completions.ChatCompletionMessageParam[] = []
+): Promise<ParsedCommand> {
   try {
-    const completion = await groq.chat.completions.create({
-      messages: [
+    const messages: Groq.Chat.Completions.ChatCompletionMessageParam[] = [
         { role: "system", content: systemPrompt },
+        ...conversationHistory,
         { role: "user", content: `Parse this trading request: "${userInput}"` }
-      ],
+    ];
+
+    const completion = await groq.chat.completions.create({
+      messages: messages,
       model: "openai/gpt-oss-20b",
       response_format: { type: "json_object" },
       temperature: 0.1,
@@ -217,6 +255,26 @@ export async function parseUserCommand(userInput: string): Promise<ParsedCommand
     };
   }
 }
+// --- END MODIFIED ---
+
+// --- NEW: Function to transcribe audio ---
+export async function transcribeAudio(mp3FilePath: string): Promise<string> {
+  console.log(`Transcribing audio file: ${mp3FilePath}`);
+  try {
+    const transcription = await groq.audio.transcriptions.create({
+      file: fs.createReadStream(mp3FilePath),
+      model: "whisper-large-v3",
+      response_format: "json",
+    });
+    console.log(`Transcription result: ${transcription.text}`);
+    return transcription.text;
+  } catch (error) {
+    console.error("Error transcribing audio:", error);
+    throw new Error("Failed to transcribe audio.");
+  }
+}
+// --- END NEW ---
+
 
 function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string): ParsedCommand {
   const errors: string[] = [];
@@ -235,16 +293,19 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     if (!parsed.settleAmount || parsed.settleAmount <= 0) errors.push("Invalid amount specified");
     // We don't validate settleAddress here, as null is acceptable (it means 'use my wallet')
   } else if (!parsed.intent || parsed.intent === "unknown") {
-      if (!parsed.success) {
-        // Keep prompt-level validation errors if they exist
+      if (parsed.success === false && parsed.validationErrors && parsed.validationErrors.length > 0) {
+         // Keep prompt-level validation errors
       } else {
         errors.push("Could not determine intent. Please try 'swap' or 'receive'.");
       }
   }
   
+  // Combine all errors
+  const allErrors = [...(parsed.validationErrors || []), ...errors];
+
   // Update success status based on validation
-  const success = parsed.success !== false && errors.length === 0;
-  const confidence = errors.length > 0 ? Math.max(0, (parsed.confidence || 0) - 30) : parsed.confidence;
+  const success = parsed.success !== false && allErrors.length === 0;
+  const confidence = allErrors.length > 0 ? Math.max(0, (parsed.confidence || 0) - 30) : parsed.confidence;
   
   return {
     success,
@@ -260,7 +321,7 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     settleAmount: parsed.settleAmount || null,
     settleAddress: parsed.settleAddress || null, // <-- ADDED
     confidence: confidence || 0,
-    validationErrors: [...(parsed.validationErrors || []), ...errors],
+    validationErrors: allErrors,
     parsedMessage: parsed.parsedMessage || '',
     requiresConfirmation: parsed.requiresConfirmation || false,
     originalInput: userInput
