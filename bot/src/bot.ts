@@ -498,7 +498,7 @@ bot.action('place_order', async (ctx) => {
 
         console.log('Order placed:', order);
         const { amount, fromAsset, fromChain } = state.parsedCommand;
-        const address = order.depositAddress;
+        const address = order.depositAddress.address;
         const memo = order.depositAddress.memo;
 
         const chainIdMap: { [key: string]: string } = {
@@ -597,7 +597,15 @@ bot.action('place_order', async (ctx) => {
     } catch (error) {
         console.error(error);
         const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-        ctx.editMessageText(`Sorry, I was unable to place your order. Please try again. \nError: ${errorMessage}`);
+        
+        // --- MODIFICATION START ---
+        if (errorMessage.includes("No matching key. session:")) {
+            ctx.editMessageText('Your wallet session has expired. Please reconnect your wallet using /connect and try again.');
+        } else {
+            ctx.editMessageText(`Sorry, I was unable to place your order. Please try again. \nError: ${errorMessage}`);
+        }
+        // --- MODIFICATION END ---
+        
         db.clearConversationState(userId); // Clear state on error
     }
 });
@@ -647,7 +655,15 @@ bot.action('confirm_send_tx', async (ctx) => {
     } catch (error) {
         console.error(error);
         const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-        ctx.editMessageText(`Sorry, I was unable to send the transaction request. Please try again. \nError: ${errorMessage}`);
+        
+        // --- MODIFICATION START ---
+        if (errorMessage.includes("No matching key. session:")) {
+            ctx.editMessageText('Your wallet session has expired. Please reconnect your wallet using /connect and try again.');
+        } else {
+            ctx.editMessageText(`Sorry, I was unable to send the transaction request. Please try again. \nError: ${errorMessage}`);
+        }
+        // --- MODIFICATION END ---
+
     } finally {
         db.clearConversationState(userId);
     }
