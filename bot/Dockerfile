@@ -1,10 +1,13 @@
-# Use an official Node.js runtime as a parent image
-# You can change '18' to match your preferred Node.js version
-FROM node:18-slim
+# Use a Node.js version that matches your dependencies (e.g., Node 20)
+FROM node:20-slim
 
-# Install ffmpeg
-# This runs 'apt-get update' and then 'apt-get install'
-RUN apt-get update && apt-get install -y ffmpeg
+# Install ffmpeg AND the tools required to build native addons
+# (build-essential includes 'make', 'g++', etc. python3 is also needed by node-gyp)
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    build-essential \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory in the container
 WORKDIR /usr/src/app
