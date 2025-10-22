@@ -18,6 +18,10 @@ import path from 'path';
 import { execSync } from 'child_process';
 // --- END NEW ---
 
+// --- NEW: Import for Render deployment ---
+import express from 'express';
+// --- END NEW ---
+
 dotenv.config();
 
 // --- Basic Bot Setup ---
@@ -694,7 +698,7 @@ bot.action('confirm_checkout', async (ctx) => {
             settleAsset!,
             settleNetwork!,
             settleAmount!,
-            finalSettleAddress, // <-- Use the final address
+            finalSettleAddress,
             '1.1.1.1' // Placeholder IP
         );
 
@@ -748,6 +752,18 @@ bot.action('cancel_swap', (ctx) => {
     ctx.editMessageText('Swap canceled. \n\nPlease type your request again.');
 });
 
+// --- NEW: Express Server for Render Health Check ---
+const app = express();
+const port = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+    res.send('Bot is alive!');
+});
+
+app.listen(port, () => {
+    console.log(`Express server listening on port ${port} for Render health checks.`);
+});
+// --- END NEW ---
 
 bot.launch();
 
