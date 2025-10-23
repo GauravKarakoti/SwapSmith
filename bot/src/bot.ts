@@ -510,7 +510,7 @@ bot.action('place_order', async (ctx) => {
 
         console.log('Order placed:', order);
         const { amount, fromAsset, fromChain } = state.parsedCommand;
-        const address = order.depositAddress.address;
+        const address = order.depositAddress;
         const memo = order.depositAddress.memo;
 
         const chainIdMap: { [key: string]: string } = {
