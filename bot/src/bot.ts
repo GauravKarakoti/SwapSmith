@@ -79,8 +79,8 @@ initializeWalletConnect().catch(err => console.error("Failed to initialize Walle
 
 bot.start((ctx) => {
   ctx.reply('Welcome to SwapSmith Bot! 🤖');
-  // --- MODIFIED: Updated start message ---
-  ctx.reply("Use /connect to connect your wallet.\nUse /disconnect to disconnect your wallet.\nUse /history to see your past 10 orders.\nUse /checkouts to see your past 10 payment links.\nUse /status [order_id] to check an order.\n\nThen, tell me what you want to swap, like 'Swap 0.1 ETH on Ethereum for USDC on BSC' or 'I need to receive 50 USDC on Polygon' or 'Send 20 USDC on BSC to 0x...'.\n\nYou can also send a voice message!");
+  // --- MODIFIED: Updated start message to include /clear ---
+  ctx.reply("Use /connect to connect your wallet.\nUse /disconnect to disconnect your wallet.\nUse /history to see your past 10 orders.\nUse /checkouts to see your past 10 payment links.\nUse /status [order_id] to check an order.\nUse /clear to reset our conversation history (if I get confused).\n\nThen, tell me what you want to swap, like 'Swap 0.1 ETH on Ethereum for USDC on BSC' or 'I need to receive 50 USDC on Polygon' or 'Send 20 USDC on BSC to 0x...'.\n\nYou can also send a voice message!");
   // --- END MODIFIED ---
 });
 
@@ -262,6 +262,14 @@ bot.command('checkouts', (ctx) => {
 
     // --- FIX: Replaced disable_web_page_preview ---
     ctx.replyWithMarkdown(message, { link_preview_options: { is_disabled: true } });
+});
+// --- END NEW ---
+
+// --- NEW: /clear Command (for resetting context) ---
+bot.command('clear', (ctx) => {
+    const userId = ctx.from.id;
+    db.clearConversationState(userId);
+    ctx.reply('✅ Your conversation history has been cleared. \n\nI will no longer remember the context of our previous messages. You can start a new swap.');
 });
 // --- END NEW ---
 
