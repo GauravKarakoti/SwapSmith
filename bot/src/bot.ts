@@ -622,7 +622,6 @@ bot.action('place_order', async (ctx) => {
     }
 });
 
-// --- NEW: Handler for the final transaction confirmation ---
 bot.action('confirm_send_tx', async (ctx) => {
     const userId = ctx.from.id;
     const state = db.getConversationState(userId);
@@ -680,8 +679,6 @@ bot.action('confirm_send_tx', async (ctx) => {
         db.clearConversationState(userId);
     }
 });
-// --- END NEW ---
-
 
 // --- NEW: Button Handler for Checkouts ---
 bot.action('confirm_checkout', async (ctx) => {
