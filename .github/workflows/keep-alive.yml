@@ -11,5 +11,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping the bot's health check endpoint
-        # Replace the URL with your bot's public URL on Render
         run: curl -s "https://swapsmith-1.onrender.com" > /dev/null
