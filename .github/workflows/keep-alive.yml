@@ -1,0 +1,15 @@
+name: Keep-Alive Ping
+
+on:
+  schedule:
+    # Runs every 10 minutes
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Allows you to run this workflow manually from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the bot's health check endpoint
+        # Replace the URL with your bot's public URL on Render
+        run: curl -s "https://swapsmith-1.onrender.com" > /dev/null
