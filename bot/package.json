@@ -21,14 +21,14 @@
     "ethers": "^6.13.1",
     "groq-sdk": "^0.33.0",
     "qrcode": "^1.5.4",
-    "telegraf": "^4.16.3"
+    "telegraf": "^4.16.3",
+    "express": "^5.1.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.3",
     "@types/node": "^24.7.2",
     "@types/qrcode": "^1.5.5",
-    "express": "^5.1.0",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3"
   }

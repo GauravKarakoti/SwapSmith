@@ -24,5 +24,5 @@ COPY . .
 # Run the build script to compile TypeScript to JavaScript
 RUN npm run build
 
-# Your app's dev command (from package.json)
-CMD [ "npm", "run", "dev" ]
+# Your app's start command (from package.json)
+CMD [ "npm", "run", "start" ]
