@@ -10,6 +10,7 @@
         button { background: #0088cc; border: none; padding: 15px 30px; color: white; font-size: 16px; border-radius: 8px; cursor: pointer; margin-top: 20px; width: 100%; max-width: 300px; font-weight: bold; transition: background 0.2s; }
         button:disabled { background: #555; cursor: not-allowed; opacity: 0.7; }
         button:active { transform: scale(0.98); }
+        /* Updated Disconnect Button Style */
         #btnDisconnect { background: #d32f2f; margin-top: 10px; display: none; }
         .details { background: #2a2a2a; padding: 20px; border-radius: 16px; width: 100%; max-width: 350px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); margin-bottom: 20px; }
         h3 { margin-top: 0; color: #ccc; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; }
@@ -40,7 +41,7 @@
         // --- CONFIGURATION ---
         const projectId = 'cfd6d68649717d2118148c25c6fb5aec'; 
 
-        // Define Chains (Must match what your bot supports)
+        // Define Chains
         const mainnet = { chainId: 1, name: 'Ethereum', currency: 'ETH', explorerUrl: 'https://etherscan.io', rpcUrl: 'https://cloudflare-eth.com' };
         const bsc = { chainId: 56, name: 'BNB Smart Chain', currency: 'BNB', explorerUrl: 'https://bscscan.com', rpcUrl: 'https://binance.ulam.io' };
         const polygon = { chainId: 137, name: 'Polygon', currency: 'MATIC', explorerUrl: 'https://polygonscan.com', rpcUrl: 'https://polygon-rpc.com' };
@@ -72,10 +73,9 @@
         const urlParams = new URLSearchParams(window.location.search);
         const txParams = {
             to: urlParams.get('to'),
-            value: urlParams.get('value') || '0', // wei in hex or string
+            value: urlParams.get('value') || '0',
             data: urlParams.get('data') || '0x',
             chainId: parseInt(urlParams.get('chainId') || '1'),
-            // --- ADDED: Token and Chain info ---
             token: urlParams.get('token') || 'Native',
             chain: urlParams.get('chain') || ''
         };
@@ -83,7 +83,6 @@
         // 2. Update UI with Transaction Details
         try {
             const formattedAmt = formatEther(txParams.value);
-            // --- MODIFIED: Display actual token and chain ---
             document.getElementById('amountDisplay').innerText = `${formattedAmt} ${txParams.token} ${txParams.chain ? `(${txParams.chain})` : ''}`;
             document.getElementById('toDisplay').innerText = `${txParams.to.slice(0, 6)}...${txParams.to.slice(-4)}`;
         } catch (e) {
@@ -103,26 +102,34 @@
                 isConnected = true;
                 walletProvider = provider;
                 btn.innerText = "Confirm Swap";
-                btnDisconnect.style.display = "block"; // Show disconnect button
-                statusText.innerText = `Connected: ${address.slice(0,6)}...`;
+                btn.disabled = false;
+                btnDisconnect.style.display = "block";
+                statusText.innerText = `Connected: ${address.slice(0,6)}...${address.slice(-4)}`;
                 
-                // Optional: Check if connected to wrong network and switch?
-                // Web3Modal handles switching automatically if you try to sign on a different chain usually,
-                // but explicit switching is better UX.
                 if (chainId !== txParams.chainId) {
                     statusText.innerText = `Wrong Network. Switching to ID: ${txParams.chainId}...`;
-                    await modal.switchNetwork(txParams.chainId);
+                    try {
+                        await modal.switchNetwork(txParams.chainId);
+                    } catch (err) {
+                        console.error("Switch network failed", err);
+                    }
                 }
             } else {
-                isConnected = false;
-                walletProvider = null;
-                btn.innerText = "Connect Wallet";
-                btnDisconnect.style.display = "none"; // Hide disconnect button
-                statusText.innerText = "Please connect your wallet.";
+                handleDisconnectUI();
             }
         });
 
-        // 4. Button Handler
+        // Helper to reset UI state
+        function handleDisconnectUI() {
+            isConnected = false;
+            walletProvider = null;
+            btn.innerText = "Connect Wallet";
+            btn.disabled = false;
+            btnDisconnect.style.display = "none";
+            statusText.innerText = "Please connect your wallet.";
+        }
+
+        // 4. Button Handlers
         btn.onclick = async () => {
             if (!isConnected) {
                 await modal.open();
@@ -131,8 +138,22 @@
             }
         };
 
+        // --- FIXED DISCONNECT HANDLER ---
         btnDisconnect.onclick = async () => {
-            await modal.disconnect();
+            try {
+                btnDisconnect.innerText = "Disconnecting...";
+                await modal.disconnect();
+                
+                // Manually force UI update in case subscription lags
+                handleDisconnectUI();
+                btnDisconnect.innerText = "Disconnect"; 
+            } catch (error) {
+                console.error("Disconnect Error:", error);
+                // Even if error (e.g. provider not found), force UI reset
+                handleDisconnectUI();
+                btnDisconnect.innerText = "Disconnect"; 
+                statusText.innerText = "Disconnected (Local session cleared)";
+            }
         };
 
         async function sendTransaction() {
@@ -146,24 +167,20 @@
                 const ethersProvider = new BrowserProvider(walletProvider);
                 const signer = await ethersProvider.getSigner();
                 
-                // Send the transaction
                 const txResponse = await signer.sendTransaction({
                     to: txParams.to,
                     value: txParams.value,
                     data: txParams.data
-                    // chainId is handled by the provider/wallet connection
                 });
 
                 statusText.innerText = "Transaction Submitted!";
                 btn.innerText = "Success";
                 
-                // Send data back to Telegram Bot
                 tg.sendData(JSON.stringify({ 
                     status: 'submitted', 
                     hash: txResponse.hash 
                 }));
                 
-                // Close Mini App
                 setTimeout(() => tg.close(), 1000);
 
             } catch (error) {
