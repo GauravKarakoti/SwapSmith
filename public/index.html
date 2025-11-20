@@ -5,65 +5,159 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SwapSmith Signer</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.1/dist/ethers.umd.min.js"></script>
     <style>
-        body { font-family: sans-serif; background-color: #1a1a1a; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        button { background: #0088cc; border: none; padding: 15px 30px; color: white; font-size: 16px; border-radius: 8px; cursor: pointer; margin-top: 20px; }
-        .details { background: #2a2a2a; padding: 20px; border-radius: 10px; text-align: center; width: 80%; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #1a1a1a; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; padding: 20px; text-align: center;}
+        button { background: #0088cc; border: none; padding: 15px 30px; color: white; font-size: 16px; border-radius: 8px; cursor: pointer; margin-top: 20px; width: 100%; max-width: 300px; font-weight: bold; transition: background 0.2s; }
+        button:disabled { background: #555; cursor: not-allowed; opacity: 0.7; }
+        button:active { transform: scale(0.98); }
+        .details { background: #2a2a2a; padding: 20px; border-radius: 16px; width: 100%; max-width: 350px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); margin-bottom: 20px; }
+        h3 { margin-top: 0; color: #ccc; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; }
+        p { line-height: 1.5; font-size: 1.1rem; word-break: break-all; }
+        .label { font-size: 0.9rem; color: #888; margin-bottom: 5px; display: block; }
+        .value { font-size: 1.2rem; font-weight: bold; display: block; margin-bottom: 15px; color: #fff; }
     </style>
 </head>
 <body>
     <div class="details" id="status">
-        <h3>Confirm Transaction</h3>
-        <p id="txInfo">Loading...</p>
+        <h3>Transaction Request</h3>
+        
+        <span class="label">Sending</span>
+        <span class="value" id="amountDisplay">Loading...</span>
+
+        <span class="label">To Address</span>
+        <span class="value" id="toDisplay">...</span>
     </div>
-    <button id="btnConnect" onclick="connectWallet()">Connect Wallet</button>
-    <button id="btnSend" onclick="sendTransaction()" style="display:none;">Confirm Swap</button>
 
-    <script>
-        const tg = window.Telegram.WebApp;
-        tg.expand();
-        let signer;
-        let txParams = {};
+    <button id="btnAction">Connect Wallet</button>
+    <p id="statusText" style="margin-top: 15px; font-size: 0.9rem; color: #888;"></p>
 
-        // Parse URL params sent by the bot
-        const urlParams = new URLSearchParams(window.location.search);
-        txParams = {
-            to: urlParams.get('to'),
-            value: urlParams.get('value'), // in wei (hex)
-            data: urlParams.get('data') || '0x',
-            chainId: urlParams.get('chainId')
+    <script type="module">
+        import { createWeb3Modal, defaultConfig } from 'https://esm.sh/@web3modal/ethers@5.1.11';
+        import { BrowserProvider, formatEther } from 'https://esm.sh/ethers@6.13.1';
+
+        // --- CONFIGURATION ---
+        const projectId = 'cfd6d68649717d2118148c25c6fb5aec'; 
+
+        // Define Chains (Must match what your bot supports)
+        const mainnet = { chainId: 1, name: 'Ethereum', currency: 'ETH', explorerUrl: 'https://etherscan.io', rpcUrl: 'https://cloudflare-eth.com' };
+        const bsc = { chainId: 56, name: 'BNB Smart Chain', currency: 'BNB', explorerUrl: 'https://bscscan.com', rpcUrl: 'https://binance.ulam.io' };
+        const polygon = { chainId: 137, name: 'Polygon', currency: 'MATIC', explorerUrl: 'https://polygonscan.com', rpcUrl: 'https://polygon-rpc.com' };
+        const arbitrum = { chainId: 42161, name: 'Arbitrum', currency: 'ETH', explorerUrl: 'https://arbiscan.io', rpcUrl: 'https://arb1.arbitrum.io/rpc' };
+        const avalanche = { chainId: 43114, name: 'Avalanche', currency: 'AVAX', explorerUrl: 'https://snowtrace.io', rpcUrl: 'https://api.avax.network/ext/bc/C/rpc' };
+        const optimism = { chainId: 10, name: 'Optimism', currency: 'ETH', explorerUrl: 'https://optimistic.etherscan.io', rpcUrl: 'https://mainnet.optimism.io' };
+        const base = { chainId: 8453, name: 'Base', currency: 'ETH', explorerUrl: 'https://basescan.org', rpcUrl: 'https://mainnet.base.org' };
+
+        const metadata = {
+            name: 'SwapSmith',
+            description: 'SwapSmith Transaction Signer',
+            url: window.location.origin, 
+            icons: ['https://avatars.githubusercontent.com/u/37784886']
         };
 
-        document.getElementById('txInfo').innerText = 
-            `Send ${ethers.formatEther(txParams.value)} ETH/Native\nTo: ${txParams.to.slice(0,6)}...`;
+        // Create Web3Modal instance
+        const modal = createWeb3Modal({
+            ethersConfig: defaultConfig({ metadata }),
+            chains: [mainnet, bsc, polygon, arbitrum, avalanche, optimism, base],
+            projectId,
+            enableAnalytics: true
+        });
 
-        async function connectWallet() {
-            if (window.ethereum) {
-                const provider = new ethers.BrowserProvider(window.ethereum);
-                await provider.send("eth_requestAccounts", []);
-                signer = await provider.getSigner();
-                
-                document.getElementById('btnConnect').style.display = 'none';
-                document.getElementById('btnSend').style.display = 'block';
-                
-                // Check Chain ID (Optional: Switch network logic can be added here)
-            } else {
-                alert("Please open this in a wallet browser (MetaMask) or install a wallet.");
-            }
+        // --- APP LOGIC ---
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        // 1. Parse Query Params
+        const urlParams = new URLSearchParams(window.location.search);
+        const txParams = {
+            to: urlParams.get('to'),
+            value: urlParams.get('value') || '0', // wei in hex or string
+            data: urlParams.get('data') || '0x',
+            chainId: parseInt(urlParams.get('chainId') || '1')
+        };
+
+        // 2. Update UI with Transaction Details
+        try {
+            const formattedAmt = formatEther(txParams.value);
+            document.getElementById('amountDisplay').innerText = `${formattedAmt} ETH/Native`;
+            document.getElementById('toDisplay').innerText = `${txParams.to.slice(0, 6)}...${txParams.to.slice(-4)}`;
+        } catch (e) {
+            console.error("Error formatting params", e);
+            document.getElementById('statusText').innerText = "Error parsing transaction details.";
         }
 
+        const btn = document.getElementById('btnAction');
+        const statusText = document.getElementById('statusText');
+        let walletProvider = null;
+        let isConnected = false;
+
+        // 3. Watch for connection changes
+        modal.subscribeProvider(async ({ provider, address, chainId }) => {
+            if (provider) {
+                isConnected = true;
+                walletProvider = provider;
+                btn.innerText = "Confirm Swap";
+                statusText.innerText = `Connected: ${address.slice(0,6)}...`;
+                
+                // Optional: Check if connected to wrong network and switch?
+                // Web3Modal handles switching automatically if you try to sign on a different chain usually,
+                // but explicit switching is better UX.
+                if (chainId !== txParams.chainId) {
+                    statusText.innerText = `Wrong Network. Switching to ID: ${txParams.chainId}...`;
+                    await modal.switchNetwork(txParams.chainId);
+                }
+            } else {
+                isConnected = false;
+                walletProvider = null;
+                btn.innerText = "Connect Wallet";
+                statusText.innerText = "Please connect your wallet.";
+            }
+        });
+
+        // 4. Button Handler
+        btn.onclick = async () => {
+            if (!isConnected) {
+                await modal.open();
+            } else {
+                await sendTransaction();
+            }
+        };
+
         async function sendTransaction() {
+            if (!walletProvider) return;
+
+            btn.disabled = true;
+            btn.innerText = "Signing...";
+            statusText.innerText = "Check your wallet to sign.";
+
             try {
-                const tx = await signer.sendTransaction({
+                const ethersProvider = new BrowserProvider(walletProvider);
+                const signer = await ethersProvider.getSigner();
+                
+                // Send the transaction
+                const txResponse = await signer.sendTransaction({
                     to: txParams.to,
                     value: txParams.value,
                     data: txParams.data
+                    // chainId is handled by the provider/wallet connection
                 });
-                tg.sendData(JSON.stringify({ status: 'submitted', hash: tx.hash }));
-                tg.close();
+
+                statusText.innerText = "Transaction Submitted!";
+                btn.innerText = "Success";
+                
+                // Send data back to Telegram Bot
+                tg.sendData(JSON.stringify({ 
+                    status: 'submitted', 
+                    hash: txResponse.hash 
+                }));
+                
+                // Close Mini App
+                setTimeout(() => tg.close(), 1000);
+
             } catch (error) {
-                alert("Transaction failed: " + error.message);
+                console.error(error);
+                btn.disabled = false;
+                btn.innerText = "Retry Swap";
+                statusText.innerText = "Failed: " + (error.shortMessage || error.message || "User rejected");
             }
         }
     </script>
