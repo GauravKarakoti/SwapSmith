@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SwapSmith Signer</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.1/dist/ethers.umd.min.js"></script>
+    <style>
+        body { font-family: sans-serif; background-color: #1a1a1a; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        button { background: #0088cc; border: none; padding: 15px 30px; color: white; font-size: 16px; border-radius: 8px; cursor: pointer; margin-top: 20px; }
+        .details { background: #2a2a2a; padding: 20px; border-radius: 10px; text-align: center; width: 80%; }
+    </style>
+</head>
+<body>
+    <div class="details" id="status">
+        <h3>Confirm Transaction</h3>
+        <p id="txInfo">Loading...</p>
+    </div>
+    <button id="btnConnect" onclick="connectWallet()">Connect Wallet</button>
+    <button id="btnSend" onclick="sendTransaction()" style="display:none;">Confirm Swap</button>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        let signer;
+        let txParams = {};
+
+        // Parse URL params sent by the bot
+        const urlParams = new URLSearchParams(window.location.search);
+        txParams = {
+            to: urlParams.get('to'),
+            value: urlParams.get('value'), // in wei (hex)
+            data: urlParams.get('data') || '0x',
+            chainId: urlParams.get('chainId')
+        };
+
+        document.getElementById('txInfo').innerText = 
+            `Send ${ethers.formatEther(txParams.value)} ETH/Native\nTo: ${txParams.to.slice(0,6)}...`;
+
+        async function connectWallet() {
+            if (window.ethereum) {
+                const provider = new ethers.BrowserProvider(window.ethereum);
+                await provider.send("eth_requestAccounts", []);
+                signer = await provider.getSigner();
+                
+                document.getElementById('btnConnect').style.display = 'none';
+                document.getElementById('btnSend').style.display = 'block';
+                
+                // Check Chain ID (Optional: Switch network logic can be added here)
+            } else {
+                alert("Please open this in a wallet browser (MetaMask) or install a wallet.");
+            }
+        }
+
+        async function sendTransaction() {
+            try {
+                const tx = await signer.sendTransaction({
+                    to: txParams.to,
+                    value: txParams.value,
+                    data: txParams.data
+                });
+                tg.sendData(JSON.stringify({ status: 'submitted', hash: tx.hash }));
+                tg.close();
+            } catch (error) {
+                alert("Transaction failed: " + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
