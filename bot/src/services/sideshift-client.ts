@@ -34,7 +34,8 @@ export interface SideShiftQuote {
 
 export interface SideShiftOrder {
     id: string;
-    depositAddress: {
+    // Update this field to allow string or object
+    depositAddress: string | {
         address: string;
         memo: string;
     };

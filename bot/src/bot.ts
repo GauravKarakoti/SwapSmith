@@ -21,8 +21,7 @@ import express from 'express';
 dotenv.config();
 
 // --- Configuration ---
-// The URL where your Mini App frontend is hosted
-const MINI_APP_URL = process.env.MINI_APP_URL || "https://swapsmith-signer.vercel.app";
+const MINI_APP_URL = process.env.MINI_APP_URL;
 
 // --- Basic Bot Setup ---
 const bot = new Telegraf(process.env.BOT_TOKEN || '');
@@ -368,8 +367,13 @@ bot.action('place_order', async (ctx) => {
         } catch (e) { console.error("DB Error", e); }
 
         const { amount, fromChain } = state.parsedCommand;
-        const depositAddress = order.depositAddress.address;
-        const memo = order.depositAddress.memo;
+        const depositAddress = typeof order.depositAddress === 'string' 
+            ? order.depositAddress 
+            : order.depositAddress.address;
+            
+        const memo = typeof order.depositAddress === 'object' 
+            ? order.depositAddress.memo 
+            : null;
 
         // --- MINI APP MECHANIC ---
         // Construct the URL for the Mini App to handle the signing

@@ -230,10 +230,11 @@ export async function parseUserCommand(
 
     const completion = await groq.chat.completions.create({
       messages: messages,
-      model: "openai/gpt-oss-20b",
+      model: "llama-3.3-70b-versatile", 
       response_format: { type: "json_object" },
       temperature: 0.1,
-      max_tokens: 500,
+      //Cwange 500 to 2048 to prevent the JSON from being cut off
+      max_tokens: 2048, 
     });
 
     const parsed = JSON.parse(completion.choices[0].message.content || '{}');

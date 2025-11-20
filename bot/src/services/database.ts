@@ -151,8 +151,6 @@ export function clearConversationState(telegramId: number) {
     stmt.run(telegramId);
 }
 
-// --- Order Log Functions (for Swaps) ---
-
 export function createOrderEntry(
   telegramId: number, 
   parsedCommand: ParsedCommand, 
@@ -160,6 +158,16 @@ export function createOrderEntry(
   settleAmount: string | number,
   quoteId: string
 ) {
+  // --- ADD THIS LOGIC ---
+  const depositAddr = typeof order.depositAddress === 'string' 
+      ? order.depositAddress 
+      : order.depositAddress?.address;
+
+  const depositMemo = typeof order.depositAddress === 'object' 
+      ? order.depositAddress?.memo 
+      : null;
+  // ----------------------
+
   const stmt = db.prepare(`
     INSERT INTO orders (
       telegram_id, sideshift_order_id, quote_id, 
@@ -180,8 +188,8 @@ export function createOrderEntry(
     parsedCommand.toAsset,
     parsedCommand.toChain,
     settleAmount.toString(),
-    order.depositAddress.address,
-    order.depositAddress.memo || null
+    depositAddr, // Use the safe variable
+    depositMemo  // Use the safe variable
   );
 }
 
