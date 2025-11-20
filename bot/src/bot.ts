@@ -26,7 +26,7 @@ const MINI_APP_URL = process.env.MINI_APP_URL;
 // --- Basic Bot Setup ---
 const bot = new Telegraf(process.env.BOT_TOKEN || '');
 
-// --- NEW: Warn if ffmpeg is not installed ---
+// ---ZW: Warn if ffmpeg is not installed ---
 try {
     execSync('ffmpeg -version');
     console.log('✅ ffmpeg is installed. Voice messages enabled.');
@@ -396,7 +396,10 @@ bot.action('place_order', async (ctx) => {
             to: depositAddress,
             value: parsedAmountHex,
             data: memo ? ethers.hexlify(ethers.toUtf8Bytes(memo)) : '0x', // Simple memo handling
-            chainId: chainId
+            chainId: chainId,
+            // --- ADDED TOKEN AND CHAIN INFO ---
+            token: state.parsedCommand.fromAsset || 'ETH',
+            chain: fromChain || 'Ethereum'
         });
 
         const webAppUrl = `${MINI_APP_URL}?${params.toString()}`;

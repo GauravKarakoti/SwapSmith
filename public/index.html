@@ -72,13 +72,17 @@
             to: urlParams.get('to'),
             value: urlParams.get('value') || '0', // wei in hex or string
             data: urlParams.get('data') || '0x',
-            chainId: parseInt(urlParams.get('chainId') || '1')
+            chainId: parseInt(urlParams.get('chainId') || '1'),
+            // --- ADDED: Token and Chain info ---
+            token: urlParams.get('token') || 'Native',
+            chain: urlParams.get('chain') || ''
         };
 
         // 2. Update UI with Transaction Details
         try {
             const formattedAmt = formatEther(txParams.value);
-            document.getElementById('amountDisplay').innerText = `${formattedAmt} ETH/Native`;
+            // --- MODIFIED: Display actual token and chain ---
+            document.getElementById('amountDisplay').innerText = `${formattedAmt} ${txParams.token} ${txParams.chain ? `(${txParams.chain})` : ''}`;
             document.getElementById('toDisplay').innerText = `${txParams.to.slice(0, 6)}...${txParams.to.slice(-4)}`;
         } catch (e) {
             console.error("Error formatting params", e);
