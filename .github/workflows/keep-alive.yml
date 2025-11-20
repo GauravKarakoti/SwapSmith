@@ -11,4 +11,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping the bot's health check endpoint
-        run: curl -s "https://swapsmith-1.onrender.com" > /dev/null
+        run: curl -s --max-time 30 "https://swapsmith-1.onrender.com" > /dev/null || true
