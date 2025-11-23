@@ -3,191 +3,202 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SwapSmith Signer</title>
+    <title>SwapSmith Secure Signer</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #1a1a1a; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; padding: 20px; text-align: center;}
-        button { background: #0088cc; border: none; padding: 15px 30px; color: white; font-size: 16px; border-radius: 8px; cursor: pointer; margin-top: 20px; width: 100%; max-width: 300px; font-weight: bold; transition: background 0.2s; }
-        button:disabled { background: #555; cursor: not-allowed; opacity: 0.7; }
-        button:active { transform: scale(0.98); }
-        /* Updated Disconnect Button Style */
-        #btnDisconnect { background: #d32f2f; margin-top: 10px; display: none; }
-        .details { background: #2a2a2a; padding: 20px; border-radius: 16px; width: 100%; max-width: 350px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); margin-bottom: 20px; }
-        h3 { margin-top: 0; color: #ccc; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; }
-        p { line-height: 1.5; font-size: 1.1rem; word-break: break-all; }
-        .label { font-size: 0.9rem; color: #888; margin-bottom: 5px; display: block; }
-        .value { font-size: 1.2rem; font-weight: bold; display: block; margin-bottom: 15px; color: #fff; }
+        body { background-color: #0f172a; color: #f8fafc; font-family: 'Inter', sans-serif; }
+        .gradient-text { background: linear-gradient(to right, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .btn-primary { background: linear-gradient(135deg, #3b82f6, #2563eb); transition: all 0.2s; }
+        .btn-primary:active { transform: scale(0.98); }
+        .loader { border: 3px solid #333; border-top: 3px solid #3b82f6; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
-<body>
-    <div class="details" id="status">
-        <h3>Transaction Request</h3>
-        
-        <span class="label">Sending</span>
-        <span class="value" id="amountDisplay">Loading...</span>
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
 
-        <span class="label">To Address</span>
-        <span class="value" id="toDisplay">...</span>
+    <div class="mb-8 text-center">
+        <h1 class="text-3xl font-bold tracking-tight">Swap<span class="gradient-text">Smith</span></h1>
+        <p class="text-slate-400 text-sm mt-1">Secure Transaction Signer</p>
     </div>
 
-    <button id="btnAction">Connect Wallet</button>
-    <button id="btnDisconnect">Disconnect</button>
-    <p id="statusText" style="margin-top: 15px; font-size: 0.9rem; color: #888;"></p>
+    <div class="glass-panel w-full max-w-md rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+        
+        <div id="statusBadge" class="absolute top-4 right-4 bg-yellow-500/10 text-yellow-500 text-xs px-2 py-1 rounded-full border border-yellow-500/20">
+            Pending Sign
+        </div>
+
+        <div class="mt-4 space-y-6">
+            
+            <div class="text-center">
+                <p class="text-slate-400 text-xs uppercase tracking-wider mb-1" id="actionLabel">You are sending</p>
+                <div class="flex items-center justify-center space-x-2">
+                    <span class="text-4xl font-bold text-white" id="amountDisplay">0.00</span>
+                    <span class="text-xl text-slate-400" id="tokenDisplay">ETH</span>
+                </div>
+                <div class="flex items-center justify-center mt-2 space-x-2 text-sm text-slate-400">
+                    <span id="chainIcon">⛓️</span>
+                    <span id="chainDisplay">Ethereum</span>
+                </div>
+            </div>
+
+            <div class="h-px bg-slate-700 w-full"></div>
+
+            <div class="flex justify-between items-center text-sm">
+                <span class="text-slate-400">Destination</span>
+                <div class="flex items-center space-x-1">
+                    <span class="font-mono text-slate-200 bg-slate-800 px-2 py-1 rounded" id="toDisplay">0x...</span>
+                </div>
+            </div>
+
+            <div class="flex justify-between items-center text-sm">
+                <span class="text-slate-400">Est. Network Fee</span>
+                <span class="text-slate-200">~ $0.45</span>
+            </div>
+        </div>
+
+        <div class="mt-8 space-y-3">
+            <button id="btnAction" class="btn-primary w-full py-4 rounded-xl font-bold text-lg shadow-lg flex justify-center items-center space-x-2">
+                <span>Connect Wallet</span>
+            </button>
+            
+            <button id="btnDisconnect" class="w-full py-3 text-slate-400 text-sm hover:text-white transition hidden">
+                Disconnect Wallet
+            </button>
+        </div>
+
+        <p id="statusText" class="mt-4 text-center text-xs text-slate-500 h-4"></p>
+    </div>
+
+    <p class="mt-6 text-xs text-slate-600 max-w-xs text-center">
+        <span class="mr-1">🔒</span> This transaction is executed directly by your wallet. SwapSmith never accesses your private keys.
+    </p>
 
     <script type="module">
         import { createWeb3Modal, defaultConfig } from 'https://esm.sh/@web3modal/ethers@5.1.11';
-        import { BrowserProvider, formatEther } from 'https://esm.sh/ethers@6.13.1';
+        import { BrowserProvider, formatEther, parseUnits } from 'https://esm.sh/ethers@6.13.1';
 
-        // --- CONFIGURATION ---
-        const projectId = 'cfd6d68649717d2118148c25c6fb5aec'; 
-
+        // --- CONFIG ---
+        const projectId = 'cfd6d68649717d2118148c25c6fb5aec';
+        const metadata = { name: 'SwapSmith', description: 'DeFi Signer', url: window.location.origin, icons: [] };
+        
         // Define Chains
-        const mainnet = { chainId: 1, name: 'Ethereum', currency: 'ETH', explorerUrl: 'https://etherscan.io', rpcUrl: 'https://cloudflare-eth.com' };
-        const bsc = { chainId: 56, name: 'BNB Smart Chain', currency: 'BNB', explorerUrl: 'https://bscscan.com', rpcUrl: 'https://binance.ulam.io' };
-        const polygon = { chainId: 137, name: 'Polygon', currency: 'MATIC', explorerUrl: 'https://polygonscan.com', rpcUrl: 'https://polygon-rpc.com' };
-        const arbitrum = { chainId: 42161, name: 'Arbitrum', currency: 'ETH', explorerUrl: 'https://arbiscan.io', rpcUrl: 'https://arb1.arbitrum.io/rpc' };
-        const avalanche = { chainId: 43114, name: 'Avalanche', currency: 'AVAX', explorerUrl: 'https://snowtrace.io', rpcUrl: 'https://api.avax.network/ext/bc/C/rpc' };
-        const optimism = { chainId: 10, name: 'Optimism', currency: 'ETH', explorerUrl: 'https://optimistic.etherscan.io', rpcUrl: 'https://mainnet.optimism.io' };
-        const base = { chainId: 8453, name: 'Base', currency: 'ETH', explorerUrl: 'https://basescan.org', rpcUrl: 'https://mainnet.base.org' };
+        const chains = [
+            { chainId: 1, name: 'Ethereum', currency: 'ETH', explorerUrl: 'https://etherscan.io', rpcUrl: 'https://cloudflare-eth.com' },
+            { chainId: 56, name: 'BNB Chain', currency: 'BNB', explorerUrl: 'https://bscscan.com', rpcUrl: 'https://binance.ulam.io' },
+            { chainId: 137, name: 'Polygon', currency: 'MATIC', explorerUrl: 'https://polygonscan.com', rpcUrl: 'https://polygon-rpc.com' },
+            { chainId: 8453, name: 'Base', currency: 'ETH', explorerUrl: 'https://basescan.org', rpcUrl: 'https://mainnet.base.org' },
+            { chainId: 42161, name: 'Arbitrum', currency: 'ETH', explorerUrl: 'https://arbiscan.io', rpcUrl: 'https://arb1.arbitrum.io/rpc' }
+        ];
 
-        const metadata = {
-            name: 'SwapSmith',
-            description: 'SwapSmith Transaction Signer',
-            url: window.location.origin, 
-            icons: ['https://avatars.githubusercontent.com/u/37784886']
-        };
-
-        // Create Web3Modal instance
-        const modal = createWeb3Modal({
-            ethersConfig: defaultConfig({ metadata }),
-            chains: [mainnet, bsc, polygon, arbitrum, avalanche, optimism, base],
-            projectId,
-            enableAnalytics: true
-        });
-
-        // --- APP LOGIC ---
+        const modal = createWeb3Modal({ ethersConfig: defaultConfig({ metadata }), chains, projectId });
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        // 1. Parse Query Params
+        // --- PARSE PARAMS ---
         const urlParams = new URLSearchParams(window.location.search);
         const txParams = {
             to: urlParams.get('to'),
-            value: urlParams.get('value') || '0',
+            value: urlParams.get('value') || '0x0',
             data: urlParams.get('data') || '0x',
             chainId: parseInt(urlParams.get('chainId') || '1'),
-            token: urlParams.get('token') || 'Native',
-            chain: urlParams.get('chain') || ''
+            token: urlParams.get('token') || 'ETH',
+            chain: urlParams.get('chain') || 'Ethereum',
+            intent: urlParams.get('intent') || 'swap' // 'swap', 'invest', 'portfolio'
         };
 
-        // 2. Update UI with Transaction Details
+        // --- UPDATE UI ---
+        // Context-aware labels (USP 2 & 3 Support)
+        const actionLabels = {
+            'swap': 'You are Swapping',
+            'invest': 'You are Investing',
+            'portfolio': 'Portfolio Allocation'
+        };
+        document.getElementById('actionLabel').innerText = actionLabels[txParams.intent] || 'You are Sending';
+
         try {
-            const formattedAmt = formatEther(txParams.value);
-            document.getElementById('amountDisplay').innerText = `${formattedAmt} ${txParams.token} ${txParams.chain ? `(${txParams.chain})` : ''}`;
+            // Simple formatting - assume 18 decimals for demo, or raw if not native
+            // In a real app, you'd check if token is native or ERC20 for formatting
+            const displayAmt = txParams.value.startsWith('0x') ? formatEther(txParams.value) : txParams.value;
+            document.getElementById('amountDisplay').innerText = parseFloat(displayAmt).toFixed(4);
+            document.getElementById('tokenDisplay').innerText = txParams.token;
+            document.getElementById('chainDisplay').innerText = txParams.chain;
             document.getElementById('toDisplay').innerText = `${txParams.to.slice(0, 6)}...${txParams.to.slice(-4)}`;
         } catch (e) {
-            console.error("Error formatting params", e);
-            document.getElementById('statusText').innerText = "Error parsing transaction details.";
+            console.error(e);
         }
 
         const btn = document.getElementById('btnAction');
         const btnDisconnect = document.getElementById('btnDisconnect');
         const statusText = document.getElementById('statusText');
+        const statusBadge = document.getElementById('statusBadge');
         let walletProvider = null;
-        let isConnected = false;
 
-        // 3. Watch for connection changes
+        // --- WALLET LOGIC ---
         modal.subscribeProvider(async ({ provider, address, chainId }) => {
             if (provider) {
-                isConnected = true;
                 walletProvider = provider;
-                btn.innerText = "Confirm Swap";
-                btn.disabled = false;
+                btn.innerHTML = `Sign Transaction <span class="ml-2">✍️</span>`;
+                btn.classList.remove('btn-primary');
+                btn.classList.add('bg-green-600', 'hover:bg-green-700', 'text-white'); // Success state style
                 btnDisconnect.style.display = "block";
-                statusText.innerText = `Connected: ${address.slice(0,6)}...${address.slice(-4)}`;
+                statusBadge.innerText = "Wallet Connected";
+                statusBadge.classList.replace('text-yellow-500', 'text-green-400');
                 
                 if (chainId !== txParams.chainId) {
-                    statusText.innerText = `Wrong Network. Switching to ID: ${txParams.chainId}...`;
-                    try {
-                        await modal.switchNetwork(txParams.chainId);
-                    } catch (err) {
-                        console.error("Switch network failed", err);
-                    }
+                    statusText.innerText = `Switching network to ${txParams.chain}...`;
+                    await modal.switchNetwork(txParams.chainId);
                 }
             } else {
-                handleDisconnectUI();
+                resetUI();
             }
         });
 
-        // Helper to reset UI state
-        function handleDisconnectUI() {
-            isConnected = false;
+        function resetUI() {
             walletProvider = null;
             btn.innerText = "Connect Wallet";
-            btn.disabled = false;
+            btn.classList.add('btn-primary');
+            btn.classList.remove('bg-green-600');
             btnDisconnect.style.display = "none";
-            statusText.innerText = "Please connect your wallet.";
+            statusBadge.innerText = "Pending Connection";
         }
 
-        // 4. Button Handlers
         btn.onclick = async () => {
-            if (!isConnected) {
+            if (!walletProvider) {
                 await modal.open();
             } else {
                 await sendTransaction();
             }
         };
 
-        // --- FIXED DISCONNECT HANDLER ---
-        btnDisconnect.onclick = async () => {
-            try {
-                btnDisconnect.innerText = "Disconnecting...";
-                await modal.disconnect();
-                
-                // Manually force UI update in case subscription lags
-                handleDisconnectUI();
-                btnDisconnect.innerText = "Disconnect"; 
-            } catch (error) {
-                console.error("Disconnect Error:", error);
-                // Even if error (e.g. provider not found), force UI reset
-                handleDisconnectUI();
-                btnDisconnect.innerText = "Disconnect"; 
-                statusText.innerText = "Disconnected (Local session cleared)";
-            }
-        };
+        btnDisconnect.onclick = async () => await modal.disconnect();
 
         async function sendTransaction() {
             if (!walletProvider) return;
-
             btn.disabled = true;
-            btn.innerText = "Signing...";
-            statusText.innerText = "Check your wallet to sign.";
+            btn.innerHTML = `<div class="loader"></div>`;
+            statusText.innerText = "Check your wallet to confirm...";
 
             try {
                 const ethersProvider = new BrowserProvider(walletProvider);
                 const signer = await ethersProvider.getSigner();
-                
-                const txResponse = await signer.sendTransaction({
+                const tx = await signer.sendTransaction({
                     to: txParams.to,
                     value: txParams.value,
                     data: txParams.data
                 });
 
-                statusText.innerText = "Transaction Submitted!";
-                btn.innerText = "Success";
+                statusText.innerText = "Transaction Sent!";
+                btn.innerText = "Success! Closing...";
                 
-                tg.sendData(JSON.stringify({ 
-                    status: 'submitted', 
-                    hash: txResponse.hash 
-                }));
-                
-                setTimeout(() => tg.close(), 1000);
-
+                tg.sendData(JSON.stringify({ status: 'submitted', hash: tx.hash }));
+                setTimeout(() => tg.close(), 2000);
             } catch (error) {
                 console.error(error);
                 btn.disabled = false;
-                btn.innerText = "Retry Swap";
-                statusText.innerText = "Failed: " + (error.shortMessage || error.message || "User rejected");
+                btn.innerText = "Retry Sign";
+                statusText.innerText = "Error: " + (error.shortMessage || "Transaction rejected");
             }
         }
     </script>

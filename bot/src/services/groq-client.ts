@@ -1,231 +1,114 @@
 import Groq from "groq-sdk";
 import dotenv from 'dotenv';
-// --- NEW: Import fs for audio ---
 import fs from 'fs';
-// --- END NEW ---
 
 dotenv.config();
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// Type definition for the parsed command object
+// Enhanced Interface to support Portfolio and Yield
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "unknown";
-  // Swap fields
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "unknown";
+  
+  // Single Swap Fields
   fromAsset: string | null;
   fromChain: string | null;
   toAsset: string | null;
   toChain: string | null;
   amount: number | null;
-  amountType: "exact" | "percentage" | "all" | null;
-  // Checkout fields
+  amountType?: "exact" | "percentage" | "all" | null; // Added back for compatibility
+  
+  // Portfolio Fields (Array of outputs)
+  portfolio?: {
+    toAsset: string;
+    toChain: string;
+    percentage: number; // e.g., 50 for 50%
+  }[];
+
+  // Checkout Fields
   settleAsset: string | null;
   settleNetwork: string | null;
   settleAmount: number | null;
-  settleAddress: string | null; // <-- ADDED THIS FIELD
-  // Common fields
+  settleAddress: string | null;
+
   confidence: number;
   validationErrors: string[];
   parsedMessage: string;
-  requiresConfirmation: boolean;
-  originalInput?: string;
+  requiresConfirmation?: boolean; // Added back for compatibility
+  originalInput?: string;         // Added back for compatibility
 }
 
-// Enhanced system prompt with better validation
 const systemPrompt = `
-You are a precise cryptocurrency trading assistant. Your role is to extract parameters from user messages with high accuracy.
+You are SwapSmith, an advanced DeFi AI agent.
+Your job is to parse natural language into specific JSON commands.
 
-CRITICAL RULES:
-1.  Always respond with valid JSON in this exact format.
-2.  If ANY parameter is ambiguous, set success: false.
-3.  Confirm amounts are numeric and positive.
-4.  DO NOT assume default chains. If the user does not specify a chain for an asset, you MUST set its corresponding chain to null.
-5.  **AMBIGUITY RULE**: If an asset (like USDC, USDT) is mentioned without a chain (for 'fromChain', 'toChain', or 'settleNetwork'), you MUST set success: false and add a validationError explaining that the chain is required.
-6.  **NO CHAIN INFERENCE**: Never infer a 'fromChain' from a 'toChain' or vice-versa.
-7.  **CONTEXT RULE**: If previous messages are provided, use them to resolve ambiguity. If the user provides info that was previously missing, set success: true.
+MODES:
+1. "swap": 1 Input -> 1 Output.
+2. "portfolio": 1 Input -> Multiple Outputs (Split allocation).
+3. "checkout": Payment link creation.
+4. "yield_scout": User asking for high APY/Yield info.
 
-"STANDARDIZED MAPPINGS":
-- Chains: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana
-- Assets: Use uppercase symbols (BTC, ETH, USDC, etc.)
-
-INTENTS:
-- "swap": User wants to exchange one asset for another (e.g., "Swap 0.1 ETH for BTC").
-- "checkout": User wants to generate a payment link for a specific amount and asset. This can be for *themselves* (e.g., "I need 50 USDC on Polygon") or for *someone else* (e.g., "Send 50 USDC on Polygon to 0x123...").
+STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
 
 RESPONSE FORMAT:
 {
   "success": boolean,
-  "intent": "swap" | "checkout" | "unknown",
+  "intent": "swap" | "portfolio" | "checkout" | "yield_scout",
   "fromAsset": string | null,
   "fromChain": string | null,
-  "toAsset": string | null,
-  "toChain": string | null,
   "amount": number | null,
   "amountType": "exact" | "percentage" | "all" | null,
+  
+  // Fill for 'swap'
+  "toAsset": string | null,
+  "toChain": string | null,
+
+  // Fill for 'portfolio'
+  "portfolio": [
+    { "toAsset": "BTC", "toChain": "bitcoin", "percentage": 50 },
+    { "toAsset": "SOL", "toChain": "solana", "percentage": 50 }
+  ],
+
+  // Fill for 'checkout'
   "settleAsset": string | null,
   "settleNetwork": string | null,
   "settleAmount": number | null,
-  "settleAddress": string | null, // <-- ADDED THIS FIELD
-  "confidence": number, // 0-100 scale
+  "settleAddress": string | null,
+
   "validationErrors": string[],
-  "parsedMessage": string, // How you interpreted the request
+  "parsedMessage": "Human readable summary",
   "requiresConfirmation": boolean
 }
 
-VALIDATION CHECKS:
-- Amount/settleAmount must be positive number.
-- Assets must be valid cryptocurrency symbols.
-- Chains must be in standardized list.
+EXAMPLES:
+1. "Split 1 ETH on Base into 50% USDC on Arb and 50% SOL"
+   -> intent: "portfolio", fromAsset: "ETH", fromChain: "base", amount: 1, portfolio: [{toAsset: "USDC", toChain: "arbitrum", percentage: 50}, {toAsset: "SOL", toChain: "solana", percentage: 50}]
 
----
-EXAMPLE 1: GOOD SWAP
-User: "Swap 0.1 ETH on Ethereum for USDC on BSC"
-Response:
-{
-  "success": true,
-  "intent": "swap",
-  "fromAsset": "ETH",
-  "fromChain": "ethereum",
-  "toAsset": "USDC",
-  "toChain": "bsc",
-  "amount": 0.1,
-  "amountType": "exact",
-  "settleAsset": null,
-  "settleNetwork": null,
-  "settleAmount": null,
-  "settleAddress": null,
-  "confidence": 95,
-  "validationErrors": [],
-  "parsedMessage": "Swapping 0.1 ETH on Ethereum for USDC on BSC.",
-  "requiresConfirmation": false
-}
----
-EXAMPLE 2: BAD SWAP (Missing 'fromChain')
-User: "Swap 100 USDC for ETH on Base"
-Response:
-{
-  "success": false,
-  "intent": "swap",
-  "fromAsset": "USDC",
-  "fromChain": null,
-  "toAsset": "ETH",
-  "toChain": "base",
-  "amount": 100,
-  "amountType": "exact",
-  "settleAsset": null,
-  "settleNetwork": null,
-  "settleAmount": null,
-  "settleAddress": null,
-  "confidence": 50,
-  "validationErrors": ["'fromChain' is required for USDC. Please specify the source chain (e.g., '100 USDC on Polygon')."],
-  "parsedMessage": "Swap 100 USDC on an unknown chain for ETH on Base.",
-  "requiresConfirmation": true
-}
----
-EXAMPLE 3: GOOD CHECKOUT (for self)
-User: "I want 50 USDC on Polygon"
-Response:
-{
-  "success": true,
-  "intent": "checkout",
-  "fromAsset": null,
-  "fromChain": null,
-  "toAsset": null,
-  "toChain": null,
-  "amount": null,
-  "amountType": null,
-  "settleAsset": "USDC",
-  "settleNetwork": "polygon",
-  "settleAmount": 50,
-  "settleAddress": null, // <-- User's own address will be used
-  "confidence": 95,
-  "validationErrors": [],
-  "parsedMessage": "Creating a checkout to receive 50 USDC on Polygon.",
-  "requiresConfirmation": false
-}
----
-EXAMPLE 4: BAD CHECKOUT (Missing 'settleNetwork')
-User: "Create a payment link for 50 USDC"
-Response:
-{
-  "success": false,
-  "intent": "checkout",
-  "fromAsset": null,
-  "fromChain": null,
-  "toAsset": null,
-  "toChain": null,
-  "amount": null,
-  "amountType": null,
-  "settleAsset": "USDC",
-  "settleNetwork": null,
-  "settleAmount": 50,
-  "settleAddress": null,
-  "confidence": 40,
-  "validationErrors": ["'settleNetwork' is required for USDC. Please specify the chain (e.g., '50 USDC on Polygon')."],
-  "parsedMessage": "Creating a checkout to receive 50 USDC on an unknown chain.",
-  "requiresConfirmation": true
-}
----
-EXAMPLE 5: GOOD CHECKOUT (with specific address)
-User: "Send 50 USDC on Polygon to 0x1234567890abcdef1234567890abcdef12345678"
-Response:
-{
-  "success": true,
-  "intent": "checkout",
-  "fromAsset": null,
-  "fromChain": null,
-  "toAsset": null,
-  "toChain": null,
-  "amount": null,
-  "amountType": null,
-  "settleAsset": "USDC",
-  "settleNetwork": "polygon",
-  "settleAmount": 50,
-  "settleAddress": "0x1234567890abcdef1234567890abcdef12345678",
-  "confidence": 95,
-  "validationErrors": [],
-  "parsedMessage": "Creating a checkout to send 50 USDC on Polygon to 0x1234...",
-  "requiresConfirmation": false
-}
----
-EXAMPLE 6: CONTEXTUAL FOLLOW-UP
-(The following messages are in sequence)
-
-Message 1 (User): "Swap 100 USDC for ETH on Base"
-Message 2 (Assistant): "'fromChain' is required for USDC. Please specify the source chain (e.g., '100 USDC on Polygon')."
-Message 3 (User): "on polygon"
-Response:
-{
-  "success": true,
-  "intent": "swap",
-  "fromAsset": "USDC",
-  "fromChain": "polygon",
-  "toAsset": "ETH",
-  "toChain": "base",
-  "amount": 100,
-  "amountType": "exact",
-  "settleAsset": null,
-  "settleNetwork": null,
-  "settleAmount": null,
-  "settleAddress": null,
-  "confidence": 90,
-  "validationErrors": [],
-  "parsedMessage": "Swapping 100 USDC on Polygon for ETH on Base.",
-  "requiresConfirmation": false
-}
+2. "Where can I get good yield on stables?"
+   -> intent: "yield_scout"
 `;
 
-// --- MODIFIED: Accept conversation history for context ---
 export async function parseUserCommand(
   userInput: string,
-  conversationHistory: Groq.Chat.Completions.ChatCompletionMessageParam[] = []
+  conversationHistory: any[] = [],
+  inputType: 'text' | 'voice' = 'text'
 ): Promise<ParsedCommand> {
+  let currentSystemPrompt = systemPrompt;
+
+  if (inputType === 'voice') {
+    currentSystemPrompt += `
+    \n\nVOICE MODE ACTIVE: 
+    1. The user is speaking. Be more lenient with phonetic typos (e.g., "Ether" vs "Ethereum").
+    2. In the 'parsedMessage' field, write the response as if it will be spoken aloud. Keep it concise, friendly, and avoid special characters like asterisks or complex formatting.
+    `;
+  }
+
   try {
-    const messages: Groq.Chat.Completions.ChatCompletionMessageParam[] = [
-        { role: "system", content: systemPrompt },
+    const messages: any[] = [
+        { role: "system", content: currentSystemPrompt },
         ...conversationHistory,
-        { role: "user", content: `Parse this trading request: "${userInput}"` }
+        { role: "user", content: userInput }
     ];
 
     const completion = await groq.chat.completions.create({
@@ -233,50 +116,33 @@ export async function parseUserCommand(
       model: "llama-3.3-70b-versatile", 
       response_format: { type: "json_object" },
       temperature: 0.1,
-      //Cwange 500 to 2048 to prevent the JSON from being cut off
       max_tokens: 2048, 
     });
 
     const parsed = JSON.parse(completion.choices[0].message.content || '{}');
-    console.log("Raw parsed command:", parsed);
-    
-    // Additional client-side validation
+    console.log("Parsed:", parsed);
     return validateParsedCommand(parsed, userInput);
   } catch (error) {
-    console.error("Error parsing command:", error);
+    console.error("Groq Error:", error);
     return {
-      success: false,
-      intent: "unknown",
-      confidence: 0,
-      validationErrors: ["Failed to process your request"],
-      parsedMessage: "Error occurred during parsing",
-      requiresConfirmation: false,
-      fromAsset: null, fromChain: null, toAsset: null, toChain: null, amount: null, amountType: null,
-      settleAsset: null, settleNetwork: null, settleAmount: null, settleAddress: null, // <-- ADDED
-    };
+      success: false, intent: "unknown", confidence: 0,
+      validationErrors: ["AI parsing failed"], parsedMessage: "",
+      fromAsset: null, fromChain: null, toAsset: null, toChain: null, amount: null,
+      settleAsset: null, settleNetwork: null, settleAmount: null, settleAddress: null
+    } as ParsedCommand;
   }
 }
-// --- END MODIFIED ---
 
-// --- NEW: Function to transcribe audio ---
 export async function transcribeAudio(mp3FilePath: string): Promise<string> {
-  console.log(`Transcribing audio file: ${mp3FilePath}`);
-  try {
-    const transcription = await groq.audio.transcriptions.create({
+  const transcription = await groq.audio.transcriptions.create({
       file: fs.createReadStream(mp3FilePath),
       model: "whisper-large-v3",
       response_format: "json",
-    });
-    console.log(`Transcription result: ${transcription.text}`);
-    return transcription.text;
-  } catch (error) {
-    console.error("Error transcribing audio:", error);
-    throw new Error("Failed to transcribe audio.");
-  }
+  });
+  return transcription.text;
 }
-// --- END NEW ---
 
-
+// --- MISSING FUNCTION RESTORED & UPDATED ---
 function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string): ParsedCommand {
   const errors: string[] = [];
   
@@ -285,19 +151,35 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     if (!parsed.toAsset) errors.push("Destination asset not specified");
     if (!parsed.amount || parsed.amount <= 0) errors.push("Invalid amount specified");
     
-    if (parsed.amountType === "percentage" && parsed.amount != null && (parsed.amount > 100 || parsed.amount < 0)) {
-      errors.push("Percentage must be between 0-100");
+  } else if (parsed.intent === "portfolio") {
+    if (!parsed.fromAsset) errors.push("Source asset not specified");
+    if (!parsed.amount || parsed.amount <= 0) errors.push("Invalid amount specified");
+    if (!parsed.portfolio || parsed.portfolio.length === 0) {
+      errors.push("No portfolio allocation specified");
+    } else {
+      // Validate portfolio percentages
+      const totalPercentage = parsed.portfolio.reduce((sum, item) => sum + (item.percentage || 0), 0);
+      if (Math.abs(totalPercentage - 100) > 1) { // Allow slight float tolerance
+        errors.push(`Total allocation is ${totalPercentage}%, but should be 100%`);
+      }
     }
+
   } else if (parsed.intent === "checkout") {
     if (!parsed.settleAsset) errors.push("Asset to receive not specified");
     if (!parsed.settleNetwork) errors.push("Network to receive on not specified");
     if (!parsed.settleAmount || parsed.settleAmount <= 0) errors.push("Invalid amount specified");
-    // We don't validate settleAddress here, as null is acceptable (it means 'use my wallet')
+    
+  } else if (parsed.intent === "yield_scout") {
+    // No specific validation needed for yield scout, just needs the intent
+    if (!parsed.success && (!parsed.validationErrors || parsed.validationErrors.length === 0)) {
+       // If AI marked as failed but didn't give a reason, we might still accept it if intent is clear
+       // But usually, we trust the AI's success flag here.
+    }
   } else if (!parsed.intent || parsed.intent === "unknown") {
       if (parsed.success === false && parsed.validationErrors && parsed.validationErrors.length > 0) {
          // Keep prompt-level validation errors
       } else {
-        errors.push("Could not determine intent. Please try 'swap' or 'receive'.");
+        errors.push("Could not determine intent.");
       }
   }
   
@@ -317,10 +199,11 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     toChain: parsed.toChain || null,
     amount: parsed.amount || null,
     amountType: parsed.amountType || null,
+    portfolio: parsed.portfolio, // Pass through portfolio
     settleAsset: parsed.settleAsset || null,
     settleNetwork: parsed.settleNetwork || null,
     settleAmount: parsed.settleAmount || null,
-    settleAddress: parsed.settleAddress || null, // <-- ADDED
+    settleAddress: parsed.settleAddress || null, 
     confidence: confidence || 0,
     validationErrors: allErrors,
     parsedMessage: parsed.parsedMessage || '',
