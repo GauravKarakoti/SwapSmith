@@ -105,11 +105,11 @@
             chainId: parseInt(urlParams.get('chainId') || '1'),
             token: urlParams.get('token') || 'ETH',
             chain: urlParams.get('chain') || 'Ethereum',
-            intent: urlParams.get('intent') || 'swap' // 'swap', 'invest', 'portfolio'
+            intent: urlParams.get('intent') || 'swap',
+            amount: urlParams.get('amount') // Capture explicit amount param
         };
 
         // --- UPDATE UI ---
-        // Context-aware labels (USP 2 & 3 Support)
         const actionLabels = {
             'swap': 'You are Swapping',
             'invest': 'You are Investing',
@@ -118,9 +118,14 @@
         document.getElementById('actionLabel').innerText = actionLabels[txParams.intent] || 'You are Sending';
 
         try {
-            // Simple formatting - assume 18 decimals for demo, or raw if not native
-            // In a real app, you'd check if token is native or ERC20 for formatting
-            const displayAmt = txParams.value.startsWith('0x') ? formatEther(txParams.value) : txParams.value;
+            // Priority: Explicit amount param > value param (which is 0 for ERC20)
+            let displayAmt;
+            if (txParams.amount) {
+                displayAmt = txParams.amount;
+            } else {
+                displayAmt = txParams.value.startsWith('0x') ? formatEther(txParams.value) : txParams.value;
+            }
+
             document.getElementById('amountDisplay').innerText = parseFloat(displayAmt).toFixed(4);
             document.getElementById('tokenDisplay').innerText = txParams.token;
             document.getElementById('chainDisplay').innerText = txParams.chain;
@@ -141,7 +146,7 @@
                 walletProvider = provider;
                 btn.innerHTML = `Sign Transaction <span class="ml-2">✍️</span>`;
                 btn.classList.remove('btn-primary');
-                btn.classList.add('bg-green-600', 'hover:bg-green-700', 'text-white'); // Success state style
+                btn.classList.add('bg-green-600', 'hover:bg-green-700', 'text-white');
                 btnDisconnect.style.display = "block";
                 statusBadge.innerText = "Wallet Connected";
                 statusBadge.classList.replace('text-yellow-500', 'text-green-400');
