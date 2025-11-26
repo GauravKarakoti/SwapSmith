@@ -245,25 +245,37 @@ bot.action('confirm_portfolio', async (ctx) => {
     await ctx.editMessageText("🔄 fetching quotes for your portfolio...");
 
     try {
-        // We need an address to settle. For demo, we ask/assume one or use a dummy if not strictly enforced by SideShift yet (they need valid addr).
-        // For this snippet, let's assume the user provided it in context or we prompt (omitted for brevity).
-        const dummyAddr = "0x000000000000000000000000000000000000dead"; // Placeholder
+        const addressBook: { [key: string]: string } = {
+            'solana': '6wU5iGswSkYLL7RKLqqVzM5aHeUEfh5GALZEuGyFFJfR', // Example SOL address
+            'bitcoin': 'bc1q7v263msjfcncj5lau49cn5fhk4kfdw0z7c950c', // Example BTC address
+            'default': '0xeb4f0cb1644fa1f6dd01aa2f7c49099d2267f3a8'  // Example EVM address
+        };
 
         let buttons = [];
         let summary = "✅ *Quotes Generated:*\n\n";
 
-        // Loop through portfolio items and generate quotes
+        const refundAddress = addressBook['default']; 
+
         for (const item of cmd.portfolio!) {
             const splitAmount = (cmd.amount! * (item.percentage / 100));
             
+            const targetChainId = item.toChain?.toLowerCase() || 'ethereum';
+            
+            // 2. Define the Settle Address (Destination)
+            // This matches the 'toChain' (e.g., Solana address for SOL swap)
+            const settleAddress = addressBook[targetChainId] || addressBook['default'];
+
             const quote = await createQuote(
                 cmd.fromAsset!, cmd.fromChain!, 
                 item.toAsset, item.toChain, 
                 splitAmount, '1.1.1.1'
             );
 
-            // Create Order
-            const order = await createOrder(quote.id!, dummyAddr, dummyAddr); // Use real addr in prod
+            // 3. Create Order with DISTINCT addresses
+            // arg1: quoteId
+            // arg2: settleAddress (Where money goes -> Target Chain)
+            // arg3: refundAddress (Where money returns if failed -> Source Chain)
+            const order = await createOrder(quote.id!, settleAddress, refundAddress);
             
             // Build Mini App URL
             const parsedAmountHex = '0x' + ethers.parseUnits(splitAmount.toString(), 18).toString(16);
