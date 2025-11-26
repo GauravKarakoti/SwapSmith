@@ -40,9 +40,12 @@ You are SwapSmith, an advanced DeFi AI agent.
 Your job is to parse natural language into specific JSON commands.
 
 MODES:
-1. "swap": 1 Input -> 1 Output.
-2. "portfolio": 1 Input -> Multiple Outputs (Split allocation).
-3. "checkout": Payment link creation.
+1. "swap": User wants to exchange one asset for another (e.g., "Swap ETH for USDC").
+2. "portfolio": User wants to split one input asset into multiple output assets (e.g., "Split 1 ETH into 50% BTC and 50% SOL").
+3. "checkout": 
+   - User wants to create a payment link.
+   - User says "Send [amount] [asset] to [address]" (Generate a link to pay that address).
+   - User says "I want to receive [amount] [asset]" (Generate a link for their own wallet).
 4. "yield_scout": User asking for high APY/Yield info.
 
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
@@ -51,22 +54,24 @@ RESPONSE FORMAT:
 {
   "success": boolean,
   "intent": "swap" | "portfolio" | "checkout" | "yield_scout",
+  
+  // SWAP PARAMS
   "fromAsset": string | null,
   "fromChain": string | null,
-  "amount": number | null,
-  "amountType": "exact" | "percentage" | "all" | null,
-  
-  // Fill for 'swap'
   "toAsset": string | null,
   "toChain": string | null,
+  "amount": number | null,
+  "amountType": "exact" | "percentage" | "all" | null,
 
-  // Fill for 'portfolio'
+  // PORTFOLIO PARAMS
   "portfolio": [
     { "toAsset": "BTC", "toChain": "bitcoin", "percentage": 50 },
     { "toAsset": "SOL", "toChain": "solana", "percentage": 50 }
   ],
 
-  // Fill for 'checkout'
+  // CHECKOUT PARAMS
+  // If user says "Send 5 USDC to 0x123...", map 5 to settleAmount, USDC to settleAsset, 0x123 to settleAddress.
+  // If user says "Receive 5 USDC", leave settleAddress as null.
   "settleAsset": string | null,
   "settleNetwork": string | null,
   "settleAmount": number | null,
@@ -107,7 +112,6 @@ export async function parseUserCommand(userInput: string): Promise<ParsedCommand
   }
 }
 
-// --- NEW: Transcription Function ---
 export async function transcribeAudio(audioFile: File): Promise<string> {
   try {
     const transcription = await groq.audio.transcriptions.create({
@@ -137,8 +141,13 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
       errors.push("No portfolio allocation specified");
     }
   } else if (parsed.intent === "checkout") {
-    if (!parsed.settleAsset) errors.push("Asset to receive not specified");
-    if (!parsed.settleNetwork) errors.push("Network to receive on not specified");
+    // If user said "Send 5 USDC...", AI might map it to 'fromAsset'. We remap to 'settleAsset' here if missing.
+    if (!parsed.settleAsset && parsed.fromAsset) parsed.settleAsset = parsed.fromAsset;
+    if (!parsed.settleNetwork && parsed.fromChain) parsed.settleNetwork = parsed.fromChain;
+    if (!parsed.settleAmount && parsed.amount) parsed.settleAmount = parsed.amount;
+
+    if (!parsed.settleAsset) errors.push("Asset to receive/send not specified");
+    // We do NOT fail if settleAddress is missing here; Frontend will inject connected wallet.
     if (!parsed.settleAmount || parsed.settleAmount <= 0) errors.push("Invalid amount specified");
   }
   

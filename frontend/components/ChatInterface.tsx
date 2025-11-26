@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useAccount } from 'wagmi';
-import { Mic, Send, StopCircle } from 'lucide-react';
+import { Mic, Send, StopCircle, Copy, Check } from 'lucide-react';
 import SwapConfirmation from './SwapConfirmation';
 import TrustIndicators from './TrustIndicators';
 import IntentConfirmation from './IntentConfirmation';
@@ -22,8 +22,10 @@ export default function ChatInterface() {
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
+  const [copiedLink, setCopiedLink] = useState<string | null>(null);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
   
   // MediaRecorder ref
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -35,6 +37,16 @@ export default function ChatInterface() {
 
   const addMessage = (message: Omit<Message, 'timestamp'>) => {
     setMessages(prev => [...prev, { ...message, timestamp: new Date() }]);
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedLink(text);
+      setTimeout(() => setCopiedLink(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy', err);
+    }
   };
 
   const startRecording = async () => {
@@ -65,14 +77,12 @@ export default function ChatInterface() {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-      // Stop all tracks to release microphone
       mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
     }
   };
 
   const handleVoiceInput = async (audioBlob: Blob) => {
     setIsLoading(true);
-    // Optimistically show that voice was sent
     addMessage({ role: 'user', content: '🎤 [Sending Voice...]', type: 'message' });
     
     const formData = new FormData();
@@ -88,15 +98,16 @@ export default function ChatInterface() {
 
         const data = await response.json();
         
-        // Replace the placeholder message or just continue
-        // We'll process the transcribed text as a command
         if (data.text) {
-            // Optionally update the UI to show what was heard
+            // ✅ FIXED: Immutable state update
             setMessages(prev => {
                 const newMsgs = [...prev];
-                const lastMsg = newMsgs[newMsgs.length - 1];
-                if (lastMsg.content === '🎤 [Sending Voice...]') {
-                    lastMsg.content = `🎤 "${data.text}"`;
+                const lastIndex = newMsgs.length - 1;
+                if (lastIndex >= 0 && newMsgs[lastIndex].content === '🎤 [Sending Voice...]') {
+                    newMsgs[lastIndex] = {
+                        ...newMsgs[lastIndex],
+                        content: `🎤 "${data.text}"`
+                    };
                 }
                 return newMsgs;
             });
@@ -115,8 +126,7 @@ export default function ChatInterface() {
   };
 
   const processCommand = async (text: string) => {
-    // Logic matches the text input flow, but ensures isLoading is managed correctly
-    if(!isLoading) setIsLoading(true); // Ensure loading state if called directly
+    if(!isLoading) setIsLoading(true); 
 
     try {
       const response = await fetch('/api/parse-command', {
@@ -150,8 +160,24 @@ export default function ChatInterface() {
         return;
       }
 
-      // Handle Checkout
+      // Handle Checkout (Payment Links)
       if (command.intent === 'checkout') {
+        // ✅ FIXED: Use connected wallet if settleAddress is missing (User said "receive")
+        let finalAddress = command.settleAddress;
+        
+        if (!finalAddress) {
+            if (!isConnected || !address) {
+                addMessage({
+                    role: 'assistant',
+                    content: "To create a receive link for yourself, please connect your wallet first.",
+                    type: 'message'
+                });
+                setIsLoading(false);
+                return;
+            }
+            finalAddress = address;
+        }
+
         const checkoutRes = await fetch('/api/create-checkout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -159,13 +185,16 @@ export default function ChatInterface() {
                 settleAsset: command.settleAsset,
                 settleNetwork: command.settleNetwork,
                 settleAmount: command.settleAmount,
-                settleAddress: command.settleAddress 
+                settleAddress: finalAddress 
             })
         });
         const checkoutData = await checkoutRes.json();
+        
+        if (checkoutData.error) throw new Error(checkoutData.error);
+
         addMessage({
             role: 'assistant',
-            content: `Payment Link Created for ${checkoutData.settleAmount} ${checkoutData.settleCoin}`,
+            content: `Payment Link Created for ${checkoutData.settleAmount} ${checkoutData.settleCoin} on ${command.settleNetwork}`,
             type: 'checkout_link',
             data: { url: checkoutData.url }
         });
@@ -175,12 +204,21 @@ export default function ChatInterface() {
 
       // Handle Portfolio
       if (command.intent === 'portfolio') {
-         let msg = `📊 **Portfolio Strategy:**\nInput: ${command.amount} ${command.fromAsset}\n\n`;
+         let msg = `📊 **Portfolio Strategy Detected**\nInput: ${command.amount} ${command.fromAsset}\n\n**Allocation Plan:**\n`;
          command.portfolio?.forEach(p => {
              msg += `• ${p.percentage}% → ${p.toAsset} on ${p.toChain}\n`;
          });
-         addMessage({ role: 'assistant', content: msg, type: 'message' });
-         addMessage({ role: 'assistant', content: "To execute this, please confirm each swap individually (multi-swap execution coming soon).", type: 'message' });
+         // Add message with structured content
+         addMessage({ 
+             role: 'assistant', 
+             content: msg, 
+             type: 'message' 
+         });
+         addMessage({ 
+             role: 'assistant', 
+             content: "⚠️ Portfolio execution is currently in beta. Please execute individual swaps for now.", 
+             type: 'message' 
+         });
          setIsLoading(false);
          return;
       }
@@ -193,9 +231,9 @@ export default function ChatInterface() {
         await executeSwap(command);
       }
       
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      addMessage({ role: 'assistant', content: 'Error processing request.', type: 'message' });
+      addMessage({ role: 'assistant', content: `Error processing request: ${error.message || 'Unknown error'}`, type: 'message' });
     } finally {
       setIsLoading(false);
     }
@@ -256,23 +294,36 @@ export default function ChatInterface() {
             <div className={`max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                 
                 {msg.type === 'yield_info' ? (
-                    <div className="bg-gray-200 text-gray-800 p-3 rounded-lg whitespace-pre-line text-sm">
+                    <div className="bg-gray-200 text-gray-900 p-3 rounded-lg whitespace-pre-line text-sm">
                         {msg.content}
                     </div>
                 ) : msg.type === 'checkout_link' ? (
-                    <div className="bg-blue-100 border border-blue-300 p-4 rounded-lg text-center">
-                        <p className="font-bold text-blue-800 mb-2">{msg.content}</p>
-                        <a href={msg.data.url} target="_blank" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 block w-full">
-                            Pay Now
-                        </a>
+                    <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg text-center shadow-sm">
+                        <p className="font-semibold text-blue-900 mb-3 text-sm">{msg.content}</p>
+                        
+                        <div className="flex flex-col gap-2">
+                            <a href={msg.data.url} target="_blank" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 block w-full font-medium text-sm transition-colors">
+                                Pay Now ↗
+                            </a>
+                            
+                            {/* ✅ ADDED: Copy Button for Link */}
+                            <button 
+                                onClick={() => copyToClipboard(msg.data.url)}
+                                className="flex items-center justify-center gap-2 bg-white border border-blue-300 text-blue-700 px-4 py-2 rounded hover:bg-blue-50 w-full text-sm transition-colors"
+                            >
+                                {copiedLink === msg.data.url ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                                {copiedLink === msg.data.url ? 'Copied Link!' : 'Copy Link'}
+                            </button>
+                        </div>
                     </div>
                 ) : msg.type === 'intent_confirmation' ? (
                     <IntentConfirmation command={msg.data?.parsedCommand} onConfirm={handleIntentConfirm} />
                 ) : msg.type === 'swap_confirmation' ? (
                     <SwapConfirmation quote={msg.data?.quoteData} confidence={msg.data?.confidence} />
                 ) : (
-                    <div className={`p-3 rounded-lg ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800'}`}>
-                        {msg.content}
+                    <div className={`p-3 rounded-lg ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-800 shadow-sm'}`}>
+                        {/* Render new lines correctly for portfolio/yield messages */}
+                        <div className="whitespace-pre-line text-sm">{msg.content}</div>
                     </div>
                 )}
             </div>
@@ -285,7 +336,7 @@ export default function ChatInterface() {
         <div className="flex gap-2 items-center">
           <button 
             onClick={isRecording ? stopRecording : startRecording}
-            className={`p-3 rounded-full transition-all ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}
+            className={`p-3 rounded-full transition-all ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
             title={isRecording ? "Stop Recording" : "Start Voice Input"}
           >
             {isRecording ? <StopCircle className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
@@ -296,20 +347,20 @@ export default function ChatInterface() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Type or speak... 'Swap ETH for BTC' or 'Best yields on stables'"
-            className="flex-1 p-3 border border-gray-300 text-gray-900 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-            disabled={isLoading || !isConnected}
+            placeholder="Type or speak... 'Swap ETH for BTC' or 'Receive 10 USDC'"
+            className="flex-1 p-3 border border-gray-300 text-gray-900 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"
+            disabled={isLoading}
           />
           
           <button 
             onClick={handleSend} 
-            disabled={isLoading || !input.trim() || !isConnected}
-            className="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            disabled={isLoading || !input.trim()}
+            className="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
             <Send className="w-5 h-5" />
           </button>
         </div>
-        {!isConnected && <p className="text-xs text-center text-red-500 mt-2">Please connect wallet first</p>}
+        {!isConnected && <p className="text-xs text-center text-red-500 mt-2 font-medium">Please connect wallet for full features</p>}
       </div>
     </div>
   );
