@@ -68,7 +68,7 @@ bot.start((ctx) => {
     "/status [id] - Check order status\n" +
     "/clear - Reset conversation\n\n" +
     "🗣️ *Try saying:*\n" +
-    "_'Swap 0.1 ETH on Ethereum for USDC on BSC'_",
+    "_'Swap 0.1 ETH on Ethereum for USDC on BSC on 0x....'_",
     { parse_mode: 'Markdown' }
   );
 });
@@ -310,7 +310,15 @@ bot.action('place_order', async (ctx) => {
 
         const webAppUrl = `${MINI_APP_URL}?${params.toString()}`;
 
-        ctx.editMessageText(`✅ *Order Created!* (ID: \`${order.id}\`)\n\nClick below to sign.`, {
+        const QV = 
+        `✅ *Order Created!* (ID: \`${order.id}\`)\n\n` +
+          `To complete the swap, please sign the transaction in your wallet.\n\n` +
+          `1. Click the button below.\n` +
+          `2. Connect your wallet (MetaMask, etc).\n` +
+          `3. Confirm the transaction.\n\n` +
+          `_Destination: ${destinationAddress}_`;
+
+        ctx.editMessageText(QV, {
             parse_mode: 'Markdown',
             ...Markup.inlineKeyboard([
                 Markup.button.webApp('📱 Sign Transaction', webAppUrl),
