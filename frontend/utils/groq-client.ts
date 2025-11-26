@@ -5,55 +5,77 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 // Type definition for the parsed command object
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "unknown";
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "unknown";
+  
+  // Single Swap Fields
   fromAsset: string | null;
   fromChain: string | null;
   toAsset: string | null;
   toChain: string | null;
   amount: number | null;
-  amountType: "exact" | "percentage" | "all" | null;
+  amountType?: "exact" | "percentage" | "all" | null;
+  
+  // Portfolio Fields
+  portfolio?: {
+    toAsset: string;
+    toChain: string;
+    percentage: number;
+  }[];
+
+  // Checkout Fields
+  settleAsset: string | null;
+  settleNetwork: string | null;
+  settleAmount: number | null;
+  settleAddress: string | null;
+
   confidence: number;
   validationErrors: string[];
   parsedMessage: string;
-  requiresConfirmation: boolean;
+  requiresConfirmation?: boolean;
   originalInput?: string;
 }
 
-// Enhanced system prompt with better validation
 const systemPrompt = `
-You are a precise cryptocurrency trading assistant. Your role is to extract swap parameters from user messages with high accuracy.
+You are SwapSmith, an advanced DeFi AI agent.
+Your job is to parse natural language into specific JSON commands.
 
-CRITICAL RULES:
-1. Always respond with valid JSON in this exact format
-2. If ANY parameter is ambiguous, set success: false
-3. Confirm amounts are numeric and positive
-4. Validate asset/chain combinations exist
+MODES:
+1. "swap": 1 Input -> 1 Output.
+2. "portfolio": 1 Input -> Multiple Outputs (Split allocation).
+3. "checkout": Payment link creation.
+4. "yield_scout": User asking for high APY/Yield info.
 
-STANDARDIZED MAPPINGS:
-- Chains: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana
-- Assets: Use uppercase symbols (BTC, ETH, USDC, etc.)
+STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
 
 RESPONSE FORMAT:
 {
   "success": boolean,
-  "intent": "swap" | "unknown",
+  "intent": "swap" | "portfolio" | "checkout" | "yield_scout",
   "fromAsset": string | null,
   "fromChain": string | null,
-  "toAsset": string | null,
-  "toChain": string | null,
   "amount": number | null,
   "amountType": "exact" | "percentage" | "all" | null,
-  "confidence": number, // 0-100 scale
-  "validationErrors": string[],
-  "parsedMessage": string, // How you interpreted the request
-  "requiresConfirmation": boolean // If confidence < 90%
-}
+  
+  // Fill for 'swap'
+  "toAsset": string | null,
+  "toChain": string | null,
 
-VALIDATION CHECKS:
-- Amount must be positive number
-- Assets must be valid cryptocurrency symbols
-- Chains must be in standardized list
-- Cross-chain swaps must have both chains specified
+  // Fill for 'portfolio'
+  "portfolio": [
+    { "toAsset": "BTC", "toChain": "bitcoin", "percentage": 50 },
+    { "toAsset": "SOL", "toChain": "solana", "percentage": 50 }
+  ],
+
+  // Fill for 'checkout'
+  "settleAsset": string | null,
+  "settleNetwork": string | null,
+  "settleAmount": number | null,
+  "settleAddress": string | null,
+
+  "validationErrors": string[],
+  "parsedMessage": "Human readable summary",
+  "requiresConfirmation": boolean
+}
 `;
 
 export async function parseUserCommand(userInput: string): Promise<ParsedCommand> {
@@ -61,17 +83,15 @@ export async function parseUserCommand(userInput: string): Promise<ParsedCommand
     const completion = await groq.chat.completions.create({
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `Parse this trading request: "${userInput}"` }
+        { role: "user", content: userInput }
       ],
-      model: "openai/gpt-oss-20b",
+      model: "llama-3.3-70b-versatile",
       response_format: { type: "json_object" },
       temperature: 0.1,
-      max_tokens: 500,
+      max_tokens: 1024,
     });
 
     const parsed = JSON.parse(completion.choices[0].message.content || '{}');
-    
-    // Additional client-side validation
     return validateParsedCommand(parsed, userInput);
   } catch (error) {
     console.error("Error parsing command:", error);
@@ -79,32 +99,52 @@ export async function parseUserCommand(userInput: string): Promise<ParsedCommand
       success: false,
       intent: "unknown",
       confidence: 0,
-      validationErrors: ["Failed to process your request"],
-      parsedMessage: "Error occurred during parsing",
-      requiresConfirmation: false,
-      fromAsset: null, fromChain: null, toAsset: null, toChain: null, amount: null, amountType: null,
-    };
+      validationErrors: ["AI parsing failed"],
+      parsedMessage: "",
+      fromAsset: null, fromChain: null, toAsset: null, toChain: null, amount: null,
+      settleAsset: null, settleNetwork: null, settleAmount: null, settleAddress: null
+    } as ParsedCommand;
+  }
+}
+
+// --- NEW: Transcription Function ---
+export async function transcribeAudio(audioFile: File): Promise<string> {
+  try {
+    const transcription = await groq.audio.transcriptions.create({
+      file: audioFile,
+      model: "whisper-large-v3",
+      response_format: "json",
+    });
+    return transcription.text;
+  } catch (error) {
+    console.error("Transcription Error:", error);
+    throw new Error("Failed to transcribe audio");
   }
 }
 
 function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string): ParsedCommand {
   const errors: string[] = [];
   
-  // Validate required fields for swap intent
   if (parsed.intent === "swap") {
     if (!parsed.fromAsset) errors.push("Source asset not specified");
     if (!parsed.toAsset) errors.push("Destination asset not specified");
     if (!parsed.amount || parsed.amount <= 0) errors.push("Invalid amount specified");
     
-    // ✅ FIX: Added a null check for parsed.amount before comparison
-    if (parsed.amountType === "percentage" && parsed.amount != null && (parsed.amount > 100 || parsed.amount < 0)) {
-      errors.push("Percentage must be between 0-100");
+  } else if (parsed.intent === "portfolio") {
+    if (!parsed.fromAsset) errors.push("Source asset not specified");
+    if (!parsed.amount || parsed.amount <= 0) errors.push("Invalid amount specified");
+    if (!parsed.portfolio || parsed.portfolio.length === 0) {
+      errors.push("No portfolio allocation specified");
     }
+  } else if (parsed.intent === "checkout") {
+    if (!parsed.settleAsset) errors.push("Asset to receive not specified");
+    if (!parsed.settleNetwork) errors.push("Network to receive on not specified");
+    if (!parsed.settleAmount || parsed.settleAmount <= 0) errors.push("Invalid amount specified");
   }
   
-  // Update success status based on validation
-  const success = parsed.success !== false && errors.length === 0;
-  const confidence = errors.length > 0 ? Math.max(0, (parsed.confidence || 0) - 30) : parsed.confidence;
+  const allErrors = [...(parsed.validationErrors || []), ...errors];
+  const success = parsed.success !== false && allErrors.length === 0;
+  const confidence = allErrors.length > 0 ? Math.max(0, (parsed.confidence || 0) - 30) : parsed.confidence;
   
   return {
     success,
@@ -115,8 +155,13 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     toChain: parsed.toChain || null,
     amount: parsed.amount || null,
     amountType: parsed.amountType || null,
+    portfolio: parsed.portfolio,
+    settleAsset: parsed.settleAsset || null,
+    settleNetwork: parsed.settleNetwork || null,
+    settleAmount: parsed.settleAmount || null,
+    settleAddress: parsed.settleAddress || null, 
     confidence: confidence || 0,
-    validationErrors: [...(parsed.validationErrors || []), ...errors],
+    validationErrors: allErrors,
     parsedMessage: parsed.parsedMessage || '',
     requiresConfirmation: parsed.requiresConfirmation || false,
     originalInput: userInput

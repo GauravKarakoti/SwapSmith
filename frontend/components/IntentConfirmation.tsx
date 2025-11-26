@@ -23,9 +23,8 @@ export default function IntentConfirmation({ command, onConfirm }: IntentConfirm
       
       <div className="mb-3">
         <p className="text-sm text-gray-700 mb-2">I understand you want to:</p>
-        <div className="bg-white p-3 rounded border text-sm">
-          Swap <strong>{command.amount} {command.fromAsset}</strong> on {command.fromChain} 
-          for <strong>{command.toAsset}</strong> on {command.toChain}
+        <div className="bg-white text-gray-900 p-3 rounded border text-sm">
+          Swap <strong>{command.amount} {command.fromAsset}</strong> on {command.fromChain} for <strong>{command.toAsset}</strong> on {command.toChain}
         </div>
       </div>
 

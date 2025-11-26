@@ -4,19 +4,8 @@ const SIDESHIFT_BASE_URL = "https://sideshift.ai/api/v2";
 const AFFILIATE_ID = process.env.NEXT_PUBLIC_AFFILIATE_ID;
 const API_KEY = process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
 
-export interface SideShiftPair {
-  depositCoin: string;
-  settleCoin: string;
-  depositNetwork: string;
-  settleNetwork: string;
-  min: string;
-  max: string;
-  rate: string;
-  hasMemo: boolean;
-}
-
 export interface SideShiftQuote {
-  id?: string; // Add quote ID for tracking
+  id?: string; 
   depositCoin: string;
   depositNetwork: string;
   settleCoin: string;
@@ -27,27 +16,14 @@ export interface SideShiftQuote {
   affiliateId: string;
   error?: { code: string; message: string; };
   memo?: string;
-  expiry?: string; // Add expiry if available
+  expiry?: string; 
 }
 
-export async function getPairs(): Promise<SideShiftPair[]> {
-  try {
-    const response = await axios.get<SideShiftPair[]>(
-      `${SIDESHIFT_BASE_URL}/pairs`,
-      {
-        headers: { 
-          'x-sideshift-secret': API_KEY,
-          'x-user-ip': '0.0.0.0' // Will be set dynamically from API route
-        },
-      }
-    );
-    return response.data;
-  } catch (error) {
-    if (axios.isAxiosError(error)) {
-      throw new Error(error.response?.data?.error?.message || 'Failed to fetch trading pairs');
-    }
-    throw new Error("Failed to fetch trading pairs");
-  }
+export interface SideShiftCheckoutResponse {
+  id: string;
+  url: string;
+  settleAmount: string;
+  settleCoin: string;
 }
 
 export async function createQuote(
@@ -59,7 +35,7 @@ export async function createQuote(
   userIP: string
 ): Promise<SideShiftQuote> {
   try {
-    const response = await axios.post<SideShiftQuote & { id?: string }>(
+    const response = await axios.post(
       `${SIDESHIFT_BASE_URL}/quotes`,
       {
         depositCoin: fromAsset,
@@ -77,20 +53,45 @@ export async function createQuote(
         }
       }
     );
+    return { ...response.data, id: response.data.id };
+  } catch (error: any) {
+    throw new Error(error.response?.data?.error?.message || 'Failed to create quote');
+  }
+}
 
-    if (response.data.error) {
-      throw new Error(response.data.error.message);
-    }
-
-    // Include the quote ID in the response
+export async function createCheckout(
+  settleCoin: string,
+  settleNetwork: string,
+  settleAmount: number,
+  settleAddress: string, // ✅ Added: Receive address as parameter
+  userIP: string
+): Promise<SideShiftCheckoutResponse> {
+  try {
+    const response = await axios.post(
+      `${SIDESHIFT_BASE_URL}/checkout`,
+      {
+        settleCoin,
+        settleNetwork,
+        settleAmount: settleAmount.toString(),
+        affiliateId: AFFILIATE_ID,
+        settleAddress: settleAddress, // ✅ Fixed: Use the passed address
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'x-sideshift-secret': API_KEY,
+          'x-user-ip': userIP,
+        },
+      }
+    );
+    
     return {
-      ...response.data,
-      id: response.data.id // This will be used for tracking
+        id: response.data.id,
+        url: `https://pay.sideshift.ai/checkout/${response.data.id}`,
+        settleAmount: response.data.settleAmount,
+        settleCoin: response.data.settleCoin
     };
-  } catch (error) {
-    if (axios.isAxiosError(error)) {
-      throw new Error(error.response?.data?.error?.message || `Failed to create quote for ${fromAsset} to ${toAsset}`);
-    }
-    throw new Error(`Failed to create quote for ${fromAsset} to ${toAsset}`);
+  } catch (error: any) {
+    throw new Error(error.response?.data?.error?.message || 'Failed to create checkout');
   }
 }
