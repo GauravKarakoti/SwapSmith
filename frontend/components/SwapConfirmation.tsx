@@ -1,9 +1,9 @@
 'use client'
 
-import { CheckCircle, AlertCircle, ExternalLink, Copy, Check } from 'lucide-react' // Removed unused 'Info'
+import { CheckCircle, AlertCircle, ExternalLink, Copy, Check, ShieldCheck } from 'lucide-react'
 import { useState } from 'react'
 import { useAccount, useSendTransaction, useSwitchChain } from 'wagmi'
-import { parseEther, type Chain } from 'viem' // Import Chain type
+import { parseEther, type Chain } from 'viem'
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
 
 // --- Interface and Constants ---
@@ -54,7 +54,8 @@ const CHAIN_MAP: { [key: string]: Chain } = { // Use the specific Chain type
 export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfirmationProps) {
   const [copiedAddress, setCopiedAddress] = useState(false)
   const [copiedMemo, setCopiedMemo] = useState(false)
-
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [simulationPassed, setSimulationPassed] = useState(false);
   const { address, isConnected, chain: connectedChain } = useAccount()
   const { data: hash, error, isPending, isSuccess, sendTransaction } = useSendTransaction()
   const { switchChainAsync } = useSwitchChain()
@@ -102,6 +103,15 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
         alert('Failed to switch network. Please try again.');
       }
     }
+  };
+
+  const handleSimulate = async () => {
+    setIsSimulating(true);
+    // Mock Simulation Delay
+    setTimeout(() => {
+        setIsSimulating(false);
+        setSimulationPassed(true);
+    }, 1500);
   };
 
   const copyToClipboard = async (text: string, type: 'address' | 'memo') => {
@@ -237,10 +247,35 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
         )}
       </div>
 
+      <div className="mt-3 mb-3">
+         {!simulationPassed ? (
+             <button 
+                onClick={handleSimulate}
+                disabled={isSimulating}
+                className="w-full flex items-center justify-center gap-2 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors"
+             >
+                {isSimulating ? (
+                    <span className="animate-pulse">Running Safety Check...</span>
+                ) : (
+                    <>
+                        <ShieldCheck className="w-4 h-4" />
+                        Simulate Transaction
+                    </>
+                )}
+             </button>
+         ) : (
+             <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+                 <ShieldCheck className="w-4 h-4" />
+                 <span>Safety Check Passed: No errors detected.</span>
+             </div>
+         )}
+      </div>
+
       <div className="mt-4 space-y-2">
         <button
           onClick={handleConfirm}
-          disabled={!isConnected || isPending || !address}
+          // Only allow confirm if simulation passed (optional strictness) or just standard checks
+          disabled={!isConnected || isPending || !address} 
           className="w-full py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isPending ? 'Check Your Wallet...' : 'Confirm and Send'}

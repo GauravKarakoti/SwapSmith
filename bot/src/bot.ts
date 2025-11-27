@@ -14,7 +14,8 @@ import express from 'express';
 
 dotenv.config();
 const MINI_APP_URL = process.env.MINI_APP_URL;
-const bot = new Telegraf(process.env.BOT_TOKEN || '');
+const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID; // New Env Var for Logs
+const bot = new Telegraf(process.env.BOT_TOKEN!);
 
 // --- FFMPEG CHECK ---
 try {
@@ -55,6 +56,14 @@ const TOKEN_MAP: Record<string, Record<string, { address: string, decimals: numb
   }
 };
 
+async function logAnalytics(ctx: any, errorType: string, details: any) {
+    console.error(`[Analytics] ${errorType}:`, details);
+    if (ADMIN_CHAT_ID) {
+        const msg = `⚠️ *Analytics Alert*\n\n*Type:* ${errorType}\n*User:* ${ctx.from?.id}\n*Input:* "${details.input}"\n*Error:* ${details.error}`;
+        await bot.telegram.sendMessage(ADMIN_CHAT_ID, msg, { parse_mode: 'Markdown' }).catch(e => console.error("Failed to send admin log", e));
+    }
+}
+
 // --- COMMANDS ---
 
 bot.start((ctx) => {
@@ -73,20 +82,20 @@ bot.start((ctx) => {
   );
 });
 
-bot.command('history', (ctx) => {
+bot.command('history', async (ctx) => {
     const userId = ctx.from.id;
-    const orders = db.getUserHistory(userId);
+    const orders = await db.getUserHistory(userId);
 
     if (orders.length === 0) return ctx.reply("You have no order history yet.");
 
     let message = "Your last 10 orders:\n\n";
     orders.forEach((order) => {
-        message += `*Order ${order.sideshift_order_id}* (${order.status})\n`;
-        message += `  *Send:* ${order.from_amount} ${order.from_asset} (${order.from_network})\n`;
-        message += `  *Rcv:* ~${order.settle_amount} ${order.to_asset} (${order.to_network})\n`;
-        message += `  *To:* \`${order.deposit_address}\`\n`;
-        if (order.tx_hash) message += `  *TxHash:* \`${order.tx_hash.substring(0, 10)}...\`\n`;
-        message += `  *Date:* ${new Date(order.created_at).toLocaleString()}\n\n`;
+        message += `*Order ${order.sideshiftOrderId}* (${order.status})\n`;
+        message += `  *Send:* ${order.fromAmount} ${order.fromAsset} (${order.fromNetwork})\n`;
+        message += `  *Rcv:* ~${order.settleAmount} ${order.toAsset} (${order.toNetwork})\n`;
+        message += `  *To:* \`${order.depositAddress}\`\n`;
+        if (order.txHash) message += `  *TxHash:* \`${order.txHash.substring(0, 10)}...\`\n`;
+        message += `  *Date:* ${new Date(order.createdAt as Date).toLocaleString()}\n\n`;
     });
     ctx.replyWithMarkdown(message);
 });
@@ -98,9 +107,9 @@ bot.command('status', async (ctx) => {
 
     try {
         if (!orderIdToCheck) {
-            const lastOrder = db.getLatestUserOrder(userId);
+            const lastOrder = await db.getLatestUserOrder(userId);
             if (!lastOrder) return ctx.reply("You have no order history to check. Send a swap first.");
-            orderIdToCheck = lastOrder.sideshift_order_id;
+            orderIdToCheck = lastOrder.sideshiftOrderId;
             await ctx.reply(`Checking status of your latest order: \`${orderIdToCheck}\``);
         }
 
@@ -121,16 +130,16 @@ bot.command('status', async (ctx) => {
     }
 });
 
-bot.command('checkouts', (ctx) => {
+bot.command('checkouts', async (ctx) => {
     const userId = ctx.from.id;
-    const checkouts = db.getUserCheckouts(userId);
+    const checkouts = await db.getUserCheckouts(userId);
     if (checkouts.length === 0) return ctx.reply("You have no checkout history yet.");
 
     let message = "Your last 10 checkouts (payment links):\n\n";
     checkouts.forEach((checkout) => {
-        const paymentUrl = `https://pay.sideshift.ai/checkout/${checkout.checkout_id}`;
+        const paymentUrl = `https://pay.sideshift.ai/checkout/${checkout.checkoutId}`;
         message += `*Checkout ${checkout.id}* (${checkout.status})\n`;
-        message += `  *Receive:* ${checkout.settle_amount} ${checkout.settle_asset} (${checkout.settle_network})\n`;
+        message += `  *Receive:* ${checkout.settleAmount} ${checkout.settleAsset} (${checkout.settleNetwork})\n`;
         message += `  *Link:* [Pay Here](${paymentUrl})\n`;
     });
     ctx.replyWithMarkdown(message, { link_preview_options: { is_disabled: true } });
@@ -175,12 +184,16 @@ bot.on(message('voice'), async (ctx) => {
 
 async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'voice' = 'text') {
   const userId = ctx.from.id;
-  const state = db.getConversationState(userId);
+  
+  // NOTE: database functions are now async
+  const state = await db.getConversationState(userId); 
   const history = state?.messages || [];
 
   await ctx.sendChatAction('typing');
   const parsed = await parseUserCommand(text, history, inputType);
+  
   if (!parsed.success && parsed.intent !== 'yield_scout') {
+      await logAnalytics(ctx, 'ValidationError', { input: text, error: parsed.validationErrors.join(", ") });
       return ctx.reply(`⚠️ ${parsed.validationErrors.join(", ") || "I didn't understand."}`);
   }
 
@@ -190,18 +203,33 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
   }
 
   if (parsed.intent === 'portfolio') {
-      db.setConversationState(userId, { parsedCommand: parsed });
+      await db.setConversationState(userId, { parsedCommand: parsed });
+      
       let msg = `📊 *Portfolio Strategy Detected*\nInput: ${parsed.amount} ${parsed.fromAsset} (${parsed.fromChain})\n\n*Allocation Plan:*\n`;
       parsed.portfolio?.forEach(item => { msg += `• ${item.percentage}% → ${item.toAsset} on ${item.toChain}\n`; });
+      
+      // We generate a "Batch Sign" link for the Mini App (Frontend)
+      // Since passing complex objects in URL params is messy, we'd typically store this in DB 
+      // and pass an ID, but for this Hackathon, we encode basic params.
+      const params = new URLSearchParams({
+          mode: 'portfolio',
+          data: JSON.stringify(parsed.portfolio),
+          amount: parsed.amount?.toString() || '0',
+          token: parsed.fromAsset || '',
+          chain: parsed.fromChain || ''
+      });
+      
+      const webAppUrl = `${MINI_APP_URL}?${params.toString()}`;
+
       return ctx.replyWithMarkdown(msg, Markup.inlineKeyboard([
-          Markup.button.callback('✅ Execute Strategy', 'confirm_portfolio'),
+          Markup.button.webApp('📱 Batch Sign (Frontend)', webAppUrl),
           Markup.button.callback('❌ Cancel', 'cancel_swap')
       ]));
   }
 
   if (parsed.intent === 'swap' || parsed.intent === 'checkout') {
       if (!parsed.settleAddress) return ctx.reply(`Please reply with the destination address.`);
-      db.setConversationState(userId, { parsedCommand: parsed });
+      await db.setConversationState(userId, { parsedCommand: parsed });
       ctx.reply("Confirm Swap...", Markup.inlineKeyboard([
           Markup.button.callback('✅ Yes', 'confirm_swap'), 
           Markup.button.callback('❌ No', 'cancel_swap')
@@ -220,7 +248,7 @@ bot.action('confirm_portfolio', async (ctx) => {
 
 bot.action('confirm_swap', async (ctx) => {
     const userId = ctx.from.id;
-    const state = db.getConversationState(userId);
+    const state = await db.getConversationState(userId);
     if (!state?.parsedCommand || state.parsedCommand.intent !== 'swap') return ctx.answerCbQuery('Session expired.');
 
     try {
@@ -250,7 +278,7 @@ bot.action('confirm_swap', async (ctx) => {
 
 bot.action('place_order', async (ctx) => {
     const userId = ctx.from.id;
-    const state = db.getConversationState(userId);
+    const state = await db.getConversationState(userId);
     if (!state?.quoteId || !state.parsedCommand) return ctx.answerCbQuery('Session expired.');
 
     try {
@@ -334,7 +362,7 @@ bot.action('place_order', async (ctx) => {
 // --- Button Handler for Checkouts ---
 bot.action('confirm_checkout', async (ctx) => {
     const userId = ctx.from.id;
-    const state = db.getConversationState(userId);
+    const state = await db.getConversationState(userId);
 
     if (!state || !state.parsedCommand || state.parsedCommand.intent !== 'checkout') {
         return ctx.answerCbQuery('Start over.');
