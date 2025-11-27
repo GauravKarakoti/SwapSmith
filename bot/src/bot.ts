@@ -159,7 +159,7 @@ bot.on(message('text'), async (ctx) => {
 
 bot.on(message('voice'), async (ctx) => {
     const userId = ctx.from.id;
-    await ctx.reply('Pd_👂 Listening...'); 
+    await ctx.reply('👂 Listening...'); 
 
     try {
         const file_id = ctx.message.voice.file_id;
@@ -230,8 +230,12 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
   if (parsed.intent === 'swap' || parsed.intent === 'checkout') {
       if (!parsed.settleAddress) return ctx.reply(`Please reply with the destination address.`);
       await db.setConversationState(userId, { parsedCommand: parsed });
+      
+      // ✅ FIX: Determine correct action based on intent
+      const confirmAction = parsed.intent === 'checkout' ? 'confirm_checkout' : 'confirm_swap';
+
       ctx.reply("Confirm...", Markup.inlineKeyboard([
-          Markup.button.callback('✅ Yes', 'confirm_swap'), 
+          Markup.button.callback('✅ Yes', confirmAction), 
           Markup.button.callback('❌ No', 'cancel_swap')
       ]));
   }
