@@ -177,7 +177,11 @@
             }
         };
 
-        btnDisconnect.onclick = async () => await modal.disconnect();
+        // --- FIXED: Open the Account view instead of calling disconnect() ---
+        btnDisconnect.onclick = async () => {
+            // Open the modal to the 'Account' view where the disconnect button exists
+            await modal.open({ view: 'Account' });
+        };
 
         async function sendTransaction() {
             if (!walletProvider) return;
