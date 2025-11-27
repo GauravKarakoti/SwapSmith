@@ -99,7 +99,6 @@ export default function ChatInterface() {
         const data = await response.json();
         
         if (data.text) {
-            // ✅ FIXED: Immutable state update
             setMessages(prev => {
                 const newMsgs = [...prev];
                 const lastIndex = newMsgs.length - 1;
@@ -120,6 +119,8 @@ export default function ChatInterface() {
 
     } catch (error) {
         console.error('Voice processing error:', error);
+        // Remove the temporary message if transcription fails hard to clean up UI
+        setMessages(prev => prev.filter(m => m.content !== '🎤 [Sending Voice...]'));
         addMessage({ role: 'assistant', content: "Sorry, I had trouble processing your voice message.", type: 'message' });
         setIsLoading(false);
     }
@@ -162,7 +163,6 @@ export default function ChatInterface() {
 
       // Handle Checkout (Payment Links)
       if (command.intent === 'checkout') {
-        // ✅ FIXED: Use connected wallet if settleAddress is missing (User said "receive")
         let finalAddress = command.settleAddress;
         
         if (!finalAddress) {
@@ -202,23 +202,31 @@ export default function ChatInterface() {
         return;
       }
 
-      // Handle Portfolio
-      if (command.intent === 'portfolio') {
-         let msg = `📊 **Portfolio Strategy Detected**\nInput: ${command.amount} ${command.fromAsset}\n\n**Allocation Plan:**\n`;
-         command.portfolio?.forEach(p => {
-             msg += `• ${p.percentage}% → ${p.toAsset} on ${p.toChain}\n`;
-         });
-         // Add message with structured content
+      // Handle Portfolio - IMPLEMENTED EXECUTION
+      if (command.intent === 'portfolio' && command.portfolio) {
          addMessage({ 
              role: 'assistant', 
-             content: msg, 
+             content: `📊 **Portfolio Strategy Detected**\nSplitting ${command.amount} ${command.fromAsset} into multiple assets. Generating orders...`, 
              type: 'message' 
          });
-         addMessage({ 
-             role: 'assistant', 
-             content: "⚠️ Portfolio execution is currently in beta. Please execute individual swaps for now.", 
-             type: 'message' 
-         });
+
+         // Iterate and execute each swap sequentially
+         for (const item of command.portfolio) {
+             const splitAmount = (command.amount! * item.percentage) / 100;
+             const subCommand: ParsedCommand = {
+                 ...command,
+                 intent: 'swap',
+                 amount: splitAmount,
+                 toAsset: item.toAsset,
+                 toChain: item.toChain,
+                 // Reset portfolio specific fields for individual swap
+                 portfolio: undefined, 
+                 confidence: 100 // Assume high confidence if parent was confirmed/parsed
+             };
+             
+             await executeSwap(subCommand);
+         }
+         
          setIsLoading(false);
          return;
       }
@@ -277,7 +285,29 @@ export default function ChatInterface() {
 
   const handleIntentConfirm = async (confirmed: boolean) => {
     if (confirmed && pendingCommand) {
-      await executeSwap(pendingCommand);
+        // If it was a portfolio command that needed confirmation, we route it back through processCommand logic manually or just execute
+        if (pendingCommand.intent === 'portfolio') {
+             // Re-trigger the portfolio logic now that we confirmed
+             const confirmedCmd = { ...pendingCommand, requiresConfirmation: false, confidence: 100 };
+             // We can't easily call processCommand recursively cleanly without refactoring, 
+             // but we can manually run the portfolio loop here.
+             addMessage({ role: 'assistant', content: "Executing Portfolio Strategy...", type: 'message' });
+             
+             if (confirmedCmd.portfolio) {
+                for (const item of confirmedCmd.portfolio) {
+                    const splitAmount = (confirmedCmd.amount! * item.percentage) / 100;
+                    await executeSwap({
+                        ...confirmedCmd,
+                        intent: 'swap',
+                        amount: splitAmount,
+                        toAsset: item.toAsset,
+                        toChain: item.toChain
+                    });
+                }
+             }
+        } else {
+            await executeSwap(pendingCommand);
+        }
     } else if (!confirmed) {
         addMessage({ role: 'assistant', content: 'Cancelled.', type: 'message' });
     }
@@ -306,7 +336,6 @@ export default function ChatInterface() {
                                 Pay Now ↗
                             </a>
                             
-                            {/* ✅ ADDED: Copy Button for Link */}
                             <button 
                                 onClick={() => copyToClipboard(msg.data.url)}
                                 className="flex items-center justify-center gap-2 bg-white border border-blue-300 text-blue-700 px-4 py-2 rounded hover:bg-blue-50 w-full text-sm transition-colors"
@@ -322,7 +351,6 @@ export default function ChatInterface() {
                     <SwapConfirmation quote={msg.data?.quoteData} confidence={msg.data?.confidence} />
                 ) : (
                     <div className={`p-3 rounded-lg ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-800 shadow-sm'}`}>
-                        {/* Render new lines correctly for portfolio/yield messages */}
                         <div className="whitespace-pre-line text-sm">{msg.content}</div>
                     </div>
                 )}

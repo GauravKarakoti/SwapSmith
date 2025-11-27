@@ -63,7 +63,7 @@ export async function createCheckout(
   settleCoin: string,
   settleNetwork: string,
   settleAmount: number,
-  settleAddress: string, // ✅ Added: Receive address as parameter
+  settleAddress: string,
   userIP: string
 ): Promise<SideShiftCheckoutResponse> {
   try {
@@ -74,7 +74,9 @@ export async function createCheckout(
         settleNetwork,
         settleAmount: settleAmount.toString(),
         affiliateId: AFFILIATE_ID,
-        settleAddress: settleAddress, // ✅ Fixed: Use the passed address
+        settleAddress: settleAddress,
+        successUrl: 'https://sideshift.ai/success', // Added required field
+        cancelUrl: 'https://sideshift.ai/cancel',   // Added required field
       },
       {
         headers: {
