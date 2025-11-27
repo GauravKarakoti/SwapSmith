@@ -77,6 +77,7 @@ RESPONSE FORMAT:
   "settleAmount": number | null,
   "settleAddress": string | null,
 
+  "confidence": number, // Confidence score between 0 and 100 based on how well the input matches the intent
   "validationErrors": string[],
   "parsedMessage": "Human readable summary",
   "requiresConfirmation": boolean
@@ -153,7 +154,11 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
   
   const allErrors = [...(parsed.validationErrors || []), ...errors];
   const success = parsed.success !== false && allErrors.length === 0;
-  const confidence = allErrors.length > 0 ? Math.max(0, (parsed.confidence || 0) - 30) : parsed.confidence;
+  
+  // Use parsed.confidence if available, otherwise default to 0. 
+  // If there are validation errors, penalize the score.
+  const rawConfidence = typeof parsed.confidence === 'number' ? parsed.confidence : 0;
+  const confidence = allErrors.length > 0 ? Math.max(0, rawConfidence - 30) : rawConfidence;
   
   return {
     success,
@@ -169,7 +174,7 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     settleNetwork: parsed.settleNetwork || null,
     settleAmount: parsed.settleAmount || null,
     settleAddress: parsed.settleAddress || null, 
-    confidence: confidence || 0,
+    confidence: confidence,
     validationErrors: allErrors,
     parsedMessage: parsed.parsedMessage || '',
     requiresConfirmation: parsed.requiresConfirmation || false,
