@@ -17,7 +17,14 @@ interface Message {
 }
 
 export default function ChatInterface() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      role: 'assistant',
+      content: "Hello! I can help you swap assets, create payment links, or scout yields.\n\n💡 Tip: Try our Telegram Bot for on-the-go access!",
+      timestamp: new Date(),
+      type: 'message'
+    }
+  ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -119,7 +126,6 @@ export default function ChatInterface() {
 
     } catch (error) {
         console.error('Voice processing error:', error);
-        // Remove the temporary message if transcription fails hard to clean up UI
         setMessages(prev => prev.filter(m => m.content !== '🎤 [Sending Voice...]'));
         addMessage({ role: 'assistant', content: "Sorry, I had trouble processing your voice message.", type: 'message' });
         setIsLoading(false);
@@ -202,7 +208,7 @@ export default function ChatInterface() {
         return;
       }
 
-      // Handle Portfolio - IMPLEMENTED EXECUTION
+      // Handle Portfolio
       if (command.intent === 'portfolio' && command.portfolio) {
          addMessage({ 
              role: 'assistant', 
@@ -210,7 +216,6 @@ export default function ChatInterface() {
              type: 'message' 
          });
 
-         // Iterate and execute each swap sequentially
          for (const item of command.portfolio) {
              const splitAmount = (command.amount! * item.percentage) / 100;
              const subCommand: ParsedCommand = {
@@ -219,9 +224,8 @@ export default function ChatInterface() {
                  amount: splitAmount,
                  toAsset: item.toAsset,
                  toChain: item.toChain,
-                 // Reset portfolio specific fields for individual swap
                  portfolio: undefined, 
-                 confidence: 100 // Assume high confidence if parent was confirmed/parsed
+                 confidence: 100 
              };
              
              await executeSwap(subCommand);
@@ -285,12 +289,8 @@ export default function ChatInterface() {
 
   const handleIntentConfirm = async (confirmed: boolean) => {
     if (confirmed && pendingCommand) {
-        // If it was a portfolio command that needed confirmation, we route it back through processCommand logic manually or just execute
         if (pendingCommand.intent === 'portfolio') {
-             // Re-trigger the portfolio logic now that we confirmed
              const confirmedCmd = { ...pendingCommand, requiresConfirmation: false, confidence: 100 };
-             // We can't easily call processCommand recursively cleanly without refactoring, 
-             // but we can manually run the portfolio loop here.
              addMessage({ role: 'assistant', content: "Executing Portfolio Strategy...", type: 'message' });
              
              if (confirmedCmd.portfolio) {

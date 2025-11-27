@@ -13,8 +13,8 @@ import { execSync } from 'child_process';
 import express from 'express';
 
 dotenv.config();
-const MINI_APP_URL = process.env.MINI_APP_URL;
-const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID; // New Env Var for Logs
+const MINI_APP_URL = process.env.MINI_APP_URL!;
+const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 const bot = new Telegraf(process.env.BOT_TOKEN!);
 
 // --- FFMPEG CHECK ---
@@ -76,9 +76,13 @@ bot.start((ctx) => {
     "/checkouts - See payment links\n" +
     "/status [id] - Check order status\n" +
     "/clear - Reset conversation\n\n" +
-    "🗣️ *Try saying:*\n" +
-    "_'Swap 0.1 ETH on Ethereum for USDC on BSC on 0x....'_",
-    { parse_mode: 'Markdown' }
+    "💡 *Tip:* Check out our web interface for a graphical experience!",
+    { 
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+            Markup.button.url('🌐 Visit Website', "https://swap-smith.vercel.app/")
+        ])
+    }
   );
 });
 
@@ -185,8 +189,29 @@ bot.on(message('voice'), async (ctx) => {
 async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'voice' = 'text') {
   const userId = ctx.from.id;
   
-  // NOTE: database functions are now async
   const state = await db.getConversationState(userId); 
+  
+  // 1. Check for pending address input
+  if (state?.parsedCommand && (state.parsedCommand.intent === 'swap' || state.parsedCommand.intent === 'checkout') && !state.parsedCommand.settleAddress) {
+      const potentialAddress = text.trim();
+      // Basic address validation (can be improved)
+      if (potentialAddress.length > 25) { // Arbitrary length check for now
+          const updatedCommand = { ...state.parsedCommand, settleAddress: potentialAddress };
+          await db.setConversationState(userId, { parsedCommand: updatedCommand });
+          
+          await ctx.reply(`Address received: \`${potentialAddress}\``, { parse_mode: 'Markdown' });
+          
+          // Re-trigger the confirmation logic with the complete command
+          const confirmAction = updatedCommand.intent === 'checkout' ? 'confirm_checkout' : 'confirm_swap';
+          return ctx.reply("Ready to proceed?", Markup.inlineKeyboard([
+              Markup.button.callback('✅ Yes', confirmAction), 
+              Markup.button.callback('❌ No', 'cancel_swap')
+          ]));
+      } else {
+          return ctx.reply("That doesn't look like a valid address. Please try again or /clear to cancel.");
+      }
+  }
+
   const history = state?.messages || [];
 
   await ctx.sendChatAction('typing');
@@ -208,9 +233,6 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
       let msg = `📊 *Portfolio Strategy Detected*\nInput: ${parsed.amount} ${parsed.fromAsset} (${parsed.fromChain})\n\n*Allocation Plan:*\n`;
       parsed.portfolio?.forEach(item => { msg += `• ${item.percentage}% → ${item.toAsset} on ${item.toChain}\n`; });
       
-      // We generate a "Batch Sign" link for the Mini App (Frontend)
-      // Since passing complex objects in URL params is messy, we'd typically store this in DB 
-      // and pass an ID, but for this Hackathon, we encode basic params.
       const params = new URLSearchParams({
           mode: 'portfolio',
           data: JSON.stringify(parsed.portfolio),
@@ -228,10 +250,15 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
   }
 
   if (parsed.intent === 'swap' || parsed.intent === 'checkout') {
-      if (!parsed.settleAddress) return ctx.reply(`Please reply with the destination address.`);
+      // 2. Handle missing address
+      if (!parsed.settleAddress) {
+          // Store partial state
+          await db.setConversationState(userId, { parsedCommand: parsed });
+          return ctx.reply(`Okay, I see you want to ${parsed.intent}. Please provide the destination/wallet address.`);
+      }
+
       await db.setConversationState(userId, { parsedCommand: parsed });
       
-      // ✅ FIX: Determine correct action based on intent
       const confirmAction = parsed.intent === 'checkout' ? 'confirm_checkout' : 'confirm_swap';
 
       ctx.reply("Confirm...", Markup.inlineKeyboard([
@@ -246,7 +273,6 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
 // --- ACTION HANDLERS ---
 
 bot.action('confirm_portfolio', async (ctx) => {
-    // ... (Portfolio logic remains similar, ideally apply the same params fix here if used)
     ctx.reply("Portfolio execution not fully implemented in this snippet.");
 });
 
@@ -337,7 +363,7 @@ bot.action('place_order', async (ctx) => {
             chainId: chainIdMap[fromChain?.toLowerCase() || 'ethereum'] || '1',
             token: assetKey,
             chain: fromChain || 'Ethereum',
-            amount: amount!.toString() // <--- FIX: Pass explicit amount for UI
+            amount: amount!.toString() 
         });
 
         const webAppUrl = `${MINI_APP_URL}?${params.toString()}`;
@@ -374,12 +400,10 @@ bot.action('confirm_checkout', async (ctx) => {
 
     try {
         await ctx.answerCbQuery('Creating link...');
-        const { settleAsset, settleNetwork, settleAmount } = state.parsedCommand;
-        // For checkout, we used checkoutAddress in state
-        const finalSettleAddress = state.checkoutAddress || state.parsedCommand.settleAddress;
-
+        const { settleAsset, settleNetwork, settleAmount, settleAddress } = state.parsedCommand;
+        
         const checkout = await createCheckout(
-            settleAsset!, settleNetwork!, settleAmount!, finalSettleAddress, '1.1.1.1'
+            settleAsset!, settleNetwork!, settleAmount!, settleAddress!, '1.1.1.1'
         );
 
         if (!checkout || !checkout.id) throw new Error("API Error");
