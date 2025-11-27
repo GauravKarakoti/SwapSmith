@@ -230,7 +230,7 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
   if (parsed.intent === 'swap' || parsed.intent === 'checkout') {
       if (!parsed.settleAddress) return ctx.reply(`Please reply with the destination address.`);
       await db.setConversationState(userId, { parsedCommand: parsed });
-      ctx.reply("Confirm Swap...", Markup.inlineKeyboard([
+      ctx.reply("Confirm...", Markup.inlineKeyboard([
           Markup.button.callback('✅ Yes', 'confirm_swap'), 
           Markup.button.callback('❌ No', 'cancel_swap')
       ]));

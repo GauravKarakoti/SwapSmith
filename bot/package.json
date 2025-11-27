@@ -6,7 +6,11 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/bot.js",
-    "dev": "ts-node-dev --respawn --transpile-only src/bot.ts"
+    "dev": "ts-node-dev --respawn --transpile-only src/bot.ts",
+    "db:gen": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "db:push": "drizzle-kit push"
   },
   "keywords": [],
   "author": "",

@@ -1,6 +1,6 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { pgTable, serial, integer, text, real, timestamp, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, real, timestamp, bigint } from 'drizzle-orm/pg-core';
 import { eq, desc } from 'drizzle-orm';
 import dotenv from 'dotenv';
 import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
@@ -15,20 +15,20 @@ const db = drizzle(sql);
 
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
-  telegramId: integer('telegram_id').notNull().unique(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull().unique(),
   walletAddress: text('wallet_address'),
   sessionTopic: text('session_topic'),
 });
 
 export const conversations = pgTable('conversations', {
   id: serial('id').primaryKey(),
-  telegramId: integer('telegram_id').notNull().unique(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull().unique(),
   state: text('state'), // JSON string
 });
 
 export const orders = pgTable('orders', {
   id: serial('id').primaryKey(),
-  telegramId: integer('telegram_id').notNull(), // Foreign key ref handled in logic
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
   sideshiftOrderId: text('sideshift_order_id').notNull().unique(),
   quoteId: text('quote_id').notNull(),
   fromAsset: text('from_asset').notNull(),
@@ -46,7 +46,7 @@ export const orders = pgTable('orders', {
 
 export const checkouts = pgTable('checkouts', {
   id: serial('id').primaryKey(),
-  telegramId: integer('telegram_id').notNull(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
   checkoutId: text('checkout_id').notNull().unique(),
   settleAsset: text('settle_asset').notNull(),
   settleNetwork: text('settle_network').notNull(),
