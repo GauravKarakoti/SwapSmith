@@ -72,6 +72,7 @@ bot.start((ctx) => {
     "I am your Voice-Activated Crypto Trading Assistant.\n" +
     "I use SideShift.ai for swaps and a Mini App for secure signing.\n\n" +
     "📜 *Commands:*\n" +
+    "/website - Open Web App\n" +
     "/history - See past orders\n" +
     "/checkouts - See payment links\n" +
     "/status [id] - Check order status\n" +
@@ -152,6 +153,18 @@ bot.command('checkouts', async (ctx) => {
 bot.command('clear', (ctx) => {
     db.clearConversationState(ctx.from.id);
     ctx.reply('✅ Conversation history cleared.');
+});
+
+bot.command('website', (ctx) => {
+  ctx.reply(
+    "🌐 *SwapSmith Web Interface*\n\nClick the button below to access the full graphical interface.",
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        Markup.button.url('🚀 Open Website', "https://swap-smith.vercel.app/")
+      ])
+    }
+  );
 });
 
 // --- MESSAGE HANDLERS ---
