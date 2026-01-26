@@ -1,93 +1,319 @@
-# SwapSmith 🤖➡️⇄
+<div align="center">
 
-**Your Voice-Activated Crypto Trading Assistant.**
+# SwapSmith 🤖⇄💱
 
-SwapSmith allows you to execute complex, cross-chain cryptocurrency swaps using simple natural language. Powered by the SideShift.ai API and OpenAI.
+### Your Voice-Activated Crypto Trading Assistant
 
-> "Swap half of my MATIC on Polygon for 50 USDC on Arbitrum."
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-## 🚀 Features
+Execute complex, cross-chain cryptocurrency swaps using simple natural language.  
+Powered by **SideShift.ai API** and **Groq AI**.
 
-- **Natural Language Interface:** Describe the swap you want in plain English.
-- **Cross-Chain Magic:** Seamlessly swap between 200+ assets across 40+ chains.
-- **Voice Input:** (Experimental) Use your microphone to command the agent.
-- **Secure:** Your keys stay yours. Transactions are only executed after your explicit confirmation.
-- **Real-Time Quotes:** Always get the best available rate via SideShift.
+[Live Demo](https://swap-smith.vercel.app/) • [Report Bug](https://github.com/GauravKarakoti/SwapSmith/issues) • [Request Feature](https://github.com/GauravKarakoti/SwapSmith/issues)
 
-## 🛠️ How It Works
-
-1.  **Connect Your Wallet** (e.g., MetaMask).
-2.  **Type or Speak** your swap command into the chat.
-3.  **Review** the parsed intent and the live quote provided by SideShift.
-4.  **Confirm** the transaction directly in your wallet.
-5.  **Relax** while SwapSmith handles the complex cross-chain logic in the background.
-
-## 📦 Installation & Setup
-
-### Prerequisites
-
-- Node.js (v18 or higher)
-- An OpenAI API key
-- A SideShift API key (optional, but recommended for higher rate limits)
-
-### Local Development
-
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/your-username/swapsmith.git
-    cd swapsmith
-    ```
-
-2.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
-
-3.  **Environment Variables:**
-    ```bash
-    cp .env.example .env
-    ```
-
-4.  **Run the development server:**
-    ```bash
-    npm run dev
-    ```
-
-5.  **Open your browser:**
-    Navigate to [http://localhost:3000](http://localhost:3000).
-
-## 💡 How to Use
-
-1.  Open the app and connect your Web3 wallet (e.g., MetaMask).
-2.  Ensure your wallet is connected to the correct network for the assets you want to swap from.
-3.  Type your command into the input box. Examples:
-    - `"Swap 0.1 ETH for BTC"`
-    - `"Convert all my USDC on Arbitrum to MATIC on Polygon"`
-    - `"I need $50 worth of AVAX"`
-4.  The AI agent will parse your request and show you a confirmation screen with the details from the SideShift API.
-5.  Review the details carefully and click "Confirm".
-6.  Sign the transaction in your wallet popup.
-7.  Wait for the magic to happen! You can track the swap status directly in the chat.
-
-## 🧠 Technology Stack
-
-- **Frontend:** Next.js, React, Tailwind CSS, Web3.js
-- **Backend:** Next.js API Routes, Node.js
-- **APIs:** SideShift.ai API, OpenAI GPT-4 API
-- **Auth:** Web3 Wallet Connection (MetaMask)
-
-## 🔮 Future Ideas
-
-- Limit Orders & DCA via natural language.
-- DeFi Integration (e.g., "Swap and stake").
-- On-chain agent reputation system.
-- Mobile app with superior voice integration.
-
-## 🐛 Known Issues
-
-- Voice input is highly experimental and may not work in all browsers.
-- The agent can sometimes misparse very complex or ambiguous commands.
+</div>
 
 ---
 
-**Built with ❤️ for the SideShift.ai Hackathon.**
+## 📖 Table of Contents
+
+- [About](#-about)
+- [Features](#-features)
+- [Demo](#-demo)
+- [Architecture](#-architecture)
+- [Getting Started](#-getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Frontend Setup](#frontend-setup)
+  - [Telegram Bot Setup](#telegram-bot-setup)
+- [Usage](#-usage)
+- [Tech Stack](#-tech-stack)
+- [Project Structure](#-project-structure)
+- [Contributing](#-contributing)
+- [Roadmap](#-roadmap)
+- [Known Issues](#-known-issues)
+- [License](#-license)
+- [Acknowledgments](#-acknowledgments)
+
+---
+
+## 🎯 About
+
+SwapSmith is a next-generation crypto trading assistant that understands natural language. Simply describe what you want to do, and SwapSmith handles the complex cross-chain logic for you.
+
+> **Example:** *"Swap 0.5 ETH on Ethereum for USDC on Polygon"*
+
+No more navigating complicated DEX interfaces or managing multiple bridges manually!
+
+---
+
+## ✨ Features
+
+| Feature | Description |
+|---------|-------------|
+| 🗣️ **Natural Language Interface** | Describe swaps in plain English - no technical knowledge required |
+| 🔗 **Cross-Chain Swaps** | Seamlessly swap between **200+ assets** across **40+ blockchains** |
+| 🎤 **Voice Input** | Use your microphone to command the agent (Experimental) |
+| 🤖 **Telegram Bot** | Execute swaps directly from Telegram |
+| 🌐 **Web Interface** | Beautiful, responsive web app with wallet integration |
+| 🔒 **Non-Custodial** | Your keys, your crypto - transactions require your explicit confirmation |
+| 📊 **Real-Time Quotes** | Always get the best available rates via SideShift.ai |
+| 📈 **Yield Scout** | Discover top stablecoin yield opportunities |
+
+---
+
+## 🎬 Demo
+
+### Web Interface
+```
+🌐 https://swap-smith.vercel.app/
+```
+
+### Example Commands
+
+```text
+"Swap 0.1 ETH for BTC"
+"Convert 100 USDC on Arbitrum to MATIC on Polygon"
+"I need $50 worth of AVAX"
+"Show me the best stablecoin yields"
+"Create a payment link for 50 USDC"
+```
+
+---
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         SwapSmith                                │
+├─────────────────────────────┬───────────────────────────────────┤
+│      Frontend (Next.js)     │      Telegram Bot (Node.js)       │
+│  • Web3 Wallet Connection   │  • Voice Message Support          │
+│  • Chat Interface           │  • Natural Language Processing    │
+│  • Transaction Signing      │  • Order Management               │
+└──────────────┬──────────────┴──────────────┬────────────────────┘
+               │                              │
+               ▼                              ▼
+        ┌──────────────┐              ┌──────────────┐
+        │   Groq AI    │              │  Neon DB     │
+        │  (LLM Parse) │              │  (Postgres)  │
+        └──────────────┘              └──────────────┘
+               │                              │
+               └──────────────┬───────────────┘
+                              ▼
+                    ┌──────────────────┐
+                    │  SideShift.ai    │
+                    │  (Swap Engine)   │
+                    └──────────────────┘
+```
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- **Node.js** v18 or higher
+- **npm** or **yarn**
+- **Git**
+
+### Frontend Setup
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/GauravKarakoti/SwapSmith.git
+   cd SwapSmith
+   ```
+
+2. **Install frontend dependencies**
+   ```bash
+   cd frontend
+   npm install
+   ```
+
+3. **Configure environment variables**
+   ```bash
+   cp .env.example .env
+   ```
+   
+   Edit `.env` and add your keys:
+   ```env
+   NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_walletconnect_id
+   GROQ_API_KEY=your_groq_api_key
+   NEXT_PUBLIC_SIDESHIFT_API_KEY=your_sideshift_key  # Optional
+   ```
+
+4. **Start the development server**
+   ```bash
+   npm run dev
+   ```
+
+5. **Open your browser**
+   ```
+   http://localhost:3000
+   ```
+
+### Telegram Bot Setup
+
+1. **Navigate to bot directory**
+   ```bash
+   cd bot
+   npm install
+   ```
+
+2. **Configure environment variables**
+   ```bash
+   cp .env.example .env
+   ```
+   
+   Edit `.env` and add:
+   ```env
+   BOT_TOKEN=your_telegram_bot_token
+   GROQ_API_KEY=your_groq_api_key
+   DATABASE_URL=your_neon_database_url
+   WALLETCONNECT_PROJECT_ID=your_walletconnect_id
+   MINI_APP_URL=https://swapsmithminiapp.netlify.app/
+   ```
+
+3. **Set up the database**
+   ```bash
+   npm run db:push
+   ```
+
+4. **Start the bot**
+   ```bash
+   npm run dev
+   ```
+
+---
+
+## 💡 Usage
+
+### Web App
+
+1. **Connect Wallet** - Click "Connect Wallet" and select your provider (MetaMask, WalletConnect, etc.)
+2. **Enter Command** - Type your swap request in natural language
+3. **Review Quote** - Check the parsed intent and live quote from SideShift
+4. **Confirm** - Sign the transaction in your wallet
+5. **Track** - Monitor the swap status in real-time
+
+### Telegram Bot
+
+1. **Start** - Send `/start` to the bot
+2. **Swap** - Type commands like `swap 0.1 ETH to USDC on polygon`
+3. **Provide Address** - Enter your destination wallet address
+4. **Confirm** - Click "Yes" to create the order
+5. **Sign** - Use the Mini App to sign the transaction
+
+### Bot Commands
+
+| Command | Description |
+|---------|-------------|
+| `/start` | Welcome message and instructions |
+| `/history` | View your last 10 orders |
+| `/status [id]` | Check order status |
+| `/checkouts` | View your payment links |
+| `/clear` | Reset conversation state |
+| `/website` | Open the web interface |
+
+---
+
+## 🛠️ Tech Stack
+
+### Frontend
+| Technology | Purpose |
+|------------|---------|
+| Next.js 16 | React Framework |
+| TypeScript | Type Safety |
+| Tailwind CSS | Styling |
+| Wagmi + Viem | Web3 Integration |
+| TanStack Query | Data Fetching |
+
+### Telegram Bot
+| Technology | Purpose |
+|------------|---------|
+| Node.js | Runtime |
+| TypeScript | Type Safety |
+| Telegraf | Telegram Bot Framework |
+| Drizzle ORM | Database ORM |
+| Neon | Serverless Postgres |
+
+### APIs & Services
+| Service | Purpose |
+|---------|---------|
+| SideShift.ai | Cross-chain swap execution |
+| Groq | LLM for natural language parsing |
+| WalletConnect | Wallet connection |
+
+---
+
+## 📁 Project Structure
+
+```
+SwapSmith/
+├── frontend/                # Next.js web application
+│   ├── app/                 # App router pages
+│   ├── components/          # React components
+│   ├── pages/api/           # API routes
+│   └── utils/               # Utility functions
+│
+├── bot/                     # Telegram bot
+│   ├── src/
+│   │   ├── bot.ts           # Main bot logic
+│   │   └── services/        # API clients & database
+│   └── drizzle/             # Database migrations
+│
+├── public/                  # Static assets
+├── CONTRIBUTING.md          # Contribution guidelines
+├── CODE_OF_CONDUCT.md       # Community guidelines
+└── README.md                # You are here!
+```
+
+---
+
+## 🤝 Contributing
+
+We love contributions! SwapSmith is open source and we welcome developers of all skill levels.
+
+1. **Fork** the repository
+2. **Clone** your fork locally
+3. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
+4. **Commit** your changes (`git commit -m 'Add amazing feature'`)
+5. **Push** to your branch (`git push origin feature/amazing-feature`)
+6. **Open** a Pull Request
+
+Please read our [Contributing Guidelines](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
+
+### Good First Issues
+
+Looking for something to work on? Check out our [open issues](https://github.com/GauravKarakoti/SwapSmith/issues) labeled `good first issue` or `help wanted`.
+
+---
+
+## 🐛 Known Issues
+
+| Issue | Status | Workaround |
+|-------|--------|------------|
+| Voice input browser compatibility | 🔄 In Progress | Use text input |
+| Complex command parsing | 🔄 In Progress | Use simpler commands |
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+<div align="center">
+
+**Built with ❤️ for the SideShift.ai Hackathon**
+
+⭐ Star this repo if you find it useful!
+
+[Report Bug](https://github.com/GauravKarakoti/SwapSmith/issues) • [Request Feature](https://github.com/GauravKarakoti/SwapSmith/issues)
+
+</div>
