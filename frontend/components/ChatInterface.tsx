@@ -7,6 +7,7 @@ import SwapConfirmation from './SwapConfirmation';
 import TrustIndicators from './TrustIndicators';
 import IntentConfirmation from './IntentConfirmation';
 import { ParsedCommand } from '@/utils/groq-client';
+import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -33,6 +34,7 @@ export default function ChatInterface() {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { address, isConnected } = useAccount();
+  const { handleError } = useErrorHandler();
   
   // MediaRecorder ref
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -75,8 +77,11 @@ export default function ChatInterface() {
       mediaRecorder.start();
       setIsRecording(true);
     } catch (err) {
-      console.error("Error accessing microphone:", err);
-      alert("Could not access microphone. Please ensure you have granted permission.");
+      const errorMessage = handleError(err, ErrorType.VOICE_ERROR, { 
+        operation: 'microphone_access',
+        retryable: true 
+      });
+      addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
     }
   };
 
@@ -125,9 +130,12 @@ export default function ChatInterface() {
         }
 
     } catch (error) {
-        console.error('Voice processing error:', error);
+        const errorMessage = handleError(error, ErrorType.VOICE_ERROR, { 
+          operation: 'voice_transcription',
+          retryable: true 
+        });
         setMessages(prev => prev.filter(m => m.content !== '🎤 [Sending Voice...]'));
-        addMessage({ role: 'assistant', content: "Sorry, I had trouble processing your voice message.", type: 'message' });
+        addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
         setIsLoading(false);
     }
   };
@@ -244,8 +252,11 @@ export default function ChatInterface() {
       }
       
     } catch (error: any) {
-      console.error(error);
-      addMessage({ role: 'assistant', content: `Error processing request: ${error.message || 'Unknown error'}`, type: 'message' });
+      const errorMessage = handleError(error, ErrorType.API_FAILURE, { 
+        operation: 'command_processing',
+        retryable: true 
+      });
+      addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
     } finally {
       setIsLoading(false);
     }
@@ -283,7 +294,11 @@ export default function ChatInterface() {
         data: { quoteData: quote, confidence: command.confidence }
       });
     } catch (error: any) {
-      addMessage({ role: 'assistant', content: `Error: ${error.message}`, type: 'message' });
+      const errorMessage = handleError(error, ErrorType.API_FAILURE, { 
+        operation: 'swap_quote',
+        retryable: true 
+      });
+      addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
     }
   };
 
