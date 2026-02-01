@@ -315,30 +315,30 @@ export default function ChatInterface() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden flex flex-col h-[600px]">
+    <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden flex flex-col h-[600px]">
       <TrustIndicators />
       
-      <div className="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-4">
+      <div className="flex-1 overflow-y-auto p-5 bg-gray-50 space-y-5">
         {messages.map((msg, index) => (
           <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                 
                 {msg.type === 'yield_info' ? (
-                    <div className="bg-gray-200 text-gray-900 p-3 rounded-lg whitespace-pre-line text-sm">
+                    <div className="bg-gray-100 border border-gray-200 text-gray-900 p-4 rounded-xl whitespace-pre-line text-sm leading-relaxed">
                         {msg.content}
                     </div>
                 ) : msg.type === 'checkout_link' ? (
-                    <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg text-center shadow-sm">
+                    <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl text-center shadow-sm">
                         <p className="font-semibold text-blue-900 mb-3 text-sm">{msg.content}</p>
                         
                         <div className="flex flex-col gap-2">
-                            <a href={msg.data.url} target="_blank" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 block w-full font-medium text-sm transition-colors">
+                            <a href={msg.data.url} target="_blank" className="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 block w-full font-medium text-sm transition-colors shadow-sm">
                                 Pay Now ↗
                             </a>
                             
                             <button 
                                 onClick={() => copyToClipboard(msg.data.url)}
-                                className="flex items-center justify-center gap-2 bg-white border border-blue-300 text-blue-700 px-4 py-2 rounded hover:bg-blue-50 w-full text-sm transition-colors"
+                                className="flex items-center justify-center gap-2 bg-white border border-blue-300 text-blue-700 px-4 py-2 rounded-xl hover:bg-blue-50 w-full text-sm transition-colors"
                             >
                                 {copiedLink === msg.data.url ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                                 {copiedLink === msg.data.url ? 'Copied Link!' : 'Copy Link'}
@@ -350,8 +350,8 @@ export default function ChatInterface() {
                 ) : msg.type === 'swap_confirmation' ? (
                     <SwapConfirmation quote={msg.data?.quoteData} confidence={msg.data?.confidence} />
                 ) : (
-                    <div className={`p-3 rounded-lg ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-800 shadow-sm'}`}>
-                        <div className="whitespace-pre-line text-sm">{msg.content}</div>
+                    <div className={`p-4 rounded-xl text-sm leading-relaxed ${msg.role === 'user' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-800 shadow-sm'}`}>
+                        <div className="whitespace-pre-line">{msg.content}</div>
                     </div>
                 )}
             </div>
@@ -364,7 +364,7 @@ export default function ChatInterface() {
         <div className="flex gap-2 items-center">
           <button 
             onClick={isRecording ? stopRecording : startRecording}
-            className={`p-3 rounded-full transition-all ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            className={`p-3 rounded-full transition-all hover:scale-105 ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
             title={isRecording ? "Stop Recording" : "Start Voice Input"}
           >
             {isRecording ? <StopCircle className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
@@ -374,16 +374,16 @@ export default function ChatInterface() {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder="Type or speak... 'Swap ETH for BTC' or 'Receive 10 USDC'"
-            className="flex-1 p-3 border border-gray-300 text-gray-900 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"
+            className="flex-1 px-4 py-3 border border-gray-300 text-gray-900 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"
             disabled={isLoading}
           />
           
           <button 
             onClick={handleSend} 
             disabled={isLoading || !input.trim()}
-            className="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            className="p-3 bg-blue-600 text-white rounded-xl shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-all"
           >
             <Send className="w-5 h-5" />
           </button>

@@ -4,18 +4,26 @@ import { MessageCircle } from 'lucide-react';
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-gray-100 p-4">
-      <div className="flex flex-col items-center max-w-4xl mx-auto">
-        <header className="text-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-800">SwapSmith</h1>
-          <p className="text-gray-600">Your Voice-Activated Crypto Trading Assistant</p>
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
+      {/* Main Card Container */}
+      <div className="flex flex-col items-center max-w-4xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-10">
+        
+        {/* Header Section */}
+        <header className="text-center mb-10 space-y-3">
+          <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">
+            SwapSmith
+          </h1>
+          <p className="text-lg text-gray-500 font-medium">
+            Your Voice-Activated Crypto Trading Assistant
+          </p>
           
-          <div className="mt-3 flex justify-center">
+          {/* Telegram Button with Micro-interaction */}
+          <div className="pt-4 flex justify-center">
             <a 
               href="https://t.me/SwapSmithBot" 
               target="_blank" 
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-[#229ED9] text-white rounded-full text-sm font-medium hover:bg-[#1b81b0] transition-colors shadow-sm"
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#229ED9] text-white rounded-full text-sm font-semibold hover:bg-[#1b81b0] transition-all duration-200 hover:scale-105 shadow-sm hover:shadow-md"
             >
               <MessageCircle className="w-4 h-4" />
               Chat on Telegram
@@ -23,11 +31,16 @@ export default function Home() {
           </div>
         </header>
         
-        <div className="mb-6 w-full flex justify-center">
+        {/* Wallet Section */}
+        <div className="mb-8 w-full flex justify-center">
           <WalletConnector />
         </div>
         
-        <ChatInterface />
+        {/* Chat Interface Container */}
+        <div className="w-full">
+          <ChatInterface />
+        </div>
+
       </div>
     </div>
   );
