@@ -11,6 +11,7 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import express from 'express';
+import { chainIdMap } from './config/chains';
 
 dotenv.config();
 const MINI_APP_URL = process.env.MINI_APP_URL!;
@@ -364,10 +365,6 @@ bot.action('place_order', async (ctx) => {
         } catch (err) {
             return ctx.editMessageText(`Tx construction error: ${err instanceof Error ? err.message : 'Unknown'}`);
         }
-
-        const chainIdMap: { [key: string]: string } = {
-            'ethereum': '1', 'bsc': '56', 'polygon': '137', 'arbitrum': '42161', 'base': '8453'
-        };
 
         const params = new URLSearchParams({
             to: txTo,
