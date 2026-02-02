@@ -233,7 +233,11 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
   
   if (!parsed.success && parsed.intent !== 'yield_scout') {
       await logAnalytics(ctx, 'ValidationError', { input: text, error: parsed.validationErrors.join(", ") });
-      return ctx.reply(`⚠️ ${parsed.validationErrors.join(", ") || "I didn't understand."}`);
+      let errorMessage = `⚠️ ${parsed.validationErrors.join(", ") || "I didn't understand."}`;
+      if (parsed.confidence < 50) {
+        errorMessage += "\n\n💡 *Suggestion:* Try rephrasing your command. For example:\n- Instead of 'swap to BTC or USDC', say 'swap to BTC'\n- For splits: 'split 1 ETH into 50% BTC and 50% USDC'";
+      }
+      return ctx.replyWithMarkdown(errorMessage);
   }
 
   if (parsed.intent === 'yield_scout') {
