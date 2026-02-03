@@ -74,6 +74,7 @@ bot.start((ctx) => {
     "I use SideShift.ai for swaps and a Mini App for secure signing.\n\n" +
     "📜 *Commands:*\n" +
     "/website - Open Web App\n" +
+    "/yield - See top yield opportunities\n" +
     "/history - See past orders\n" +
     "/checkouts - See payment links\n" +
     "/status [id] - Check order status\n" +
@@ -168,6 +169,12 @@ bot.command('website', (ctx) => {
   );
 });
 
+bot.command('yield', async (ctx) => {
+  await ctx.reply('📈 Fetching top yield opportunities...');
+  const yields = await getTopStablecoinYields();
+  ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields:*\n\n${yields}`);
+});
+
 // --- MESSAGE HANDLERS ---
 
 bot.on(message('text'), async (ctx) => {
@@ -243,6 +250,47 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
   if (parsed.intent === 'yield_scout') {
       const yields = await getTopStablecoinYields();
       return ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields:*\n\n${yields}`);
+  }
+
+  if (parsed.intent === 'yield_deposit') {
+      // For yield_deposit, we need to swap to the yield asset on the yield chain
+      // Simplified: assume user wants to deposit to the top yield pool for their fromAsset
+      const { getTopYieldPools } = await import('./services/yield-client');
+      const pools = await getTopYieldPools();
+      const matchingPool = pools.find(p => p.symbol === parsed.fromAsset?.toUpperCase());
+
+      if (!matchingPool) {
+          return ctx.reply(`Sorry, no suitable yield pool found for ${parsed.fromAsset}. Try /yield to see options.`);
+      }
+
+      // If user is not on the yield chain, bridge via SideShift
+      if (parsed.fromChain?.toLowerCase() !== matchingPool.chain.toLowerCase()) {
+          // Bridge to yield chain first
+          const bridgeCommand = {
+              intent: 'swap',
+              fromAsset: parsed.fromAsset,
+              fromChain: parsed.fromChain,
+              toAsset: parsed.fromAsset, // Same asset, different chain
+              toChain: matchingPool.chain.toLowerCase(),
+              amount: parsed.amount,
+              settleAddress: null // Will ask for address
+          };
+          await db.setConversationState(userId, { parsedCommand: bridgeCommand });
+          return ctx.reply(`To deposit to yield on ${matchingPool.chain}, we need to bridge first. Please provide your wallet address on ${matchingPool.chain}.`);
+      } else {
+          // Already on the right chain, proceed to swap to yield asset (simplified as swap to the stable)
+          const depositCommand = {
+              intent: 'swap',
+              fromAsset: parsed.fromAsset,
+              fromChain: parsed.fromChain,
+              toAsset: matchingPool.symbol, // Swap to the yield asset
+              toChain: matchingPool.chain,
+              amount: parsed.amount,
+              settleAddress: null
+          };
+          await db.setConversationState(userId, { parsedCommand: depositCommand });
+          return ctx.reply(`Ready to deposit ${parsed.amount} ${parsed.fromAsset} to yield on ${matchingPool.chain} via ${matchingPool.project}. Please provide your wallet address.`);
+      }
   }
 
   if (parsed.intent === 'portfolio') {
