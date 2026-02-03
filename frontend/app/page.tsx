@@ -1,9 +1,11 @@
 import WalletConnector from '@/components/WalletConnector';
 import ChatInterface from '@/components/ChatInterface';
+import Footer from '@/components/Footer';
 import { MessageCircle, Zap } from 'lucide-react';
 
 export default function Home() {
   return (
+    <div className="flex flex-col min-h-screen">
     <main className="min-h-screen flex flex-col items-center p-4 md:p-8">
       {/* Navigation / Header */}
       <nav className="w-full max-w-6xl flex justify-between items-center mb-12 backdrop-blur-md bg-white/5 border border-white/10 p-4 rounded-2xl">
@@ -46,5 +48,7 @@ export default function Home() {
         </div>
       </div>
     </main>
+    <Footer />
+    </div>
   );
 }
