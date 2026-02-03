@@ -9,7 +9,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 // Enhanced Interface to support Portfolio and Yield
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "unknown";
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "unknown";
   
   // Single Swap Fields
   fromAsset: string | null;
@@ -48,6 +48,7 @@ MODES:
 2. "portfolio": 1 Input -> Multiple Outputs (Split allocation).
 3. "checkout": Payment link creation.
 4. "yield_scout": User asking for high APY/Yield info.
+5. "yield_deposit": Deposit assets into yield platforms, possibly bridging if needed.
 
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
 
@@ -60,7 +61,7 @@ AMBIGUITY HANDLING:
 RESPONSE FORMAT:
 {
   "success": boolean,
-  "intent": "swap" | "portfolio" | "checkout" | "yield_scout",
+  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit",
   "fromAsset": string | null,
   "fromChain": string | null,
   "amount": number | null,
@@ -100,6 +101,9 @@ EXAMPLES:
 
 4. "If ETH > $3000, swap to BTC, else to USDC" (conditional)
    -> intent: "portfolio", fromAsset: "ETH", portfolio: [{toAsset: "BTC", toChain: "bitcoin", percentage: 100}], confidence: 70, parsedMessage: "Conditional swap: If ETH > $3000, swap to BTC", requiresConfirmation: true
+
+5. "Deposit 1 ETH to yield"
+   -> intent: "yield_deposit", fromAsset: "ETH", amount: 1, confidence: 95
 `;
 
 export async function parseUserCommand(
