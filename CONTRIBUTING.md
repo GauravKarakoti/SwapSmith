@@ -47,10 +47,11 @@ npm run lint
 ```
 
 ## 🚀 Submitting a Pull Request
-1. **Create a Branch:** Create a new branch for your feature or bugfix: `git checkout -b feature/amazing-feature`
-2. **Commit Changes:** Make sure your commit messages are clear and descriptive.
-3. **Push to GitHub:** Push your branch to your fork.
-4.**Open a PR:** Go to the original SwapSmith repository and open a Pull Request.
+1. **Get Assigned**: Before working on any issue, make sure to get assigned to it first.
+2. **Create a Branch:** Create a new branch for your feature or bugfix: `git checkout -b feature/amazing-feature`
+3. **Commit Changes:** Make sure your commit messages are clear and descriptive.
+4. **Push to GitHub:** Push your branch to your fork.
+5.**Open a PR:** Go to the original SwapSmith repository and open a Pull Request.
     - Describe your changes in detail.
     - Link to any relevant issues.
     - Attach screenshots if your changes impact the UI.

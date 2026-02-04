@@ -24,6 +24,7 @@ export const conversations = pgTable('conversations', {
   id: serial('id').primaryKey(),
   telegramId: bigint('telegram_id', { mode: 'number' }).notNull().unique(),
   state: text('state'), // JSON string
+  lastUpdated: timestamp('last_updated').defaultNow(),
 });
 
 export const orders = pgTable('orders', {
@@ -78,16 +79,28 @@ export async function setUserWalletAndSession(telegramId: number, walletAddress:
 }
 
 export async function getConversationState(telegramId: number) {
-  const result = await db.select({ state: conversations.state }).from(conversations).where(eq(conversations.telegramId, telegramId));
-  return result[0]?.state ? JSON.parse(result[0].state) : null;
+  const result = await db.select({ state: conversations.state, lastUpdated: conversations.lastUpdated }).from(conversations).where(eq(conversations.telegramId, telegramId));
+  if (!result[0]?.state) return null;
+
+  const state = JSON.parse(result[0].state);
+  const lastUpdated = result[0].lastUpdated;
+
+  // Check if state is older than 1 hour
+  if (lastUpdated && (Date.now() - new Date(lastUpdated).getTime()) > 60 * 60 * 1000) {
+    // State is expired, clear it
+    await clearConversationState(telegramId);
+    return null;
+  }
+
+  return state;
 }
 
 export async function setConversationState(telegramId: number, state: any) {
   await db.insert(conversations)
-    .values({ telegramId, state: JSON.stringify(state) })
+    .values({ telegramId, state: JSON.stringify(state), lastUpdated: new Date() })
     .onConflictDoUpdate({
       target: conversations.telegramId,
-      set: { state: JSON.stringify(state) }
+      set: { state: JSON.stringify(state), lastUpdated: new Date() }
     });
 }
 

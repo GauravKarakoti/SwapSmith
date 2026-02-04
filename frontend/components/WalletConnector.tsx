@@ -1,37 +1,38 @@
 'use client'
 
 import { useAccount, useConnect, useDisconnect } from 'wagmi';
+import { Wallet, LogOut } from 'lucide-react';
 
 export default function WalletConnector() {
   const { address, isConnected } = useAccount();
-  // 2. The useConnect hook now provides the `connect` function and a list of `connectors`
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
-
-  // Get the first available connector (usually the injected browser wallet like MetaMask)
   const connector = connectors[0];
 
   if (isConnected)
     return (
-      <div className="flex items-center gap-2 p-4 bg-gray-100 rounded-lg">
-        <span className="text-sm font-medium text-black">
-          Connected to {address?.substring(0, 6)}...{address?.substring(address.length - 4)}
-        </span>
+      <div className="flex items-center gap-3">
+        <div className="hidden md:flex flex-col items-end">
+          <span className="text-[10px] text-gray-500 font-bold uppercase tracking-tight">Connected</span>
+          <span className="text-xs font-mono text-blue-400">
+            {address?.substring(0, 6)}...{address?.substring(address.length - 4)}
+          </span>
+        </div>
         <button 
           onClick={() => disconnect()}
-          className="px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600"
+          className="p-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl transition-colors border border-red-500/20"
         >
-          Disconnect
+          <LogOut className="w-4 h-4" />
         </button>
       </div>
     );
     
   return (
-    // 3. Call `connect` with the desired connector from the `connectors` array
     <button 
       onClick={() => connect({ connector })}
-      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+      className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-blue-600/20 active:scale-95"
     >
+      <Wallet className="w-4 h-4" />
       Connect Wallet
     </button>
   );

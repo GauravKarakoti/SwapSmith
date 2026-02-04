@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useAccount } from 'wagmi';
-import { Mic, Send, StopCircle, Copy, Check, AlertCircle } from 'lucide-react';
+import { Mic, Send, StopCircle, Copy, Check, AlertCircle, Sparkles, Command } from 'lucide-react';
 import SwapConfirmation from './SwapConfirmation';
 import TrustIndicators from './TrustIndicators';
 import IntentConfirmation from './IntentConfirmation';
@@ -357,98 +357,110 @@ export default function ChatInterface() {
     setPendingCommand(null);
   };
 
-  return (
-    <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden flex flex-col h-[600px]">
-      <TrustIndicators />
+return (
+    <div className="flex flex-col h-[700px] bg-[#0B0E11] border border-white/10 rounded-3xl overflow-hidden shadow-2xl relative">
       
-      <div className="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-4">
+      {/* 1. Header / Status Bar */}
+      <div className="px-6 py-4 bg-white/[0.02] border-b border-white/5 flex justify-between items-center backdrop-blur-md">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-blue-500/10 rounded-lg">
+            <Sparkles className="w-4 h-4 text-blue-400" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-white tracking-tight">SwapSmith AI</h3>
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[10px] text-emerald-500/80 font-bold uppercase tracking-widest">System Ready</span>
+            </div>
+          </div>
+        </div>
+        <TrustIndicators />
+      </div>
+
+      {/* 2. Message Feed */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-8 scrollbar-thin scrollbar-thumb-white/10">
         {messages.map((msg, index) => (
-          <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                
-                {msg.type === 'yield_info' ? (
-                    <div className="bg-gray-200 text-gray-900 p-3 rounded-lg whitespace-pre-line text-sm">
-                        {msg.content}
-                    </div>
-                ) : msg.type === 'checkout_link' ? (
-                    <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg text-center shadow-sm">
-                        <p className="font-semibold text-blue-900 mb-3 text-sm">{msg.content}</p>
-                        
-                        <div className="flex flex-col gap-2">
-                            <a href={msg.data.url} target="_blank" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 block w-full font-medium text-sm transition-colors">
-                                Pay Now ↗
-                            </a>
-                            
-                            <button 
-                                onClick={() => copyToClipboard(msg.data.url)}
-                                className="flex items-center justify-center gap-2 bg-white border border-blue-300 text-blue-700 px-4 py-2 rounded hover:bg-blue-50 w-full text-sm transition-colors"
-                            >
-                                {copiedLink === msg.data.url ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                                {copiedLink === msg.data.url ? 'Copied Link!' : 'Copy Link'}
-                            </button>
-                        </div>
-                    </div>
-                ) : msg.type === 'intent_confirmation' ? (
-                    <IntentConfirmation command={msg.data?.parsedCommand} onConfirm={handleIntentConfirm} />
-                ) : msg.type === 'swap_confirmation' ? (
-                    <SwapConfirmation quote={msg.data?.quoteData} confidence={msg.data?.confidence} />
-                ) : (
-                    <div className={`p-3 rounded-lg ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-800 shadow-sm'}`}>
-                        <div className="whitespace-pre-line text-sm">{msg.content}</div>
-                    </div>
-                )}
+          <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2`}>
+            <div className={`max-w-[85%] ${msg.role === 'user' ? 'order-1' : 'order-2'}`}>
+              
+              {/* User Message: Clean & Right-aligned */}
+              {msg.role === 'user' ? (
+                <div className="bg-blue-600 text-white px-5 py-3 rounded-2xl rounded-tr-none shadow-lg shadow-blue-600/20 text-sm font-medium">
+                  {msg.content}
+                </div>
+              ) : (
+                /* Assistant Message: Subtle & Framed */
+                <div className="space-y-3">
+                  <div className="bg-white/[0.04] border border-white/10 text-gray-200 px-5 py-4 rounded-2xl rounded-tl-none text-sm leading-relaxed backdrop-blur-sm">
+                    {/* Render different types (yield, swap, etc) within this styled frame */}
+                    {msg.type === 'message' && <div className="whitespace-pre-line">{msg.content}</div>}
+                    {msg.type === 'yield_info' && <div className="font-mono text-xs text-blue-300">{msg.content}</div>}
+                    
+                    {/* Inject your Custom Components (SwapConfirmation etc) here */}
+                    {msg.type === 'intent_confirmation' && <IntentConfirmation command={msg.data?.parsedCommand} onConfirm={handleIntentConfirm} />}
+                    {msg.type === 'swap_confirmation' && <SwapConfirmation quote={msg.data?.quoteData} confidence={msg.data?.confidence} />}
+                  </div>
+                </div>
+              )}
+              
+              <p className={`text-[10px] text-gray-500 mt-2 px-1 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
+                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </p>
             </div>
           </div>
         ))}
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="border-t border-gray-200 p-4 bg-white">
-        <div className="flex gap-2 items-center">
-          <button 
-            onClick={isRecording ? handleStopRecording : handleStartRecording}
-            disabled={isLoading}
-            className={`p-3 rounded-full transition-all ${
-              !isAudioSupported 
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                : isRecording 
-                  ? 'bg-red-500 text-white animate-pulse' 
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-            title={
-              !isAudioSupported 
-                ? "Voice input not supported in this browser" 
-                : isRecording 
-                  ? "Stop Recording" 
-                  : "Start Voice Input"
-            }
-          >
-            {!isAudioSupported ? (
-              <AlertCircle className="w-5 h-5" />
-            ) : isRecording ? (
-              <StopCircle className="w-5 h-5" />
-            ) : (
-              <Mic className="w-5 h-5" />
-            )}
-          </button>
+      <div className="p-6 bg-gradient-to-t from-[#0B0E11] via-[#0B0E11] to-transparent">
+        <div className="relative group transition-all duration-300">
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-2xl blur opacity-0 group-focus-within:opacity-100 transition duration-500" />
+            <button 
+              onClick={isRecording ? handleStopRecording : handleStartRecording}
+              disabled={isLoading}
+              className={`p-3 rounded-full transition-all ${
+                !isAudioSupported 
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                  : isRecording 
+                    ? 'bg-red-500 text-white animate-pulse' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              title={
+                !isAudioSupported 
+                  ? "Voice input not supported in this browser" 
+                  : isRecording 
+                    ? "Stop Recording" 
+                    : "Start Voice Input"
+              }
+            >
+              {!isAudioSupported ? (
+                <AlertCircle className="w-5 h-5" />
+              ) : isRecording ? (
+                <StopCircle className="w-5 h-5" />
+              ) : (
+                <Mic className="w-5 h-5" />
+              )}
+            </button>
           
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Type or speak... 'Swap ETH for BTC' or 'Receive 10 USDC'"
-            className="flex-1 p-3 border border-gray-300 text-gray-900 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"
-            disabled={isLoading}
-          />
-          
-          <button 
-            onClick={handleSend} 
-            disabled={isLoading || !input.trim()}
-            className="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            <Send className="w-5 h-5" />
-          </button>
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+              placeholder="Type or speak... 'Swap ETH for BTC' or 'Receive 10 USDC'"
+              className="flex-1 p-3 border border-gray-300 text-gray-900 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"
+              disabled={isLoading}
+            />
+            <div className="flex items-center gap-2 pr-2">
+              <button 
+                onClick={handleSend} 
+                disabled={isLoading || !input.trim()}
+                className="p-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-20 text-white rounded-xl transition-all shadow-lg shadow-blue-600/20"
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
         </div>
         {!isConnected && <p className="text-xs text-center text-red-500 mt-2 font-medium">Please connect wallet for full features</p>}
         {isAudioSupported && (
@@ -460,6 +472,16 @@ export default function ChatInterface() {
           <p className="text-xs text-center text-amber-600 mt-1 font-medium">
             Voice input not supported in this browser
           </p>
+        
+        {/* Footer Warning */}
+        {!isConnected && (
+          <div className="flex justify-center mt-4">
+            <div className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20">
+              <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest text-center">
+                Wallet Not Connected • Read Only Mode
+              </p>
+            </div>
+          </div>
         )}
       </div>
     </div>

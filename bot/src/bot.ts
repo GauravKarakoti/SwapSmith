@@ -11,6 +11,89 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import express from 'express';
+import { chainIdMap } from './config/chains';
+
+// --- ADDRESS VALIDATION ---
+// Regex patterns for validating wallet addresses by chain type
+const ADDRESS_PATTERNS: Record<string, RegExp> = {
+  // EVM-compatible chains (Ethereum, BSC, Polygon, Arbitrum, Base, Avalanche, etc.)
+  ethereum: /^0x[a-fA-F0-9]{40}$/,
+  bsc: /^0x[a-fA-F0-9]{40}$/,
+  polygon: /^0x[a-fA-F0-9]{40}$/,
+  arbitrum: /^0x[a-fA-F0-9]{40}$/,
+  base: /^0x[a-fA-F0-9]{40}$/,
+  avalanche: /^0x[a-fA-F0-9]{40}$/,
+  optimism: /^0x[a-fA-F0-9]{40}$/,
+  fantom: /^0x[a-fA-F0-9]{40}$/,
+  // Bitcoin (Legacy, SegWit, Native SegWit, Taproot)
+  bitcoin: /^(1[a-km-zA-HJ-NP-Z1-9]{25,34}|3[a-km-zA-HJ-NP-Z1-9]{25,34}|bc1[a-zA-HJ-NP-Z0-9]{39,59}|bc1p[a-zA-HJ-NP-Z0-9]{58})$/,
+  // Litecoin (Legacy, SegWit)
+  litecoin: /^([LM3][a-km-zA-HJ-NP-Z1-9]{26,33}|ltc1[a-zA-HJ-NP-Z0-9]{39,59})$/,
+  // Solana
+  solana: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/,
+  // Tron
+  tron: /^T[a-zA-HJ-NP-Z0-9]{33}$/,
+  // Ripple (XRP)
+  ripple: /^r[0-9a-zA-Z]{24,34}$/,
+  xrp: /^r[0-9a-zA-Z]{24,34}$/,
+  // Dogecoin
+  dogecoin: /^D[5-9A-HJ-NP-U][1-9A-HJ-NP-Za-km-z]{32}$/,
+  // Cosmos-based chains
+  cosmos: /^cosmos[a-z0-9]{38,45}$/,
+  // Polkadot
+  polkadot: /^1[a-zA-Z0-9]{47}$/,
+  // Cardano
+  cardano: /^addr1[a-zA-Z0-9]{53,}$/,
+  // Monero
+  monero: /^4[0-9AB][1-9A-HJ-NP-Za-km-z]{93}$/,
+  // Zcash (transparent)
+  zcash: /^t1[a-zA-Z0-9]{33}$/,
+};
+
+// Default EVM pattern for unknown chains
+const DEFAULT_EVM_PATTERN = /^0x[a-fA-F0-9]{40}$/;
+
+/**
+ * Validates a wallet address against the expected format for a given chain.
+ * @param address - The wallet address to validate
+ * @param chain - The blockchain network (e.g., 'ethereum', 'bitcoin', 'solana')
+ * @returns boolean indicating if the address is valid for the specified chain
+ */
+function isValidAddress(address: string, chain?: string): boolean {
+  if (!address || typeof address !== 'string') {
+    return false;
+  }
+
+  const trimmedAddress = address.trim();
+  
+  // If no chain specified, check if it matches any known pattern
+  if (!chain) {
+    // Check EVM first (most common)
+    if (DEFAULT_EVM_PATTERN.test(trimmedAddress)) {
+      return true;
+    }
+    // Check other common patterns
+    for (const pattern of Object.values(ADDRESS_PATTERNS)) {
+      if (pattern.test(trimmedAddress)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Normalize chain name
+  const normalizedChain = chain.toLowerCase().replace(/[^a-z]/g, '');
+  
+  // Get the pattern for the specified chain
+  const pattern = ADDRESS_PATTERNS[normalizedChain];
+  
+  if (pattern) {
+    return pattern.test(trimmedAddress);
+  }
+  
+  // For unknown chains, assume EVM-compatible
+  return DEFAULT_EVM_PATTERN.test(trimmedAddress);
+}
 
 dotenv.config();
 const MINI_APP_URL = process.env.MINI_APP_URL!;
@@ -73,6 +156,7 @@ bot.start((ctx) => {
     "I use SideShift.ai for swaps and a Mini App for secure signing.\n\n" +
     "📜 *Commands:*\n" +
     "/website - Open Web App\n" +
+    "/yield - See top yield opportunities\n" +
     "/history - See past orders\n" +
     "/checkouts - See payment links\n" +
     "/status [id] - Check order status\n" +
@@ -167,6 +251,12 @@ bot.command('website', (ctx) => {
   );
 });
 
+bot.command('yield', async (ctx) => {
+  await ctx.reply('📈 Fetching top yield opportunities...');
+  const yields = await getTopStablecoinYields();
+  ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields:*\n\n${yields}`);
+});
+
 // --- MESSAGE HANDLERS ---
 
 bot.on(message('text'), async (ctx) => {
@@ -207,8 +297,11 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
   // 1. Check for pending address input
   if (state?.parsedCommand && (state.parsedCommand.intent === 'swap' || state.parsedCommand.intent === 'checkout') && !state.parsedCommand.settleAddress) {
       const potentialAddress = text.trim();
-      // Basic address validation (can be improved)
-      if (potentialAddress.length > 25) { // Arbitrary length check for now
+      // Get the target chain for validation (use toChain for swaps, settleNetwork for checkouts)
+      const targetChain = state.parsedCommand.toChain || state.parsedCommand.settleNetwork;
+      
+      // Validate address format based on the target chain
+      if (isValidAddress(potentialAddress, targetChain)) {
           const updatedCommand = { ...state.parsedCommand, settleAddress: potentialAddress };
           await db.setConversationState(userId, { parsedCommand: updatedCommand });
           
@@ -221,7 +314,8 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
               Markup.button.callback('❌ No', 'cancel_swap')
           ]));
       } else {
-          return ctx.reply("That doesn't look like a valid address. Please try again or /clear to cancel.");
+          const chainHint = targetChain ? ` for ${targetChain}` : '';
+          return ctx.reply(`That doesn't look like a valid wallet address${chainHint}. Please provide a valid address or /clear to cancel.`);
       }
   }
 
@@ -232,12 +326,57 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
   
   if (!parsed.success && parsed.intent !== 'yield_scout') {
       await logAnalytics(ctx, 'ValidationError', { input: text, error: parsed.validationErrors.join(", ") });
-      return ctx.reply(`⚠️ ${parsed.validationErrors.join(", ") || "I didn't understand."}`);
+      let errorMessage = `⚠️ ${parsed.validationErrors.join(", ") || "I didn't understand."}`;
+      if (parsed.confidence < 50) {
+        errorMessage += "\n\n💡 *Suggestion:* Try rephrasing your command. For example:\n- Instead of 'swap to BTC or USDC', say 'swap to BTC'\n- For splits: 'split 1 ETH into 50% BTC and 50% USDC'";
+      }
+      return ctx.replyWithMarkdown(errorMessage);
   }
 
   if (parsed.intent === 'yield_scout') {
       const yields = await getTopStablecoinYields();
       return ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields:*\n\n${yields}`);
+  }
+
+  if (parsed.intent === 'yield_deposit') {
+      // For yield_deposit, we need to swap to the yield asset on the yield chain
+      // Simplified: assume user wants to deposit to the top yield pool for their fromAsset
+      const { getTopYieldPools } = await import('./services/yield-client');
+      const pools = await getTopYieldPools();
+      const matchingPool = pools.find(p => p.symbol === parsed.fromAsset?.toUpperCase());
+
+      if (!matchingPool) {
+          return ctx.reply(`Sorry, no suitable yield pool found for ${parsed.fromAsset}. Try /yield to see options.`);
+      }
+
+      // If user is not on the yield chain, bridge via SideShift
+      if (parsed.fromChain?.toLowerCase() !== matchingPool.chain.toLowerCase()) {
+          // Bridge to yield chain first
+          const bridgeCommand = {
+              intent: 'swap',
+              fromAsset: parsed.fromAsset,
+              fromChain: parsed.fromChain,
+              toAsset: parsed.fromAsset, // Same asset, different chain
+              toChain: matchingPool.chain.toLowerCase(),
+              amount: parsed.amount,
+              settleAddress: null // Will ask for address
+          };
+          await db.setConversationState(userId, { parsedCommand: bridgeCommand });
+          return ctx.reply(`To deposit to yield on ${matchingPool.chain}, we need to bridge first. Please provide your wallet address on ${matchingPool.chain}.`);
+      } else {
+          // Already on the right chain, proceed to swap to yield asset (simplified as swap to the stable)
+          const depositCommand = {
+              intent: 'swap',
+              fromAsset: parsed.fromAsset,
+              fromChain: parsed.fromChain,
+              toAsset: matchingPool.symbol, // Swap to the yield asset
+              toChain: matchingPool.chain,
+              amount: parsed.amount,
+              settleAddress: null
+          };
+          await db.setConversationState(userId, { parsedCommand: depositCommand });
+          return ctx.reply(`Ready to deposit ${parsed.amount} ${parsed.fromAsset} to yield on ${matchingPool.chain} via ${matchingPool.project}. Please provide your wallet address.`);
+      }
   }
 
   if (parsed.intent === 'portfolio') {
@@ -364,10 +503,6 @@ bot.action('place_order', async (ctx) => {
         } catch (err) {
             return ctx.editMessageText(`Tx construction error: ${err instanceof Error ? err.message : 'Unknown'}`);
         }
-
-        const chainIdMap: { [key: string]: string } = {
-            'ethereum': '1', 'bsc': '56', 'polygon': '137', 'arbitrum': '42161', 'base': '8453'
-        };
 
         const params = new URLSearchParams({
             to: txTo,

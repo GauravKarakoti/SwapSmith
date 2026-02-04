@@ -9,7 +9,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 // Enhanced Interface to support Portfolio and Yield
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "unknown";
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "unknown";
   
   // Single Swap Fields
   fromAsset: string | null;
@@ -48,18 +48,25 @@ MODES:
 2. "portfolio": 1 Input -> Multiple Outputs (Split allocation).
 3. "checkout": Payment link creation.
 4. "yield_scout": User asking for high APY/Yield info.
+5. "yield_deposit": Deposit assets into yield platforms, possibly bridging if needed.
 
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
+
+AMBIGUITY HANDLING:
+- If the command is ambiguous (e.g., "swap all my ETH to BTC or USDC"), set confidence low (0-30) and add validation error "Command is ambiguous. Please specify clearly."
+- For complex commands, prefer explicit allocations over assumptions.
+- If multiple interpretations possible, choose the most straightforward and set requiresConfirmation: true.
+- Handle conditional swaps by treating them as portfolio with conditional logic in parsedMessage.
 
 RESPONSE FORMAT:
 {
   "success": boolean,
-  "intent": "swap" | "portfolio" | "checkout" | "yield_scout",
+  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit",
   "fromAsset": string | null,
   "fromChain": string | null,
   "amount": number | null,
   "amountType": "exact" | "percentage" | "all" | null,
-  
+
   // Fill for 'swap'
   "toAsset": string | null,
   "toChain": string | null,
@@ -76,6 +83,7 @@ RESPONSE FORMAT:
   "settleAmount": number | null,
   "settleAddress": string | null,
 
+  "confidence": number,  // 0-100, lower for ambiguous
   "validationErrors": string[],
   "parsedMessage": "Human readable summary",
   "requiresConfirmation": boolean
@@ -83,10 +91,19 @@ RESPONSE FORMAT:
 
 EXAMPLES:
 1. "Split 1 ETH on Base into 50% USDC on Arb and 50% SOL"
-   -> intent: "portfolio", fromAsset: "ETH", fromChain: "base", amount: 1, portfolio: [{toAsset: "USDC", toChain: "arbitrum", percentage: 50}, {toAsset: "SOL", toChain: "solana", percentage: 50}]
+   -> intent: "portfolio", fromAsset: "ETH", fromChain: "base", amount: 1, portfolio: [{toAsset: "USDC", toChain: "arbitrum", percentage: 50}, {toAsset: "SOL", toChain: "solana", percentage: 50}], confidence: 95
 
 2. "Where can I get good yield on stables?"
-   -> intent: "yield_scout"
+   -> intent: "yield_scout", confidence: 100
+
+3. "Swap 1 ETH to BTC or USDC" (ambiguous)
+   -> intent: "swap", fromAsset: "ETH", toAsset: null, confidence: 20, validationErrors: ["Command is ambiguous. Please specify clearly."], requiresConfirmation: true
+
+4. "If ETH > $3000, swap to BTC, else to USDC" (conditional)
+   -> intent: "portfolio", fromAsset: "ETH", portfolio: [{toAsset: "BTC", toChain: "bitcoin", percentage: 100}], confidence: 70, parsedMessage: "Conditional swap: If ETH > $3000, swap to BTC", requiresConfirmation: true
+
+5. "Deposit 1 ETH to yield"
+   -> intent: "yield_deposit", fromAsset: "ETH", amount: 1, confidence: 95
 `;
 
 export async function parseUserCommand(
@@ -185,6 +202,11 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
   
   // Combine all errors
   const allErrors = [...(parsed.validationErrors || []), ...errors];
+
+  // Additional validation for low confidence
+  if ((parsed.confidence || 0) < 50) {
+    allErrors.push("Low confidence in parsing. Please rephrase your command for clarity.");
+  }
 
   // Update success status based on validation
   const success = parsed.success !== false && allErrors.length === 0;
