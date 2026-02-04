@@ -15,7 +15,7 @@ interface Message {
   content: string;
   timestamp: Date;
   type?: 'message' | 'intent_confirmation' | 'swap_confirmation' | 'yield_info' | 'checkout_link';
-  data?: ParsedCommand | { quoteData: unknown; confidence: number } | { url: string };
+  data?: ParsedCommand | { quoteData: unknown; confidence: number } | { url: string } | { parsedCommand: ParsedCommand };
 }
 
 export default function ChatInterface() {
