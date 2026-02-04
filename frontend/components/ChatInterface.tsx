@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useAccount } from 'wagmi';
-import { Mic, Send, StopCircle, Copy, Check, AlertCircle, Sparkles, Command } from 'lucide-react';
+import { Mic, Send, StopCircle, AlertCircle } from 'lucide-react';
 import SwapConfirmation from './SwapConfirmation';
 import TrustIndicators from './TrustIndicators';
 import IntentConfirmation from './IntentConfirmation';
@@ -15,7 +15,7 @@ interface Message {
   content: string;
   timestamp: Date;
   type?: 'message' | 'intent_confirmation' | 'swap_confirmation' | 'yield_info' | 'checkout_link';
-  data?: any;
+  data?: ParsedCommand | { quoteData: unknown; confidence: number } | { url: string };
 }
 
 export default function ChatInterface() {
@@ -30,7 +30,6 @@ export default function ChatInterface() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
-  const [copiedLink, setCopiedLink] = useState<string | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { address, isConnected } = useAccount();
@@ -62,16 +61,6 @@ export default function ChatInterface() {
 
   const addMessage = (message: Omit<Message, 'timestamp'>) => {
     setMessages(prev => [...prev, { ...message, timestamp: new Date() }]);
-  };
-
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedLink(text);
-      setTimeout(() => setCopiedLink(null), 2000);
-    } catch (err) {
-      console.error('Failed to copy', err);
-    }
   };
 
   const handleStartRecording = async () => {
@@ -279,7 +268,7 @@ export default function ChatInterface() {
         await executeSwap(command);
       }
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       const errorMessage = handleError(error, ErrorType.API_FAILURE, { 
         operation: 'command_processing',
         retryable: true 
@@ -321,7 +310,7 @@ export default function ChatInterface() {
         type: 'swap_confirmation',
         data: { quoteData: quote, confidence: command.confidence }
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       const errorMessage = handleError(error, ErrorType.API_FAILURE, { 
         operation: 'swap_quote',
         retryable: true 

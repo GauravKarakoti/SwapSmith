@@ -237,17 +237,15 @@ export const useAudioRecorder = (config: AudioRecorderConfig = {}): UseAudioReco
 
   useEffect(() => {
     setMounted(true);
-    if (typeof window !== 'undefined') {
-      polyfillRef.current = new AudioRecorderPolyfill();
-      // Use setTimeout to avoid setState during render
-      setTimeout(() => {
-        if (polyfillRef.current) {
-          setBrowserInfo(polyfillRef.current.getBrowserInfo());
-          setIsSupported(polyfillRef.current.isSupported());
-        }
-      }, 0);
-    }
   }, []);
+
+  useEffect(() => {
+    if (mounted && typeof window !== 'undefined') {
+      polyfillRef.current = new AudioRecorderPolyfill();
+      setBrowserInfo(polyfillRef.current.getBrowserInfo());
+      setIsSupported(polyfillRef.current.isSupported());
+    }
+  }, [mounted]);
 
   const startRecording = useCallback(async (): Promise<void> => {
     if (!isSupported || !polyfillRef.current || !mounted) {
