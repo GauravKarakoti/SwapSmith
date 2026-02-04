@@ -226,7 +226,6 @@ class AudioRecorderPolyfill {
 export const useAudioRecorder = (config: AudioRecorderConfig = {}): UseAudioRecorderReturn => {
   const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mounted, setMounted] = useState(false);
   const [browserInfo, setBrowserInfo] = useState({
     browser: 'unknown',
     supportedMimeTypes: [],
@@ -236,19 +235,15 @@ export const useAudioRecorder = (config: AudioRecorderConfig = {}): UseAudioReco
   const polyfillRef = useRef<AudioRecorderPolyfill | null>(null);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (mounted && typeof window !== 'undefined') {
+    if (typeof window !== 'undefined') {
       polyfillRef.current = new AudioRecorderPolyfill();
       setBrowserInfo(polyfillRef.current.getBrowserInfo());
       setIsSupported(polyfillRef.current.isSupported());
     }
-  }, [mounted]);
+  }, []);
 
   const startRecording = useCallback(async (): Promise<void> => {
-    if (!isSupported || !polyfillRef.current || !mounted) {
+    if (!isSupported || !polyfillRef.current) {
       setError('Audio recording is not supported in this browser');
       return;
     }
@@ -275,7 +270,7 @@ export const useAudioRecorder = (config: AudioRecorderConfig = {}): UseAudioReco
         setError(`Failed to start recording: ${error.message || 'Unknown error'}`);
       }
     }
-  }, [isSupported, isRecording, config, mounted]);
+  }, [isSupported, isRecording, config]);
 
   const stopRecording = useCallback(async (): Promise<Blob | null> => {
     if (!isRecording || !polyfillRef.current) {
