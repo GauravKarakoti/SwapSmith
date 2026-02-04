@@ -165,4 +165,35 @@ describe('parseUserCommand', () => {
     expect(result.success).toBe(true);
     expect(result.intent).toBe('yield_scout');
   });
+
+  it('should handle yield deposit intent', async () => {
+    const mockGroq = require('groq-sdk');
+    mockGroq.mockImplementation(() => ({
+      chat: {
+        completions: {
+          create: jest.fn().mockResolvedValue({
+            choices: [{
+              message: {
+                content: JSON.stringify({
+                  success: true,
+                  intent: 'yield_deposit',
+                  fromAsset: 'ETH',
+                  amount: 1,
+                  confidence: 95,
+                  validationErrors: [],
+                  parsedMessage: 'Depositing 1 ETH to yield'
+                })
+              }
+            }]
+          })
+        }
+      }
+    }));
+
+    const result = await parseUserCommand('deposit 1 ETH to yield');
+    expect(result.success).toBe(true);
+    expect(result.intent).toBe('yield_deposit');
+    expect(result.fromAsset).toBe('ETH');
+    expect(result.amount).toBe(1);
+  });
 });
