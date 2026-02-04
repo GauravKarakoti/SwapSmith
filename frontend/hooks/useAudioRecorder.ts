@@ -113,7 +113,6 @@ class AudioRecorderPolyfill {
       // Firefox-specific optimizations - keep base constraints
       // Firefox works well with the base configuration
     }
-    }
 
     return baseConstraints;
   }

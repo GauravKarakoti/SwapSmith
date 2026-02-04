@@ -412,55 +412,52 @@ return (
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-6 bg-gradient-to-t from-[#0B0E11] via-[#0B0E11] to-transparent">
-        <div className="relative group transition-all duration-300">
-          <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-2xl blur opacity-0 group-focus-within:opacity-100 transition duration-500" />
-            <button 
-              onClick={isRecording ? handleStopRecording : handleStartRecording}
-              disabled={isLoading}
-              className={`p-3 rounded-full transition-all ${
-                !isAudioSupported 
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                  : isRecording 
-                    ? 'bg-red-500 text-white animate-pulse' 
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-              title={
-                !isAudioSupported 
-                  ? "Voice input not supported in this browser" 
-                  : isRecording 
-                    ? "Stop Recording" 
-                    : "Start Voice Input"
-              }
-            >
-              {!isAudioSupported ? (
-                <AlertCircle className="w-5 h-5" />
-              ) : isRecording ? (
-                <StopCircle className="w-5 h-5" />
-              ) : (
-                <Mic className="w-5 h-5" />
-              )}
-            </button>
+      <div className="border-t border-gray-200 p-4 bg-white">
+        <div className="flex gap-2 items-center">
+          <button 
+            onClick={isRecording ? handleStopRecording : handleStartRecording}
+            disabled={isLoading}
+            className={`p-3 rounded-full transition-all ${
+              !isAudioSupported 
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                : isRecording 
+                  ? 'bg-red-500 text-white animate-pulse' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+            title={
+              !isAudioSupported 
+                ? "Voice input not supported in this browser" 
+                : isRecording 
+                  ? "Stop Recording" 
+                  : "Start Voice Input"
+            }
+          >
+            {!isAudioSupported ? (
+              <AlertCircle className="w-5 h-5" />
+            ) : isRecording ? (
+              <StopCircle className="w-5 h-5" />
+            ) : (
+              <Mic className="w-5 h-5" />
+            )}
+          </button>
           
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder="Type or speak... 'Swap ETH for BTC' or 'Receive 10 USDC'"
-              className="flex-1 p-3 border border-gray-300 text-gray-900 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"
-              disabled={isLoading}
-            />
-            <div className="flex items-center gap-2 pr-2">
-              <button 
-                onClick={handleSend} 
-                disabled={isLoading || !input.trim()}
-                className="p-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-20 text-white rounded-xl transition-all shadow-lg shadow-blue-600/20"
-              >
-                <Send className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            placeholder="Type or speak... 'Swap ETH for BTC' or 'Receive 10 USDC'"
+            className="flex-1 p-3 border border-gray-300 text-gray-900 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"
+            disabled={isLoading}
+          />
+          
+          <button 
+            onClick={handleSend} 
+            disabled={isLoading || !input.trim()}
+            className="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            <Send className="w-5 h-5" />
+          </button>
         </div>
         {!isConnected && <p className="text-xs text-center text-red-500 mt-2 font-medium">Please connect wallet for full features</p>}
         {isAudioSupported && (
