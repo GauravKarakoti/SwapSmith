@@ -10,6 +10,20 @@ import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 
+// Import QuoteData type from SwapConfirmation
+interface QuoteData {
+  depositAmount: string;
+  depositCoin: string;
+  depositNetwork: string;
+  rate: string;
+  settleAmount: string;
+  settleCoin: string;
+  settleNetwork: string;
+  memo?: string;
+  expiry?: string;
+  id?: string;
+}
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
@@ -394,8 +408,8 @@ return (
                     {msg.type === 'yield_info' && <div className="font-mono text-xs text-blue-300">{msg.content}</div>}
                     
                     {/* Inject your Custom Components (SwapConfirmation etc) here */}
-                    {msg.type === 'intent_confirmation' && <IntentConfirmation command={msg.data?.parsedCommand} onConfirm={handleIntentConfirm} />}
-                    {msg.type === 'swap_confirmation' && <SwapConfirmation quote={msg.data?.quoteData} confidence={msg.data?.confidence} />}
+                    {msg.type === 'intent_confirmation' && msg.data && 'parsedCommand' in msg.data && <IntentConfirmation command={msg.data.parsedCommand} onConfirm={handleIntentConfirm} />}
+                    {msg.type === 'swap_confirmation' && msg.data && 'quoteData' in msg.data && <SwapConfirmation quote={msg.data.quoteData as QuoteData} confidence={msg.data.confidence} />}
                   </div>
                 </div>
               )}

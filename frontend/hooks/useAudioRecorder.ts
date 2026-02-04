@@ -194,7 +194,7 @@ class AudioRecorderPolyfill {
   isSupported(): boolean {
     return !!(
       navigator.mediaDevices &&
-      navigator.mediaDevices.getUserMedia &&
+      typeof navigator.mediaDevices.getUserMedia === 'function' &&
       window.MediaRecorder
     );
   }
@@ -226,7 +226,11 @@ class AudioRecorderPolyfill {
 export const useAudioRecorder = (config: AudioRecorderConfig = {}): UseAudioRecorderReturn => {
   const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [browserInfo, setBrowserInfo] = useState({
+  const [browserInfo, setBrowserInfo] = useState<{
+    browser: string;
+    supportedMimeTypes: string[];
+    recommendedMimeType: string;
+  }>({
     browser: 'unknown',
     supportedMimeTypes: [],
     recommendedMimeType: ''
