@@ -36,7 +36,7 @@ export default function ChatInterface() {
   const { address, isConnected } = useAccount();
   const { handleError } = useErrorHandler();
   
-  // Use cross-browser audio recorder
+  // Use cross-browser audio recorder with simplified approach
   const { 
     isRecording, 
     isSupported: isAudioSupported, 
@@ -45,9 +45,8 @@ export default function ChatInterface() {
     error: audioError,
     browserInfo 
   } = useAudioRecorder({
-    sampleRate: 16000, // Optimized for speech recognition
-    numberOfAudioChannels: 1,
-    timeSlice: 1000
+    sampleRate: 16000,
+    numberOfAudioChannels: 1
   });
 
   useEffect(() => {
@@ -79,7 +78,7 @@ export default function ChatInterface() {
     if (!isAudioSupported) {
       addMessage({ 
         role: 'assistant', 
-        content: `Voice input is not supported in this browser (${browserInfo.browser}). Please use text input instead.`, 
+        content: `Voice input is not supported in this browser. Please use text input instead.`, 
         type: 'message' 
       });
       return;
@@ -418,7 +417,7 @@ export default function ChatInterface() {
             }`}
             title={
               !isAudioSupported 
-                ? `Voice input not supported in ${browserInfo.browser}` 
+                ? "Voice input not supported in this browser" 
                 : isRecording 
                   ? "Stop Recording" 
                   : "Start Voice Input"
@@ -452,9 +451,14 @@ export default function ChatInterface() {
           </button>
         </div>
         {!isConnected && <p className="text-xs text-center text-red-500 mt-2 font-medium">Please connect wallet for full features</p>}
+        {isAudioSupported && (
+          <p className="text-xs text-center text-green-600 mt-1 font-medium">
+            Voice input ready: {browserInfo.browser} using {browserInfo.recommendedMimeType || 'default format'}
+          </p>
+        )}
         {!isAudioSupported && (
           <p className="text-xs text-center text-amber-600 mt-1 font-medium">
-            Voice input not supported in {browserInfo.browser}. Supported formats: {browserInfo.supportedMimeTypes.join(', ') || 'none'}
+            Voice input not supported in this browser
           </p>
         )}
       </div>
