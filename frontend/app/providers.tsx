@@ -2,18 +2,44 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { WagmiProvider, createConfig, http } from 'wagmi'
-import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
-import { injected } from 'wagmi/connectors'
+import { 
+  mainnet, 
+  polygon, 
+  arbitrum, 
+  avalanche, 
+  optimism, 
+  bsc, 
+  base
+} from 'wagmi/chains'
+import { injected, metaMask } from 'wagmi/connectors'
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 3,
+      retryDelay: 1000,
+    },
+  },
+})
 
-// Add all supported chains to this array and use "as const"
-const supportedChains = [mainnet, polygon, arbitrum, avalanche, optimism, bsc, base] as const;
+const supportedChains = [
+  mainnet, 
+  polygon, 
+  arbitrum, 
+  avalanche, 
+  optimism, 
+  bsc, 
+  base
+] as const;
 
 const config = createConfig({
   chains: supportedChains,
   connectors: [
-    injected(),
+    // Just browser wallets - simple and effective
+    injected({ 
+      shimDisconnect: true,
+    }),
+    metaMask(),
   ],
   transports: {
     [mainnet.id]: http(),
