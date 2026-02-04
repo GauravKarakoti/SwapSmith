@@ -104,16 +104,18 @@ class AudioRecorderPolyfill {
     // Browser-specific optimizations
     if (this.browser === 'safari') {
       // Safari-specific optimizations
-      (baseConstraints.audio as any) = {
-        ...baseConstraints.audio,
+      const audioConstraints = baseConstraints.audio as MediaTrackConstraints;
+      baseConstraints.audio = {
+        ...audioConstraints,
         sampleRate: 44100, // Safari prefers higher sample rates
         latency: 0.1,
         volume: 1.0
       };
     } else if (this.browser === 'firefox') {
       // Firefox-specific optimizations
-      (baseConstraints.audio as any) = {
-        ...baseConstraints.audio,
+      const audioConstraints = baseConstraints.audio as MediaTrackConstraints;
+      baseConstraints.audio = {
+        ...audioConstraints,
         sampleSize: 16,
         volume: 1.0
       };
@@ -152,7 +154,7 @@ class AudioRecorderPolyfill {
       this.audioChunks = [];
 
       // Set up event handlers
-      this.mediaRecorder.ondataavailable = (event) => {
+      this.mediaRecorder.ondataavailable = (event: BlobEvent) => {
         if (event.data.size > 0) {
           this.audioChunks.push(event.data);
         }
@@ -263,17 +265,18 @@ export const useAudioRecorder = (config: AudioRecorderConfig = {}): UseAudioReco
       setError(null);
       await polyfillRef.current.startRecording(config);
       setIsRecording(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to start recording:', err);
       
-      if (err.name === 'NotAllowedError') {
+      const error = err as Error;
+      if (error.name === 'NotAllowedError') {
         setError('Microphone access denied. Please enable microphone permissions and try again.');
-      } else if (err.name === 'NotFoundError') {
+      } else if (error.name === 'NotFoundError') {
         setError('No microphone found. Please connect a microphone and try again.');
-      } else if (err.name === 'NotSupportedError') {
+      } else if (error.name === 'NotSupportedError') {
         setError('Audio recording is not supported in this browser.');
       } else {
-        setError(`Failed to start recording: ${err.message || 'Unknown error'}`);
+        setError(`Failed to start recording: ${error.message || 'Unknown error'}`);
       }
     }
   }, [isSupported, isRecording, config, mounted]);
@@ -287,9 +290,10 @@ export const useAudioRecorder = (config: AudioRecorderConfig = {}): UseAudioReco
       const audioBlob = await polyfillRef.current.stopRecording();
       setIsRecording(false);
       return audioBlob;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to stop recording:', err);
-      setError(`Failed to stop recording: ${err.message || 'Unknown error'}`);
+      const error = err as Error;
+      setError(`Failed to stop recording: ${error.message || 'Unknown error'}`);
       setIsRecording(false);
       return null;
     }
