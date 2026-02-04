@@ -7,7 +7,32 @@ export default function WalletConnector() {
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
-  const connector = connectors[0];
+
+  const handleConnect = () => {
+    console.log("Available connectors:", connectors);
+    // Prefer MetaMask specifically, then Injected
+    const metaMaskConnector = connectors.find((c: any) => c.id === 'metaMask' || c.name === 'MetaMask');
+    const injectedConnector = connectors.find((c: any) => c.id === 'injected' || c.name === 'Injected');
+
+    const connectorToUse = metaMaskConnector || injectedConnector || connectors[0];
+
+    if (!connectorToUse) {
+      console.error('No connector found');
+      return;
+    }
+
+    console.log("Attempting to connect with:", connectorToUse.name, connectorToUse.id);
+
+    connect({ connector: connectorToUse }, {
+      onError: (error: any) => {
+        console.error('Failed to connect:', error);
+        // If the error comes from an extension, it might be an internal error
+        if (error?.message?.includes('Unexpected error')) {
+          console.warn("It looks like a wallet extension (e.g. Phantom) is failing. Try disabling conflicting wallets.");
+        }
+      }
+    });
+  };
 
   if (isConnected)
     return (
@@ -18,7 +43,7 @@ export default function WalletConnector() {
             {address?.substring(0, 6)}...{address?.substring(address.length - 4)}
           </span>
         </div>
-        <button 
+        <button
           onClick={() => disconnect()}
           className="p-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl transition-colors border border-red-500/20"
         >
@@ -26,10 +51,10 @@ export default function WalletConnector() {
         </button>
       </div>
     );
-    
+
   return (
-    <button 
-      onClick={() => connect({ connector })}
+    <button
+      onClick={handleConnect}
       className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-blue-600/20 active:scale-95"
     >
       <Wallet className="w-4 h-4" />
