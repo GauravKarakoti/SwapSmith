@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useAccount } from 'wagmi';
-import { Mic, Send, StopCircle, AlertCircle } from 'lucide-react';
+import { Mic, Send, StopCircle, AlertCircle, Zap } from 'lucide-react';
 import SwapConfirmation from './SwapConfirmation';
 import TrustIndicators from './TrustIndicators';
 import IntentConfirmation from './IntentConfirmation';
@@ -353,7 +353,7 @@ return (
       <div className="px-6 py-4 bg-white/[0.02] border-b border-white/5 flex justify-between items-center backdrop-blur-md">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-blue-500/10 rounded-lg">
-            <Sparkles className="w-4 h-4 text-blue-400" />
+            <Zap className="w-4 h-4 text-blue-400" />
           </div>
           <div>
             <h3 className="text-sm font-bold text-white tracking-tight">SwapSmith AI</h3>
