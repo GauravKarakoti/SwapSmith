@@ -472,6 +472,7 @@ return (
           <p className="text-xs text-center text-amber-600 mt-1 font-medium">
             Voice input not supported in this browser
           </p>
+        )}
         
         {/* Footer Warning */}
         {!isConnected && (

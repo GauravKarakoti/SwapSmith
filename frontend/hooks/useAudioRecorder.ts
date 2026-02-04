@@ -234,22 +234,22 @@ export const useAudioRecorder = (config: AudioRecorderConfig = {}): UseAudioReco
   const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [browserInfo, setBrowserInfo] = useState({
+    browser: 'unknown',
+    supportedMimeTypes: [],
+    recommendedMimeType: ''
+  });
+  const [isSupported, setIsSupported] = useState(false);
   const polyfillRef = useRef<AudioRecorderPolyfill | null>(null);
 
   useEffect(() => {
     setMounted(true);
     if (typeof window !== 'undefined') {
       polyfillRef.current = new AudioRecorderPolyfill();
+      setBrowserInfo(polyfillRef.current.getBrowserInfo());
+      setIsSupported(polyfillRef.current.isSupported());
     }
   }, []);
-
-  const browserInfo = mounted && polyfillRef.current 
-    ? polyfillRef.current.getBrowserInfo()
-    : { browser: 'unknown', supportedMimeTypes: [], recommendedMimeType: '' };
-
-  const isSupported = mounted && polyfillRef.current 
-    ? polyfillRef.current.isSupported()
-    : false;
 
   const startRecording = useCallback(async (): Promise<void> => {
     if (!isSupported || !polyfillRef.current || !mounted) {
