@@ -107,18 +107,12 @@ class AudioRecorderPolyfill {
       const audioConstraints = baseConstraints.audio as MediaTrackConstraints;
       baseConstraints.audio = {
         ...audioConstraints,
-        sampleRate: 44100, // Safari prefers higher sample rates
-        latency: 0.1,
-        volume: 1.0
+        sampleRate: 44100 // Safari prefers higher sample rates
       };
     } else if (this.browser === 'firefox') {
-      // Firefox-specific optimizations
-      const audioConstraints = baseConstraints.audio as MediaTrackConstraints;
-      baseConstraints.audio = {
-        ...audioConstraints,
-        sampleSize: 16,
-        volume: 1.0
-      };
+      // Firefox-specific optimizations - keep base constraints
+      // Firefox works well with the base configuration
+    }
     }
 
     return baseConstraints;
@@ -246,8 +240,13 @@ export const useAudioRecorder = (config: AudioRecorderConfig = {}): UseAudioReco
     setMounted(true);
     if (typeof window !== 'undefined') {
       polyfillRef.current = new AudioRecorderPolyfill();
-      setBrowserInfo(polyfillRef.current.getBrowserInfo());
-      setIsSupported(polyfillRef.current.isSupported());
+      // Use setTimeout to avoid setState during render
+      setTimeout(() => {
+        if (polyfillRef.current) {
+          setBrowserInfo(polyfillRef.current.getBrowserInfo());
+          setIsSupported(polyfillRef.current.isSupported());
+        }
+      }, 0);
     }
   }, []);
 
