@@ -2,12 +2,13 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useAccount } from 'wagmi';
-import { Mic, Send, StopCircle, Copy, Check } from 'lucide-react';
+import { Mic, Send, StopCircle, Copy, Check, AlertCircle } from 'lucide-react';
 import SwapConfirmation from './SwapConfirmation';
 import TrustIndicators from './TrustIndicators';
 import IntentConfirmation from './IntentConfirmation';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
+import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -28,7 +29,6 @@ export default function ChatInterface() {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
   const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
   
@@ -36,13 +36,30 @@ export default function ChatInterface() {
   const { address, isConnected } = useAccount();
   const { handleError } = useErrorHandler();
   
-  // MediaRecorder ref
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  // Use cross-browser audio recorder
+  const { 
+    isRecording, 
+    isSupported: isAudioSupported, 
+    startRecording, 
+    stopRecording, 
+    error: audioError,
+    browserInfo 
+  } = useAudioRecorder({
+    sampleRate: 16000, // Optimized for speech recognition
+    numberOfAudioChannels: 1,
+    timeSlice: 1000
+  });
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Show audio error if any
+  useEffect(() => {
+    if (audioError) {
+      addMessage({ role: 'assistant', content: audioError, type: 'message' });
+    }
+  }, [audioError]);
 
   const addMessage = (message: Omit<Message, 'timestamp'>) => {
     setMessages(prev => [...prev, { ...message, timestamp: new Date() }]);
@@ -58,24 +75,18 @@ export default function ChatInterface() {
     }
   };
 
-  const startRecording = async () => {
+  const handleStartRecording = async () => {
+    if (!isAudioSupported) {
+      addMessage({ 
+        role: 'assistant', 
+        content: `Voice input is not supported in this browser (${browserInfo.browser}). Please use text input instead.`, 
+        type: 'message' 
+      });
+      return;
+    }
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) audioChunksRef.current.push(event.data);
-      };
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        await handleVoiceInput(audioBlob);
-      };
-
-      mediaRecorder.start();
-      setIsRecording(true);
+      await startRecording();
     } catch (err) {
       const errorMessage = handleError(err, ErrorType.VOICE_ERROR, { 
         operation: 'microphone_access',
@@ -85,11 +96,18 @@ export default function ChatInterface() {
     }
   };
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+  const handleStopRecording = async () => {
+    try {
+      const audioBlob = await stopRecording();
+      if (audioBlob) {
+        await handleVoiceInput(audioBlob);
+      }
+    } catch (err) {
+      const errorMessage = handleError(err, ErrorType.VOICE_ERROR, { 
+        operation: 'stop_recording',
+        retryable: true 
+      });
+      addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
     }
   };
 
@@ -98,7 +116,18 @@ export default function ChatInterface() {
     addMessage({ role: 'user', content: '🎤 [Sending Voice...]', type: 'message' });
     
     const formData = new FormData();
-    formData.append('file', audioBlob, 'voice.webm');
+    
+    // Determine file extension based on blob type and browser
+    let fileName = 'voice.webm';
+    if (audioBlob.type.includes('mp4')) {
+      fileName = 'voice.mp4';
+    } else if (audioBlob.type.includes('wav')) {
+      fileName = 'voice.wav';
+    } else if (audioBlob.type.includes('ogg')) {
+      fileName = 'voice.ogg';
+    }
+    
+    formData.append('file', audioBlob, fileName);
 
     try {
         const response = await fetch('/api/transcribe', {
@@ -378,18 +407,37 @@ export default function ChatInterface() {
       <div className="border-t border-gray-200 p-4 bg-white">
         <div className="flex gap-2 items-center">
           <button 
-            onClick={isRecording ? stopRecording : startRecording}
-            className={`p-3 rounded-full transition-all ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-            title={isRecording ? "Stop Recording" : "Start Voice Input"}
+            onClick={isRecording ? handleStopRecording : handleStartRecording}
+            disabled={isLoading}
+            className={`p-3 rounded-full transition-all ${
+              !isAudioSupported 
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                : isRecording 
+                  ? 'bg-red-500 text-white animate-pulse' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+            title={
+              !isAudioSupported 
+                ? `Voice input not supported in ${browserInfo.browser}` 
+                : isRecording 
+                  ? "Stop Recording" 
+                  : "Start Voice Input"
+            }
           >
-            {isRecording ? <StopCircle className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            {!isAudioSupported ? (
+              <AlertCircle className="w-5 h-5" />
+            ) : isRecording ? (
+              <StopCircle className="w-5 h-5" />
+            ) : (
+              <Mic className="w-5 h-5" />
+            )}
           </button>
           
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder="Type or speak... 'Swap ETH for BTC' or 'Receive 10 USDC'"
             className="flex-1 p-3 border border-gray-300 text-gray-900 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"
             disabled={isLoading}
@@ -404,6 +452,11 @@ export default function ChatInterface() {
           </button>
         </div>
         {!isConnected && <p className="text-xs text-center text-red-500 mt-2 font-medium">Please connect wallet for full features</p>}
+        {!isAudioSupported && (
+          <p className="text-xs text-center text-amber-600 mt-1 font-medium">
+            Voice input not supported in {browserInfo.browser}. Supported formats: {browserInfo.supportedMimeTypes.join(', ') || 'none'}
+          </p>
+        )}
       </div>
     </div>
   );
