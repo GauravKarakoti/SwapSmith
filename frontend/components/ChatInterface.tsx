@@ -355,20 +355,17 @@ return (
           <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2`}>
             <div className={`max-w-[85%] ${msg.role === 'user' ? 'order-1' : 'order-2'}`}>
               
-              {/* User Message: Clean & Right-aligned */}
               {msg.role === 'user' ? (
                 <div className="bg-blue-600 text-white px-5 py-3 rounded-2xl rounded-tr-none shadow-lg shadow-blue-600/20 text-sm font-medium">
                   {msg.content}
                 </div>
               ) : (
-                /* Assistant Message: Subtle & Framed */
+                
                 <div className="space-y-3">
                   <div className="bg-white/[0.04] border border-white/10 text-gray-200 px-5 py-4 rounded-2xl rounded-tl-none text-sm leading-relaxed backdrop-blur-sm">
-                    {/* Render different types (yield, swap, etc) within this styled frame */}
                     {msg.type === 'message' && <div className="whitespace-pre-line">{msg.content}</div>}
                     {msg.type === 'yield_info' && <div className="font-mono text-xs text-blue-300">{msg.content}</div>}
                     
-                    {/* Inject your Custom Components (SwapConfirmation etc) here */}
                     {msg.type === 'intent_confirmation' && <IntentConfirmation command={msg.data?.parsedCommand} onConfirm={handleIntentConfirm} />}
                     {msg.type === 'swap_confirmation' && <SwapConfirmation quote={msg.data?.quoteData} confidence={msg.data?.confidence} />}
                   </div>
@@ -387,7 +384,6 @@ return (
       {/* 3. Input Console */}
       <div className="p-6 bg-gradient-to-t from-[#0B0E11] via-[#0B0E11] to-transparent">
         <div className="relative group transition-all duration-300">
-          {/* Subtle glow effect on focus */}
           <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-2xl blur opacity-0 group-focus-within:opacity-100 transition duration-500" />
           
           <div className="relative flex items-center gap-3 bg-[#161A1E] border border-white/10 p-2 rounded-2xl group-focus-within:border-blue-500/50 transition-all">

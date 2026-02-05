@@ -26,7 +26,6 @@ export default function LandingPage() {
 
       {/* 2. Hero Section */}
       <section className="relative pt-30 pb-20 px-6 overflow-hidden">
-        {/* Ambient Glows */}
         <div className="absolute top-20 left-1/2 -translate-x-1/2 w-full max-w-4xl h-[400px] bg-blue-600/10 blur-[120px] rounded-full pointer-events-none" />
         
         <div className="max-w-5xl mx-auto text-center space-y-8 relative z-10">

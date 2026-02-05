@@ -1,4 +1,4 @@
-'use client' // Ensure this is a client component for scroll control
+'use client' 
 
 import { useEffect } from 'react';
 import WalletConnector from '@/components/WalletConnector';
@@ -8,16 +8,13 @@ import { MessageCircle, Zap } from 'lucide-react';
 
 export default function TerminalPage() {
   
-  // Force scroll to top on mount to fix the "auto-scroll down" bug
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
 
   return (
     <div className="flex flex-col min-h-screen bg-[#050505] text-white overflow-x-hidden">
-      {/* We use flex-1 on the main container to push the footer down 
-        and keep the terminal centered without weird scrolling.
-      */}
+
       <main className="flex-1 flex flex-col items-center p-4 md:p-8">
         
         {/* Navigation Bar */}
