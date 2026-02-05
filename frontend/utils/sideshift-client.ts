@@ -54,8 +54,9 @@ export async function createQuote(
       }
     );
     return { ...response.data, id: response.data.id };
-  } catch (error: any) {
-    throw new Error(error.response?.data?.error?.message || 'Failed to create quote');
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: { error?: { message?: string } } } };
+    throw new Error(err.response?.data?.error?.message || 'Failed to create quote');
   }
 }
 
@@ -93,7 +94,8 @@ export async function createCheckout(
         settleAmount: response.data.settleAmount,
         settleCoin: response.data.settleCoin
     };
-  } catch (error: any) {
-    throw new Error(error.response?.data?.error?.message || 'Failed to create checkout');
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: { error?: { message?: string } } } };
+    throw new Error(err.response?.data?.error?.message || 'Failed to create checkout');
   }
 }
