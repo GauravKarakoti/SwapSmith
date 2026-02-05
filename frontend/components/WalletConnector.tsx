@@ -1,7 +1,7 @@
 'use client'
 
 import { useAccount, useConnect, useDisconnect } from 'wagmi';
-import { Wallet, LogOut, Loader2, AlertCircle } from 'lucide-react';
+import { Wallet, LogOut, Loader2 } from 'lucide-react';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
 import { useState, useEffect } from 'react';
 import {
@@ -15,108 +15,76 @@ export default function WalletConnector() {
   const { address, isConnected, chain } = useAccount();
   const { connect, connectors, isPending, error } = useConnect();
   const { disconnect } = useDisconnect();
+  
+  // FIX: Destructure handleError from the hook
+  const { handleError } = useErrorHandler();
+  
+  // FIX: Define missing state
+  const [connectionError, setConnectionError] = useState<string>('');
 
+  // FIX: Merged the two handleConnect declarations into one
   const handleConnect = () => {
+    setConnectionError('');
     console.log("Available connectors:", connectors);
-    // Prefer MetaMask specifically, then Injected
-    const metaMaskConnector = connectors.find((c: any) => c.id === 'metaMask' || c.name === 'MetaMask');
-    const injectedConnector = connectors.find((c: any) => c.id === 'injected' || c.name === 'Injected');
 
-    const connectorToUse = metaMaskConnector || injectedConnector || connectors[0];
-
-    if (!connectorToUse) {
-      console.error('No connector found');
+    if (!connectors || connectors.length === 0) {
+      setConnectionError('No wallet connectors available. Please install MetaMask or another Web3 wallet.');
       return;
     }
+
+    // Prefer MetaMask specifically, then Injected, then the first available
+    const metaMaskConnector = connectors.find((c: any) => c.id === 'metaMask' || c.name === 'MetaMask');
+    const injectedConnector = connectors.find((c: any) => c.id === 'injected' || c.name === 'Injected');
+    const connectorToUse = metaMaskConnector || injectedConnector || connectors[0];
 
     console.log("Attempting to connect with:", connectorToUse.name, connectorToUse.id);
 
     connect({ connector: connectorToUse }, {
-      onError: (error: any) => {
-        console.error('Failed to connect:', error);
-        // If the error comes from an extension, it might be an internal error
-        if (error?.message?.includes('Unexpected error')) {
+      onError: (err: any) => {
+        console.error('Failed to connect:', err);
+        if (err?.message?.includes('Unexpected error')) {
           console.warn("It looks like a wallet extension (e.g. Phantom) is failing. Try disabling conflicting wallets.");
         }
       }
     });
   };
 
-  
- useEffect(() => {
-  if (!error) {
-    if (connectionError !== '') {
-      setConnectionError('');
+  useEffect(() => {
+    if (!error) {
+      if (connectionError !== '') {
+        setConnectionError('');
+      }
+      return;
     }
-    return;
-  }
 
-  // console.log('Wallet connection error', error);
-
-  let errorMessage: string;
-  
-  if (error instanceof ConnectorNotFoundError) {
-    errorMessage = 'Wallet not detected. Please install MetaMask or another Web3 wallet.';
-  } else if (error instanceof ChainNotConfiguredError) {
-    errorMessage = 'Unsupported network. Please switch to a supported chain.';
-  }else if (error instanceof ConnectorUnavailableReconnectingError ) {
-    errorMessage = 'Connector unavailable while reconnecting';
-  } else if (error instanceof  ConnectorAlreadyConnectedError) {
-  errorMessage = 'Wallet is already processing a request. Please check your wallet.';
-  } 
-
-  else {
+    let errorMessage: string;
     
-    errorMessage = handleError(error, ErrorType.WALLET_ERROR, {
-      operation: 'wallet_connect',
-      retryable: true,
-    });
-  }
+    if (error instanceof ConnectorNotFoundError) {
+      errorMessage = 'Wallet not detected. Please install MetaMask or another Web3 wallet.';
+    } else if (error instanceof ChainNotConfiguredError) {
+      errorMessage = 'Unsupported network. Please switch to a supported chain.';
+    } else if (error instanceof ConnectorUnavailableReconnectingError ) {
+      errorMessage = 'Connector unavailable while reconnecting';
+    } else if (error instanceof ConnectorAlreadyConnectedError) {
+      errorMessage = 'Wallet is already processing a request. Please check your wallet.';
+    } else {
+      // FIX: handleError is now available via useErrorHandler()
+      errorMessage = handleError(error, ErrorType.WALLET_ERROR, {
+        operation: 'wallet_connect',
+        retryable: true,
+      });
+    }
 
-  if (connectionError !== errorMessage) {
-    setConnectionError(errorMessage);
-  }
-}, [error, handleError, connectionError]);
-
-useEffect(() => {
-  if (isConnected && connectionError !== '') {
-    setConnectionError('');
-    // console.log('Wallet connected successfully');
-  }
-}, [isConnected, connectionError]);
-
+    if (connectionError !== errorMessage) {
+      setConnectionError(errorMessage);
+    }
+  }, [error, handleError, connectionError]);
 
   useEffect(() => {
-    const info = {
-      connectorsCount: connectors?.length || 0,
-      connectorNames: connectors?.map(c => ({ id: c.id, name: c.name })) || [],
-      isConnected,
-      chain: chain?.name || null,
-      address: address ? `${address.substring(0, 6)}...${address.substring(address.length - 4)}` : null,
-      error: error?.message || null,
-      connectionError
-    };
-    // console.log('WalletConnector Debug:', info);
-
-  }, [connectors, isConnected, address, chain, error, connectionError]);
-
-  const handleConnect = () => {
-    setConnectionError('');
-    
-    if (!connectors || connectors.length === 0) {
-      setConnectionError('No wallet connectors available. Please install MetaMask or another Web3 wallet.');
-      return;
+    if (isConnected && connectionError !== '') {
+      setConnectionError('');
     }
-
-    const connector = connectors[0];
-    if (!connector) {
-      setConnectionError('Wallet connector not found. Please install MetaMask or another Web3 wallet.');
-      return;
-    }
-
-    // console.log('Attempt to connect with connector', connector.name);
-    connect({ connector });
-  };
+  }, [isConnected, connectionError]);
 
   if (isConnected) {
     return (
@@ -138,18 +106,26 @@ useEffect(() => {
         </button>
       </div>
     );
+  }
 
   return (
-    <button
-      onClick={handleConnect}
-      className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-blue-600/20 active:scale-95"
-    >
-      {isPending ? (
-        <Loader2 className="w-4 h-4 animate-spin" />
-      ) : (
-        <Wallet className="w-4 h-4" />
+    <div className="flex flex-col items-end gap-2">
+      <button
+        onClick={handleConnect}
+        className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-blue-600/20 active:scale-95"
+      >
+        {isPending ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : (
+          <Wallet className="w-4 h-4" />
+        )}
+        {isPending ? 'Connecting...' : 'Connect Wallet'}
+      </button>
+      {connectionError && (
+        <span className="text-[10px] text-red-500 bg-red-500/10 px-2 py-1 rounded-md border border-red-500/20">
+          {connectionError}
+        </span>
       )}
-      {isPending ? 'Connecting...' : 'Connect Wallet'}
-    </button>
+    </div>
   );
 }
