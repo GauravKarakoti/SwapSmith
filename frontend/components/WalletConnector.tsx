@@ -15,8 +15,32 @@ export default function WalletConnector() {
   const { address, isConnected, chain } = useAccount();
   const { connect, connectors, isPending, error } = useConnect();
   const { disconnect } = useDisconnect();
-  const { handleError } = useErrorHandler();
-  const [connectionError, setConnectionError] = useState<string>('');
+
+  const handleConnect = () => {
+    console.log("Available connectors:", connectors);
+    // Prefer MetaMask specifically, then Injected
+    const metaMaskConnector = connectors.find((c: any) => c.id === 'metaMask' || c.name === 'MetaMask');
+    const injectedConnector = connectors.find((c: any) => c.id === 'injected' || c.name === 'Injected');
+
+    const connectorToUse = metaMaskConnector || injectedConnector || connectors[0];
+
+    if (!connectorToUse) {
+      console.error('No connector found');
+      return;
+    }
+
+    console.log("Attempting to connect with:", connectorToUse.name, connectorToUse.id);
+
+    connect({ connector: connectorToUse }, {
+      onError: (error: any) => {
+        console.error('Failed to connect:', error);
+        // If the error comes from an extension, it might be an internal error
+        if (error?.message?.includes('Unexpected error')) {
+          console.warn("It looks like a wallet extension (e.g. Phantom) is failing. Try disabling conflicting wallets.");
+        }
+      }
+    });
+  };
 
   
  useEffect(() => {
@@ -105,7 +129,7 @@ useEffect(() => {
             {address?.substring(0, 6)}...{address?.substring(address.length - 4)}
           </span>
         </div>
-        <button 
+        <button
           onClick={() => disconnect()}
           className="p-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl transition-colors border border-red-500/20"
           title="Disconnect Wallet"
@@ -114,34 +138,11 @@ useEffect(() => {
         </button>
       </div>
     );
-  }
 
-
-  if (connectionError) {
-    return (
-      <div className="flex flex-col items-end gap-2">
-        <button 
-          onClick={handleConnect}
-          disabled={isPending}
-          className="flex items-center gap-2 px-6 py-2.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 text-sm font-bold rounded-xl transition-all border border-red-500/20"
-          title={connectionError}
-        >
-          <AlertCircle className="w-4 h-4" />
-          Retry Connection
-        </button>
-        <span className="text-xs text-red-400 max-w-xs text-right">
-          {connectionError}
-        </span>
-      </div>
-    );
-  }
-    
   return (
-    <button 
+    <button
       onClick={handleConnect}
-      disabled={isPending || !connectors?.length}
-      className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-blue-600/20 active:scale-95 disabled:active:scale-100"
-      title={!connectors?.length ? "No wallet detected. Please install MetaMask." : "Connect your wallet"}
+      className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-blue-600/20 active:scale-95"
     >
       {isPending ? (
         <Loader2 className="w-4 h-4 animate-spin" />

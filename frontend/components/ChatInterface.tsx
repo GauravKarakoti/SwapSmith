@@ -2,19 +2,34 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useAccount } from 'wagmi';
-import { Mic, Send, StopCircle, Copy, Check, Sparkles, Command } from 'lucide-react';
+import { Mic, Send, StopCircle, AlertCircle, Zap } from 'lucide-react';
 import SwapConfirmation from './SwapConfirmation';
 import TrustIndicators from './TrustIndicators';
 import IntentConfirmation from './IntentConfirmation';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
+import { useAudioRecorder } from '@/hooks/useAudioRecorder';
+
+// Import QuoteData type from SwapConfirmation
+interface QuoteData {
+  depositAmount: string;
+  depositCoin: string;
+  depositNetwork: string;
+  rate: string;
+  settleAmount: string;
+  settleCoin: string;
+  settleNetwork: string;
+  memo?: string;
+  expiry?: string;
+  id?: string;
+}
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
   type?: 'message' | 'intent_confirmation' | 'swap_confirmation' | 'yield_info' | 'checkout_link';
-  data?: any;
+  data?: ParsedCommand | { quoteData: unknown; confidence: number } | { url: string } | { parsedCommand: ParsedCommand };
 }
 
 export default function ChatInterface() {
@@ -28,54 +43,60 @@ export default function ChatInterface() {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
   const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
-  const [copiedLink, setCopiedLink] = useState<string | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { address, isConnected } = useAccount();
   const { handleError } = useErrorHandler();
   
-  // MediaRecorder ref
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  // Use cross-browser audio recorder with simplified approach
+  const { 
+    isRecording, 
+    isSupported: isAudioSupported, 
+    startRecording, 
+    stopRecording, 
+    error: audioError,
+    browserInfo 
+  } = useAudioRecorder({
+    sampleRate: 16000,
+    numberOfAudioChannels: 1
+  });
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Show audio error if any
+  useEffect(() => {
+    if (audioError) {
+      addMessage({ role: 'assistant', content: audioError, type: 'message' });
+    }
+  }, [audioError]);
+
+  const formatTime = (date: Date) => {
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    return `${displayHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+  };
+
   const addMessage = (message: Omit<Message, 'timestamp'>) => {
     setMessages(prev => [...prev, { ...message, timestamp: new Date() }]);
   };
 
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedLink(text);
-      setTimeout(() => setCopiedLink(null), 2000);
-    } catch (err) {
-      console.error('Failed to copy', err);
+  const handleStartRecording = async () => {
+    if (!isAudioSupported) {
+      addMessage({ 
+        role: 'assistant', 
+        content: `Voice input is not supported in this browser. Please use text input instead.`, 
+        type: 'message' 
+      });
+      return;
     }
-  };
 
-  const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) audioChunksRef.current.push(event.data);
-      };
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        await handleVoiceInput(audioBlob);
-      };
-
-      mediaRecorder.start();
-      setIsRecording(true);
+      await startRecording();
     } catch (err) {
       const errorMessage = handleError(err, ErrorType.VOICE_ERROR, { 
         operation: 'microphone_access',
@@ -85,11 +106,18 @@ export default function ChatInterface() {
     }
   };
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+  const handleStopRecording = async () => {
+    try {
+      const audioBlob = await stopRecording();
+      if (audioBlob) {
+        await handleVoiceInput(audioBlob);
+      }
+    } catch (err) {
+      const errorMessage = handleError(err, ErrorType.VOICE_ERROR, { 
+        operation: 'stop_recording',
+        retryable: true 
+      });
+      addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
     }
   };
 
@@ -98,7 +126,18 @@ export default function ChatInterface() {
     addMessage({ role: 'user', content: '🎤 [Sending Voice...]', type: 'message' });
     
     const formData = new FormData();
-    formData.append('file', audioBlob, 'voice.webm');
+    
+    // Determine file extension based on blob type and browser
+    let fileName = 'voice.webm';
+    if (audioBlob.type.includes('mp4')) {
+      fileName = 'voice.mp4';
+    } else if (audioBlob.type.includes('wav')) {
+      fileName = 'voice.wav';
+    } else if (audioBlob.type.includes('ogg')) {
+      fileName = 'voice.ogg';
+    }
+    
+    formData.append('file', audioBlob, fileName);
 
     try {
         const response = await fetch('/api/transcribe', {
@@ -251,7 +290,7 @@ export default function ChatInterface() {
         await executeSwap(command);
       }
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       const errorMessage = handleError(error, ErrorType.API_FAILURE, { 
         operation: 'command_processing',
         retryable: true 
@@ -293,7 +332,7 @@ export default function ChatInterface() {
         type: 'swap_confirmation',
         data: { quoteData: quote, confidence: command.confidence }
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       const errorMessage = handleError(error, ErrorType.API_FAILURE, { 
         operation: 'swap_quote',
         retryable: true 
@@ -336,7 +375,7 @@ return (
       <div className="px-6 py-4 bg-white/[0.02] border-b border-white/5 flex justify-between items-center backdrop-blur-md">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-blue-500/10 rounded-lg">
-            <Sparkles className="w-4 h-4 text-blue-400" />
+            <Zap className="w-4 h-4 text-blue-400" />
           </div>
           <div>
             <h3 className="text-sm font-bold text-white tracking-tight">SwapSmith AI</h3>
@@ -369,14 +408,14 @@ return (
                     {msg.type === 'yield_info' && <div className="font-mono text-xs text-blue-300">{msg.content}</div>}
                     
                     {/* Inject your Custom Components (SwapConfirmation etc) here */}
-                    {msg.type === 'intent_confirmation' && <IntentConfirmation command={msg.data?.parsedCommand} onConfirm={handleIntentConfirm} />}
-                    {msg.type === 'swap_confirmation' && <SwapConfirmation quote={msg.data?.quoteData} confidence={msg.data?.confidence} />}
+                    {msg.type === 'intent_confirmation' && msg.data && 'parsedCommand' in msg.data && <IntentConfirmation command={msg.data.parsedCommand} onConfirm={handleIntentConfirm} />}
+                    {msg.type === 'swap_confirmation' && msg.data && 'quoteData' in msg.data && <SwapConfirmation quote={msg.data.quoteData as QuoteData} confidence={msg.data.confidence} />}
                   </div>
                 </div>
               )}
               
               <p className={`text-[10px] text-gray-500 mt-2 px-1 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
-                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {formatTime(msg.timestamp)}
               </p>
             </div>
           </div>
@@ -384,42 +423,64 @@ return (
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 3. Input Console */}
-      <div className="p-6 bg-gradient-to-t from-[#0B0E11] via-[#0B0E11] to-transparent">
-        <div className="relative group transition-all duration-300">
-          {/* Subtle glow effect on focus */}
-          <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-2xl blur opacity-0 group-focus-within:opacity-100 transition duration-500" />
+      <div className="border-t border-gray-200 p-4 bg-white">
+        <div className="flex gap-2 items-center">
+          <button 
+            onClick={isRecording ? handleStopRecording : handleStartRecording}
+            disabled={isLoading}
+            className={`p-3 rounded-full transition-all ${
+              !isAudioSupported 
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                : isRecording 
+                  ? 'bg-red-500 text-white animate-pulse' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+            title={
+              !isAudioSupported 
+                ? "Voice input not supported in this browser" 
+                : isRecording 
+                  ? "Stop Recording" 
+                  : "Start Voice Input"
+            }
+          >
+            {!isAudioSupported ? (
+              <AlertCircle className="w-5 h-5" />
+            ) : isRecording ? (
+              <StopCircle className="w-5 h-5" />
+            ) : (
+              <Mic className="w-5 h-5" />
+            )}
+          </button>
           
-          <div className="relative flex items-center gap-3 bg-[#161A1E] border border-white/10 p-2 rounded-2xl group-focus-within:border-blue-500/50 transition-all">
-            <button 
-              onClick={isRecording ? stopRecording : startRecording}
-              className={`p-3 rounded-xl transition-all ${
-                isRecording ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/40' : 'bg-white/5 text-gray-400 hover:bg-white/10'
-              }`}
-            >
-              {isRecording ? <StopCircle className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-            </button>
-            
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder="Send a command (e.g., 'Swap 1 ETH to USDC')"
-              className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-white placeholder:text-gray-500 py-3"
-            />
-            
-            <div className="flex items-center gap-2 pr-2">
-              <button 
-                onClick={handleSend} 
-                disabled={isLoading || !input.trim()}
-                className="p-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-20 text-white rounded-xl transition-all shadow-lg shadow-blue-600/20"
-              >
-                <Send className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            placeholder="Type or speak... 'Swap ETH for BTC' or 'Receive 10 USDC'"
+            className="flex-1 p-3 border border-gray-300 text-gray-900 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"
+            disabled={isLoading}
+          />
+          
+          <button 
+            onClick={handleSend} 
+            disabled={isLoading || !input.trim()}
+            className="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            <Send className="w-5 h-5" />
+          </button>
         </div>
+        {!isConnected && <p className="text-xs text-center text-red-500 mt-2 font-medium">Please connect wallet for full features</p>}
+        {isAudioSupported && (
+          <p className="text-xs text-center text-green-600 mt-1 font-medium">
+            Voice input ready: {browserInfo.browser} using {browserInfo.recommendedMimeType || 'default format'}
+          </p>
+        )}
+        {!isAudioSupported && (
+          <p className="text-xs text-center text-amber-600 mt-1 font-medium">
+            Voice input not supported in this browser
+          </p>
+        )}
         
         {/* Footer Warning */}
         {!isConnected && (
