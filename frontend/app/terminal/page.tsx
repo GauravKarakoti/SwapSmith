@@ -1,12 +1,14 @@
 'use client' 
 
 import { useEffect } from 'react';
+import { useAuth } from '@/hooks/useAuth'; // Import the hook
 import WalletConnector from '@/components/WalletConnector';
 import ChatInterface from '@/components/ChatInterface';
 import Footer from '@/components/Footer';
-import { MessageCircle, Zap } from 'lucide-react';
+import { MessageCircle, Zap, LogOut } from 'lucide-react'; // Import LogOut icon
 
 export default function TerminalPage() {
+  const { logout } = useAuth(); // Access logout function
   
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -25,7 +27,20 @@ export default function TerminalPage() {
             </div>
             <span className="text-xl font-black tracking-tighter uppercase">SwapSmith</span>
           </div>
-          <WalletConnector />
+
+          <div className="flex items-center gap-4">
+            <WalletConnector />
+            
+            {/* Professional Logout Button */}
+            <button 
+              onClick={logout}
+              className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-500 rounded-xl transition-all text-xs font-bold uppercase tracking-widest active:scale-95"
+              title="Logout Terminal"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Logout</span>
+            </button>
+          </div>
         </nav>
 
         {/* Content Container */}
