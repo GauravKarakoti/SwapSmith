@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { AlertCircle, RefreshCw, TrendingUp } from 'lucide-react';
+import { motion } from 'framer-motion';
 import CoinCard from '@/components/CoinCard';
 import SearchBar from '@/components/SearchBar';
 import CoinCardSkeleton from '@/components/CoinCardSkeleton';
@@ -115,9 +116,16 @@ export default function PricesPage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <TrendingUp className="w-8 h-8 text-blue-600" />
-              <h1 className="text-4xl font-bold text-gray-900 dark:text-white">
+              <motion.h1
+                initial={{ scale: 0.95, opacity: 0.7 }}
+                animate={{ scale: 1, opacity: 1 }}
+                whileHover={{ scale: 1.08, color: '#22d3ee', textShadow: '0 2px 20px #22d3ee' }}
+                transition={{ type: 'spring', stiffness: 120, damping: 10 }}
+                className="text-4xl font-bold text-gray-900 dark:text-white cursor-pointer transition-colors duration-300"
+              >
                 Live Crypto Prices
-              </h1>
+              </motion.h1>
+              
             </div>
             <button
               onClick={() => fetchPrices(true)}
@@ -138,19 +146,31 @@ export default function PricesPage() {
           )}
         </div>
 
-        {/* Top 10 Cryptocurrencies Section */}
-        {!loading && !error && coins.length > 0 && (
-          <TopCryptoSection 
-            coins={filteredAndSortedCoins.filter(c => c.usdPrice).map(coin => {
-              const key = `${coin.coin}-${coin.network}`;
-              return {
-                ...coin,
-                usdPrice: coin.usdPrice!,
-                change24h: mockChanges.get(key) ?? 0,
-              };
-            })} 
-          />
-        )}
+        {/* Featured Cryptocurrencies Section Motion */}
+        <motion.div
+          initial={{ y: 40, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 80, damping: 14 }}
+        >
+          <h2 className="text-2xl font-bold text-blue-500 dark:text-cyan-300 mb-2 mt-2 hover:text-pink-500 transition-colors duration-300 cursor-pointer">
+            Featured Cryptocurrencies
+          </h2>
+          <p className="text-gray-500 dark:text-gray-400 mb-4">
+            Top performing assets with 100-day price history
+          </p>
+          {!loading && !error && coins.length > 0 && (
+            <TopCryptoSection 
+              coins={filteredAndSortedCoins.filter(c => c.usdPrice).map(coin => {
+                const key = `${coin.coin}-${coin.network}`;
+                return {
+                  ...coin,
+                  usdPrice: coin.usdPrice!,
+                  change24h: mockChanges.get(key) ?? 0,
+                };
+              })} 
+            />
+          )}
+        </motion.div>
 
         {/* Search Bar */}
         {!loading && !error && (
@@ -196,18 +216,28 @@ export default function PricesPage() {
 
         {/* Coins Grid */}
         {!loading && !error && filteredAndSortedCoins.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <motion.div
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6 }}
+          >
             {filteredAndSortedCoins.map((coin, index) => (
-              <CoinCard
+              <motion.div
                 key={`${coin.coin}-${coin.network}-${index}`}
-                coin={coin.coin}
-                name={coin.name}
-                network={coin.network}
-                usdPrice={coin.usdPrice}
-                available={coin.available}
-              />
+                whileHover={{ scale: 1.04, boxShadow: '0 4px 24px #38bdf8' }}
+                transition={{ type: 'spring', stiffness: 120, damping: 12 }}
+              >
+                <CoinCard
+                  coin={coin.coin}
+                  name={coin.name}
+                  network={coin.network}
+                  usdPrice={coin.usdPrice}
+                  available={coin.available}
+                />
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         )}
 
         {/* No Results */}
