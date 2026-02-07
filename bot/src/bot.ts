@@ -12,6 +12,7 @@ import path from 'path';
 import { execSync } from 'child_process';
 import express from 'express';
 import { chainIdMap } from './config/chains';
+import { handleError } from './services/logger';
 
 // --- ADDRESS VALIDATION ---
 // Regex patterns for validating wallet addresses by chain type
@@ -246,11 +247,7 @@ const TOKEN_MAP: Record<string, Record<string, { address: string, decimals: numb
 };
 
 async function logAnalytics(ctx: any, errorType: string, details: any) {
-    console.error(`[Analytics] ${errorType}:`, details);
-    if (ADMIN_CHAT_ID) {
-        const msg = `⚠️ *Analytics Alert*\n\n*Type:* ${errorType}\n*User:* ${ctx.from?.id}\n*Input:* "${details.input}"\n*Error:* ${details.error}`;
-        await bot.telegram.sendMessage(ADMIN_CHAT_ID, msg, { parse_mode: 'Markdown' }).catch(e => console.error("Failed to send admin log", e));
-    }
+    await handleError(errorType, details, ctx, true);
 }
 
 // --- COMMANDS ---
