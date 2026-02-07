@@ -1,7 +1,7 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import { pgTable, serial, text, real, timestamp, bigint } from 'drizzle-orm/pg-core';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm'; // Added 'and'
 import dotenv from 'dotenv';
 import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
 import type { ParsedCommand } from './groq-client';
@@ -12,7 +12,6 @@ const sql = neon(process.env.DATABASE_URL!);
 const db = drizzle(sql);
 
 // --- SCHEMAS ---
-
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
   telegramId: bigint('telegram_id', { mode: 'number' }).notNull().unique(),
@@ -23,7 +22,7 @@ export const users = pgTable('users', {
 export const conversations = pgTable('conversations', {
   id: serial('id').primaryKey(),
   telegramId: bigint('telegram_id', { mode: 'number' }).notNull().unique(),
-  state: text('state'), // JSON string
+  state: text('state'),
   lastUpdated: timestamp('last_updated').defaultNow(),
 });
 
@@ -66,7 +65,6 @@ export const addressBook = pgTable('address_book', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-// --- TYPE DEFINITIONS ---
 export type User = typeof users.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Checkout = typeof checkouts.$inferSelect;
@@ -95,13 +93,10 @@ export async function getConversationState(telegramId: number) {
   const state = JSON.parse(result[0].state);
   const lastUpdated = result[0].lastUpdated;
 
-  // Check if state is older than 1 hour
   if (lastUpdated && (Date.now() - new Date(lastUpdated).getTime()) > 60 * 60 * 1000) {
-    // State is expired, clear it
     await clearConversationState(telegramId);
     return null;
   }
-
   return state;
 }
 
@@ -182,8 +177,6 @@ export async function getUserCheckouts(telegramId: number): Promise<Checkout[]> 
     .limit(10);
 }
 
-// --- ADDRESS BOOK FUNCTIONS ---
-
 export async function addAddressBookEntry(telegramId: number, nickname: string, address: string, chain: string) {
   await db.insert(addressBook)
     .values({ telegramId, nickname, address, chain })
@@ -202,8 +195,12 @@ export async function getAddressBookEntries(telegramId: number): Promise<Address
 export async function resolveNickname(telegramId: number, nickname: string): Promise<string | null> {
   const result = await db.select({ address: addressBook.address })
     .from(addressBook)
-    .where(eq(addressBook.telegramId, telegramId))
-    .where(eq(addressBook.nickname, nickname))
+    .where(
+      and(
+        eq(addressBook.telegramId, telegramId), 
+        eq(addressBook.nickname, nickname)
+      )
+    ) // Corrected multi-where syntax
     .limit(1);
   return result[0]?.address || null;
 }
