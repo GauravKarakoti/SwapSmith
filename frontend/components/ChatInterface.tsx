@@ -29,7 +29,7 @@ interface Message {
   content: string;
   timestamp: Date;
   type?: 'message' | 'intent_confirmation' | 'swap_confirmation' | 'yield_info' | 'checkout_link';
-  data?: ParsedCommand | { quoteData: unknown; confidence: number } | { url: string } | { parsedCommand: ParsedCommand };
+  data?: any;
 }
 
 export default function ChatInterface() {
