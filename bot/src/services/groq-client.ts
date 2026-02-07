@@ -1,6 +1,7 @@
 import Groq from "groq-sdk";
 import dotenv from 'dotenv';
 import fs from 'fs';
+import { handleError } from './logger';
 
 dotenv.config();
 
@@ -151,12 +152,17 @@ export async function parseUserCommand(
 }
 
 export async function transcribeAudio(mp3FilePath: string): Promise<string> {
-  const transcription = await groq.audio.transcriptions.create({
-      file: fs.createReadStream(mp3FilePath),
-      model: "whisper-large-v3",
-      response_format: "json",
-  });
-  return transcription.text;
+  try {
+    const transcription = await groq.audio.transcriptions.create({
+        file: fs.createReadStream(mp3FilePath),
+        model: "whisper-large-v3",
+        response_format: "json",
+    });
+    return transcription.text;
+  } catch (error) {
+    await handleError('TranscriptionError', { error: error instanceof Error ? error.message : 'Unknown error', filePath: mp3FilePath }, null, false);
+    throw error; // Re-throw to let caller handle
+  }
 }
 
 // --- MISSING FUNCTION RESTORED & UPDATED ---

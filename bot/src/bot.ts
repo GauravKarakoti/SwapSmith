@@ -3,7 +3,7 @@ import { message } from 'telegraf/filters';
 import dotenv from 'dotenv';
 import { parseUserCommand, transcribeAudio } from './services/groq-client';
 import { createQuote, createOrder, createCheckout, getOrderStatus } from './services/sideshift-client';
-import { getTopStablecoinYields } from './services/yield-client'; 
+import { getTopStablecoinYields } from './services/yield-client';
 import * as db from './services/database';
 import { ethers } from 'ethers';
 import axios from 'axios';
@@ -12,6 +12,7 @@ import path from 'path';
 import { execSync } from 'child_process';
 import express from 'express';
 import { chainIdMap } from './config/chains';
+import { handleError } from './services/logger';
 
 dotenv.config();
 const MINI_APP_URL = process.env.MINI_APP_URL!;
@@ -164,11 +165,7 @@ const TOKEN_MAP: Record<string, Record<string, { address: string, decimals: numb
 };
 
 async function logAnalytics(ctx: any, errorType: string, details: any) {
-    console.error(`[Analytics] ${errorType}:`, details);
-    if (ADMIN_CHAT_ID) {
-        const msg = `⚠️ *Analytics Alert*\n\n*Type:* ${errorType}\n*User:* ${ctx.from?.id}\n*Input:* "${details.input}"\n*Error:* ${details.error}`;
-        await bot.telegram.sendMessage(ADMIN_CHAT_ID, msg, { parse_mode: 'Markdown' }).catch(e => console.error("Failed to send admin log", e));
-    }
+    await handleError(errorType, details, ctx, true);
 }
 
 // --- COMMANDS ---
