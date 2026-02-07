@@ -1,19 +1,19 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 export function useAuth() {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    // Lazy initialization - only runs once on mount
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('swapsmith_session') === 'active';
+    }
+    return false;
+  })
+  const [isLoading] = useState(false) // No loading needed for localStorage check
   const router = useRouter()
 
-  useEffect(() => {
-    const auth = localStorage.getItem('swapsmith_session')
-    if (auth === 'active') setIsAuthenticated(true)
-    setIsLoading(false)
-  }, [])
-
-  const register = (userData: any) => {
+  const register = (userData: { email: string; password: string; name?: string }) => {
     // Store user data in localStorage (acting as our database)
     localStorage.setItem('swapsmith_user', JSON.stringify(userData))
     // Auto-login after registration
