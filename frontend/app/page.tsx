@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { motion, useMotionValue, useTransform, useSpring } from 'framer-motion'
 import { Zap, Mic, Shield, ArrowRight, Wallet, MessageSquare, CheckCircle, ListChecks, BarChart3, Sparkles } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useAuth } from '@/hooks/useAuth' 
 
 // Floating particles component
 const FloatingParticle = ({ delay, duration, x, y }: { delay: number; duration: number; x: number; y: number }) => (
@@ -146,6 +147,7 @@ const slideInLeft = {
 
 export default function LandingPage() {
   const router = useRouter()
+  const { isAuthenticated } = useAuth()
   const [particles] = useState(() =>
     Array.from({ length: 30 }, (_, i) => ({
       id: i,
@@ -155,6 +157,14 @@ export default function LandingPage() {
       y: Math.random() * 100,
     }))
   )
+  
+  const handleAccess = () => {
+    if (isAuthenticated) {
+      router.push('/terminal')
+    } else {
+      router.push('/login')
+    }
+  }
 
   const features = [
     { icon: MessageSquare, title: "Natural Language", desc: "Describe the swap you want in plain English. No complex forms required.", color: "cyan" },
@@ -233,7 +243,7 @@ export default function LandingPage() {
             </span>
           </motion.div>
           <MagneticButton
-            onClick={() => router.push('/terminal')}
+            onClick={handleAccess}
             className="group flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-purple-600 text-white px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-widest hover:shadow-[0_0_30px_rgba(34,211,238,0.4)] transition-all duration-300"
           >
             Launch App <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -315,7 +325,7 @@ export default function LandingPage() {
 
           <motion.div variants={itemVariants} className="pt-4">
             <MagneticButton
-              onClick={() => router.push('/terminal')}
+              onClick={handleAccess}
               className="group relative px-12 py-5 bg-gradient-to-r from-cyan-500 via-purple-600 to-pink-600 rounded-2xl font-black text-xl overflow-hidden"
             >
               <motion.div

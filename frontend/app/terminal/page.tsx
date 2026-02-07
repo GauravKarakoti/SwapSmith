@@ -1,16 +1,19 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react';
+import { useAuth } from '@/hooks/useAuth';
 import { useAccount } from 'wagmi';
 import Link from 'next/link';
 import WalletConnector from '@/components/WalletConnector';
 import ClaudeChatInput from '@/components/ClaudeChatInput';
 import SwapConfirmation from '@/components/SwapConfirmation';
+import ChatInterface from '@/components/ChatInterface';
 import IntentConfirmation from '@/components/IntentConfirmation';
+import Footer from '@/components/Footer';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
-import { MessageCircle, Zap, Plus, Clock, Settings, HelpCircle, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { MessageCircle, Zap, Plus, Clock, Settings, HelpCircle, PanelLeftClose, PanelLeft, LogOut } from 'lucide-react';
 
 interface QuoteData {
   depositAmount: string;
@@ -34,6 +37,7 @@ interface Message {
 }
 
 export default function TerminalPage() {
+  const { logout } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [chatHistory, setChatHistory] = useState([
     { id: 1, title: "Swap ETH to USDC", timestamp: "2 hours ago" },
@@ -465,7 +469,7 @@ export default function TerminalPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             <Link href="/" className="p-2 hover:bg-zinc-800 rounded-lg transition-colors text-zinc-400 hover:text-white text-sm font-medium">
               Home
             </Link>
@@ -474,6 +478,14 @@ export default function TerminalPage() {
             </button>
             <div className="h-6 w-px bg-zinc-800" />
             <WalletConnector />
+            <button 
+              onClick={logout}
+              className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-500 rounded-xl transition-all text-xs font-bold uppercase tracking-widest active:scale-95"
+              title="Logout Terminal"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Logout</span>
+            </button>
           </div>
         </nav>
 
