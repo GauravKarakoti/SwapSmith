@@ -57,10 +57,20 @@ export const checkouts = pgTable('checkouts', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const addressBook = pgTable('address_book', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
+  nickname: text('nickname').notNull(),
+  address: text('address').notNull(),
+  chain: text('chain').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 // --- TYPE DEFINITIONS ---
 export type User = typeof users.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Checkout = typeof checkouts.$inferSelect;
+export type AddressBookEntry = typeof addressBook.$inferSelect;
 
 // --- FUNCTIONS ---
 
@@ -170,4 +180,30 @@ export async function getUserCheckouts(telegramId: number): Promise<Checkout[]> 
     .where(eq(checkouts.telegramId, telegramId))
     .orderBy(desc(checkouts.createdAt))
     .limit(10);
+}
+
+// --- ADDRESS BOOK FUNCTIONS ---
+
+export async function addAddressBookEntry(telegramId: number, nickname: string, address: string, chain: string) {
+  await db.insert(addressBook)
+    .values({ telegramId, nickname, address, chain })
+    .onConflictDoUpdate({
+      target: [addressBook.telegramId, addressBook.nickname],
+      set: { address, chain }
+    });
+}
+
+export async function getAddressBookEntries(telegramId: number): Promise<AddressBookEntry[]> {
+  return await db.select().from(addressBook)
+    .where(eq(addressBook.telegramId, telegramId))
+    .orderBy(desc(addressBook.createdAt));
+}
+
+export async function resolveNickname(telegramId: number, nickname: string): Promise<string | null> {
+  const result = await db.select({ address: addressBook.address })
+    .from(addressBook)
+    .where(eq(addressBook.telegramId, telegramId))
+    .where(eq(addressBook.nickname, nickname))
+    .limit(1);
+  return result[0]?.address || null;
 }
