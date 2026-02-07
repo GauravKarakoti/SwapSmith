@@ -53,6 +53,11 @@ MODES:
 
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
 
+ADDRESS RESOLUTION:
+- Users can specify addresses as raw wallet addresses, ENS names (ending in .eth), Lens handles (ending in .lens), or nicknames from their address book.
+- If an address is specified, include it in settleAddress field.
+- The system will resolve nicknames, ENS, and Lens automatically.
+
 AMBIGUITY HANDLING:
 - If the command is ambiguous (e.g., "swap all my ETH to BTC or USDC"), set confidence low (0-30) and add validation error "Command is ambiguous. Please specify clearly."
 - For complex commands, prefer explicit allocations over assumptions.
@@ -105,6 +110,12 @@ EXAMPLES:
 
 5. "Deposit 1 ETH to yield"
    -> intent: "yield_deposit", fromAsset: "ETH", amount: 1, confidence: 95
+
+6. "Swap 1 ETH to mywallet"
+   -> intent: "swap", fromAsset: "ETH", toAsset: "BTC", toChain: "bitcoin", amount: 1, settleAddress: "mywallet", confidence: 95
+
+7. "Send 5 USDC to vitalik.eth"
+   -> intent: "checkout", settleAsset: "USDC", settleNetwork: "ethereum", settleAmount: 5, settleAddress: "vitalik.eth", confidence: 95
 `;
 
 export async function parseUserCommand(

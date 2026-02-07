@@ -5,6 +5,7 @@ import { parseUserCommand, transcribeAudio } from './services/groq-client';
 import { createQuote, createOrder, createCheckout, getOrderStatus } from './services/sideshift-client';
 import { getTopStablecoinYields } from './services/yield-client';
 import * as db from './services/database';
+import { resolveAddress } from './services/address-resolver';
 import { ethers } from 'ethers';
 import axios from 'axios';
 import fs from 'fs';
@@ -276,6 +277,40 @@ bot.command('yield', async (ctx) => {
   await ctx.reply('📈 Fetching top yield opportunities...');
   const yields = await getTopStablecoinYields();
   ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields:*\n\n${yields}`);
+});
+
+bot.command('add_address', async (ctx) => {
+  const userId = ctx.from.id;
+  const args = ctx.message.text.split(' ').slice(1); // Remove /add_address
+
+  if (args.length < 3) {
+    return ctx.reply("Usage: /add_address <nickname> <address> <chain>\nExample: /add_address mywallet 0x123... ethereum");
+  }
+
+  const [nickname, address, chain] = args;
+
+  try {
+    await db.addAddressBookEntry(userId, nickname, address, chain);
+    ctx.reply(`✅ Added "${nickname}" → \`${address}\` on ${chain}`, { parse_mode: 'Markdown' });
+  } catch (error) {
+    ctx.reply("❌ Failed to add address. It might already exist.");
+  }
+});
+
+bot.command('list_addresses', async (ctx) => {
+  const userId = ctx.from.id;
+  const addresses = await db.getAddressBookEntries(userId);
+
+  if (addresses.length === 0) {
+    return ctx.reply("You have no saved addresses. Use /add_address to add some.");
+  }
+
+  let message = "📖 *Your Address Book:*\n\n";
+  addresses.forEach((entry) => {
+    message += `• **${entry.nickname}**: \`${entry.address}\` (${entry.chain})\n`;
+  });
+
+  ctx.replyWithMarkdown(message);
 });
 
 // --- MESSAGE HANDLERS ---
