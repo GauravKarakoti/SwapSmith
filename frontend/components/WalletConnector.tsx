@@ -33,14 +33,14 @@ export default function WalletConnector() {
     }
 
     // Prefer MetaMask specifically, then Injected, then the first available
-    const metaMaskConnector = connectors.find((c: any) => c.id === 'metaMask' || c.name === 'MetaMask');
-    const injectedConnector = connectors.find((c: any) => c.id === 'injected' || c.name === 'Injected');
+    const metaMaskConnector = connectors.find((c) => c.id === 'metaMask' || c.name === 'MetaMask');
+    const injectedConnector = connectors.find((c) => c.id === 'injected' || c.name === 'Injected');
     const connectorToUse = metaMaskConnector || injectedConnector || connectors[0];
 
     console.log("Attempting to connect with:", connectorToUse.name, connectorToUse.id);
 
     connect({ connector: connectorToUse }, {
-      onError: (err: any) => {
+      onError: (err: Error) => {
         console.error('Failed to connect:', err);
         if (err?.message?.includes('Unexpected error')) {
           console.warn("It looks like a wallet extension (e.g. Phantom) is failing. Try disabling conflicting wallets.");
@@ -50,10 +50,14 @@ export default function WalletConnector() {
   };
 
   useEffect(() => {
-    if (!error) {
-      if (connectionError !== '') {
-        setConnectionError('');
-      }
+    // Clear error when connected
+    if (isConnected && connectionError) {
+      setConnectionError('');
+      return;
+    }
+    
+    // Handle connection errors
+    if (!error || isConnected) {
       return;
     }
 
@@ -75,16 +79,9 @@ export default function WalletConnector() {
       });
     }
 
-    if (connectionError !== errorMessage) {
-      setConnectionError(errorMessage);
-    }
-  }, [error, handleError, connectionError]);
-
-  useEffect(() => {
-    if (isConnected && connectionError !== '') {
-      setConnectionError('');
-    }
-  }, [isConnected, connectionError]);
+    setConnectionError(errorMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [error, isConnected]);
 
   if (isConnected) {
     return (

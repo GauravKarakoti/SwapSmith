@@ -81,7 +81,7 @@ class AudioRecorderPolyfill {
         if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(mimeType)) {
           return mimeType;
         }
-      } catch (e) {
+      } catch {
         continue;
       }
     }
