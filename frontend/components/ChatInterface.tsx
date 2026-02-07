@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useAccount } from 'wagmi';
-import { Mic, Send, StopCircle, AlertCircle, Zap } from 'lucide-react';
+import { Mic, Send, StopCircle, Zap } from 'lucide-react';
 import SwapConfirmation from './SwapConfirmation';
 import TrustIndicators from './TrustIndicators';
 import IntentConfirmation from './IntentConfirmation';
@@ -29,7 +29,12 @@ interface Message {
   content: string;
   timestamp: Date;
   type?: 'message' | 'intent_confirmation' | 'swap_confirmation' | 'yield_info' | 'checkout_link';
-  data?: any;
+  data?: { 
+    parsedCommand?: ParsedCommand; 
+    quoteData?: QuoteData; 
+    confidence?: number;
+    url?: string;
+  };
 }
 
 export default function ChatInterface() {
@@ -55,8 +60,7 @@ export default function ChatInterface() {
     isSupported: isAudioSupported, 
     startRecording, 
     stopRecording, 
-    error: audioError,
-    browserInfo 
+    error: audioError
   } = useAudioRecorder({
     sampleRate: 16000,
     numberOfAudioChannels: 1
@@ -85,7 +89,9 @@ export default function ChatInterface() {
     setMessages(prev => [...prev, { ...message, timestamp: new Date() }]);
   };
 
-  const handleStartRecording = async () => {
+  // Voice recording handlers (reserved for future UI integration)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _handleStartRecording = async () => {
     if (!isAudioSupported) {
       addMessage({ 
         role: 'assistant', 
@@ -106,7 +112,8 @@ export default function ChatInterface() {
     }
   };
 
-  const handleStopRecording = async () => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _handleStopRecording = async () => {
     try {
       const audioBlob = await stopRecording();
       if (audioBlob) {
@@ -407,7 +414,7 @@ return (
                     
                     {/* Inject your Custom Components (SwapConfirmation etc) here */}
                     {msg.type === 'intent_confirmation' && <IntentConfirmation command={msg.data?.parsedCommand} onConfirm={handleIntentConfirm} />}
-                    {msg.type === 'swap_confirmation' && <SwapConfirmation quote={msg.data?.quoteData} confidence={msg.data?.confidence} />}
+                    {msg.type === 'swap_confirmation' && msg.data?.quoteData && <SwapConfirmation quote={msg.data.quoteData} confidence={msg.data.confidence} />}
                   </div>
                 </div>
               )}

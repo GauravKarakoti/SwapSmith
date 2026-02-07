@@ -1,12 +1,13 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/hooks/useAuth' // Import the hook
-import { Zap, Mic, Shield, ArrowRight, Wallet, MessageSquare, CheckCircle, ListChecks, BarChart3 } from 'lucide-react'
+import { useAuth } from '@/hooks/useAuth'
+import { Mic, Shield, Wallet, MessageSquare, CheckCircle, ListChecks, BarChart3, Zap } from 'lucide-react'
+import Navbar from '@/components/Navbar'
 
 export default function LandingPage() {
   const router = useRouter()
-  const { isAuthenticated } = useAuth() // Get auth state
+  const { isAuthenticated } = useAuth()
 
   // Helper function to handle routing based on auth state
   const handleAccess = () => {
@@ -19,21 +20,7 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white selection:bg-blue-500/30 font-sans">
-      {/* 1. Sleek Navbar */}
-      <nav className="fixed top-0 w-full z-50 border-b border-white/5 bg-[#050505]/80 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <Zap className="w-6 h-6 text-blue-500" fill="currentColor" />
-            <span className="text-xl font-black tracking-tighter uppercase">SwapSmith</span>
-          </div>
-          <button 
-            onClick={handleAccess} // Integrated Auth Logic
-            className="group flex items-center gap-2 bg-white text-black px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-zinc-200 transition-all active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
-          >
-            Launch App <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </button>
-        </div>
-      </nav>
+      <Navbar />
 
       {/* 2. Hero Section */}
       <section className="relative pt-30 pb-20 px-6 overflow-hidden">

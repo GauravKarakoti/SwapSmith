@@ -4,16 +4,15 @@ import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAccount } from 'wagmi';
 import Link from 'next/link';
+import Navbar from '@/components/Navbar';
 import WalletConnector from '@/components/WalletConnector';
 import ClaudeChatInput from '@/components/ClaudeChatInput';
 import SwapConfirmation from '@/components/SwapConfirmation';
-import ChatInterface from '@/components/ChatInterface';
 import IntentConfirmation from '@/components/IntentConfirmation';
-import Footer from '@/components/Footer';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
-import { MessageCircle, Zap, Plus, Clock, Settings, HelpCircle, PanelLeftClose, PanelLeft, LogOut } from 'lucide-react';
+import { MessageCircle, Plus, Clock, Settings, HelpCircle, PanelLeftClose, PanelLeft, Zap, LogOut } from 'lucide-react';
 
 interface QuoteData {
   depositAmount: string;
@@ -363,8 +362,9 @@ export default function TerminalPage() {
   };
 
   return (
-    <div className="flex h-screen bg-[#050505] text-white overflow-hidden">
-      
+    <>
+      <Navbar />
+      <div className="flex h-screen bg-[#050505] text-white overflow-hidden pt-16 sm:pt-20">
       {/* Sidebar */}
       <aside className={`${isSidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 bg-zinc-900/50 border-r border-zinc-800 flex flex-col overflow-hidden`}>
         {isSidebarOpen && (
@@ -557,5 +557,6 @@ export default function TerminalPage() {
         </main>
       </div>
     </div>
+    </>
   );
 }
