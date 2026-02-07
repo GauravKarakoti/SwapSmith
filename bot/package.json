@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/bot.js",
-    "dev": "ts-node-dev --respawn --transpile-only src/bot.ts",
+    "dev": "ts-node-dev -r dotenv/config --respawn --transpile-only src/bot.ts",
     "test": "jest",
     "db:gen": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
@@ -42,7 +42,12 @@
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "node",
-    "roots": ["<rootDir>/src"],
-    "testMatch": ["**/__tests__/**/*.test.ts", "**/?(*.)+(spec|test).ts"]
+    "roots": [
+      "<rootDir>/src"
+    ],
+    "testMatch": [
+      "**/__tests__/**/*.test.ts",
+      "**/?(*.)+(spec|test).ts"
+    ]
   }
 }
