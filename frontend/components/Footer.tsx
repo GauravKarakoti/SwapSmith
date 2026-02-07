@@ -18,7 +18,6 @@ export default function Footer() {
       <div className="relative max-w-7xl mx-auto px-6 pt-16 pb-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 mb-16">
           
-          {/* Brand & Newsletter - Spans 5 columns */}
           <div className="lg:col-span-5 space-y-8">
             <div className="space-y-4">
               <div className="flex items-center gap-3">
@@ -35,7 +34,6 @@ export default function Footer() {
               </p>
             </div>
 
-            {/* Newsletter Input - High Design Component */}
             <div className="relative max-w-sm group">
               <input 
                 type="email" 
@@ -48,7 +46,6 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Navigation Links - Spans 7 columns */}
           <div className="lg:col-span-7 grid grid-cols-2 sm:grid-cols-3 gap-8">
             <div className="space-y-6">
               <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Ecosystem</h4>
@@ -74,7 +71,6 @@ export default function Footer() {
               </ul>
             </div>
 
-            {/* Social Glass Tiles */}
             <div className="space-y-6 col-span-2 sm:col-span-1">
               <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Connect</h4>
               <div className="flex flex-wrap gap-3">
