@@ -1,10 +1,12 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { motion, useMotionValue, useTransform, useSpring } from 'framer-motion'
+import { motion, useMotionValue, useSpring } from 'framer-motion'
 import { Zap, Mic, Shield, ArrowRight, Wallet, MessageSquare, CheckCircle, ListChecks, BarChart3, Sparkles } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { useAuth } from '@/hooks/useAuth' 
+import { useEffect, useState, useRef } from 'react'
+import { useAuth } from '@/hooks/useAuth'
+import { ReactLenis } from 'lenis/react'
+import { animate, scroll } from 'motion' 
 
 // Floating particles component
 const FloatingParticle = ({ delay, duration, x, y }: { delay: number; duration: number; x: number; y: number }) => (
@@ -148,6 +150,7 @@ const slideInLeft = {
 export default function LandingPage() {
   const router = useRouter()
   const { isAuthenticated } = useAuth()
+  const ulRef = useRef<HTMLUListElement>(null)
   const [particles] = useState(() =>
     Array.from({ length: 30 }, (_, i) => ({
       id: i,
@@ -166,6 +169,32 @@ export default function LandingPage() {
     }
   }
 
+  useEffect(() => {
+    // Add a delay to ensure DOM is fully ready
+    const timer = setTimeout(() => {
+      const items = document.querySelectorAll('.horizontal-scroll-item')
+      const section = document.querySelector('.horizontal-section')
+
+      if (ulRef.current && items.length > 0 && section) {
+        // Animate the horizontal scroll
+        const controls = animate(
+          ulRef.current,
+          {
+            transform: ['translateX(0vw)', `translateX(-${(items.length - 1) * 100}vw)`],
+          },
+          { duration: 1 }
+        )
+        
+        scroll(controls, { 
+          target: section,
+          offset: ['start start', 'end end']
+        })
+      }
+    }, 100)
+
+    return () => clearTimeout(timer)
+  }, [])
+
   const features = [
     { icon: MessageSquare, title: "Natural Language", desc: "Describe the swap you want in plain English. No complex forms required.", color: "cyan" },
     { icon: Zap, title: "Cross-Chain Magic", desc: "Seamlessly swap between 200+ assets across 40+ chains using SideShift.ai API.", color: "purple" },
@@ -183,7 +212,9 @@ export default function LandingPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-[#030308] text-white selection:bg-cyan-500/30 font-sans overflow-x-hidden">
+    <ReactLenis root>
+      {/* Main Landing Page Content */}
+      <div className="min-h-screen bg-[#030308] text-white selection:bg-cyan-500/30 font-sans">
       {/* Animated background gradient */}
       <div className="fixed inset-0 pointer-events-none">
         <motion.div
@@ -318,7 +349,7 @@ export default function LandingPage() {
                 <span className="text-xs text-zinc-500 uppercase tracking-wider">Voice Command</span>
               </div>
               <p className="italic text-zinc-300 text-base md:text-lg">
-                "Swap half of my MATIC on Polygon for 50 USDC on Arbitrum."
+                &ldquo;Swap half of my MATIC on Polygon for 50 USDC on Arbitrum.&rdquo;
               </p>
             </div>
           </motion.div>
@@ -559,6 +590,85 @@ export default function LandingPage() {
           </p>
         </motion.div>
       </footer>
-    </div>
+      </div>
+
+      {/* Scroll Animation Section - After Footer */}
+      <article>
+        <section className='text-white h-screen w-full bg-slate-950 grid place-content-center sticky top-0'>
+          <div className='absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:54px_54px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]'></div>
+
+          <h1 className='2xl:text-7xl text-6xl px-8 font-semibold text-center tracking-tight leading-[120%] relative z-10'>
+            Ready to Transform <br /> Your Trading? Scroll Please 👇
+          </h1>
+        </section>
+
+        <section className='bg-gray-300 text-black grid place-content-center h-screen sticky top-0 rounded-tr-2xl rounded-tl-2xl overflow-hidden'>
+          <div className='absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:54px_54px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]'></div>
+          <h1 className='2xl:text-7xl text-4xl px-8 font-semibold text-center tracking-tight leading-[120%] relative z-10'>
+            Voice-Activated Cross-Chain Swaps, <br /> Built with AI & Open Source 💼
+          </h1>
+        </section>
+
+        <section className='text-white h-screen w-full bg-slate-950 grid place-content-center sticky top-0'>
+          <div className='absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:54px_54px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]'></div>
+          <h1 className='2xl:text-7xl text-5xl px-8 font-semibold text-center tracking-tight leading-[120%] relative z-10'>
+            Thanks for Scrolling!
+            <br /> Keep Going for More 👇
+          </h1>
+        </section>
+      </article>
+
+      {/* Horizontal Scroll Animation Section */}
+      <article>
+        <header className='text-white relative w-full bg-slate-950 grid place-content-center h-[80vh]'>
+          <div className='absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:14px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]'></div>
+
+          <h1 className='text-6xl font-bold text-center tracking-tight relative z-10'>
+            I Know You Love to Scroll <br />
+            So Keep Scrolling →
+          </h1>
+        </header>
+        <section className='horizontal-section h-[500vh] relative'>
+          <ul ref={ulRef} className='flex sticky top-0 h-screen overflow-hidden' style={{ width: '500vw' }}>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-gradient-to-br from-cyan-500 to-cyan-700 flex flex-col justify-center items-center'>
+              <h2 className='text-[20vw] font-bold text-white select-none'>
+                TRADE
+              </h2>
+            </li>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-gradient-to-br from-purple-500 to-purple-700 flex flex-col justify-center items-center'>
+              <h2 className='text-[20vw] font-bold text-white select-none'>
+                SWAP
+              </h2>
+            </li>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-gradient-to-br from-pink-500 to-pink-700 flex flex-col justify-center items-center'>
+              <h2 className='text-[20vw] font-bold text-white select-none'>
+                EARN
+              </h2>
+            </li>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-gradient-to-br from-emerald-500 to-emerald-700 flex flex-col justify-center items-center'>
+              <h2 className='text-[20vw] font-bold text-white select-none'>
+                GROW
+              </h2>
+            </li>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-gradient-to-br from-orange-500 to-orange-700 flex flex-col justify-center items-center'>
+              <h2 className='text-[20vw] font-bold text-white select-none'>
+                WIN
+              </h2>
+            </li>
+          </ul>
+        </section>
+        <footer className='bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 font-medium text-white grid place-content-center h-[80vh]'>
+          <div className='text-center space-y-4'>
+            <p className='text-2xl font-bold'>Ready to Start Your Journey?</p>
+            <button
+              onClick={handleAccess}
+              className='px-8 py-4 bg-white text-purple-600 rounded-full font-bold text-lg hover:scale-105 transition-transform'
+            >
+              Launch SwapSmith Now
+            </button>
+          </div>
+        </footer>
+      </article>
+    </ReactLenis>
   )
 }
