@@ -2,6 +2,7 @@ import Groq from "groq-sdk";
 import dotenv from 'dotenv';
 import fs from 'fs';
 import { handleError } from './logger';
+import { analyzeCommand, generateContextualHelp } from './contextual-help';
 
 dotenv.config();
 
@@ -150,7 +151,7 @@ export async function parseUserCommand(
 
     const parsed = JSON.parse(completion.choices[0].message.content || '{}');
     console.log("Parsed:", parsed);
-    return validateParsedCommand(parsed, userInput);
+    return validateParsedCommand(parsed, userInput, inputType);
   } catch (error) {
     console.error("Groq Error:", error);
     return {
@@ -177,7 +178,7 @@ export async function transcribeAudio(mp3FilePath: string): Promise<string> {
 }
 
 // --- MISSING FUNCTION RESTORED & UPDATED ---
-function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string): ParsedCommand {
+function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string, inputType: 'text' | 'voice' = 'text'): ParsedCommand {
   const errors: string[] = [];
   
   if (parsed.intent === "swap") {
@@ -229,7 +230,7 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
   const success = parsed.success !== false && allErrors.length === 0;
   const confidence = allErrors.length > 0 ? Math.max(0, (parsed.confidence || 0) - 30) : parsed.confidence;
   
-  return {
+  const result: ParsedCommand = {
     success,
     intent: parsed.intent || 'unknown',
     fromAsset: parsed.fromAsset || null,
@@ -249,4 +250,43 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     requiresConfirmation: parsed.requiresConfirmation || false,
     originalInput: userInput
   };
+
+  // Generate contextual help if there are errors or low confidence
+  if (allErrors.length > 0 || confidence < 50) {
+    try {
+      console.log('🔍 Generating contextual help...');
+      console.log('Errors:', allErrors);
+      console.log('Confidence:', confidence);
+      
+      const analysis = analyzeCommand(result);
+      console.log('Analysis:', JSON.stringify(analysis, null, 2));
+      
+      const contextualHelp = generateContextualHelp(analysis, userInput, inputType);
+      console.log('Contextual Help Generated:', contextualHelp);
+      
+      // Replace generic low confidence message with contextual help
+      const lowConfidenceIndex = result.validationErrors.findIndex(err => 
+        err.includes('Low confidence') || err.includes('Please rephrase')
+      );
+      
+      if (lowConfidenceIndex !== -1) {
+        result.validationErrors[lowConfidenceIndex] = contextualHelp;
+        console.log('✅ Replaced low confidence message');
+      } else if (result.validationErrors.length > 0) {
+        // Add contextual help as additional guidance
+        result.validationErrors.push(contextualHelp);
+        console.log('✅ Added contextual help to errors');
+      } else {
+        result.validationErrors = [contextualHelp];
+        console.log('✅ Set contextual help as only error');
+      }
+      
+      console.log('Final validation errors:', result.validationErrors);
+    } catch (error) {
+      console.error('❌ Contextual help generation failed:', error);
+      // Fallback to existing error messages
+    }
+  }
+  
+  return result;
 }
