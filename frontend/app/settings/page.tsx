@@ -10,8 +10,6 @@ import {
   Wallet,
   Shield,
   Bell,
-  Moon,
-  Sun,
   Globe,
   Zap,
   ChevronRight,
@@ -168,11 +166,13 @@ export default function SettingsPage() {
   const { disconnect } = useDisconnect()
 
   // Preferences (persisted to localStorage)
-  const [darkMode, setDarkMode] = useState(true)
-  const [notifications, setNotifications] = useState(true)
-  const [soundEnabled, setSoundEnabled] = useState(true)
-  const [autoConfirmSwaps, setAutoConfirmSwaps] = useState(false)
-  const [currency, setCurrency] = useState('USD')
+  const [preferences, setPreferences] = useState({
+    darkMode: true,
+    notifications: true,
+    soundEnabled: true,
+    autoConfirmSwaps: false,
+    currency: 'USD'
+  })
 
   const [copied, setCopied] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
@@ -183,11 +183,8 @@ export default function SettingsPage() {
       const saved = localStorage.getItem('swapsmith_preferences')
       if (saved) {
         const prefs = JSON.parse(saved)
-        setDarkMode(prefs.darkMode ?? true)
-        setNotifications(prefs.notifications ?? true)
-        setSoundEnabled(prefs.soundEnabled ?? true)
-        setAutoConfirmSwaps(prefs.autoConfirmSwaps ?? false)
-        setCurrency(prefs.currency ?? 'USD')
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setPreferences(prev => ({ ...prev, ...prefs }))
       }
     } catch {}
   }, [])
@@ -196,9 +193,9 @@ export default function SettingsPage() {
   useEffect(() => {
     localStorage.setItem(
       'swapsmith_preferences',
-      JSON.stringify({ darkMode, notifications, soundEnabled, autoConfirmSwaps, currency })
+      JSON.stringify(preferences)
     )
-  }, [darkMode, notifications, soundEnabled, autoConfirmSwaps, currency])
+  }, [preferences])
 
   const copyAddress = () => {
     if (address) {
@@ -343,19 +340,19 @@ export default function SettingsPage() {
               description="Receive swap & yield alerts"
               action={
                 <ToggleSwitch
-                  enabled={notifications}
-                  onToggle={() => setNotifications(!notifications)}
+                  enabled={preferences.notifications}
+                  onToggle={() => setPreferences(p => ({ ...p, notifications: !p.notifications }))}
                 />
               }
             />
             <SettingRow
-              icon={soundEnabled ? Volume2 : VolumeX}
+              icon={preferences.soundEnabled ? Volume2 : VolumeX}
               label="Sound Effects"
               description="Play sounds for confirmations"
               action={
                 <ToggleSwitch
-                  enabled={soundEnabled}
-                  onToggle={() => setSoundEnabled(!soundEnabled)}
+                  enabled={preferences.soundEnabled}
+                  onToggle={() => setPreferences(p => ({ ...p, soundEnabled: !p.soundEnabled }))}
                 />
               }
             />
@@ -365,8 +362,8 @@ export default function SettingsPage() {
               description="Skip confirmation for high-confidence swaps"
               action={
                 <ToggleSwitch
-                  enabled={autoConfirmSwaps}
-                  onToggle={() => setAutoConfirmSwaps(!autoConfirmSwaps)}
+                  enabled={preferences.autoConfirmSwaps}
+                  onToggle={() => setPreferences(p => ({ ...p, autoConfirmSwaps: !p.autoConfirmSwaps }))}
                   activeColor="bg-amber-500"
                 />
               }
@@ -377,8 +374,8 @@ export default function SettingsPage() {
               description="Prices shown in this currency"
               action={
                 <select
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value)}
+                  value={preferences.currency}
+                  onChange={(e) => setPreferences(p => ({ ...p, currency: e.target.value }))}
                   className="bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/40 cursor-pointer"
                 >
                   <option value="USD">USD</option>
