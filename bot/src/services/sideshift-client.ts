@@ -94,6 +94,47 @@ export interface SideShiftCheckoutResponse {
 }
 // --- END NEW ---
 
+// --- NEW: Types and function for Coins API ---
+export interface TokenDetail {
+  contractAddress: string;
+  decimals: number;
+}
+
+export interface SideShiftCoin {
+  networks: string[];
+  coin: string;
+  name: string;
+  hasMemo: boolean;
+  deprecated?: boolean;
+  fixedOnly: string[] | boolean;
+  variableOnly: string[] | boolean;
+  tokenDetails?: Record<string, TokenDetail>; // Object with network as key
+  networksWithMemo: string[];
+  depositOffline: string[] | boolean;
+  settleOffline: string[] | boolean;
+}
+
+export async function getCoins(): Promise<SideShiftCoin[]> {
+  try {
+    const response = await axios.get<SideShiftCoin[]>(
+      `${SIDESHIFT_BASE_URL}/coins`,
+      {
+        headers: { 
+          'x-sideshift-secret': API_KEY,
+          'x-user-ip': '1.1.1.1'
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      throw new Error(error.response?.data?.error?.message || 'Failed to fetch coins');
+    }
+    throw new Error("Failed to fetch coins");
+  }
+}
+// --- END NEW ---
+
 
 export async function getPairs(): Promise<SideShiftPair[]> {
   try {
