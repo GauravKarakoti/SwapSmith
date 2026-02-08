@@ -9,7 +9,7 @@ import { ethers } from 'ethers';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import { exec } from 'child_process';
 import express from 'express';
 import { chainIdMap } from './config/chains';
 import { handleError } from './services/logger';
@@ -113,12 +113,15 @@ function isValidAddress(address: string, chain?: string): boolean {
 }
 
 // --- FFMPEG CHECK ---
-try {
-    execSync('ffmpeg -version');
-    console.log('✅ ffmpeg is installed. Voice messages enabled.');
-} catch (error) {
-    console.warn('⚠️ ffmpeg not found. Voice messages will fail. Please install ffmpeg.');
-}
+// --- FFMPEG CHECK (non-blocking, correct) ---
+exec('ffmpeg -version', (error) => {
+    if (error) {
+        console.warn('⚠️ ffmpeg not found. Voice messages will fail. Please install ffmpeg.');
+    } else {
+        console.log('✅ ffmpeg is installed. Voice messages enabled.');
+    }
+});
+
 
 // --- ERC20 CONFIGURATION ---
 const ERC20_ABI = [
@@ -317,7 +320,14 @@ bot.on(message('voice'), async (ctx) => {
         const ogaPath = path.join(__dirname, `temp_${userId}.oga`);
         const mp3Path = path.join(__dirname, `temp_${userId}.mp3`);
         fs.writeFileSync(ogaPath, Buffer.from(response.data));
-        execSync(`ffmpeg -i ${ogaPath} ${mp3Path} -y`);
+        // execSync(`ffmpeg -i ${ogaPath} ${mp3Path} -y`);
+        await new Promise<void>((resolve, reject) => {
+         exec(`ffmpeg -i "${ogaPath}" "${mp3Path}" -y`, (err) => {
+           if (err) reject(err);
+           else resolve();
+         });
+        });
+
 
         const transcribedText = await transcribeAudio(mp3Path);
         await handleTextMessage(ctx, transcribedText, 'voice');
