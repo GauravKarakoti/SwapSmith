@@ -57,7 +57,8 @@ export default function CryptoChart({ title, symbol, currentPrice, change24h, da
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.4 }}
+      whileHover={{ scale: 1.04, boxShadow: '0 4px 24px #38bdf8' }}
+      transition={{ duration: 0.4, type: 'spring', stiffness: 120, damping: 12 }}
       className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-6 border border-slate-700 shadow-xl hover:shadow-2xl transition-shadow duration-300"
     >
       {/* Header */}

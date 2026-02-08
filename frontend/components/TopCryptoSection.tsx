@@ -76,14 +76,19 @@ export default function TopCryptoSection({ coins }: TopCryptoSectionProps) {
           const change = coin.change24h ?? 0;
 
           return (
-            <CryptoChart
+            <motion.div
               key={`${coin.coin}-${coin.network}-${index}`}
-              title={coin.name}
-              symbol={coin.coin.toUpperCase()}
-              currentPrice={coin.usdPrice}
-              change24h={change}
-              data={priceHistory}
-            />
+              whileHover={{ scale: 1.03, boxShadow: '0 4px 24px #38bdf8' }}
+              transition={{ type: 'spring', stiffness: 120, damping: 12 }}
+            >
+              <CryptoChart
+                title={coin.name}
+                symbol={coin.coin.toUpperCase()}
+                currentPrice={coin.usdPrice}
+                change24h={change}
+                data={priceHistory}
+              />
+            </motion.div>
           );
         })}
         
