@@ -336,10 +336,38 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
 
     if (!parsed.success && parsed.intent !== 'yield_scout') {
         await logAnalytics(ctx, 'ValidationError', { input: text, error: parsed.validationErrors.join(", ") });
-        let errorMessage = `⚠️ ${parsed.validationErrors.join(", ") || "I didn't understand."}`;
-        if (parsed.confidence < 50) {
-            errorMessage += "\n\n💡 *Suggestion:* Try rephrasing your command. For example:\n- Instead of 'swap to BTC or USDC', say 'swap to BTC'";
+        
+        console.log('📱 Bot received parsed command:');
+        console.log('Success:', parsed.success);
+        console.log('Intent:', parsed.intent);
+        console.log('Validation Errors:', parsed.validationErrors);
+        console.log('Parsed Message:', parsed.parsedMessage);
+        
+        // Filter out generic messages and show contextual help
+        const contextualErrors = parsed.validationErrors.filter(err => 
+            err.includes('💡') || err.includes('How much') || err.includes('Which asset') || err.includes('Example:')
+        );
+        
+        const otherErrors = parsed.validationErrors.filter(err => 
+            !err.includes('💡') && !err.includes('How much') && !err.includes('Which asset') && !err.includes('Example:')
+        );
+        
+        console.log('Contextual Errors:', contextualErrors);
+        console.log('Other Errors:', otherErrors);
+        
+        let errorMessage = '';
+        if (otherErrors.length > 0) {
+            errorMessage = `⚠️ ${otherErrors.join(", ")}\n\n`;
         }
+        
+        if (contextualErrors.length > 0) {
+            errorMessage += contextualErrors.join("\n\n");
+        } else if (errorMessage === '') {
+            errorMessage = `⚠️ I didn't understand.`;
+        }
+        
+        console.log('Final Error Message:', errorMessage);
+        
         return ctx.replyWithMarkdown(errorMessage);
     }
 
