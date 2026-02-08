@@ -4,7 +4,6 @@ import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAccount } from 'wagmi';
 import Link from 'next/link';
-import Navbar from '@/components/Navbar';
 import WalletConnector from '@/components/WalletConnector';
 import ClaudeChatInput from '@/components/ClaudeChatInput';
 import SwapConfirmation from '@/components/SwapConfirmation';
@@ -363,8 +362,7 @@ export default function TerminalPage() {
 
   return (
     <>
-      <Navbar />
-      <div className="flex h-screen bg-[#050505] text-white overflow-hidden pt-16 sm:pt-20">
+      <div className="flex h-screen bg-[#050505] text-white overflow-hidden">
       {/* Sidebar */}
       <aside className={`${isSidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 bg-zinc-900/50 border-r border-zinc-800 flex flex-col overflow-hidden`}>
         {isSidebarOpen && (

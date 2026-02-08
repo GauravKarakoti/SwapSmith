@@ -2,11 +2,203 @@
 
 import { useRouter } from 'next/navigation'
 import { motion, useMotionValue, useSpring } from 'framer-motion'
-import { Zap, Mic, Shield, ArrowRight, Wallet, MessageSquare, CheckCircle, ListChecks, BarChart3, Sparkles } from 'lucide-react'
+import { Zap, Mic, Shield, ArrowRight, Wallet, MessageSquare, CheckCircle, ListChecks, BarChart3, Sparkles, TrendingUp } from 'lucide-react'
 import { useEffect, useState, useRef } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { ReactLenis } from 'lenis/react'
 import { animate, scroll } from 'motion' 
+import Footer from '@/components/Footer'
+import Navbar from '@/components/Navbar'
+import { RandomizedTextEffect } from '@/components/RandomizedTextEffect'
+
+// Dashboard Preview Component - Customized for SwapSmith (Crypto Theme)
+const DashboardPreview = () => (
+  <div className="absolute inset-0 pointer-events-none z-0">
+    {/* Left Card - Portfolio Analytics */}
+    <motion.div 
+      initial={{ opacity: 0, x: -100, rotate: -12 }}
+      animate={{ 
+        opacity: 1, 
+        x: 0, 
+        rotate: -6,
+        y: [-10, 10, -10]
+      }}
+      transition={{ 
+        opacity: { duration: 1, delay: 0.5 },
+        x: { duration: 1, delay: 0.5 },
+        rotate: { duration: 1, delay: 0.5 },
+        y: { duration: 6, repeat: Infinity, ease: "easeInOut" }
+      }}
+      style={{ left: '5%', top: '20%' }}
+      className="absolute hidden xl:block p-6 bg-[#0a0a12]/90 backdrop-blur-md rounded-3xl shadow-2xl w-[320px] text-white border border-white/10"
+    >
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-cyan-900/30 flex items-center justify-center border border-cyan-500/30">
+            <BarChart3 className="w-5 h-5 text-cyan-400" />
+          </div>
+          <span className="font-bold text-sm text-zinc-200">Portfolio Value</span>
+        </div>
+        <span className="text-xs font-semibold text-emerald-400 bg-emerald-900/20 px-2 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Live
+        </span>
+      </div>
+      
+      <div className="mb-6">
+        <div className="text-4xl font-black mb-1 text-white tracking-tight">$42,853.21</div>
+        <div className="flex items-center gap-2 text-sm text-zinc-400">
+          <span>Net Worth</span>
+          <span className="text-emerald-400 font-bold bg-emerald-900/20 px-1.5 rounded text-xs">+5.24%</span>
+        </div>
+      </div>
+      
+      <div className="h-24 w-full bg-black/20 rounded-xl mb-6 relative overflow-hidden border border-white/5">
+        {/* Crypto Line Chart */}
+        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 40" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.3" />
+              <stop offset="100%" stopColor="#22d3ee" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path d="M0 40 L0 30 Q 10 25 20 28 T 40 20 T 60 15 T 80 22 T 100 10 L 100 40 Z" fill="url(#chartGradient)" />
+          <path d="M0 30 Q 10 25 20 28 T 40 20 T 60 15 T 80 22 T 100 10" fill="none" stroke="#22d3ee" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+        {/* Interactive Point */}
+        <div className="absolute top-[25%] right-[20%] w-3 h-3 bg-cyan-400 rounded-full border-2 border-[#0a0a12] shadow-[0_0_10px_rgba(34,211,238,0.5)]"></div>
+        
+        <div className="absolute bottom-2 left-3 text-[10px] text-zinc-500 font-mono tracking-wider">BTC / USDT PRICE ACTION</div>
+      </div>
+      
+      <div className="space-y-3">
+        <div className="flex justify-between text-sm">
+          <span className="font-medium text-zinc-400">Gas Tracker</span>
+          <span className="font-bold text-purple-400 flex items-center gap-1">
+            <Zap className="w-3 h-3" /> 12 Gwei
+          </span>
+        </div>
+        <div className="w-full bg-zinc-800 rounded-full h-1.5">
+          <div className="bg-gradient-to-r from-cyan-400 to-purple-500 h-1.5 rounded-full w-[35%]"></div>
+        </div>
+        <div className="flex justify-between text-xs text-zinc-500 pt-1 font-medium font-mono">
+          <span>Slippage: &lt;0.5%</span>
+          <span>Route: Best</span>
+        </div>
+      </div>
+    </motion.div>
+
+    {/* Right Card - Active Swaps / Operations */}
+    <motion.div 
+      initial={{ opacity: 0, x: 100, rotate: 12 }}
+      animate={{ 
+        opacity: 1, 
+        x: 0, 
+        rotate: 6,
+        y: [10, -10, 10]
+      }}
+      transition={{ 
+        opacity: { duration: 1, delay: 0.7 },
+        x: { duration: 1, delay: 0.7 },
+        rotate: { duration: 1, delay: 0.7 },
+        y: { duration: 7, repeat: Infinity, ease: "easeInOut", delay: 1 }
+      }}
+      style={{ right: '5%', top: '25%' }}
+      className="absolute hidden xl:block p-6 bg-[#0a0a12]/90 backdrop-blur-md rounded-3xl shadow-2xl w-[300px] text-white border border-white/10"
+    >
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-pink-900/30 flex items-center justify-center border border-pink-500/30">
+            <ListChecks className="w-5 h-5 text-pink-400" />
+          </div>
+          <span className="font-bold text-sm text-zinc-200">Active Swaps</span>
+        </div>
+        <span className="text-xs font-bold border border-cyan-500/30 px-2 py-1 rounded-md text-cyan-400 bg-cyan-900/20 shadow-[0_0_10px_rgba(34,211,238,0.1)]">SYNC</span>
+      </div>
+      
+      <div className="mb-6">
+        <div className="text-4xl font-black mb-1 text-white tracking-tight">1,204</div>
+        <div className="text-sm text-zinc-400">Transactions Today</div>
+      </div>
+      
+      <div className="flex gap-3 mb-6">
+        <div className="flex-1 bg-white/5 p-3 rounded-xl border border-white/5 text-center transition-colors hover:bg-white/10">
+          <div className="text-lg font-bold text-white">2.4s</div>
+          <div className="text-[10px] text-zinc-500 uppercase font-bold tracking-wide">Avg Time</div>
+        </div>
+        <div className="flex-1 bg-white/5 p-3 rounded-xl border border-white/5 text-center transition-colors hover:bg-white/10">
+          <div className="text-lg font-bold text-white">$4.2M</div>
+          <div className="text-[10px] text-zinc-500 uppercase font-bold tracking-wide">Volume</div>
+        </div>
+      </div>
+      
+      <div className="space-y-3">
+        {[
+            { name: "Ethereum", label: "Bridge Active", status: "STABLE", color: "text-blue-400 bg-blue-900/30 border-blue-500/30", icon: "💎" },
+            { name: "Arbitrum", label: "Low Fees", status: "FAST", color: "text-cyan-400 bg-cyan-900/30 border-cyan-500/30", icon: "⚡" },
+            { name: "Solana", label: "High Speed", status: "TURBO", color: "text-purple-400 bg-purple-900/30 border-purple-500/30", icon: "🚀" }
+        ].map((item, i) => (
+            <div key={i} className={`flex items-center p-3 rounded-xl border transition-all hover:translate-x-1 ${
+                i === 0 ? 'bg-gradient-to-r from-blue-900/20 to-transparent border-blue-500/20 ring-1 ring-blue-400/10' 
+                : 'bg-white/5 border-white/5 hover:border-white/10'
+            }`}>
+                <div className="w-8 h-8 flex items-center justify-center text-lg">{item.icon}</div>
+                <div className="flex-1 ml-2">
+                    <div className="text-xs font-bold text-white group-hover:text-cyan-400 transition-colors">{item.name}</div>
+                    <div className="text-[10px] text-zinc-500 font-medium">{item.label}</div>
+                </div>
+                <span className={`text-[10px] font-bold px-2 py-1 rounded-md border ${item.color}`}>{item.status}</span>
+            </div>
+        ))}
+      </div>
+    </motion.div>
+
+    {/* Bottom Left Card - 'Expert Level' / AI Status */}
+    <motion.div
+        initial={{ opacity: 0, scale: 0.8, rotate: -5 }}
+        animate={{ 
+            opacity: 1, 
+            scale: 1, 
+            rotate: 0,
+            y: [-5, 5, -5] 
+        }}
+        transition={{ 
+            opacity: { duration: 0.8, delay: 1.2 },
+            scale: { duration: 0.8, delay: 1.2 },
+            rotate: { duration: 0.8, delay: 1.2 },
+            y: { duration: 5, repeat: Infinity, ease: "easeInOut", delay: 0 }
+        }}
+        style={{ left: '15%', bottom: '15%' }}
+        className="absolute hidden xl:block p-4 bg-[#0a0a12]/90 backdrop-blur-md rounded-2xl shadow-xl w-[220px] text-white border border-white/10 z-10"
+    >
+        <div className="flex items-center gap-2 mb-3">
+            <div className="w-6 h-6 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 flex items-center justify-center">
+                <Sparkles className="w-3 h-3 text-white" />
+            </div>
+            <span className="text-xs font-bold text-transparent bg-gradient-to-r from-pink-400 to-rose-400 bg-clip-text">AI Agent Active</span>
+        </div>
+        <h4 className="font-black text-lg text-white mb-1">SwapSmith Pro</h4>
+        <p className="text-[10px] text-zinc-400 mb-3">Auto-routing optimization enabled</p>
+        <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden">
+            <motion.div 
+                className="h-full bg-gradient-to-r from-pink-500 to-rose-500"
+                animate={{ width: ["0%", "100%"] }}
+                transition={{ duration: 2, repeat: Infinity }}
+            />
+        </div>
+    </motion.div>
+    
+    {/* Floating Background Words - Crypto Themed */}
+     <motion.div animate={{ rotate: 360 }} transition={{ duration: 150, repeat: Infinity, ease: 'linear' }} className="absolute left-[10%] top-[15%] text-white/[0.03] font-black text-7xl select-none -z-10 blur-[2px] pointer-events-none tracking-tighter">
+        LIQUIDITY
+     </motion.div>
+     <motion.div animate={{ rotate: -360 }} transition={{ duration: 180, repeat: Infinity, ease: 'linear' }} className="absolute right-[8%] bottom-[25%] text-white/[0.03] font-black text-7xl select-none -z-10 blur-[2px] pointer-events-none tracking-tighter">
+        PROTOCOL
+     </motion.div>
+     <motion.div animate={{ y: [-20, 20, -20] }} transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }} className="absolute left-[20%] bottom-[30%] text-cyan-500/5 font-black text-5xl select-none -z-10 transform -rotate-12 pointer-events-none">
+        GAS
+     </motion.div>
+  </div>
+)
 
 // Floating particles component
 const FloatingParticle = ({ delay, duration, x, y }: { delay: number; duration: number; x: number; y: number }) => (
@@ -214,7 +406,7 @@ export default function LandingPage() {
   return (
     <ReactLenis root>
       {/* Main Landing Page Content */}
-      <div className="min-h-screen bg-[#030308] text-white selection:bg-cyan-500/30 font-sans">
+      <div className="min-h-screen bg-[#030308] text-white selection:bg-cyan-500/30 font-sans overflow-x-hidden">
       {/* Animated background gradient */}
       <div className="fixed inset-0 pointer-events-none">
         <motion.div
@@ -251,39 +443,11 @@ export default function LandingPage() {
       />
 
       {/* 1. Sleek Navbar */}
-      <motion.nav
-        initial={{ y: -100, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
-        className="fixed top-0 w-full z-50 border-b border-white/5 bg-[#030308]/70 backdrop-blur-xl"
-      >
-        <div className="max-w-7xl mx-auto px-6 h-20 flex justify-between items-center">
-          <motion.div
-            className="flex items-center gap-2 cursor-pointer"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <motion.div
-              animate={{ rotate: [0, 360] }}
-              transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-            >
-              <Zap className="w-7 h-7 text-cyan-400" fill="currentColor" />
-            </motion.div>
-            <span className="text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-              SwapSmith
-            </span>
-          </motion.div>
-          <MagneticButton
-            onClick={handleAccess}
-            className="group flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-purple-600 text-white px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-widest hover:shadow-[0_0_30px_rgba(34,211,238,0.4)] transition-all duration-300"
-          >
-            Launch App <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </MagneticButton>
-        </div>
-      </motion.nav>
+      <Navbar />
 
       {/* 2. Hero Section */}
       <section className="relative pt-40 pb-24 px-6 overflow-hidden">
+        <DashboardPreview />
         <motion.div
           className="max-w-5xl mx-auto text-center space-y-10 relative z-10"
           variants={containerVariants}
@@ -508,47 +672,172 @@ export default function LandingPage() {
         </motion.div>
       </section>
 
-      {/* CTA Section */}
-      <section className="relative py-24 px-6">
-        <motion.div
-          className="max-w-4xl mx-auto text-center"
-          initial={{ opacity: 0, scale: 0.95 }}
-          whileInView={{ opacity: 1, scale: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-        >
-          <div className="relative p-12 rounded-3xl overflow-hidden">
-            {/* Animated gradient border */}
-            <motion.div
-              className="absolute inset-0 bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 rounded-3xl"
-              animate={{
-                backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
-              }}
-              transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
-              style={{ backgroundSize: "200% 200%" }}
-            />
-            <div className="absolute inset-[2px] bg-[#030308] rounded-3xl" />
+      {/* Mobile Mockup Section (AutoML Style) */}
+      <section className="relative py-32 px-6 overflow-hidden max-w-7xl mx-auto">
+        <div className="grid lg:grid-cols-2 gap-16 items-center">
+          {/* Left Side - Text Content */}
+          <motion.div
+            initial={{ opacity: 0, x: -50 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="space-y-8 relative z-10"
+          >
+            <h2 className="text-5xl md:text-6xl font-black tracking-tighter leading-tight">
+              Accelerate trading <br />
+              innovation with <br />
+              <span className="bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent">automated AI</span> <br />
+              strategies and build <br />
+              <span className="text-zinc-500">wealth that lasts.</span>
+            </h2>
             
-            <div className="relative z-10 space-y-6">
-              <motion.h2
-                className="text-3xl md:text-4xl font-black tracking-tight"
-                animate={{ opacity: [0.8, 1, 0.8] }}
-                transition={{ duration: 2, repeat: Infinity }}
-              >
-                Ready to Transform Your Trading?
-              </motion.h2>
-              <p className="text-zinc-400 max-w-md mx-auto">
-                Join the future of cross-chain swaps with voice-activated AI
-              </p>
-              <MagneticButton
-                onClick={() => router.push('/terminal')}
-                className="px-10 py-4 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-xl font-bold text-lg hover:shadow-[0_0_40px_rgba(34,211,238,0.3)] transition-all duration-300"
-              >
-                Get Started Free
-              </MagneticButton>
+            <p className="text-xl text-zinc-400 max-w-lg leading-relaxed">
+              The all-in-one SwapSmith platform to automate trading workflows, from intent recognition to execution. Empower your portfolio to grow, diversify, and outperform the market—no complex coding required.
+            </p>
+
+            {/* Feature Card */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-colors cursor-default">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center flex-shrink-0">
+                  <Sparkles className="w-5 h-5 text-cyan-400" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-lg mb-2">How does AI-Powered Trading boost profitability?</h4>
+                  <p className="text-zinc-400 text-sm leading-relaxed">
+                    Our platform automates market analysis, route optimization, gas estimation, and slippage protection. Instantly execute best-price swaps across 40+ chains with a single voice command—freeing you to focus on strategy.
+                  </p>
+                </div>
+                <button className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center hover:bg-white/10 flex-shrink-0">
+                   <div className="w-2 h-2 rounded-full bg-cyan-400" />
+                </button>
+              </div>
             </div>
-          </div>
-        </motion.div>
+          </motion.div>
+
+          {/* Right Side - Phone Mockup */}
+          <motion.div
+            initial={{ opacity: 0, x: 50 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
+            className="relative"
+          >
+            {/* Background decorative circles */}
+            <motion.div 
+               animate={{ y: [-20, 20, -20] }} 
+               transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+               className="absolute -top-10 -left-10 w-24 h-24 rounded-full border border-white/10 z-0 bg-transparent" 
+            />
+            <motion.div 
+               animate={{ scale: [1, 1.2, 1] }} 
+               transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+               className="absolute top-1/2 -right-12 w-16 h-16 rounded-full border border-cyan-500/20 z-0 bg-cyan-500/5 backdrop-blur-sm" 
+            />
+             <motion.div 
+               animate={{ y: [20, -20, 20] }} 
+               transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+               className="absolute -bottom-8 left-1/4 w-20 h-20 rounded-full border border-purple-500/20 z-0 bg-purple-500/5" 
+            />
+
+            {/* Phone Frame */}
+            <div className="relative z-10 w-[360px] h-[720px] bg-[#0f0f16] rounded-[3rem] border-8 border-[#1a1a24] shadow-2xl mx-auto overflow-hidden">
+               {/* Phone Notch/Status Bar */}
+               <div className="h-8 w-full flex justify-between items-center px-6 pt-3 pb-1">
+                 <span className="text-[10px] font-medium text-white">10:24</span>
+                 <div className="w-16 h-4 bg-black/50 rounded-full" />
+                 <div className="w-4 h-2.5 border border-white/30 rounded-[2px]" />
+               </div>
+
+               {/* App Content */}
+               <div className="p-6 h-full font-sans">
+                  {/* Header */}
+                  <div className="flex items-center gap-3 mb-8">
+                     <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-600 to-blue-700 flex items-center justify-center shadow-lg shadow-cyan-900/20">
+                        <Zap className="w-6 h-6 text-white" fill="currentColor" />
+                     </div>
+                     <div>
+                        <h3 className="font-bold text-lg leading-tight">SwapSmith App</h3>
+                        <p className="text-xs text-zinc-500">Portfolio: Main Wallet</p>
+                     </div>
+                  </div>
+
+                  {/* Main Card */}
+                  <div className="border border-white/10 rounded-3xl p-6 bg-white/5 backdrop-blur-sm mb-6 relative overflow-hidden">
+                     <div className="flex justify-between items-start mb-6">
+                        <div>
+                           <div className="text-xs text-zinc-400 font-medium mb-1">Total Balance</div>
+                           <div className="text-3xl font-black tracking-tight flex items-start gap-1">
+                              $12,450
+                              <span className="text-xs font-bold text-emerald-400 mt-2">+12%</span>
+                           </div>
+                        </div>
+                        <div className="bg-emerald-500/10 p-2 rounded-full">
+                           <TrendingUp className="w-4 h-4 text-emerald-400" />
+                        </div>
+                     </div>
+                     
+                     <div className="space-y-2">
+                        <div className="text-xs text-zinc-500">Asset Allocation</div>
+                        <div className="w-full h-2 bg-black/40 rounded-full flex overflow-hidden">
+                           <div className="w-[45%] bg-cyan-500 h-full" />
+                           <div className="w-[30%] bg-purple-500 h-full" />
+                           <div className="w-[25%] bg-pink-500 h-full" />
+                        </div>
+                        <div className="flex justify-between text-[10px] text-zinc-400 pt-1">
+                           <span>ETH 45%</span>
+                           <span>SOL 30%</span>
+                           <span>USDC 25%</span>
+                        </div>
+                     </div>
+                  </div>
+
+                  {/* Secondary Cards (List) */}
+                  <div className="space-y-4">
+                     {/* Card 1 */}
+                     <div className="bg-[#181820] rounded-2xl p-4 flex items-center gap-4 border border-white/5 shadow-lg">
+                        <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
+                           <span className="text-lg">💎</span>
+                        </div>
+                        <div className="flex-1">
+                           <div className="text-sm font-bold text-white">Ethereum</div>
+                           <div className="text-[10px] text-zinc-500">Bridge Active • 2 min ago</div>
+                        </div>
+                        <div className="w-4 h-4 rounded-full bg-green-500/20 flex items-center justify-center">
+                           <CheckCircle className="w-3 h-3 text-green-500" />
+                        </div>
+                     </div>
+
+                     {/* Card 2 */}
+                     <div className="bg-gradient-to-r from-cyan-900/40 to-blue-900/40 rounded-2xl p-4 flex items-center gap-4 border border-cyan-500/30">
+                        <div className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center border border-cyan-500/20 animate-pulse">
+                           <Zap className="w-5 h-5 text-cyan-400" />
+                        </div>
+                        <div className="flex-1">
+                           <div className="text-sm font-bold text-white">Swap Executing</div>
+                           <div className="text-[10px] text-cyan-300">Finding best route...</div>
+                        </div>
+                        <div className="text-xs font-mono text-cyan-400">65%</div>
+                     </div>
+
+                     {/* Card 3 */}
+                     <div className="bg-[#181820] rounded-2xl p-4 flex items-center gap-4 border border-white/5 shadow-lg opacity-60">
+                         <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center border border-purple-500/20">
+                           <span className="text-lg">🟣</span>
+                        </div>
+                        <div className="flex-1">
+                           <div className="text-sm font-bold text-white">Polygon</div>
+                           <div className="text-[10px] text-zinc-500">Queued • Starts in 5s</div>
+                        </div>
+                        <div className="w-4 h-4 rounded-full border border-white/20" />
+                     </div>
+                  </div>
+               </div>
+            </div>
+            
+            {/* Background Glow */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[600px] bg-cyan-500/20 blur-[100px] pointer-events-none -z-10" />
+          </motion.div>
+        </div>
       </section>
 
       {/* 5. Footer */}
@@ -597,24 +886,61 @@ export default function LandingPage() {
         <section className='text-white h-screen w-full bg-slate-950 grid place-content-center sticky top-0'>
           <div className='absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:54px_54px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]'></div>
 
-          <h1 className='2xl:text-7xl text-6xl px-8 font-semibold text-center tracking-tight leading-[120%] relative z-10'>
-            Ready to Transform <br /> Your Trading? Scroll Please 👇
-          </h1>
+          <div className='relative z-10 max-w-4xl mx-auto px-8'>
+            <h1 className='2xl:text-7xl text-6xl font-semibold text-center tracking-tight leading-[120%] mb-6'>
+              Ready to Transform <br /> Your Trading? Scroll Please
+            </h1>
+            <p className='text-xl text-gray-400 text-center mt-4'>
+              Experience the future of cross-chain swaps with AI-powered voice commands
+            </p>
+          </div>
         </section>
 
         <section className='bg-gray-300 text-black grid place-content-center h-screen sticky top-0 rounded-tr-2xl rounded-tl-2xl overflow-hidden'>
           <div className='absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:54px_54px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]'></div>
-          <h1 className='2xl:text-7xl text-4xl px-8 font-semibold text-center tracking-tight leading-[120%] relative z-10'>
-            Voice-Activated Cross-Chain Swaps, <br /> Built with AI & Open Source 💼
-          </h1>
+          <div className='relative z-10 max-w-5xl mx-auto px-8'>
+            <h1 className='2xl:text-7xl text-4xl font-semibold text-center tracking-tight leading-[120%] mb-6'>
+              Voice-Activated Cross-Chain Swaps, <br /> Built with AI & Open Source 💼
+            </h1>
+            <div className='grid grid-cols-3 gap-6 mt-12'>
+              <div className='bg-white/80 p-6 rounded-xl backdrop-blur-sm'>
+                <h3 className='text-2xl font-bold mb-2'>200+</h3>
+                <p className='text-gray-700'>Supported Assets</p>
+              </div>
+              <div className='bg-white/80 p-6 rounded-xl backdrop-blur-sm'>
+                <h3 className='text-2xl font-bold mb-2'>40+</h3>
+                <p className='text-gray-700'>Blockchain Networks</p>
+              </div>
+              <div className='bg-white/80 p-6 rounded-xl backdrop-blur-sm'>
+                <h3 className='text-2xl font-bold mb-2'>0%</h3>
+                <p className='text-gray-700'>Platform Fees</p>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section className='text-white h-screen w-full bg-slate-950 grid place-content-center sticky top-0'>
           <div className='absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:54px_54px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]'></div>
-          <h1 className='2xl:text-7xl text-5xl px-8 font-semibold text-center tracking-tight leading-[120%] relative z-10'>
-            Thanks for Scrolling!
-            <br /> Keep Going for More 👇
-          </h1>
+          <div className='relative z-10 max-w-4xl mx-auto px-8'>
+            <h1 className='2xl:text-7xl text-5xl font-semibold text-center tracking-tight leading-[120%] mb-6'>
+              Thanks for Scrolling!
+              <br /> Keep Going for More 
+            </h1>
+            <div className='flex justify-center gap-8 mt-12'>
+              <div className='text-center'>
+                <div className='text-cyan-400 text-4xl mb-2'>⚡</div>
+                <p className='text-gray-400'>Lightning Fast</p>
+              </div>
+              <div className='text-center'>
+                <div className='text-purple-400 text-4xl mb-2'>🔒</div>
+                <p className='text-gray-400'>Secure & Safe</p>
+              </div>
+              <div className='text-center'>
+                <div className='text-pink-400 text-4xl mb-2'>🎯</div>
+                <p className='text-gray-400'>Easy to Use</p>
+              </div>
+            </div>
+          </div>
         </section>
       </article>
 
@@ -630,44 +956,70 @@ export default function LandingPage() {
         </header>
         <section className='horizontal-section h-[500vh] relative'>
           <ul ref={ulRef} className='flex sticky top-0 h-screen overflow-hidden' style={{ width: '500vw' }}>
-            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-gradient-to-br from-cyan-500 to-cyan-700 flex flex-col justify-center items-center'>
-              <h2 className='text-[20vw] font-bold text-white select-none'>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-gradient-to-br from-cyan-500 to-cyan-700 flex flex-col justify-center items-center px-12'>
+              <h2 className='text-[20vw] font-bold text-white select-none mb-8'>
                 TRADE
               </h2>
+              <p className='text-3xl text-white/90 max-w-3xl text-center font-medium'>
+                Execute complex cross-chain swaps with simple voice commands. Trade 200+ assets across 40+ networks.
+              </p>
             </li>
-            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-gradient-to-br from-purple-500 to-purple-700 flex flex-col justify-center items-center'>
-              <h2 className='text-[20vw] font-bold text-white select-none'>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-gradient-to-br from-purple-500 to-purple-700 flex flex-col justify-center items-center px-12'>
+              <h2 className='text-[20vw] font-bold text-white select-none mb-8'>
                 SWAP
               </h2>
+              <p className='text-3xl text-white/90 max-w-3xl text-center font-medium'>
+                Seamless asset exchanges powered by SideShift.ai. Get real-time quotes and best rates instantly.
+              </p>
             </li>
-            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-gradient-to-br from-pink-500 to-pink-700 flex flex-col justify-center items-center'>
-              <h2 className='text-[20vw] font-bold text-white select-none'>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-gradient-to-br from-pink-500 to-pink-700 flex flex-col justify-center items-center px-12'>
+              <h2 className='text-[20vw] font-bold text-white select-none mb-8'>
                 EARN
               </h2>
+              <p className='text-3xl text-white/90 max-w-3xl text-center font-medium'>
+                Discover yield opportunities across DeFi protocols. Maximize your crypto earnings effortlessly.
+              </p>
             </li>
-            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-gradient-to-br from-emerald-500 to-emerald-700 flex flex-col justify-center items-center'>
-              <h2 className='text-[20vw] font-bold text-white select-none'>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-gradient-to-br from-emerald-500 to-emerald-700 flex flex-col justify-center items-center px-12'>
+              <h2 className='text-[20vw] font-bold text-white select-none mb-8'>
                 GROW
               </h2>
+              <p className='text-3xl text-white/90 max-w-3xl text-center font-medium'>
+                Build your portfolio with AI-assisted trading strategies. Make informed decisions with confidence.
+              </p>
             </li>
-            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-gradient-to-br from-orange-500 to-orange-700 flex flex-col justify-center items-center'>
-              <h2 className='text-[20vw] font-bold text-white select-none'>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-gradient-to-br from-orange-500 to-orange-700 flex flex-col justify-center items-center px-12'>
+              <h2 className='text-[20vw] font-bold text-white select-none mb-8'>
                 WIN
               </h2>
+              <p className='text-3xl text-white/90 max-w-3xl text-center font-medium'>
+                Join thousands of traders using SwapSmith. Experience the future of decentralized trading today.
+              </p>
             </li>
           </ul>
         </section>
-        <footer className='bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 font-medium text-white grid place-content-center h-[80vh]'>
-          <div className='text-center space-y-4'>
-            <p className='text-2xl font-bold'>Ready to Start Your Journey?</p>
+        <footer className='relative font-medium text-white grid place-content-center h-[80vh] overflow-hidden'>
+          {/* Background Image with Blur */}
+          <div 
+            className="absolute inset-0 bg-[url('/image.png')] bg-cover bg-center"
+            style={{ filter: 'blur(8px)' }}
+          />
+          {/* Dark Overlay for better text readability */}
+          <div className="absolute inset-0 bg-black/20" />
+          
+          <div className='relative z-10 text-center space-y-4'>
+            <div className='text-3xl md:text-4xl font-bold mb-8'>
+              <RandomizedTextEffect text="Ready to Start Your Journey?" />
+            </div>
             <button
               onClick={handleAccess}
-              className='px-8 py-4 bg-white text-purple-600 rounded-full font-bold text-lg hover:scale-105 transition-transform'
+              className='px-8 py-4 bg-white text-purple-600 rounded-full font-bold text-lg hover:scale-105 transition-transform shadow-lg'
             >
               Launch SwapSmith Now
             </button>
           </div>
         </footer>
+        <Footer/>
       </article>
     </ReactLenis>
   )

@@ -9,6 +9,7 @@ import CoinCardSkeleton from '@/components/CoinCardSkeleton';
 import Navbar from '@/components/Navbar';
 import TopCryptoSection from '@/components/TopCryptoSection';
 import { getCoinPrices, CoinPrice } from '@/utils/sideshift-client';
+import Footer from '@/components/Footer';
 
 export default function PricesPage() {
   const [coins, setCoins] = useState<CoinPrice[]>([]);
@@ -272,6 +273,7 @@ export default function PricesPage() {
         )}
         </div>
       </div>
+     <Footer />
     </>
   );
 }
