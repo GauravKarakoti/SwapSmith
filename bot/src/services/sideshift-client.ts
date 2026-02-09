@@ -3,8 +3,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const SIDESHIFT_BASE_URL = "https://sideshift.ai/api/v2";
-const AFFILIATE_ID = process.env.NEXT_PUBLIC_AFFILIATE_ID;
-const API_KEY = process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
+const AFFILIATE_ID = process.env.SIDESHIFT_AFFILIATE_ID || process.env.NEXT_PUBLIC_AFFILIATE_ID || '';
+const API_KEY = process.env.SIDESHIFT_API_KEY || process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
 
 export interface SideShiftPair {
   depositCoin: string;
@@ -202,14 +202,20 @@ export async function createQuote(
 
 export async function createOrder(quoteId: string, settleAddress: string, refundAddress: string): Promise<SideShiftOrder> {
     try {
+        const payload: any = {
+            quoteId,
+            settleAddress,
+            refundAddress,
+        };
+        
+        // Only include affiliateId if it's defined
+        if (AFFILIATE_ID) {
+            payload.affiliateId = AFFILIATE_ID;
+        }
+        
         const response = await axios.post<SideShiftOrder>(
             `${SIDESHIFT_BASE_URL}/shifts/fixed`,
-            {
-                quoteId,
-                settleAddress,
-                refundAddress,
-                affiliateId: AFFILIATE_ID,
-            },
+            payload,
             {
                 headers: {
                     'Content-Type': 'application/json',
