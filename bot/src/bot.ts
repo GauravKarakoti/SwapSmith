@@ -14,10 +14,14 @@ import express from 'express';
 import { chainIdMap } from './config/chains';
 import { handleError } from './services/logger';
 import { tokenResolver } from './services/token-resolver';
+import { OrderMonitor } from './services/order-monitor';
 
 dotenv.config();
 const MINI_APP_URL = process.env.MINI_APP_URL!;
 const bot = new Telegraf(process.env.BOT_TOKEN!);
+
+// Initialize order monitor
+const orderMonitor = new OrderMonitor(bot);
 
 // --- ADDRESS VALIDATION PATTERNS ---
 const ADDRESS_PATTERNS: Record<string, RegExp> = {
@@ -146,6 +150,9 @@ bot.start((ctx) => {
         "/history - See past orders\n" +
         "/checkouts - See payment links\n" +
         "/status [id] - Check order status\n" +
+        "/watch [id] - Watch order for completion\n" +
+        "/unwatch [id] - Stop watching order\n" +
+        "/watching - List watched orders\n" +
         "/clear - Reset conversation\n\n" +
         "💡 *Tip:* Check out our web interface for a graphical experience!",
         {
@@ -202,6 +209,92 @@ bot.command('status', async (ctx) => {
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
         ctx.reply(`Sorry, couldn't get status. Error: ${errorMessage}`);
+    }
+});
+
+bot.command('watch', async (ctx) => {
+    const userId = ctx.from.id;
+    const args = ctx.message.text.split(' ');
+    let orderIdToWatch: string | null = args[1];
+
+    try {
+        if (!orderIdToWatch) {
+            const lastOrder = await db.getLatestUserOrder(userId);
+            if (!lastOrder) return ctx.reply("You have no order history to watch. Send a swap first.");
+            orderIdToWatch = lastOrder.sideshiftOrderId;
+        }
+
+        // Check if order exists and get its current status
+        await ctx.reply(`⏳ Setting up watch for order \`${orderIdToWatch}\`...`, { parse_mode: 'Markdown' });
+        const status = await getOrderStatus(orderIdToWatch);
+        
+        // Check if already completed
+        if (status.status.toLowerCase() === 'settled' || status.status.toLowerCase() === 'refunded') {
+            return ctx.reply(`⚠️ Order \`${orderIdToWatch}\` is already ${status.status}. No need to watch.`, { parse_mode: 'Markdown' });
+        }
+
+        // Add to watch list
+        await db.addWatchedOrder(userId, orderIdToWatch, status.status);
+        
+        let message = `✅ *Now watching order:* \`${orderIdToWatch}\`\n\n`;
+        message += `*Current Status:* \`${status.status.toUpperCase()}\`\n`;
+        message += `*Send:* ${status.depositAmount || '?'} ${status.depositCoin} (${status.depositNetwork})\n`;
+        message += `*Receive:* ${status.settleAmount || '?'} ${status.settleCoin} (${status.settleNetwork})\n\n`;
+        message += `🔔 I'll notify you when the status changes or when it's completed!`;
+
+        ctx.replyWithMarkdown(message);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+        ctx.reply(`Sorry, couldn't watch order. Error: ${errorMessage}`);
+    }
+});
+
+bot.command('unwatch', async (ctx) => {
+    const userId = ctx.from.id;
+    const args = ctx.message.text.split(' ');
+    let orderIdToUnwatch: string | null = args[1];
+
+    try {
+        if (!orderIdToUnwatch) {
+            const watchedOrders = await db.getUserWatchedOrders(userId);
+            if (watchedOrders.length === 0) {
+                return ctx.reply("You have no watched orders.");
+            }
+            orderIdToUnwatch = watchedOrders[0].sideshiftOrderId;
+        }
+
+        await db.removeWatchedOrder(orderIdToUnwatch);
+        ctx.reply(`✅ Stopped watching order \`${orderIdToUnwatch}\``, { parse_mode: 'Markdown' });
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+        ctx.reply(`Sorry, couldn't unwatch order. Error: ${errorMessage}`);
+    }
+});
+
+bot.command('watching', async (ctx) => {
+    const userId = ctx.from.id;
+    
+    try {
+        const watchedOrders = await db.getUserWatchedOrders(userId);
+        
+        if (watchedOrders.length === 0) {
+            return ctx.reply("You are not watching any orders.\n\nUse /watch [order_id] to start monitoring an order.");
+        }
+
+        let message = `🔍 *Your Watched Orders:*\n\n`;
+        
+        for (const watched of watchedOrders) {
+            message += `*Order:* \`${watched.sideshiftOrderId}\`\n`;
+            message += `  *Status:* \`${watched.lastStatus.toUpperCase()}\`\n`;
+            message += `  *Last Checked:* ${new Date(watched.lastChecked as Date).toLocaleString()}\n\n`;
+        }
+        
+        message += `💡 Use /unwatch [order_id] to stop watching an order.`;
+        
+        ctx.replyWithMarkdown(message);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+        ctx.reply(`Sorry, couldn't fetch watched orders. Error: ${errorMessage}`);
     }
 });
 
@@ -493,6 +586,9 @@ bot.action('place_order', async (ctx) => {
         if (!order.id) throw new Error("Failed to create order");
 
         db.createOrderEntry(userId, state.parsedCommand, order, state.settleAmount, state.quoteId);
+        
+        // Automatically add order to watch list
+        await db.addWatchedOrder(userId, order.id, 'pending');
 
         const { amount, fromChain, fromAsset } = state.parsedCommand;
         const rawDepositAddress = typeof order.depositAddress === 'string' ? order.depositAddress : order.depositAddress.address;
@@ -525,7 +621,7 @@ bot.action('place_order', async (ctx) => {
             token: assetKey, amount: amount!.toString()
         });
 
-        ctx.editMessageText(`✅ *Order Created!*\nTo complete the swap, sign in your wallet.`, {
+        ctx.editMessageText(`✅ *Order Created!*\nTo complete the swap, sign in your wallet.\n\n🔔 *Auto-Watch Enabled:* I'll notify you when your swap completes!`, {
             parse_mode: 'Markdown',
             ...Markup.inlineKeyboard([
                 Markup.button.webApp('📱 Sign Transaction', `${MINI_APP_URL}?${params.toString()}`),
@@ -650,6 +746,9 @@ bot.action('place_portfolio_orders', async (ctx) => {
                     amount: quoteData.swapAmount
                 };
                 db.createOrderEntry(userId, orderCommand, order, quoteData.settleAmount, quoteData.quoteId);
+                
+                // Automatically add each order to watch list
+                await db.addWatchedOrder(userId, order.id, 'pending');
 
                 orders.push({ order, allocation: quoteData.allocation, quoteId: quoteData.quoteId });
             } catch (error) {
@@ -696,7 +795,7 @@ bot.action('place_portfolio_orders', async (ctx) => {
         orders.forEach((o, i) => {
             orderSummary += `${i + 1}. Order ${o.order.id.substring(0, 8)}... → ${o.allocation.toAsset}\n`;
         });
-        orderSummary += `\nSign the transaction to complete all swaps.`;
+        orderSummary += `\nSign the transaction to complete all swaps.\n\n🔔 *Auto-Watch Enabled:* I'll notify you when each swap completes!`;
 
         ctx.editMessageText(orderSummary, {
             parse_mode: 'Markdown',
@@ -720,4 +819,18 @@ bot.action('cancel_swap', (ctx) => {
 const app = express();
 app.get('/', (req, res) => res.send('SwapSmith Alive'));
 app.listen(process.env.PORT || 3000, () => console.log(`Express server live`));
+
+// Start the order monitor
+orderMonitor.start();
+
 bot.launch();
+
+// Graceful shutdown
+process.once('SIGINT', () => {
+    orderMonitor.stop();
+    bot.stop('SIGINT');
+});
+process.once('SIGTERM', () => {
+    orderMonitor.stop();
+    bot.stop('SIGTERM');
+});
