@@ -1,5 +1,4 @@
--- Create watched_orders table for persistent transaction monitoring
-CREATE TABLE IF NOT EXISTS "watched_orders" (
+CREATE TABLE "watched_orders" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"telegram_id" bigint NOT NULL,
 	"sideshift_order_id" text NOT NULL,
