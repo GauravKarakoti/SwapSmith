@@ -252,7 +252,7 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
   };
 
   // Generate contextual help if there are errors or low confidence
-  if (allErrors.length > 0 || confidence < 50) {
+  if (allErrors.length > 0 || confidence! < 50) {
     try {
       console.log('🔍 Generating contextual help...');
       console.log('Errors:', allErrors);
