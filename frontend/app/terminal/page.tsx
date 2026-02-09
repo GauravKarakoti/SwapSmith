@@ -1,19 +1,17 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useAccount } from 'wagmi';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
-import WalletConnector from '@/components/WalletConnector';
 import ClaudeChatInput from '@/components/ClaudeChatInput';
 import SwapConfirmation from '@/components/SwapConfirmation';
 import IntentConfirmation from '@/components/IntentConfirmation';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
-import { MessageCircle, Plus, Clock, Settings, HelpCircle, PanelLeftClose, PanelLeft, Zap, LogOut } from 'lucide-react';
+import { MessageCircle, Plus, Clock, Settings, HelpCircle, PanelLeftClose, PanelLeft } from 'lucide-react';
 
 interface QuoteData {
   depositAmount: string;
@@ -37,8 +35,6 @@ interface Message {
 }
 
 export default function TerminalPage() {
-  const router = useRouter();
-  const { logout } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [chatHistory, setChatHistory] = useState([
     { id: 1, title: "Swap ETH to USDC", timestamp: "2 hours ago" },
@@ -57,16 +53,16 @@ export default function TerminalPage() {
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
-
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { address, isConnected } = useAccount();
   const { handleError } = useErrorHandler();
-
-  const {
-    isRecording,
-    isSupported: isAudioSupported,
-    startRecording,
-    stopRecording,
+  
+  const { 
+    isRecording, 
+    isSupported: isAudioSupported, 
+    startRecording, 
+    stopRecording, 
     error: audioError
   } = useAudioRecorder({
     sampleRate: 16000,
@@ -101,19 +97,19 @@ export default function TerminalPage() {
 
   const handleStartRecording = async () => {
     if (!isAudioSupported) {
-      addMessage({
-        role: 'assistant',
-        content: `Voice input is not supported in this browser. Please use text input instead.`,
-        type: 'message'
+      addMessage({ 
+        role: 'assistant', 
+        content: `Voice input is not supported in this browser. Please use text input instead.`, 
+        type: 'message' 
       });
       return;
     }
     try {
       await startRecording();
     } catch (err) {
-      const errorMessage = handleError(err, ErrorType.VOICE_ERROR, {
+      const errorMessage = handleError(err, ErrorType.VOICE_ERROR, { 
         operation: 'microphone_access',
-        retryable: true
+        retryable: true 
       });
       addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
     }
@@ -126,9 +122,9 @@ export default function TerminalPage() {
         await handleVoiceInput(audioBlob);
       }
     } catch (err) {
-      const errorMessage = handleError(err, ErrorType.VOICE_ERROR, {
+      const errorMessage = handleError(err, ErrorType.VOICE_ERROR, { 
         operation: 'stop_recording',
-        retryable: true
+        retryable: true 
       });
       addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
     }
@@ -137,13 +133,13 @@ export default function TerminalPage() {
   const handleVoiceInput = async (audioBlob: Blob) => {
     setIsLoading(true);
     addMessage({ role: 'user', content: '🎤 [Sending Voice...]', type: 'message' });
-
+    
     const formData = new FormData();
     let fileName = 'voice.webm';
     if (audioBlob.type.includes('mp4')) fileName = 'voice.mp4';
     else if (audioBlob.type.includes('wav')) fileName = 'voice.wav';
     else if (audioBlob.type.includes('ogg')) fileName = 'voice.ogg';
-
+    
     formData.append('file', audioBlob, fileName);
 
     try {
@@ -153,7 +149,7 @@ export default function TerminalPage() {
         });
         if (!response.ok) throw new Error('Transcription failed');
         const data = await response.json();
-
+        
         if (data.text) {
             setMessages(prev => {
                 const newMsgs = [...prev];
@@ -172,9 +168,9 @@ export default function TerminalPage() {
             setIsLoading(false);
         }
     } catch (error) {
-        const errorMessage = handleError(error, ErrorType.VOICE_ERROR, {
+        const errorMessage = handleError(error, ErrorType.VOICE_ERROR, { 
           operation: 'voice_transcription',
-          retryable: true
+          retryable: true 
         });
         setMessages(prev => prev.filter(m => m.content !== '🎤 [Sending Voice...]'));
         addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
@@ -183,7 +179,7 @@ export default function TerminalPage() {
   };
 
   const processCommand = async (text: string) => {
-    if(!isLoading) setIsLoading(true);
+    if(!isLoading) setIsLoading(true); 
     try {
       const response = await fetch('/api/parse-command', {
         method: 'POST',
@@ -191,7 +187,7 @@ export default function TerminalPage() {
         body: JSON.stringify({ message: text }),
       });
       const command: ParsedCommand = await response.json();
-
+      
       if (!command.success && command.intent !== 'yield_scout') {
         addMessage({
           role: 'assistant',
@@ -207,7 +203,7 @@ export default function TerminalPage() {
         const yieldData = await yieldRes.json();
         addMessage({
           role: 'assistant',
-          content: yieldData.message,
+          content: yieldData.message, 
           type: 'yield_info'
         });
         setIsLoading(false);
@@ -235,7 +231,7 @@ export default function TerminalPage() {
                 settleAsset: command.settleAsset,
                 settleNetwork: command.settleNetwork,
                 settleAmount: command.settleAmount,
-                settleAddress: finalAddress
+                settleAddress: finalAddress 
             })
         });
         const checkoutData = await checkoutRes.json();
@@ -251,10 +247,10 @@ export default function TerminalPage() {
       }
 
       if (command.intent === 'portfolio' && command.portfolio) {
-         addMessage({
-             role: 'assistant',
-             content: `📊 **Portfolio Strategy Detected**\nSplitting ${command.amount} ${command.fromAsset} into multiple assets. Generating orders...`,
-             type: 'message'
+         addMessage({ 
+             role: 'assistant', 
+             content: `📊 **Portfolio Strategy Detected**\nSplitting ${command.amount} ${command.fromAsset} into multiple assets. Generating orders...`, 
+             type: 'message' 
          });
          for (const item of command.portfolio) {
              const splitAmount = (command.amount! * item.percentage) / 100;
@@ -264,8 +260,8 @@ export default function TerminalPage() {
                  amount: splitAmount,
                  toAsset: item.toAsset,
                  toChain: item.toChain,
-                 portfolio: undefined,
-                 confidence: 100
+                 portfolio: undefined, 
+                 confidence: 100 
              };
              await executeSwap(subCommand);
          }
@@ -280,9 +276,9 @@ export default function TerminalPage() {
         await executeSwap(command);
       }
     } catch (error: unknown) {
-      const errorMessage = handleError(error, ErrorType.API_FAILURE, {
+      const errorMessage = handleError(error, ErrorType.API_FAILURE, { 
         operation: 'command_processing',
-        retryable: true
+        retryable: true 
       });
       addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
     } finally {
@@ -312,9 +308,9 @@ export default function TerminalPage() {
         data: { quoteData: quote, confidence: command.confidence }
       });
     } catch (error: unknown) {
-      const errorMessage = handleError(error, ErrorType.API_FAILURE, {
+      const errorMessage = handleError(error, ErrorType.API_FAILURE, { 
         operation: 'swap_quote',
-        retryable: true
+        retryable: true 
       });
       addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
     }
@@ -371,23 +367,7 @@ export default function TerminalPage() {
       <aside className={`${isSidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 bg-zinc-900/50 border-r border-zinc-800 flex flex-col overflow-hidden`}>
         {isSidebarOpen && (
           <>
-            {/* Sidebar Header */}
-            <div className="p-4 border-b border-zinc-800">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="bg-blue-600 p-1.5 rounded-lg shadow-lg shadow-blue-600/20">
-                    <Zap className="w-4 h-4 text-white" fill="white" />
-                  </div>
-                  <span className="text-sm font-black tracking-tighter uppercase">SwapSmith</span>
-                </div>
-                <button
-                  onClick={() => setIsSidebarOpen(false)}
-                  className="p-1 hover:bg-zinc-800 rounded-lg transition-colors"
-                >
-                  <PanelLeftClose className="w-4 h-4 text-zinc-400" />
-                </button>
-              </div>
-
+            <div className="p-4 border-b border-zinc-800">              
               <button className="w-full flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors text-sm font-medium">
                 <Plus className="w-4 h-4" />
                 New Chat
@@ -419,18 +399,15 @@ export default function TerminalPage() {
 
             {/* Sidebar Footer */}
             <div className="p-3 border-t border-zinc-800 space-y-1">
-              <a
-                href="https://t.me/SwapSmithBot"
+              <a 
+                href="https://t.me/SwapSmithBot" 
                 target='_blank'
                 className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors text-sm text-zinc-400 hover:text-white"
               >
                 <MessageCircle className="w-4 h-4" />
                 Support
               </a>
-              <button
-                onClick={() => router.push('/settings')}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors text-sm text-zinc-400 hover:text-white"
-              >
+              <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors text-sm text-zinc-400 hover:text-white">
                 <Settings className="w-4 h-4" />
                 Settings
               </button>
@@ -441,62 +418,9 @@ export default function TerminalPage() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-
-        {/* Top Navigation Bar */}
-        <nav className="h-16 border-b border-zinc-800 px-4 flex items-center justify-between bg-zinc-900/30 backdrop-blur-xl">
-          <div className="flex items-center gap-4">
-            {!isSidebarOpen && (
-              <button
-                onClick={() => setIsSidebarOpen(true)}
-                className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
-              >
-                <PanelLeft className="w-5 h-5 text-zinc-400" />
-              </button>
-            )}
-            {!isSidebarOpen && (
-              <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-                <div className="bg-blue-600 p-1.5 rounded-lg shadow-lg shadow-blue-600/20">
-                  <Zap className="w-4 h-4 text-white" fill="white" />
-                </div>
-                <span className="text-sm font-black tracking-tighter uppercase">SwapSmith</span>
-              </Link>
-            )}
-
-            {/* System Status */}
-            <div className="flex items-center gap-3 px-3 py-1.5 bg-zinc-900/50 border border-zinc-800 rounded-lg">
-              <div className="p-1.5 bg-blue-500/10 rounded-lg">
-                <Zap className="w-3 h-3 text-blue-400" />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-[10px] text-emerald-500/80 font-bold uppercase tracking-widest">System Ready</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <Link href="/" className="p-2 hover:bg-zinc-800 rounded-lg transition-colors text-zinc-400 hover:text-white text-sm font-medium">
-              Home
-            </Link>
-            <button className="p-2 hover:bg-zinc-800 rounded-lg transition-colors">
-              <HelpCircle className="w-5 h-5 text-zinc-400 hover:text-white" />
-            </button>
-            <div className="h-6 w-px bg-zinc-800" />
-            <WalletConnector />
-            <button
-              onClick={logout}
-              className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-500 rounded-xl transition-all text-xs font-bold uppercase tracking-widest active:scale-95"
-              title="Logout Terminal"
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">Logout</span>
-            </button>
-          </div>
-        </nav>
-
         {/* Chat Area */}
         <main className="flex-1 overflow-y-auto flex flex-col">
-
+          
           {/* Header Section */}
           <div className="flex-shrink-0 pt-12 pb-8 px-4">
             <div className="max-w-3xl mx-auto text-center space-y-4">
@@ -549,8 +473,8 @@ export default function TerminalPage() {
           {/* Input Area - Fixed at bottom */}
           <div className="flex-shrink-0 pb-8 px-4">
             <div className="max-w-3xl mx-auto">
-              <ClaudeChatInput
-                onSendMessage={handleSendMessage}
+              <ClaudeChatInput 
+                onSendMessage={handleSendMessage} 
                 isRecording={isRecording}
                 isAudioSupported={isAudioSupported}
                 onStartRecording={handleStartRecording}
