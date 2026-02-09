@@ -883,7 +883,7 @@ export default function LandingPage() {
 
       {/* Scroll Animation Section - After Footer */}
       <article>
-        <section className='text-white h-screen w-full bg-slate-950 grid place-content-center sticky top-0'>
+        <section className='text-white h-screen w-full bg-[#030712] grid place-content-center sticky top-0'>
           <div className='absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:54px_54px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]'></div>
 
           <div className='relative z-10 max-w-4xl mx-auto px-8'>
@@ -896,30 +896,30 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className='bg-gray-300 text-black grid place-content-center h-screen sticky top-0 rounded-tr-2xl rounded-tl-2xl overflow-hidden'>
+        <section className='bg-[#0B1120] text-white grid place-content-center h-screen sticky top-0 rounded-tr-2xl rounded-tl-2xl overflow-hidden'>
           <div className='absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:54px_54px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]'></div>
           <div className='relative z-10 max-w-5xl mx-auto px-8'>
             <h1 className='2xl:text-7xl text-4xl font-semibold text-center tracking-tight leading-[120%] mb-6'>
               Voice-Activated Cross-Chain Swaps, <br /> Built with AI & Open Source 💼
             </h1>
             <div className='grid grid-cols-3 gap-6 mt-12'>
-              <div className='bg-white/80 p-6 rounded-xl backdrop-blur-sm'>
+              <div className='bg-white/10 p-6 rounded-xl backdrop-blur-sm border border-white/10'>
                 <h3 className='text-2xl font-bold mb-2'>200+</h3>
-                <p className='text-gray-700'>Supported Assets</p>
+                <p className='text-gray-300'>Supported Assets</p>
               </div>
-              <div className='bg-white/80 p-6 rounded-xl backdrop-blur-sm'>
+              <div className='bg-white/10 p-6 rounded-xl backdrop-blur-sm border border-white/10'>
                 <h3 className='text-2xl font-bold mb-2'>40+</h3>
-                <p className='text-gray-700'>Blockchain Networks</p>
+                <p className='text-gray-300'>Blockchain Networks</p>
               </div>
-              <div className='bg-white/80 p-6 rounded-xl backdrop-blur-sm'>
+              <div className='bg-white/10 p-6 rounded-xl backdrop-blur-sm border border-white/10'>
                 <h3 className='text-2xl font-bold mb-2'>0%</h3>
-                <p className='text-gray-700'>Platform Fees</p>
+                <p className='text-gray-300'>Platform Fees</p>
               </div>
             </div>
           </div>
         </section>
 
-        <section className='text-white h-screen w-full bg-slate-950 grid place-content-center sticky top-0'>
+        <section className='text-white h-screen w-full bg-[#130E18] grid place-content-center sticky top-0'>
           <div className='absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:54px_54px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]'></div>
           <div className='relative z-10 max-w-4xl mx-auto px-8'>
             <h1 className='2xl:text-7xl text-5xl font-semibold text-center tracking-tight leading-[120%] mb-6'>
@@ -956,43 +956,43 @@ export default function LandingPage() {
         </header>
         <section className='horizontal-section h-[500vh] relative'>
           <ul ref={ulRef} className='flex sticky top-0 h-screen overflow-hidden' style={{ width: '500vw' }}>
-            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-gradient-to-br from-cyan-500 to-cyan-700 flex flex-col justify-center items-center px-12'>
-              <h2 className='text-[20vw] font-bold text-white select-none mb-8'>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-slate-950 flex flex-col justify-center items-center px-12 border-r border-white/5'>
+              <h2 className='text-[20vw] font-bold text-cyan-500 select-none mb-8'>
                 TRADE
               </h2>
-              <p className='text-3xl text-white/90 max-w-3xl text-center font-medium'>
+              <p className='text-3xl text-zinc-400 max-w-3xl text-center font-medium'>
                 Execute complex cross-chain swaps with simple voice commands. Trade 200+ assets across 40+ networks.
               </p>
             </li>
-            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-gradient-to-br from-purple-500 to-purple-700 flex flex-col justify-center items-center px-12'>
-              <h2 className='text-[20vw] font-bold text-white select-none mb-8'>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-[#0f0a1e] flex flex-col justify-center items-center px-12 border-r border-white/5'>
+              <h2 className='text-[20vw] font-bold text-purple-500 select-none mb-8'>
                 SWAP
               </h2>
-              <p className='text-3xl text-white/90 max-w-3xl text-center font-medium'>
+              <p className='text-3xl text-zinc-400 max-w-3xl text-center font-medium'>
                 Seamless asset exchanges powered by SideShift.ai. Get real-time quotes and best rates instantly.
               </p>
             </li>
-            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-gradient-to-br from-pink-500 to-pink-700 flex flex-col justify-center items-center px-12'>
-              <h2 className='text-[20vw] font-bold text-white select-none mb-8'>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-[#1a0b14] flex flex-col justify-center items-center px-12 border-r border-white/5'>
+              <h2 className='text-[20vw] font-bold text-pink-500 select-none mb-8'>
                 EARN
               </h2>
-              <p className='text-3xl text-white/90 max-w-3xl text-center font-medium'>
+              <p className='text-3xl text-zinc-400 max-w-3xl text-center font-medium'>
                 Discover yield opportunities across DeFi protocols. Maximize your crypto earnings effortlessly.
               </p>
             </li>
-            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-gradient-to-br from-emerald-500 to-emerald-700 flex flex-col justify-center items-center px-12'>
-              <h2 className='text-[20vw] font-bold text-white select-none mb-8'>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-[#051a12] flex flex-col justify-center items-center px-12 border-r border-white/5'>
+              <h2 className='text-[20vw] font-bold text-emerald-500 select-none mb-8'>
                 GROW
               </h2>
-              <p className='text-3xl text-white/90 max-w-3xl text-center font-medium'>
+              <p className='text-3xl text-zinc-400 max-w-3xl text-center font-medium'>
                 Build your portfolio with AI-assisted trading strategies. Make informed decisions with confidence.
               </p>
             </li>
-            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-gradient-to-br from-orange-500 to-orange-700 flex flex-col justify-center items-center px-12'>
-              <h2 className='text-[20vw] font-bold text-white select-none mb-8'>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-[#1a0f05] flex flex-col justify-center items-center px-12'>
+              <h2 className='text-[20vw] font-bold text-orange-500 select-none mb-8'>
                 WIN
               </h2>
-              <p className='text-3xl text-white/90 max-w-3xl text-center font-medium'>
+              <p className='text-3xl text-zinc-400 max-w-3xl text-center font-medium'>
                 Join thousands of traders using SwapSmith. Experience the future of decentralized trading today.
               </p>
             </li>
