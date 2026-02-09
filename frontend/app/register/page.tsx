@@ -1,17 +1,34 @@
 'use client'
 import { useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-import { Zap, User, Mail, Lock, ArrowRight } from 'lucide-react'
+import { Zap, User, Mail, Lock, ArrowRight, AlertCircle, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
 export default function RegisterPage() {
-  const { register } = useAuth()
+  // Pull register function and isLoading state from our Firebase hook
+  const { register, isLoading } = useAuth()
   const [formData, setFormData] = useState({ name: '', email: '', password: '' })
+  const [error, setError] = useState('')
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError('') // Reset error state
+
     if (formData.name && formData.email && formData.password) {
-      register(formData)
+      try {
+        // Firebase expects email and password
+        // You can save the 'name' to Firebase Profile or Firestore later
+        await register(formData.email, formData.password)
+      } catch (err: any) {
+        // Handle common Firebase errors professionally
+        if (err.includes('email-already-in-use')) {
+          setError('This email is already registered.')
+        } else if (err.includes('weak-password')) {
+          setError('Password should be at least 6 characters.')
+        } else {
+          setError('Failed to create account. Please try again.')
+        }
+      }
     }
   }
 
@@ -25,9 +42,17 @@ export default function RegisterPage() {
             <div className="inline-flex p-3 bg-blue-600/10 rounded-2xl border border-blue-500/20 mb-4">
               <Zap className="w-6 h-6 text-blue-500" fill="currentColor" />
             </div>
-            <h1 className="text-3xl font-black tracking-tighter uppercase italic">Create Account</h1>
+            <h1 className="text-3xl font-black tracking-tighter uppercase italic text-white">Create Account</h1>
             <p className="text-zinc-500 text-sm">Join the voice-activated trading revolution.</p>
           </div>
+
+          {/* Error Message Display */}
+          {error && (
+            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-500 text-xs font-bold uppercase tracking-tight animate-in fade-in slide-in-from-top-1">
+              <AlertCircle className="w-4 h-4" />
+              {error}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="relative group">
@@ -35,8 +60,9 @@ export default function RegisterPage() {
               <input 
                 type="text" 
                 required
+                disabled={isLoading}
                 placeholder="Full Name"
-                className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-blue-500/50 transition-all"
+                className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-blue-500/50 transition-all disabled:opacity-50"
                 onChange={(e) => setFormData({...formData, name: e.target.value})}
               />
             </div>
@@ -46,8 +72,9 @@ export default function RegisterPage() {
               <input 
                 type="email" 
                 required
+                disabled={isLoading}
                 placeholder="Email Address"
-                className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-blue-500/50 transition-all"
+                className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-blue-500/50 transition-all disabled:opacity-50"
                 onChange={(e) => setFormData({...formData, email: e.target.value})}
               />
             </div>
@@ -57,14 +84,26 @@ export default function RegisterPage() {
               <input 
                 type="password" 
                 required
+                disabled={isLoading}
                 placeholder="Password"
-                className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-blue-500/50 transition-all"
+                className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-blue-500/50 transition-all disabled:opacity-50"
                 onChange={(e) => setFormData({...formData, password: e.target.value})}
               />
             </div>
 
-            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-widest py-4 rounded-2xl transition-all flex items-center justify-center gap-2 group">
-              Initialize Profile <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            <button 
+              type="submit" 
+              disabled={isLoading}
+              className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 text-white font-black uppercase tracking-widest py-4 rounded-2xl transition-all flex items-center justify-center gap-2 group shadow-lg shadow-blue-600/20"
+            >
+              {isLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <>
+                  Initialize Profile 
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </>
+              )}
             </button>
           </form>
 
