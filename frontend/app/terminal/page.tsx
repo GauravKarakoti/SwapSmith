@@ -5,14 +5,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAccount } from 'wagmi';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
-import WalletConnector from '@/components/WalletConnector';
 import ClaudeChatInput from '@/components/ClaudeChatInput';
 import SwapConfirmation from '@/components/SwapConfirmation';
 import IntentConfirmation from '@/components/IntentConfirmation';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
-import { MessageCircle, Plus, Clock, Settings, HelpCircle, PanelLeftClose, PanelLeft, Zap, LogOut } from 'lucide-react';
+import { MessageCircle, Plus, Clock, Settings, HelpCircle, PanelLeftClose, PanelLeft } from 'lucide-react';
 
 interface QuoteData {
   depositAmount: string;
@@ -36,7 +35,6 @@ interface Message {
 }
 
 export default function TerminalPage() {
-  const { logout } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [chatHistory, setChatHistory] = useState([
     { id: 1, title: "Swap ETH to USDC", timestamp: "2 hours ago" },
