@@ -54,8 +54,11 @@ export async function createQuote(
       }
     );
     return { ...response.data, id: response.data.id };
-  } catch (error: any) {
-    throw new Error(error.response?.data?.error?.message || 'Failed to create quote');
+  } catch (error: unknown) {  // ✅ FIXED: Changed from any to unknown
+    if (axios.isAxiosError(error)) {
+      throw new Error(error.response?.data?.error?.message || 'Failed to create quote');
+    }
+    throw new Error('Failed to create quote');
   }
 }
 
@@ -75,8 +78,8 @@ export async function createCheckout(
         settleAmount: settleAmount.toString(),
         affiliateId: AFFILIATE_ID,
         settleAddress: settleAddress,
-        successUrl: 'https://sideshift.ai/success', // Added required field
-        cancelUrl: 'https://sideshift.ai/cancel',   // Added required field
+        successUrl: 'https://sideshift.ai/success',
+        cancelUrl: 'https://sideshift.ai/cancel',
       },
       {
         headers: {
@@ -93,7 +96,10 @@ export async function createCheckout(
         settleAmount: response.data.settleAmount,
         settleCoin: response.data.settleCoin
     };
-  } catch (error: any) {
-    throw new Error(error.response?.data?.error?.message || 'Failed to create checkout');
+  } catch (error: unknown) {  // ✅ Already fixed
+    if (axios.isAxiosError(error)) {
+      throw new Error(error.response?.data?.error?.message || 'Failed to create checkout');
+    }
+    throw new Error('Failed to create checkout');
   }
 }

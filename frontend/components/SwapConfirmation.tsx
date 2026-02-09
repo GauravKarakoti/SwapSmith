@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { CheckCircle, AlertCircle, ExternalLink, Copy, Check, ShieldCheck } from 'lucide-react'
-import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi' // Added usePublicClient
+import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi'
 import { parseEther, type Chain } from 'viem'
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
 
@@ -83,7 +83,7 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
     }
 
     const transactionDetails = {
-      to: address, // Note: Ideally this should be the SideShift deposit address generated from an Order
+      to: address,
       value: parseEther(quote.depositAmount),
       chainId: depositChainId,
     };
@@ -97,8 +97,8 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
         await switchChainAsync({ chainId: depositChainId });
       }
       sendTransaction(transactionDetails);
-    } catch (e) {
-      const switchError = e as Error;
+    } catch (e: unknown) {  // ✅ FIXED: Changed from implicit any to unknown
+      const switchError = e instanceof Error ? e : new Error('Unknown error');
       console.error('Failed to switch network or send transaction:', switchError);
       if (switchError.message.includes('User rejected the request')) {
         alert('You rejected the network switch request. Please approve it to continue.');
@@ -138,10 +138,10 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
 
         setSimulationPassed(true);
 
-    } catch (error: any) {
+    } catch (error: unknown) {  // ✅ FIXED: Changed from any to unknown
         console.error("Simulation failed:", error);
         // Extract meaningful error message
-        const msg = error.shortMessage || error.message || "Transaction likely to fail";
+        const msg = error instanceof Error ? (error as Error & { shortMessage?: string }).shortMessage || error.message : "Transaction likely to fail";
         
         if (msg.includes("insufficient funds")) {
             alert(`Simulation Failed: Insufficient funds for ${quote.depositAmount} ${quote.depositCoin} + Gas.`);
@@ -164,8 +164,8 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
         setCopiedMemo(true)
         setTimeout(() => setCopiedMemo(false), 2000)
       }
-    } catch (err) {
-      console.error('Failed to copy:', err)
+    } catch (err: unknown) {  // ✅ FIXED: Changed from implicit any to unknown
+      console.error('Failed to copy:', err);
     }
   }
 

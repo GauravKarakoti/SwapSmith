@@ -8,12 +8,26 @@ import TrustIndicators from './TrustIndicators';
 import IntentConfirmation from './IntentConfirmation';
 import { ParsedCommand } from '@/utils/groq-client';
 
+// ✅ Type definitions for message data
+interface CheckoutData {
+  url: string;
+}
+
+interface SwapData {
+  quoteData: unknown;
+  confidence: number;
+}
+
+interface IntentData {
+  parsedCommand: ParsedCommand;
+}
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
   type?: 'message' | 'intent_confirmation' | 'swap_confirmation' | 'yield_info' | 'checkout_link';
-  data?: any;
+  data?: unknown;
 }
 
 export default function ChatInterface() {
@@ -243,9 +257,10 @@ export default function ChatInterface() {
         await executeSwap(command);
       }
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      addMessage({ role: 'assistant', content: `Error processing request: ${error.message || 'Unknown error'}`, type: 'message' });
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      addMessage({ role: 'assistant', content: `Error processing request: ${message}`, type: 'message' });
     } finally {
       setIsLoading(false);
     }
@@ -282,8 +297,9 @@ export default function ChatInterface() {
         type: 'swap_confirmation',
         data: { quoteData: quote, confidence: command.confidence }
       });
-    } catch (error: any) {
-      addMessage({ role: 'assistant', content: `Error: ${error.message}`, type: 'message' });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      addMessage({ role: 'assistant', content: `Error: ${message}`, type: 'message' });
     }
   };
 
@@ -332,23 +348,34 @@ export default function ChatInterface() {
                         <p className="font-semibold text-blue-900 mb-3 text-sm">{msg.content}</p>
                         
                         <div className="flex flex-col gap-2">
-                            <a href={msg.data.url} target="_blank" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 block w-full font-medium text-sm transition-colors">
+                            {/* ✅ FIXED: Single cast to CheckoutData */}
+                            <a href={(msg.data as CheckoutData)?.url} target="_blank" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 block w-full font-medium text-sm transition-colors">
                                 Pay Now ↗
                             </a>
                             
                             <button 
-                                onClick={() => copyToClipboard(msg.data.url)}
+                                onClick={() => copyToClipboard((msg.data as CheckoutData)?.url)}
                                 className="flex items-center justify-center gap-2 bg-white border border-blue-300 text-blue-700 px-4 py-2 rounded hover:bg-blue-50 w-full text-sm transition-colors"
                             >
-                                {copiedLink === msg.data.url ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                                {copiedLink === msg.data.url ? 'Copied Link!' : 'Copy Link'}
+                                {copiedLink === (msg.data as CheckoutData)?.url ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                                {copiedLink === (msg.data as CheckoutData)?.url ? 'Copied Link!' : 'Copy Link'}
                             </button>
                         </div>
                     </div>
                 ) : msg.type === 'intent_confirmation' ? (
-                    <IntentConfirmation command={msg.data?.parsedCommand} onConfirm={handleIntentConfirm} />
+                    /* ✅ FIXED: Single cast to IntentData */
+                    <IntentConfirmation command={(msg.data as IntentData)?.parsedCommand} onConfirm={handleIntentConfirm} />
                 ) : msg.type === 'swap_confirmation' ? (
-                    <SwapConfirmation quote={msg.data?.quoteData} confidence={msg.data?.confidence} />
+                    /* ✅ FIXED: Single cast to SwapData and reuse */
+                    (() => {
+                        const swapData = msg.data as SwapData;
+                        return (
+                            <SwapConfirmation 
+                                quote={swapData?.quoteData} 
+                                confidence={swapData?.confidence} 
+                            />
+                        );
+                    })()
                 ) : (
                     <div className={`p-3 rounded-lg ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-800 shadow-sm'}`}>
                         <div className="whitespace-pre-line text-sm">{msg.content}</div>

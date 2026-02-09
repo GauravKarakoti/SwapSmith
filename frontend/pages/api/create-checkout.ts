@@ -19,7 +19,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // ✅ Pass settleAddress to the function
     const result = await createCheckout(settleAsset, settleNetwork, settleAmount, settleAddress, userIP);
     res.status(200).json(result);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    res.status(500).json({ error: message });
   }
 }

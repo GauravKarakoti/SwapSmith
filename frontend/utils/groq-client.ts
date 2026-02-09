@@ -99,7 +99,7 @@ export async function parseUserCommand(userInput: string): Promise<ParsedCommand
 
     const parsed = JSON.parse(completion.choices[0].message.content || '{}');
     return validateParsedCommand(parsed, userInput);
-  } catch (error) {
+  } catch (error: unknown) {  // ✅ FIXED: Changed from implicit any to unknown
     console.error("Error parsing command:", error);
     return {
       success: false,
@@ -121,7 +121,7 @@ export async function transcribeAudio(audioFile: File): Promise<string> {
       response_format: "json",
     });
     return transcription.text;
-  } catch (error) {
+  } catch (error: unknown) {  // ✅ FIXED: Changed from implicit any to unknown
     console.error("Transcription Error:", error);
     throw new Error("Failed to transcribe audio");
   }
