@@ -320,16 +320,16 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
     const userId = ctx.from.id;
     const state = await db.getConversationState(userId);
 
-    if (state?.parsedCommand && (state.parsedCommand.intent === 'swap' || state.parsedCommand.intent === 'checkout') && !state.parsedCommand.settleAddress) {
+    if (state?.parsedCommand && (state.parsedCommand.intent === 'swap' || state.parsedCommand.intent === 'checkout' || state.parsedCommand.intent === 'portfolio') && !state.parsedCommand.settleAddress) {
         const potentialAddress = text.trim();
-        const targetChain = state.parsedCommand.toChain || state.parsedCommand.settleNetwork;
+        const targetChain = state.parsedCommand.toChain || state.parsedCommand.settleNetwork || state.parsedCommand.fromChain;
 
         if (isValidAddress(potentialAddress, targetChain)) {
             const updatedCommand = { ...state.parsedCommand, settleAddress: potentialAddress };
             await db.setConversationState(userId, { parsedCommand: updatedCommand });
             await ctx.reply(`Address received: \`${potentialAddress}\``, { parse_mode: 'Markdown' });
 
-            const confirmAction = updatedCommand.intent === 'checkout' ? 'confirm_checkout' : 'confirm_swap';
+            const confirmAction = updatedCommand.intent === 'checkout' ? 'confirm_checkout' : updatedCommand.intent === 'portfolio' ? 'confirm_portfolio' : 'confirm_swap';
             return ctx.reply("Ready to proceed?", Markup.inlineKeyboard([
                 Markup.button.callback('✅ Yes', confirmAction),
                 Markup.button.callback('❌ No', 'cancel_swap')
@@ -419,21 +419,18 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
     }
 
     if (parsed.intent === 'portfolio') {
+        if (!parsed.settleAddress) {
+            await db.setConversationState(userId, { parsedCommand: parsed });
+            let msg = `📊 *Portfolio Strategy Detected*\nInput: ${parsed.amount} ${parsed.fromAsset}\n\n*Allocation Plan:*\n`;
+            parsed.portfolio?.forEach(item => { msg += `• ${item.percentage}% → ${item.toAsset} on ${item.toChain}\n`; });
+            msg += `\nPlease provide your destination wallet address to receive the assets.`;
+            return ctx.replyWithMarkdown(msg);
+        }
+
         await db.setConversationState(userId, { parsedCommand: parsed });
-        let msg = `📊 *Portfolio Strategy Detected*\nInput: ${parsed.amount} ${parsed.fromAsset}\n\n*Allocation Plan:*\n`;
-        parsed.portfolio?.forEach(item => { msg += `• ${item.percentage}% → ${item.toAsset} on ${item.toChain}\n`; });
-
-        const params = new URLSearchParams({
-            mode: 'portfolio',
-            data: JSON.stringify(parsed.portfolio),
-            amount: parsed.amount?.toString() || '0',
-            token: parsed.fromAsset || '',
-            chain: parsed.fromChain || ''
-        });
-
-        return ctx.replyWithMarkdown(msg, Markup.inlineKeyboard([
-            Markup.button.webApp('📱 Batch Sign', `${MINI_APP_URL}?${params.toString()}`),
-            Markup.button.callback('❌ Cancel', 'cancel_swap')
+        return ctx.reply("Ready to execute portfolio swap?", Markup.inlineKeyboard([
+            Markup.button.callback('✅ Yes', 'confirm_portfolio'),
+            Markup.button.callback('❌ No', 'cancel_swap')
         ]));
     }
 
@@ -558,6 +555,158 @@ bot.action('confirm_checkout', async (ctx) => {
         });
     } catch (error) {
         ctx.editMessageText(`Error creating link.`);
+    } finally {
+        db.clearConversationState(userId);
+    }
+});
+
+bot.action('confirm_portfolio', async (ctx) => {
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+    if (!state?.parsedCommand || state.parsedCommand.intent !== 'portfolio') return ctx.answerCbQuery('Session expired.');
+
+    try {
+        await ctx.answerCbQuery('Creating portfolio swaps...');
+        const { fromAsset, fromChain, amount, portfolio, settleAddress } = state.parsedCommand;
+        
+        if (!portfolio || portfolio.length === 0) {
+            return ctx.editMessageText('❌ No portfolio allocation found.');
+        }
+
+        // Create quotes for each allocation
+        const quotes: Array<{ quote: any; allocation: any; swapAmount: number }> = [];
+        let quoteSummary = `📊 *Portfolio Swap Summary*\n\nFrom: ${amount} ${fromAsset} on ${fromChain}\n\n*Swaps:*\n`;
+
+        for (const allocation of portfolio) {
+            const swapAmount = (amount! * allocation.percentage) / 100;
+            
+            try {
+                const quote = await createQuote(
+                    fromAsset!,
+                    fromChain!,
+                    allocation.toAsset,
+                    allocation.toChain,
+                    swapAmount,
+                    '1.1.1.1'
+                );
+
+                if (quote.error) {
+                    throw new Error(`${allocation.toAsset}: ${quote.error.message}`);
+                }
+
+                quotes.push({ quote, allocation, swapAmount });
+                quoteSummary += `• ${allocation.percentage}% (${swapAmount} ${fromAsset}) → ~${quote.settleAmount} ${allocation.toAsset}\n`;
+            } catch (error) {
+                return ctx.editMessageText(`❌ Failed to create quote for ${allocation.toAsset}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+        }
+
+        // Store quotes in state
+        await db.setConversationState(userId, { 
+            ...state, 
+            portfolioQuotes: quotes.map(q => ({ 
+                quoteId: q.quote.id, 
+                allocation: q.allocation, 
+                swapAmount: q.swapAmount,
+                settleAmount: q.quote.settleAmount
+            }))
+        });
+
+        quoteSummary += `\nReady to place orders?`;
+
+        ctx.editMessageText(quoteSummary, {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+                Markup.button.callback('✅ Place Orders', 'place_portfolio_orders'),
+                Markup.button.callback('❌ Cancel', 'cancel_swap')
+            ])
+        });
+    } catch (error) {
+        ctx.editMessageText(`Error: ${error instanceof Error ? error.message : 'Unknown'}`);
+    }
+});
+
+bot.action('place_portfolio_orders', async (ctx) => {
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+    if (!state?.portfolioQuotes || !state.parsedCommand) return ctx.answerCbQuery('Session expired.');
+
+    try {
+        await ctx.answerCbQuery('Placing orders...');
+        const { settleAddress, fromAsset, fromChain, amount } = state.parsedCommand;
+        const orders: Array<{ order: any; allocation: any; quoteId: string }> = [];
+
+        // Create orders for each quote
+        for (const quoteData of state.portfolioQuotes) {
+            try {
+                const order = await createOrder(quoteData.quoteId, settleAddress!, settleAddress!);
+                if (!order.id) throw new Error(`Failed to create order for ${quoteData.allocation.toAsset}`);
+
+                // Store each order in database
+                const orderCommand = {
+                    ...state.parsedCommand,
+                    toAsset: quoteData.allocation.toAsset,
+                    toChain: quoteData.allocation.toChain,
+                    amount: quoteData.swapAmount
+                };
+                db.createOrderEntry(userId, orderCommand, order, quoteData.settleAmount, quoteData.quoteId);
+
+                orders.push({ order, allocation: quoteData.allocation, quoteId: quoteData.quoteId });
+            } catch (error) {
+                return ctx.editMessageText(`❌ Failed to create order for ${quoteData.allocation.toAsset}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+        }
+
+        // For portfolio swaps, we need to execute multiple transactions
+        // The user will need to send the full amount to the first order's deposit address
+        // Then the system will handle the splits via SideShift
+        const firstOrder = orders[0].order;
+        const rawDepositAddress = typeof firstOrder.depositAddress === 'string' ? firstOrder.depositAddress : firstOrder.depositAddress.address;
+        const depositMemo = typeof firstOrder.depositAddress === 'object' ? firstOrder.depositAddress.memo : null;
+
+        const chainKey = fromChain?.toLowerCase() || 'ethereum';
+        const assetKey = fromAsset?.toUpperCase() || 'ETH';
+        const totalAmount = amount!;
+        
+        // Use dynamic token resolver
+        const tokenData = await tokenResolver.getTokenInfo(assetKey, chainKey);
+
+        let txTo = rawDepositAddress, txValueHex = '0x0', txData = '0x';
+
+        if (tokenData) {
+            // ERC20 token
+            txTo = tokenData.address;
+            const amountBigInt = ethers.parseUnits(totalAmount.toString(), tokenData.decimals);
+            const iface = new ethers.Interface(ERC20_ABI);
+            txData = iface.encodeFunctionData("transfer", [rawDepositAddress, amountBigInt]);
+        } else {
+            // Native token
+            const amountBigInt = ethers.parseUnits(totalAmount.toString(), 18);
+            txValueHex = '0x' + amountBigInt.toString(16);
+            if (depositMemo) txData = ethers.hexlify(ethers.toUtf8Bytes(depositMemo));
+        }
+
+        const params = new URLSearchParams({
+            to: txTo, value: txValueHex, data: txData,
+            chainId: chainIdMap[chainKey] || '1',
+            token: assetKey, amount: totalAmount.toString()
+        });
+
+        let orderSummary = `✅ *Portfolio Orders Created!*\n\n*Orders:*\n`;
+        orders.forEach((o, i) => {
+            orderSummary += `${i + 1}. Order ${o.order.id.substring(0, 8)}... → ${o.allocation.toAsset}\n`;
+        });
+        orderSummary += `\nSign the transaction to complete all swaps.`;
+
+        ctx.editMessageText(orderSummary, {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+                Markup.button.webApp('📱 Sign Transaction', `${MINI_APP_URL}?${params.toString()}`),
+                Markup.button.callback('❌ Close', 'cancel_swap')
+            ])
+        });
+    } catch (error) {
+        ctx.editMessageText(`Failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
         db.clearConversationState(userId);
     }
