@@ -98,24 +98,12 @@ export default function Navbar({
           {/* Nav Links */}
 
           <Link
-            href="/"
+            href="/terminal"
             className={`text-sm font-semibold transition-colors px-2 sm:px-3 py-2 ${
               pathname === "/" ? "text-white" : "text-zinc-400 hover:text-white"
             }`}
           >
             Home
-          </Link>
-
-          <Link
-            href="/about"
-            className={`flex items-center gap-2 text-sm font-semibold transition-colors px-2 sm:px-3 py-2 ${
-              pathname === "/about"
-                ? "text-white"
-                : "text-zinc-400 hover:text-white"
-            }`}
-          >
-            <HelpCircle className="w-5 h-5" />
-            About
           </Link>
 
           <Link

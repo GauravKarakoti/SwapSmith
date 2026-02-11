@@ -5,8 +5,8 @@ import { motion, useMotionValue, useSpring } from 'framer-motion'
 import { Zap, Mic, Shield, ArrowRight, Wallet, MessageSquare, CheckCircle, ListChecks, BarChart3, Sparkles, TrendingUp } from 'lucide-react'
 import { useEffect, useState, useRef } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-// Removed: import { ReactLenis } from 'lenis/react'
-// Removed: import { animate, scroll } from 'motion' 
+import { ReactLenis } from 'lenis/react'
+import { animate, scroll } from 'motion' 
 import Footer from '@/components/Footer'
 import Navbar from '@/components/Navbar'
 import { RandomizedTextEffect } from '@/components/RandomizedTextEffect'
@@ -404,11 +404,11 @@ export default function LandingPage() {
   ]
 
   return (
-    <>
+    <ReactLenis root>
       {/* Main Landing Page Content */}
       <div className="min-h-screen bg-[#030308] text-white selection:bg-cyan-500/30 font-sans overflow-x-hidden">
-        {/* Animated background gradient */}
-        <div className="fixed inset-0 pointer-events-none">
+      {/* Animated background gradient */}
+      <div className="fixed inset-0 pointer-events-none">
         <motion.div
           className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-pink-500/10 rounded-full blur-[150px]"
           animate={{
@@ -831,7 +831,7 @@ export default function LandingPage() {
                         <div className="w-4 h-4 rounded-full border border-white/20" />
                      </div>
                   </div>
-               </div>z
+               </div>
             </div>
             
             {/* Background Glow */}
@@ -1021,6 +1021,6 @@ export default function LandingPage() {
         </footer>
         <Footer/>
       </article>
-    </>
-  );
+    </ReactLenis>
+  )
 }
