@@ -5,6 +5,8 @@ import { parseUserCommand, transcribeAudio } from './services/groq-client';
 import { createQuote, createOrder, createCheckout, getOrderStatus } from './services/sideshift-client';
 import { getTopStablecoinYields } from './services/yield-client'; 
 import * as db from './services/database';
+import { startLimitOrderWorker } from './workers/limitOrderWorker';
+import { parseLimitOrder } from './utils/parseLimitOrder';
 import { ethers } from 'ethers';
 import axios from 'axios';
 import fs from 'fs';
@@ -16,6 +18,9 @@ dotenv.config();
 const MINI_APP_URL = process.env.MINI_APP_URL!;
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 const bot = new Telegraf(process.env.BOT_TOKEN!);
+
+// Start Limit Order Worker
+startLimitOrderWorker(bot);
 
 // --- FFMPEG CHECK ---
 try {
@@ -199,10 +204,71 @@ bot.on(message('voice'), async (ctx) => {
     }
 });
 
+function inferNetwork(asset: string): string {
+  const map: Record<string, string> = {
+    'BTC': 'bitcoin',
+    'ETH': 'ethereum',
+    'SOL': 'solana',
+    'USDT': 'ethereum',
+    'USDC': 'ethereum',
+    'DAI': 'ethereum',
+    'WBTC': 'ethereum',
+    'BNB': 'bsc',
+    'AVAX': 'avalanche',
+    'MATIC': 'polygon',
+    'ARB': 'arbitrum',
+    'OP': 'optimism',
+    'BASE': 'base'
+  };
+  return map[asset?.toUpperCase()] || 'ethereum';
+}
+
 async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'voice' = 'text') {
   const userId = ctx.from.id;
+
+  // NEW: Check for limit order pattern first
+  const limitOrder = parseLimitOrder(text);
+  if (limitOrder.success) {
+      await db.setConversationState(userId, {
+          intent: 'limit_order',
+          data: limitOrder,
+          step: 'awaiting_address'
+      });
+
+      return ctx.reply(
+          `👍 I understood: Swap ${limitOrder.amount} ${limitOrder.fromAsset} for ${limitOrder.toAsset} ` +
+          `if ${limitOrder.conditionAsset || limitOrder.toAsset} is ${limitOrder.conditionType} $${limitOrder.targetPrice}.\n\n` +
+          `Please enter the destination ${limitOrder.toAsset} wallet address:`
+      );
+  }
   
   const state = await db.getConversationState(userId); 
+
+  // Check if we are in 'limit_order' flow
+  if (state?.intent === 'limit_order' && state.step === 'awaiting_address') {
+      const address = text.trim();
+      if (address.length < 10) return ctx.reply("Address too short. Please try again or /clear.");
+
+      const orderData = state.data;
+      const fromNetwork = inferNetwork(orderData.fromAsset);
+      const toNetwork = inferNetwork(orderData.toAsset);
+
+      await db.createLimitOrder({
+          telegramId: userId,
+          fromAsset: orderData.fromAsset,
+          toAsset: orderData.toAsset,
+          fromNetwork: fromNetwork,
+          toNetwork: toNetwork,
+          amount: orderData.amount,
+          conditionAsset: orderData.conditionAsset || orderData.toAsset,
+          conditionType: orderData.conditionType,
+          targetPrice: orderData.targetPrice,
+          settleAddress: address
+      });
+
+      await db.clearConversationState(userId);
+      return ctx.reply(`✅ Limit Order Created! I'll watch the price for you.`);
+  }
   
   // 1. Check for pending address input
   if (state?.parsedCommand && (state.parsedCommand.intent === 'swap' || state.parsedCommand.intent === 'checkout') && !state.parsedCommand.settleAddress) {
