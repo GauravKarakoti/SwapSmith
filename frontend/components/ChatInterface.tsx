@@ -2,19 +2,39 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useAccount } from 'wagmi';
-import { Mic, Send, StopCircle, Copy, Check, Sparkles, Command } from 'lucide-react';
+import { Mic, Send, StopCircle, Zap } from 'lucide-react';
 import SwapConfirmation from './SwapConfirmation';
 import TrustIndicators from './TrustIndicators';
 import IntentConfirmation from './IntentConfirmation';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
+import { useAudioRecorder } from '@/hooks/useAudioRecorder';
+
+// Import QuoteData type from SwapConfirmation
+interface QuoteData {
+  depositAmount: string;
+  depositCoin: string;
+  depositNetwork: string;
+  rate: string;
+  settleAmount: string;
+  settleCoin: string;
+  settleNetwork: string;
+  memo?: string;
+  expiry?: string;
+  id?: string;
+}
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
   type?: 'message' | 'intent_confirmation' | 'swap_confirmation' | 'yield_info' | 'checkout_link';
-  data?: any;
+  data?: { 
+    parsedCommand?: ParsedCommand; 
+    quoteData?: QuoteData; 
+    confidence?: number;
+    url?: string;
+  };
 }
 
 export default function ChatInterface() {
@@ -28,54 +48,61 @@ export default function ChatInterface() {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
   const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
-  const [copiedLink, setCopiedLink] = useState<string | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { address, isConnected } = useAccount();
   const { handleError } = useErrorHandler();
   
-  // MediaRecorder ref
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  // Use cross-browser audio recorder with simplified approach
+  const { 
+    isRecording, 
+    isSupported: isAudioSupported, 
+    startRecording, 
+    stopRecording, 
+    error: audioError
+  } = useAudioRecorder({
+    sampleRate: 16000,
+    numberOfAudioChannels: 1
+  });
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Show audio error if any
+  useEffect(() => {
+    if (audioError) {
+      addMessage({ role: 'assistant', content: audioError, type: 'message' });
+    }
+  }, [audioError]);
+
+  const formatTime = (date: Date) => {
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    return `${displayHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+  };
+
   const addMessage = (message: Omit<Message, 'timestamp'>) => {
     setMessages(prev => [...prev, { ...message, timestamp: new Date() }]);
   };
 
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedLink(text);
-      setTimeout(() => setCopiedLink(null), 2000);
-    } catch (err) {
-      console.error('Failed to copy', err);
+  // Voice recording handlers (reserved for future UI integration)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _handleStartRecording = async () => {
+    if (!isAudioSupported) {
+      addMessage({ 
+        role: 'assistant', 
+        content: `Voice input is not supported in this browser. Please use text input instead.`, 
+        type: 'message' 
+      });
+      return;
     }
-  };
 
-  const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) audioChunksRef.current.push(event.data);
-      };
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        await handleVoiceInput(audioBlob);
-      };
-
-      mediaRecorder.start();
-      setIsRecording(true);
+      await startRecording();
     } catch (err) {
       const errorMessage = handleError(err, ErrorType.VOICE_ERROR, { 
         operation: 'microphone_access',
@@ -85,11 +112,19 @@ export default function ChatInterface() {
     }
   };
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _handleStopRecording = async () => {
+    try {
+      const audioBlob = await stopRecording();
+      if (audioBlob) {
+        await handleVoiceInput(audioBlob);
+      }
+    } catch (err) {
+      const errorMessage = handleError(err, ErrorType.VOICE_ERROR, { 
+        operation: 'stop_recording',
+        retryable: true 
+      });
+      addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
     }
   };
 
@@ -98,7 +133,18 @@ export default function ChatInterface() {
     addMessage({ role: 'user', content: '🎤 [Sending Voice...]', type: 'message' });
     
     const formData = new FormData();
-    formData.append('file', audioBlob, 'voice.webm');
+    
+    // Determine file extension based on blob type and browser
+    let fileName = 'voice.webm';
+    if (audioBlob.type.includes('mp4')) {
+      fileName = 'voice.mp4';
+    } else if (audioBlob.type.includes('wav')) {
+      fileName = 'voice.wav';
+    } else if (audioBlob.type.includes('ogg')) {
+      fileName = 'voice.ogg';
+    }
+    
+    formData.append('file', audioBlob, fileName);
 
     try {
         const response = await fetch('/api/transcribe', {
@@ -251,7 +297,7 @@ export default function ChatInterface() {
         await executeSwap(command);
       }
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       const errorMessage = handleError(error, ErrorType.API_FAILURE, { 
         operation: 'command_processing',
         retryable: true 
@@ -293,7 +339,7 @@ export default function ChatInterface() {
         type: 'swap_confirmation',
         data: { quoteData: quote, confidence: command.confidence }
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       const errorMessage = handleError(error, ErrorType.API_FAILURE, { 
         operation: 'swap_quote',
         retryable: true 
@@ -336,7 +382,7 @@ return (
       <div className="px-6 py-4 bg-white/[0.02] border-b border-white/5 flex justify-between items-center backdrop-blur-md">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-blue-500/10 rounded-lg">
-            <Sparkles className="w-4 h-4 text-blue-400" />
+            <Zap className="w-4 h-4 text-blue-400" />
           </div>
           <div>
             <h3 className="text-sm font-bold text-white tracking-tight">SwapSmith AI</h3>
@@ -355,28 +401,26 @@ return (
           <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2`}>
             <div className={`max-w-[85%] ${msg.role === 'user' ? 'order-1' : 'order-2'}`}>
               
-              {/* User Message: Clean & Right-aligned */}
               {msg.role === 'user' ? (
                 <div className="bg-blue-600 text-white px-5 py-3 rounded-2xl rounded-tr-none shadow-lg shadow-blue-600/20 text-sm font-medium">
                   {msg.content}
                 </div>
               ) : (
-                /* Assistant Message: Subtle & Framed */
+                
                 <div className="space-y-3">
                   <div className="bg-white/[0.04] border border-white/10 text-gray-200 px-5 py-4 rounded-2xl rounded-tl-none text-sm leading-relaxed backdrop-blur-sm">
-                    {/* Render different types (yield, swap, etc) within this styled frame */}
                     {msg.type === 'message' && <div className="whitespace-pre-line">{msg.content}</div>}
                     {msg.type === 'yield_info' && <div className="font-mono text-xs text-blue-300">{msg.content}</div>}
                     
                     {/* Inject your Custom Components (SwapConfirmation etc) here */}
                     {msg.type === 'intent_confirmation' && <IntentConfirmation command={msg.data?.parsedCommand} onConfirm={handleIntentConfirm} />}
-                    {msg.type === 'swap_confirmation' && <SwapConfirmation quote={msg.data?.quoteData} confidence={msg.data?.confidence} />}
+                    {msg.type === 'swap_confirmation' && msg.data?.quoteData && <SwapConfirmation quote={msg.data.quoteData} confidence={msg.data.confidence} />}
                   </div>
                 </div>
               )}
               
               <p className={`text-[10px] text-gray-500 mt-2 px-1 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
-                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {formatTime(msg.timestamp)}
               </p>
             </div>
           </div>
