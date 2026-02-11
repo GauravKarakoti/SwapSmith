@@ -56,10 +56,29 @@ export const checkouts = pgTable('checkouts', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const limitOrders = pgTable('limit_orders', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
+  fromAsset: text('from_asset').notNull(),
+  toAsset: text('to_asset').notNull(),
+  fromNetwork: text('from_network'), // Can be null if inferred later
+  toNetwork: text('to_network'),     // Can be null if inferred later
+  amount: real('amount').notNull(),
+  conditionAsset: text('condition_asset').notNull(), // The asset to watch price for
+  conditionType: text('condition_type').notNull(), // 'above' | 'below'
+  targetPrice: real('target_price').notNull(),
+  status: text('status').notNull().default('pending'), // 'pending', 'executed', 'cancelled', 'failed'
+  sideshiftOrderId: text('sideshift_order_id'),
+  settleAddress: text('settle_address'),
+  errorMessage: text('error_message'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 // --- TYPE DEFINITIONS ---
 export type User = typeof users.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Checkout = typeof checkouts.$inferSelect;
+export type LimitOrder = typeof limitOrders.$inferSelect;
 
 // --- FUNCTIONS ---
 
@@ -116,7 +135,7 @@ export async function createOrderEntry(
     toNetwork: parsedCommand.toChain!,
     settleAmount: settleAmount.toString(),
     depositAddress: depositAddr!,
-    depositMemo: depositMemo || null
+    depositMemo: depositMemo || null,
   });
 }
 
@@ -157,4 +176,30 @@ export async function getUserCheckouts(telegramId: number): Promise<Checkout[]> 
     .where(eq(checkouts.telegramId, telegramId))
     .orderBy(desc(checkouts.createdAt))
     .limit(10);
+}
+
+// --- LIMIT ORDER FUNCTIONS ---
+
+export async function createLimitOrder(order: Omit<LimitOrder, 'id' | 'createdAt' | 'status' | 'sideshiftOrderId' | 'errorMessage'>) {
+  return await db.insert(limitOrders).values(order).returning();
+}
+
+export async function getPendingLimitOrders(): Promise<LimitOrder[]> {
+  return await db.select().from(limitOrders).where(eq(limitOrders.status, 'pending'));
+}
+
+export async function updateLimitOrderStatus(id: number, status: string, sideshiftOrderId?: string, errorMessage?: string) {
+  const updates: any = { status };
+  if (sideshiftOrderId) updates.sideshiftOrderId = sideshiftOrderId;
+  if (errorMessage) updates.errorMessage = errorMessage;
+
+  await db.update(limitOrders)
+    .set(updates)
+    .where(eq(limitOrders.id, id));
+}
+
+export async function getLimitOrdersByUser(telegramId: number): Promise<LimitOrder[]> {
+  return await db.select().from(limitOrders)
+    .where(eq(limitOrders.telegramId, telegramId))
+    .orderBy(desc(limitOrders.createdAt));
 }

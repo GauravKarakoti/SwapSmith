@@ -18,6 +18,7 @@
   "type": "commonjs",
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
+    "@types/node-cron": "^3.0.11",
     "axios": "^1.12.2",
     "better-sqlite3": "^12.4.1",
     "dotenv": "^17.2.3",
@@ -25,6 +26,7 @@
     "ethers": "^6.13.1",
     "express": "^5.1.0",
     "groq-sdk": "^0.33.0",
+    "node-cron": "^4.2.1",
     "telegraf": "^4.16.3"
   },
   "devDependencies": {
