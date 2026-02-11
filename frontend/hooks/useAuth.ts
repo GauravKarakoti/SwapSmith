@@ -29,8 +29,10 @@ export function useAuth() {
     try {
       await createUserWithEmailAndPassword(auth, email, pass);
       router.push('/terminal');
-    } catch (error: any) {
-      throw error.message;
+    } catch (error) {
+      console.error('Registration error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Registration failed';
+      throw errorMessage;
     } finally {
       setIsLoading(false);
     }
@@ -41,8 +43,10 @@ export function useAuth() {
     try {
       await signInWithEmailAndPassword(auth, email, pass);
       router.push('/terminal');
-    } catch (error: any) {
-      throw error.message;
+    } catch (error) {
+      console.error('Login error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Login failed';
+      throw errorMessage;
     } finally {
       setIsLoading(false);
     }

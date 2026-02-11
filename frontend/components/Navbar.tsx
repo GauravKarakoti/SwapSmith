@@ -1,45 +1,47 @@
 "use client";
 
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
+import { useState, useEffect } from "react";
 import {
   Zap,
-  ArrowRight,
-  PanelLeft,
-  HelpCircle,
+  User,
   LogOut,
-  LineChart,
+  Home,
+  TrendingUp,
+  Terminal as TerminalIcon,
 } from "lucide-react";
-
 import { useAuth } from "@/hooks/useAuth";
-
 import WalletConnector from "./WalletConnector";
 
-interface NavbarProps {
-  isSidebarOpen?: boolean;
-
-  onToggleSidebar?: () => void;
-}
-
-export default function Navbar({
-  isSidebarOpen,
-  onToggleSidebar,
-}: NavbarProps) {
-  const router = useRouter();
-
+export default function Navbar() {
   const pathname = usePathname();
-
-  const { isAuthenticated, logout } = useAuth();
-
+  const { logout, user } = useAuth();
   const isTerminal = pathname === "/terminal";
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
 
-  const handleAppClick = () => {
-    if (isAuthenticated) {
-      router.push("/terminal");
-    } else {
-      router.push("/login");
-    }
-  };
+  // Load profile image from localStorage and listen for changes
+  useEffect(() => {
+    const loadProfileImage = () => {
+      if (user?.uid) {
+        const savedImage = localStorage.getItem(`profile-image-${user.uid}`);
+        setProfileImageUrl(savedImage);
+      } else {
+        setProfileImageUrl(null);
+      }
+    };
+
+    loadProfileImage();
+
+    // Listen for custom event when profile image changes
+    const handleProfileImageChange = () => {
+      loadProfileImage();
+    };
+
+    window.addEventListener('profileImageChanged', handleProfileImageChange);
+    return () => window.removeEventListener('profileImageChanged', handleProfileImageChange);
+  }, [user?.uid]);
 
   return (
     <nav
@@ -53,25 +55,22 @@ export default function Navbar({
         {/* LEFT SECTION */}
 
         <div className="flex items-center gap-4">
-          {/* Logo (Hidden in Terminal if Sidebar is open to prevent double branding) */}
+          {/* Logo - Always visible */}
+          <Link
+            href="/"
+            className="flex items-center gap-2 group hover:opacity-80 transition-opacity"
+          >
+            <div className="bg-blue-600 p-1.5 rounded-lg shadow-lg shadow-blue-600/20">
+              <Zap
+                className="w-4 h-4 sm:w-5 sm:h-5 text-white"
+                fill="white"
+              />
+            </div>
 
-          {(!isTerminal || !isSidebarOpen) && (
-            <Link
-              href="/"
-              className="flex items-center gap-2 group hover:opacity-80 transition-opacity"
-            >
-              <div className="bg-blue-600 p-1.5 rounded-lg shadow-lg shadow-blue-600/20">
-                <Zap
-                  className="w-4 h-4 sm:w-5 sm:h-5 text-white"
-                  fill="white"
-                />
-              </div>
-
-              <span className="text-sm sm:text-lg font-black tracking-tighter uppercase text-white">
-                SwapSmith
-              </span>
-            </Link>
-          )}
+            <span className="text-sm sm:text-lg font-black tracking-tighter uppercase text-white">
+              SwapSmith
+            </span>
+          </Link>
 
           {/* System Status (Terminal Style - High Tech) */}
 
@@ -98,43 +97,91 @@ export default function Navbar({
           {/* Nav Links */}
 
           <Link
-            href="/terminal"
-            className={`text-sm font-semibold transition-colors px-2 sm:px-3 py-2 ${
+            href="/"
+            className={`flex items-center gap-1.5 text-sm font-semibold transition-colors px-2 sm:px-3 py-2 ${
               pathname === "/" ? "text-white" : "text-zinc-400 hover:text-white"
             }`}
           >
-            Home
+            <Home className="w-4 h-4" />
+            <span className="hidden sm:inline">Home</span>
           </Link>
 
           <Link
             href="/prices"
-            className={`flex items-center gap-2 text-sm font-semibold transition-colors px-2 sm:px-3 py-2 ${
+            className={`flex items-center gap-1.5 text-sm font-semibold transition-colors px-2 sm:px-3 py-2 ${
               pathname === "/prices"
                 ? "text-white"
                 : "text-zinc-400 hover:text-white"
             }`}
           >
-            Live Prices
+            <TrendingUp className="w-4 h-4" />
+            <span className="hidden sm:inline">Live Prices</span>
+          </Link>
+
+          <Link
+            href="/terminal"
+            className={`flex items-center gap-1.5 text-sm font-semibold transition-colors px-2 sm:px-3 py-2 ${
+              pathname === "/terminal"
+                ? "text-white"
+                : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            <TerminalIcon className="w-4 h-4" />
+            <span className="hidden sm:inline">Terminal</span>
           </Link>
 
           <div className="flex items-center gap-3">
-            <button className="hidden sm:block p-2 hover:bg-zinc-800 rounded-lg transition-colors">
-              <HelpCircle className="w-5 h-5 text-zinc-400 hover:text-white" />
-            </button>
-
             <div className="h-6 w-px bg-zinc-800 hidden sm:block" />
 
             <WalletConnector />
 
-            <button
-              onClick={logout}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-500 rounded-xl transition-all text-xs font-bold uppercase tracking-widest active:scale-95"
-              title="Logout Terminal"
-            >
-              <LogOut className="w-4 h-4" />
+            <div className="relative">
+              <button
+                onClick={() => setShowProfileMenu(!showProfileMenu)}
+                className="flex items-center gap-2 p-1.5 hover:bg-zinc-800 rounded-full transition-colors"
+                title="Profile Menu"
+              >
+                {profileImageUrl ? (
+                  <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-blue-500">
+                    <img src={profileImageUrl} alt="Profile" className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                    <User className="w-4 h-4 text-white" />
+                  </div>
+                )}
+              </button>
 
-              <span className="hidden md:inline">Logout</span>
-            </button>
+              {showProfileMenu && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setShowProfileMenu(false)}
+                  />
+                  <div className="absolute right-0 mt-2 w-48 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl overflow-hidden z-50">
+                    <Link
+                      href="/profile"
+                      onClick={() => setShowProfileMenu(false)}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 transition-colors text-sm text-zinc-200"
+                    >
+                      <User className="w-4 h-4" />
+                      <span>Profile</span>
+                    </Link>
+                    <div className="h-px bg-zinc-800" />
+                    <button
+                      onClick={() => {
+                        setShowProfileMenu(false);
+                        logout();
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-500/10 transition-colors text-sm text-red-400"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>Logout</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
