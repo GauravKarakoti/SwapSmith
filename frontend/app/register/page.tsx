@@ -16,8 +16,6 @@ export default function RegisterPage() {
 
     if (formData.name && formData.email && formData.password) {
       try {
-        // Firebase expects email and password
-        // You can save the 'name' to Firebase Profile or Firestore later
         await register(formData.email, formData.password)
       } catch (err: any) {
         // Handle common Firebase errors professionally
