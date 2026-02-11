@@ -65,10 +65,20 @@ export const addressBook = pgTable('address_book', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const watchedOrders = pgTable('watched_orders', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
+  sideshiftOrderId: text('sideshift_order_id').notNull().unique(),
+  lastStatus: text('last_status').notNull().default('pending'),
+  lastChecked: timestamp('last_checked').defaultNow(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 export type User = typeof users.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Checkout = typeof checkouts.$inferSelect;
 export type AddressBookEntry = typeof addressBook.$inferSelect;
+export type WatchedOrder = typeof watchedOrders.$inferSelect;
 
 // --- FUNCTIONS ---
 
@@ -203,4 +213,41 @@ export async function resolveNickname(telegramId: number, nickname: string): Pro
     ) // Corrected multi-where syntax
     .limit(1);
   return result[0]?.address || null;
+}
+
+
+// --- WATCHED ORDERS FUNCTIONS ---
+
+export async function addWatchedOrder(telegramId: number, sideshiftOrderId: string, initialStatus: string = 'pending') {
+  await db.insert(watchedOrders)
+    .values({ 
+      telegramId, 
+      sideshiftOrderId, 
+      lastStatus: initialStatus,
+      lastChecked: new Date()
+    })
+    .onConflictDoUpdate({
+      target: watchedOrders.sideshiftOrderId,
+      set: { lastChecked: new Date() }
+    });
+}
+
+export async function removeWatchedOrder(sideshiftOrderId: string) {
+  await db.delete(watchedOrders).where(eq(watchedOrders.sideshiftOrderId, sideshiftOrderId));
+}
+
+export async function getAllWatchedOrders(): Promise<WatchedOrder[]> {
+  return await db.select().from(watchedOrders);
+}
+
+export async function getUserWatchedOrders(telegramId: number): Promise<WatchedOrder[]> {
+  return await db.select().from(watchedOrders)
+    .where(eq(watchedOrders.telegramId, telegramId))
+    .orderBy(desc(watchedOrders.createdAt));
+}
+
+export async function updateWatchedOrderStatus(sideshiftOrderId: string, newStatus: string) {
+  await db.update(watchedOrders)
+    .set({ lastStatus: newStatus, lastChecked: new Date() })
+    .where(eq(watchedOrders.sideshiftOrderId, sideshiftOrderId));
 }
