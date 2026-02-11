@@ -26,6 +26,33 @@ export interface SideShiftCheckoutResponse {
   settleCoin: string;
 }
 
+export interface CoinNetwork {
+  network: string;
+  tokenContract?: string;
+  depositAddressType?: string;
+  depositOffline?: boolean;
+  settleOffline?: boolean;
+}
+
+export interface Coin {
+  coin: string;
+  name: string;
+  networks: CoinNetwork[];
+  chainData?: {
+    chain: string;
+    mainnet: boolean;
+  };
+}
+
+export interface CoinPrice {
+  coin: string;
+  name: string;
+  network: string;
+  usdPrice?: string;
+  btcPrice?: string;
+  available: boolean;
+}
+
 export async function createQuote(
   fromAsset: string, 
   fromNetwork: string, 

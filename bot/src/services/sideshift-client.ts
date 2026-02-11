@@ -3,8 +3,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const SIDESHIFT_BASE_URL = "https://sideshift.ai/api/v2";
-const AFFILIATE_ID = process.env.NEXT_PUBLIC_AFFILIATE_ID;
-const API_KEY = process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
+const AFFILIATE_ID = process.env.SIDESHIFT_AFFILIATE_ID || process.env.NEXT_PUBLIC_AFFILIATE_ID || '';
+const API_KEY = process.env.SIDESHIFT_API_KEY || process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
 
 export interface SideShiftPair {
   depositCoin: string;
@@ -94,6 +94,47 @@ export interface SideShiftCheckoutResponse {
 }
 // --- END NEW ---
 
+// --- NEW: Types and function for Coins API ---
+export interface TokenDetail {
+  contractAddress: string;
+  decimals: number;
+}
+
+export interface SideShiftCoin {
+  networks: string[];
+  coin: string;
+  name: string;
+  hasMemo: boolean;
+  deprecated?: boolean;
+  fixedOnly: string[] | boolean;
+  variableOnly: string[] | boolean;
+  tokenDetails?: Record<string, TokenDetail>; // Object with network as key
+  networksWithMemo: string[];
+  depositOffline: string[] | boolean;
+  settleOffline: string[] | boolean;
+}
+
+export async function getCoins(): Promise<SideShiftCoin[]> {
+  try {
+    const response = await axios.get<SideShiftCoin[]>(
+      `${SIDESHIFT_BASE_URL}/coins`,
+      {
+        headers: { 
+          'x-sideshift-secret': API_KEY,
+          'x-user-ip': '1.1.1.1'
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      throw new Error(error.response?.data?.error?.message || 'Failed to fetch coins');
+    }
+    throw new Error("Failed to fetch coins");
+  }
+}
+// --- END NEW ---
+
 
 export async function getPairs(): Promise<SideShiftPair[]> {
   try {
@@ -161,14 +202,20 @@ export async function createQuote(
 
 export async function createOrder(quoteId: string, settleAddress: string, refundAddress: string): Promise<SideShiftOrder> {
     try {
+        const payload: any = {
+            quoteId,
+            settleAddress,
+            refundAddress,
+        };
+        
+        // Only include affiliateId if it's defined
+        if (AFFILIATE_ID) {
+            payload.affiliateId = AFFILIATE_ID;
+        }
+        
         const response = await axios.post<SideShiftOrder>(
             `${SIDESHIFT_BASE_URL}/shifts/fixed`,
-            {
-                quoteId,
-                settleAddress,
-                refundAddress,
-                affiliateId: AFFILIATE_ID,
-            },
+            payload,
             {
                 headers: {
                     'Content-Type': 'application/json',

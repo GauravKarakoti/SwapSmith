@@ -19,9 +19,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ text });
   } catch (error: unknown) {
     console.error('Transcription API Error:', error);
-    return NextResponse.json(
-      { error: (error as Error).message || 'Transcription failed' },
-      { status: 500 }
-    );
+    const errorObj = error as Error;
+    return NextResponse.json({ error: errorObj.message || 'Transcription failed' }, { status: 500 });
   }
 }

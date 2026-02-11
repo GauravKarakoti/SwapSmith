@@ -18,23 +18,23 @@ export async function getTopStablecoinYields(): Promise<string> {
     // Filter for stablecoins, high APY, major chains, and sufficient TVL
     // ✅ FIXED: Removed all `any` types - TypeScript now infers from YieldPool
     const topPools = data
-      .filter((p) => 
+      .filter((p: { symbol: string; tvlUsd: number; chain: string }) => 
         ['USDC', 'USDT', 'DAI'].includes(p.symbol) && 
         p.tvlUsd > 1000000 && 
         ['Ethereum', 'Polygon', 'Arbitrum', 'Optimism', 'Base', 'Avalanche'].includes(p.chain)
       )
-      .sort((a, b) => b.apy - a.apy)
+      .sort((a: { apy: number }, b: { apy: number }) => b.apy - a.apy)
       .slice(0, 5);
 
     if (topPools.length === 0) throw new Error("No pools found");
 
-    // ✅ FIXED: Removed `any` from map callback
-    return topPools.map((p) => 
+    return topPools.map((p: { symbol: string; chain: string; project: string; apy: number }) => 
       `• ${p.symbol} on ${p.chain} via ${p.project}: **${p.apy.toFixed(2)}% APY**`
     ).join('\n');
 
-  } catch (error) {
-    console.error("Yield fetch error:", error);
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("Yield fetch error:", err);
     return "Could not fetch live yield data at the moment.";
   }
 }

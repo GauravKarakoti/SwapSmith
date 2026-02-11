@@ -1,6 +1,8 @@
 import Groq from "groq-sdk";
 import dotenv from 'dotenv';
 import fs from 'fs';
+import { handleError } from './logger';
+import { analyzeCommand, generateContextualHelp } from './contextual-help';
 
 dotenv.config();
 
@@ -9,7 +11,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 // Enhanced Interface to support Portfolio and Yield
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "unknown";
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "unknown";
   
   // Single Swap Fields
   fromAsset: string | null;
@@ -48,18 +50,30 @@ MODES:
 2. "portfolio": 1 Input -> Multiple Outputs (Split allocation).
 3. "checkout": Payment link creation.
 4. "yield_scout": User asking for high APY/Yield info.
+5. "yield_deposit": Deposit assets into yield platforms, possibly bridging if needed.
 
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
+
+ADDRESS RESOLUTION:
+- Users can specify addresses as raw wallet addresses, ENS names (ending in .eth), Lens handles (ending in .lens), or nicknames from their address book.
+- If an address is specified, include it in settleAddress field.
+- The system will resolve nicknames, ENS, and Lens automatically.
+
+AMBIGUITY HANDLING:
+- If the command is ambiguous (e.g., "swap all my ETH to BTC or USDC"), set confidence low (0-30) and add validation error "Command is ambiguous. Please specify clearly."
+- For complex commands, prefer explicit allocations over assumptions.
+- If multiple interpretations possible, choose the most straightforward and set requiresConfirmation: true.
+- Handle conditional swaps by treating them as portfolio with conditional logic in parsedMessage.
 
 RESPONSE FORMAT:
 {
   "success": boolean,
-  "intent": "swap" | "portfolio" | "checkout" | "yield_scout",
+  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit",
   "fromAsset": string | null,
   "fromChain": string | null,
   "amount": number | null,
   "amountType": "exact" | "percentage" | "all" | null,
-  
+
   // Fill for 'swap'
   "toAsset": string | null,
   "toChain": string | null,
@@ -76,6 +90,7 @@ RESPONSE FORMAT:
   "settleAmount": number | null,
   "settleAddress": string | null,
 
+  "confidence": number,  // 0-100, lower for ambiguous
   "validationErrors": string[],
   "parsedMessage": "Human readable summary",
   "requiresConfirmation": boolean
@@ -83,10 +98,25 @@ RESPONSE FORMAT:
 
 EXAMPLES:
 1. "Split 1 ETH on Base into 50% USDC on Arb and 50% SOL"
-   -> intent: "portfolio", fromAsset: "ETH", fromChain: "base", amount: 1, portfolio: [{toAsset: "USDC", toChain: "arbitrum", percentage: 50}, {toAsset: "SOL", toChain: "solana", percentage: 50}]
+   -> intent: "portfolio", fromAsset: "ETH", fromChain: "base", amount: 1, portfolio: [{toAsset: "USDC", toChain: "arbitrum", percentage: 50}, {toAsset: "SOL", toChain: "solana", percentage: 50}], confidence: 95
 
 2. "Where can I get good yield on stables?"
-   -> intent: "yield_scout"
+   -> intent: "yield_scout", confidence: 100
+
+3. "Swap 1 ETH to BTC or USDC" (ambiguous)
+   -> intent: "swap", fromAsset: "ETH", toAsset: null, confidence: 20, validationErrors: ["Command is ambiguous. Please specify clearly."], requiresConfirmation: true
+
+4. "If ETH > $3000, swap to BTC, else to USDC" (conditional)
+   -> intent: "portfolio", fromAsset: "ETH", portfolio: [{toAsset: "BTC", toChain: "bitcoin", percentage: 100}], confidence: 70, parsedMessage: "Conditional swap: If ETH > $3000, swap to BTC", requiresConfirmation: true
+
+5. "Deposit 1 ETH to yield"
+   -> intent: "yield_deposit", fromAsset: "ETH", amount: 1, confidence: 95
+
+6. "Swap 1 ETH to mywallet"
+   -> intent: "swap", fromAsset: "ETH", toAsset: "BTC", toChain: "bitcoin", amount: 1, settleAddress: "mywallet", confidence: 95
+
+7. "Send 5 USDC to vitalik.eth"
+   -> intent: "checkout", settleAsset: "USDC", settleNetwork: "ethereum", settleAmount: 5, settleAddress: "vitalik.eth", confidence: 95
 `;
 
 export async function parseUserCommand(
@@ -121,7 +151,7 @@ export async function parseUserCommand(
 
     const parsed = JSON.parse(completion.choices[0].message.content || '{}');
     console.log("Parsed:", parsed);
-    return validateParsedCommand(parsed, userInput);
+    return validateParsedCommand(parsed, userInput, inputType);
   } catch (error) {
     console.error("Groq Error:", error);
     return {
@@ -134,16 +164,21 @@ export async function parseUserCommand(
 }
 
 export async function transcribeAudio(mp3FilePath: string): Promise<string> {
-  const transcription = await groq.audio.transcriptions.create({
-      file: fs.createReadStream(mp3FilePath),
-      model: "whisper-large-v3",
-      response_format: "json",
-  });
-  return transcription.text;
+  try {
+    const transcription = await groq.audio.transcriptions.create({
+        file: fs.createReadStream(mp3FilePath),
+        model: "whisper-large-v3",
+        response_format: "json",
+    });
+    return transcription.text;
+  } catch (error) {
+    await handleError('TranscriptionError', { error: error instanceof Error ? error.message : 'Unknown error', filePath: mp3FilePath }, null, false);
+    throw error; // Re-throw to let caller handle
+  }
 }
 
 // --- MISSING FUNCTION RESTORED & UPDATED ---
-function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string): ParsedCommand {
+function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string, inputType: 'text' | 'voice' = 'text'): ParsedCommand {
   const errors: string[] = [];
   
   if (parsed.intent === "swap") {
@@ -186,11 +221,16 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
   // Combine all errors
   const allErrors = [...(parsed.validationErrors || []), ...errors];
 
+  // Additional validation for low confidence
+  if ((parsed.confidence || 0) < 50) {
+    allErrors.push("Low confidence in parsing. Please rephrase your command for clarity.");
+  }
+
   // Update success status based on validation
   const success = parsed.success !== false && allErrors.length === 0;
   const confidence = allErrors.length > 0 ? Math.max(0, (parsed.confidence || 0) - 30) : parsed.confidence;
   
-  return {
+  const result: ParsedCommand = {
     success,
     intent: parsed.intent || 'unknown',
     fromAsset: parsed.fromAsset || null,
@@ -210,4 +250,43 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     requiresConfirmation: parsed.requiresConfirmation || false,
     originalInput: userInput
   };
+
+  // Generate contextual help if there are errors or low confidence
+  if (allErrors.length > 0 || confidence! < 50) {
+    try {
+      console.log('🔍 Generating contextual help...');
+      console.log('Errors:', allErrors);
+      console.log('Confidence:', confidence);
+      
+      const analysis = analyzeCommand(result);
+      console.log('Analysis:', JSON.stringify(analysis, null, 2));
+      
+      const contextualHelp = generateContextualHelp(analysis, userInput, inputType);
+      console.log('Contextual Help Generated:', contextualHelp);
+      
+      // Replace generic low confidence message with contextual help
+      const lowConfidenceIndex = result.validationErrors.findIndex(err => 
+        err.includes('Low confidence') || err.includes('Please rephrase')
+      );
+      
+      if (lowConfidenceIndex !== -1) {
+        result.validationErrors[lowConfidenceIndex] = contextualHelp;
+        console.log('✅ Replaced low confidence message');
+      } else if (result.validationErrors.length > 0) {
+        // Add contextual help as additional guidance
+        result.validationErrors.push(contextualHelp);
+        console.log('✅ Added contextual help to errors');
+      } else {
+        result.validationErrors = [contextualHelp];
+        console.log('✅ Set contextual help as only error');
+      }
+      
+      console.log('Final validation errors:', result.validationErrors);
+    } catch (error) {
+      console.error('❌ Contextual help generation failed:', error);
+      // Fallback to existing error messages
+    }
+  }
+  
+  return result;
 }

@@ -1,6 +1,9 @@
 import Groq from "groq-sdk";
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// Lazy-load Groq client to avoid build-time environment variable requirement
+function getGroqClient(): Groq {
+  return new Groq({ apiKey: process.env.GROQ_API_KEY });
+}
 
 // Type definition for the parsed command object
 export interface ParsedCommand {
@@ -86,6 +89,7 @@ RESPONSE FORMAT:
 
 export async function parseUserCommand(userInput: string): Promise<ParsedCommand> {
   try {
+    const groq = getGroqClient();
     const completion = await groq.chat.completions.create({
       messages: [
         { role: "system", content: systemPrompt },
@@ -115,6 +119,7 @@ export async function parseUserCommand(userInput: string): Promise<ParsedCommand
 
 export async function transcribeAudio(audioFile: File): Promise<string> {
   try {
+    const groq = getGroqClient();
     const transcription = await groq.audio.transcriptions.create({
       file: audioFile,
       model: "whisper-large-v3",
