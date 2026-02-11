@@ -3,7 +3,7 @@ import { message } from 'telegraf/filters';
 import dotenv from 'dotenv';
 import { parseUserCommand, transcribeAudio } from './services/groq-client';
 import { createQuote, createOrder, createCheckout, getOrderStatus } from './services/sideshift-client';
-import { getTopStablecoinYields, getTopYieldPools } from './services/yield-client';
+import { getTopStablecoinYields, getTopYieldPools, suggestMigration, findHigherYieldPools, formatMigrationMessage, MigrationSuggestion } from './services/yield-client';
 import * as db from './services/database';
 import { ethers } from 'ethers';
 import axios from 'axios';
@@ -336,6 +336,78 @@ bot.command('yield', async (ctx) => {
     ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields:*\n\n${yields}`);
 });
 
+bot.command('migrate', async (ctx) => {
+    const args = ctx.message.text.split(' ').slice(1);
+    const userId = ctx.from.id;
+
+    if (args.length < 1) {
+        return ctx.replyWithMarkdown(
+            `*Yield Migration Command*\n\n` +
+            `Usage: /migrate <asset> [chain] [current_project]\n\n` +
+            `Examples:\n` +
+            `• /migrate USDC\n` +
+            `• /migrate USDC base\n` +
+            `• /migrate USDC base aave\n\n` +
+            `This will find higher-yielding pools and suggest a migration.`
+        );
+    }
+
+    await ctx.reply('🔍 Analyzing yield opportunities...');
+
+    const asset = args[0];
+    const chain = args[1] || null;
+    const project = args[2] || null;
+    const amount = 10000;
+
+    const suggestion = await suggestMigration(asset, chain || undefined, project || undefined, amount);
+
+    if (!suggestion) {
+        const higherPools = await findHigherYieldPools(asset, chain || undefined);
+        if (higherPools.length === 0) {
+            return ctx.reply(`No higher-yielding pools found for ${asset}.`);
+        }
+        return ctx.replyWithMarkdown(
+            `*Higher Yield Options for ${asset}:*\n\n` +
+            higherPools.slice(0, 3).map(p =>
+                `• ${p.symbol} on ${p.chain} via ${p.project}: *${p.apy.toFixed(2)}% APY*`
+            ).join('\n')
+        );
+    }
+
+    const message = formatMigrationMessage(suggestion, amount);
+    const isCrossChain = suggestion.isCrossChain;
+
+    const migrationCommand = {
+        intent: 'yield_migrate',
+        fromAsset: suggestion.fromPool.symbol,
+        fromChain: suggestion.fromPool.chain.toLowerCase(),
+        toAsset: suggestion.toPool.symbol,
+        toChain: suggestion.toPool.chain.toLowerCase(),
+        amount: amount,
+        fromProject: suggestion.fromPool.project,
+        toProject: suggestion.toPool.project,
+        fromYield: suggestion.fromPool.apy,
+        toYield: suggestion.toPool.apy,
+        isCrossChain
+    };
+
+    await db.setConversationState(userId, { parsedCommand: migrationCommand, migrationSuggestion: suggestion });
+
+    if (isCrossChain) {
+        ctx.replyWithMarkdown(message, Markup.inlineKeyboard([
+            Markup.button.callback('✅ Migrate', 'confirm_migration'),
+            Markup.button.callback('❌ Cancel', 'cancel_swap'),
+            Markup.button.callback('🔄 See Alternatives', 'see_alternatives')
+        ]));
+    } else {
+        ctx.replyWithMarkdown(message + `\n\n*Same-chain: Deposit directly to save fees.*`, Markup.inlineKeyboard([
+            Markup.button.callback('📖 Show Deposit Instructions', 'show_deposit_instructions'),
+            Markup.button.callback('🔄 See Alternatives', 'see_alternatives'),
+            Markup.button.callback('❌ Cancel', 'cancel_swap')
+        ]));
+    }
+});
+
 bot.command('add_address', async (ctx) => {
   const userId = ctx.from.id;
   const args = ctx.message.text.split(' ').slice(1);
@@ -509,6 +581,72 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
             await db.setConversationState(userId, { parsedCommand: depositCommand });
             return ctx.reply(`Ready to deposit ${parsed.amount} ${parsed.fromAsset} to yield on ${matchingPool.chain} via ${matchingPool.project}. Please provide your address.`);
         }
+    }
+
+    if (parsed.intent === 'yield_migrate') {
+        await ctx.sendChatAction('typing');
+        await ctx.reply('🔍 Analyzing yield migration opportunities...');
+
+        const suggestion = await suggestMigration(
+            parsed.fromAsset!,
+            parsed.fromChain || undefined,
+            parsed.fromProject || undefined,
+            parsed.amount || 10000
+        );
+
+        if (!suggestion) {
+            const higherPools = await findHigherYieldPools(parsed.fromAsset!, parsed.fromChain || undefined, parsed.fromYield || 0);
+            if (higherPools.length === 0) {
+                return ctx.reply(`No higher-yielding pools found for ${parsed.fromAsset}.`);
+            }
+
+            let message = `*Higher Yield Options for ${parsed.fromAsset}:*\n\n`;
+            higherPools.slice(0, 5).forEach((p, i) => {
+                message += `${i + 1}. ${p.symbol} on ${p.chain} via ${p.project}: *${p.apy.toFixed(2)}% APY*\n`;
+            });
+
+            return ctx.replyWithMarkdown(message, Markup.inlineKeyboard([
+                Markup.button.callback('🔄 Refresh', 'refresh_yields'),
+                Markup.button.callback('❌ Cancel', 'cancel_swap')
+            ]));
+        }
+
+        const message = formatMigrationMessage(suggestion, parsed.amount || 10000);
+
+        const isCrossChain = suggestion.isCrossChain;
+
+        const migrationCommand = {
+            ...parsed,
+            intent: 'yield_migrate',
+            fromProject: suggestion.fromPool.project,
+            toProject: suggestion.toPool.project,
+            fromYield: suggestion.fromPool.apy,
+            toYield: suggestion.toPool.apy,
+            toChain: suggestion.toPool.chain.toLowerCase(),
+            toAsset: suggestion.toPool.symbol,
+            isCrossChain
+        };
+
+        await db.setConversationState(userId, { parsedCommand: migrationCommand, migrationSuggestion: suggestion });
+
+        if (isCrossChain) {
+            return ctx.replyWithMarkdown(message, Markup.inlineKeyboard([
+                Markup.button.callback('✅ Migrate', 'confirm_migration'),
+                Markup.button.callback('🔄 See Alternatives', 'see_alternatives'),
+                Markup.button.callback('❌ Cancel', 'cancel_swap')
+            ]));
+        } else {
+            return ctx.replyWithMarkdown(message + `\n\n*Same-chain migration: Deposit directly to the new protocol.*`, Markup.inlineKeyboard([
+                Markup.button.callback('📖 Show Deposit Instructions', 'show_deposit_instructions'),
+                Markup.button.callback('🔄 See Alternatives', 'see_alternatives'),
+                Markup.button.callback('❌ Cancel', 'cancel_swap')
+            ]));
+        }
+    }
+
+    if ((parsed as any).intent === 'refresh_yields') {
+        await ctx.sendChatAction('typing');
+        return ctx.reply('🔄 Use /migrate <asset> to find the best yields.');
     }
 
     if (parsed.intent === 'portfolio') {
@@ -814,6 +952,218 @@ bot.action('place_portfolio_orders', async (ctx) => {
 bot.action('cancel_swap', (ctx) => {
     db.clearConversationState(ctx.from.id);
     ctx.editMessageText('❌ Cancelled.');
+});
+
+bot.action('confirm_migration', async (ctx) => {
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+
+    if (!state?.parsedCommand || state.parsedCommand.intent !== 'yield_migrate') {
+        return ctx.answerCbQuery('Session expired.');
+    }
+
+    try {
+        await ctx.answerCbQuery('Preparing migration...');
+
+        const { fromChain, toChain, fromAsset, toAsset, amount, isCrossChain } = state.parsedCommand;
+
+        if (!isCrossChain) {
+            return ctx.editMessageText(`🌉 *Same-Chain Migration*\n\n` +
+                `Since both pools are on the same chain, you can migrate directly:\n\n` +
+                `1. Withdraw your ${fromAsset} from ${state.parsedCommand.fromProject}\n` +
+                `2. Deposit to ${state.parsedCommand.toProject}\n\n` +
+                `This saves on bridge fees and is instant.\n\n` +
+                `Do you need a quote to swap ${fromAsset} to a different chain?`, {
+                parse_mode: 'Markdown',
+                ...Markup.inlineKeyboard([
+                    Markup.button.callback('🔄 Find Cross-Chain Options', 'find_bridge_options'),
+                    Markup.button.callback('❌ Cancel', 'cancel_swap')
+                ])
+            });
+        }
+
+        const quote = await createQuote(
+            fromAsset!, fromChain!,
+            toAsset!, toChain!,
+            amount!, '1.1.1.1'
+        );
+
+        if (quote.error) return ctx.editMessageText(`Error: ${quote.error.message}`);
+
+        db.setConversationState(userId, { ...state, quoteId: quote.id, settleAmount: quote.settleAmount });
+
+        const migrationText = state.migrationSuggestion
+            ? `*Yield Migration*\n\n` +
+              `From: ${state.parsedCommand.fromProject} (${state.parsedCommand.fromYield}% APY)\n` +
+              `To: ${state.parsedCommand.toProject} (${state.parsedCommand.toYield}% APY)\n\n`
+            : '';
+
+        ctx.editMessageText(`${migrationText}➡️ *Send:* \`${quote.depositAmount} ${quote.depositCoin}\`\n⬅️ *Receive:* \`${quote.settleAmount} ${quote.settleCoin}\`\n\nReady to migrate?`, {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+                Markup.button.callback('✅ Migrate', 'place_migration'),
+                Markup.button.callback('❌ Cancel', 'cancel_swap'),
+            ])
+        });
+    } catch (error) {
+        ctx.editMessageText(`Error: ${error instanceof Error ? error.message : 'Unknown'}`);
+    }
+});
+
+bot.action('show_deposit_instructions', async (ctx) => {
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+
+    if (!state?.migrationSuggestion) return ctx.answerCbQuery('Session expired.');
+
+    const { fromPool, toPool } = state.migrationSuggestion;
+
+    ctx.editMessageText(`📖 *Direct Deposit Instructions*\n\n` +
+        `1. Go to ${toPool.project}\n` +
+        `2. Connect your wallet\n` +
+        `3. Withdraw from ${fromPool.project}\n` +
+        `4. Deposit to ${toPool.project}\n\n` +
+        `This is instant and saves bridge fees!\n\n` +
+        `*APY Improvement:* ${fromPool.apy.toFixed(2)}% → ${toPool.apy.toFixed(2)}%`, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+            Markup.button.callback('🔙 Back', 'cancel_swap')
+        ])
+    });
+});
+
+bot.action('find_bridge_options', async (ctx) => {
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+
+    if (!state?.migrationSuggestion) return ctx.answerCbQuery('Session expired.');
+
+    const { fromAsset } = state.parsedCommand;
+    const pools = await getTopYieldPools();
+    const crossChainPools = pools.filter(p =>
+        p.symbol.toUpperCase() === fromAsset?.toUpperCase() &&
+        p.chain.toLowerCase() !== state.parsedCommand.fromChain?.toLowerCase()
+    );
+
+    if (crossChainPools.length === 0) {
+        return ctx.editMessageText(`No cross-chain yield options found for ${fromAsset}.`);
+    }
+
+    ctx.editMessageText(`🌉 *Cross-Chain Migration Options*\n\n` +
+        crossChainPools.slice(0, 3).map((p, i) =>
+            `${i + 1}. ${p.symbol} on ${p.chain} via ${p.project}: *${p.apy.toFixed(2)}% APY*`
+        ).join('\n'), {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+            Markup.button.callback('❌ Cancel', 'cancel_swap')
+        ])
+    });
+});
+
+bot.action('place_migration', async (ctx) => {
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+
+    if (!state?.quoteId || !state.parsedCommand) return ctx.answerCbQuery('Session expired.');
+
+    try {
+        await ctx.answerCbQuery('Creating migration order...');
+
+        const destinationAddress = state.parsedCommand.settleAddress || state.parsedCommand.toAsset!;
+        const order = await createOrder(state.quoteId, destinationAddress, destinationAddress);
+
+        if (!order.id) throw new Error("Failed to create order");
+
+        const migrationData = {
+            intent: 'yield_migrate',
+            fromAsset: state.parsedCommand.fromAsset,
+            fromChain: state.parsedCommand.fromChain,
+            toAsset: state.parsedCommand.toAsset,
+            toChain: state.parsedCommand.toChain,
+            amount: state.parsedCommand.amount,
+            fromProject: state.parsedCommand.fromProject,
+            toProject: state.parsedCommand.toProject,
+            fromYield: state.parsedCommand.fromYield,
+            toYield: state.parsedCommand.toYield
+        };
+
+        db.createOrderEntry(userId, migrationData as any, order, state.settleAmount, state.quoteId);
+
+        const { amount, fromChain, fromAsset } = state.parsedCommand;
+        const rawDepositAddress = typeof order.depositAddress === 'string' ? order.depositAddress : order.depositAddress.address;
+        const depositMemo = typeof order.depositAddress === 'object' ? order.depositAddress.memo : null;
+
+        const chainKey = fromChain?.toLowerCase() || 'ethereum';
+        const assetKey = fromAsset?.toUpperCase() || 'ETH';
+
+        const tokenData = await tokenResolver.getTokenInfo(assetKey, chainKey);
+
+        let txTo = rawDepositAddress, txValueHex = '0x0', txData = '0x';
+
+        if (tokenData) {
+            txTo = tokenData.address;
+            const amountBigInt = ethers.parseUnits(amount!.toString(), tokenData.decimals);
+            const iface = new ethers.Interface(ERC20_ABI);
+            txData = iface.encodeFunctionData("transfer", [rawDepositAddress, amountBigInt]);
+        } else {
+            const amountBigInt = ethers.parseUnits(amount!.toString(), 18);
+            txValueHex = '0x' + amountBigInt.toString(16);
+            if (depositMemo) txData = ethers.hexlify(ethers.toUtf8Bytes(depositMemo));
+        }
+
+        const params = new URLSearchParams({
+            to: txTo, value: txValueHex, data: txData,
+            chainId: chainIdMap[chainKey] || '1',
+            token: assetKey, amount: amount!.toString()
+        });
+
+        ctx.editMessageText(`✅ *Migration Order Created!*\n\nYour funds will be moved to the higher-yielding pool.\n\nSign to complete the migration.`, {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+                Markup.button.webApp('📱 Sign Transaction', `${MINI_APP_URL}?${params.toString()}`),
+                Markup.button.callback('❌ Close', 'cancel_swap')
+            ])
+        });
+    } catch (error) {
+        ctx.editMessageText(`Failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+});
+
+bot.action('see_alternatives', async (ctx) => {
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+
+    if (!state?.parsedCommand) return ctx.answerCbQuery('Session expired.');
+
+    const { fromAsset, fromChain } = state.parsedCommand;
+    const pools = await getTopYieldPools();
+
+    const alternatives = pools
+        .filter(p =>
+            p.symbol.toUpperCase() === (fromAsset?.toUpperCase()) &&
+            (!fromChain || p.chain.toLowerCase() === fromChain.toLowerCase())
+        )
+        .sort((a, b) => b.apy - a.apy)
+        .slice(0, 5);
+
+    if (alternatives.length === 0) {
+        return ctx.answerCbQuery('No alternative pools found.');
+    }
+
+    ctx.editMessageText(`*Alternative Yield Pools for ${fromAsset}:*\n\n` +
+        alternatives.map((p, i) =>
+            `${i + 1}. ${p.symbol} on ${p.chain} via ${p.project}: *${p.apy.toFixed(2)}% APY*`
+        ).join('\n'), { parse_mode: 'Markdown' });
+});
+
+bot.action('refresh_yields', async (ctx) => {
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+
+    if (!state?.parsedCommand) return ctx.answerCbQuery('Session expired.');
+
+    await ctx.answerCbQuery('Refreshing yields...');
+    return ctx.reply('🔄 Refreshing yield data... Use /migrate to try again.');
 });
 
 const app = express();
