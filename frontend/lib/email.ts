@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+import axios from 'axios';
 
 export interface EmailNotification {
   to: string;
@@ -7,18 +7,9 @@ export interface EmailNotification {
   type: 'wallet' | 'price' | 'general';
 }
 
-// Create reusable transporter
-const createTransporter = () => {
-  return nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.EMAIL_PORT || '587'),
-    secure: process.env.EMAIL_SECURE === 'true',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD,
-    },
-  });
-};
+// Brevo API configuration
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
+const BREVO_API_KEY = process.env.BREVO_API_KEY || '';
 
 // Email templates
 const templates = {
@@ -159,17 +150,24 @@ const templates = {
 // Send email function
 export async function sendEmail(notification: EmailNotification) {
   try {
-    const transporter = createTransporter();
-    
-    const info = await transporter.sendMail({
-      from: `"SwapSmith" <${process.env.EMAIL_USER}>`,
-      to: notification.to,
-      subject: notification.subject,
-      html: notification.html,
-    });
+    const response = await axios.post(
+      BREVO_API_URL,
+      {
+        sender: { name: 'SwapSmith', email: process.env.BREVO_SENDER_EMAIL || '' },
+        to: [{ email: notification.to }],
+        subject: notification.subject,
+        htmlContent: notification.html,
+      },
+      {
+        headers: {
+          'api-key': BREVO_API_KEY,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
 
-    console.log('Email sent:', info.messageId);
-    return { success: true, messageId: info.messageId };
+    console.log('Email sent:', response.data.messageId || response.data);
+    return { success: true, messageId: response.data.messageId || undefined };
   } catch (error) {
     console.error('Error sending email:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
