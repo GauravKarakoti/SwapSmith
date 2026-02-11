@@ -36,7 +36,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     res.status(200).json(parsedCommand);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error parsing command:', error);
     
     // Differentiate between Groq API errors and other errors
