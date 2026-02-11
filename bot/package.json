@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "test": "jest",
     "build": "tsc",
     "start": "node dist/bot.js",
     "dev": "ts-node-dev --respawn --transpile-only src/bot.ts",
@@ -32,8 +33,11 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.3",
-    "@types/node": "^24.7.2",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.10.13",
     "drizzle-kit": "^0.31.7",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3"
   }
