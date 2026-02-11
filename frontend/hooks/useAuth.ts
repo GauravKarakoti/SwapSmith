@@ -1,47 +1,57 @@
 'use client'
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { auth } from '@/lib/firebase';
+import { 
+  onAuthStateChanged, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut,
+  User 
+} from 'firebase/auth';
 
 export function useAuth() {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    // Lazy initialization - only runs once on mount
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('swapsmith_session') === 'active';
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+
+  useEffect(() => {
+    // Listen for real-time auth state changes
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setIsLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const register = async (email: string, pass: string) => {
+    setIsLoading(true);
+    try {
+      await createUserWithEmailAndPassword(auth, email, pass);
+      router.push('/terminal');
+    } catch (error: any) {
+      throw error.message;
+    } finally {
+      setIsLoading(false);
     }
-    return false;
-  })
-  const [isLoading] = useState(false) // No loading needed for localStorage check
-  const router = useRouter()
+  };
 
-  const register = (userData: { email: string; password: string; name?: string }) => {
-    // Store user data in localStorage (acting as our database)
-    localStorage.setItem('swapsmith_user', JSON.stringify(userData))
-    // Auto-login after registration
-    localStorage.setItem('swapsmith_session', 'active')
-    setIsAuthenticated(true)
-    router.push('/terminal')
-  }
-
-  const login = (email: string, pass: string) => {
-    const storedUser = localStorage.getItem('swapsmith_user')
-    
-    if (storedUser) {
-      const user = JSON.parse(storedUser)
-      if (user.email === email && user.password === pass) {
-        localStorage.setItem('swapsmith_session', 'active')
-        setIsAuthenticated(true)
-        router.push('/terminal')
-        return true
-      }
+  const login = async (email: string, pass: string) => {
+    setIsLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+      router.push('/terminal');
+    } catch (error: any) {
+      throw error.message;
+    } finally {
+      setIsLoading(false);
     }
-    return false // Mismatch or no user found
-  }
+  };
 
-  const logout = () => {
-    localStorage.removeItem('swapsmith_session')
-    setIsAuthenticated(false)
-    router.push('/login')
-  }
+  const logout = async () => {
+    await signOut(auth);
+    router.push('/login');
+  };
 
-  return { isAuthenticated, isLoading, login, register, logout }
+  return { user, isAuthenticated: !!user, isLoading, login, register, logout };
 }
