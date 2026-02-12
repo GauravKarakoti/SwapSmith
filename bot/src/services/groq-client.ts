@@ -1,6 +1,8 @@
 import Groq from "groq-sdk";
 import dotenv from 'dotenv';
 import fs from 'fs';
+import { handleError } from './logger';
+import { analyzeCommand, generateContextualHelp } from './contextual-help';
 
 dotenv.config();
 
@@ -9,7 +11,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 // Enhanced Interface to support Portfolio and Yield
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "unknown";
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "unknown";
   
   // Single Swap Fields
   fromAsset: string | null;
@@ -33,6 +35,11 @@ export interface ParsedCommand {
   settleAmount: number | null;
   settleAddress: string | null;
 
+  fromProject: string | null;
+  fromYield: number | null;
+  toProject: string | null;
+  toYield: number | null;
+
   confidence: number;
   validationErrors: string[];
   parsedMessage: string;
@@ -49,18 +56,43 @@ MODES:
 2. "portfolio": 1 Input -> Multiple Outputs (Split allocation).
 3. "checkout": Payment link creation.
 4. "yield_scout": User asking for high APY/Yield info.
+5. "yield_deposit": Deposit assets into yield platforms, possibly bridging if needed.
+6. "yield_migrate": Move funds from a lower-yielding pool to a higher-yielding pool on the same or different chain.
 
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
+
+ADDRESS RESOLUTION:
+- Users can specify addresses as raw wallet addresses (0x...), ENS names (ending in .eth), Lens handles (ending in .lens), Unstoppable Domains (ending in .crypto, .nft, .blockchain, etc.), or nicknames from their address book.
+- If an address is specified, include it in settleAddress field.
+- The system will resolve nicknames, ENS, Lens, and Unstoppable Domains automatically.
+
+IMPORTANT: ENS/ADDRESS HANDLING:
+- When a user says "Swap X ETH to vitalik.eth" or "Send X ETH to vitalik.eth", they mean:
+  * Keep the same asset (ETH)
+  * Send it to the address vitalik.eth
+  * This should be parsed as: toAsset: "ETH", toChain: "ethereum", settleAddress: "vitalik.eth"
+- Patterns to recognize as addresses (not assets):
+  * Ends with .eth (ENS)
+  * Ends with .lens (Lens Protocol)
+  * Ends with .crypto, .nft, .blockchain, .wallet, etc. (Unstoppable Domains)
+  * Starts with 0x followed by 40 hex characters
+  * Looks like a nickname (single word, lowercase, no special chars)
+
+AMBIGUITY HANDLING:
+- If the command is ambiguous (e.g., "swap all my ETH to BTC or USDC"), set confidence low (0-30) and add validation error "Command is ambiguous. Please specify clearly."
+- For complex commands, prefer explicit allocations over assumptions.
+- If multiple interpretations possible, choose the most straightforward and set requiresConfirmation: true.
+- Handle conditional swaps by treating them as portfolio with conditional logic in parsedMessage.
 
 RESPONSE FORMAT:
 {
   "success": boolean,
-  "intent": "swap" | "portfolio" | "checkout" | "yield_scout",
+  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate",
   "fromAsset": string | null,
   "fromChain": string | null,
   "amount": number | null,
   "amountType": "exact" | "percentage" | "all" | null,
-  
+
   // Fill for 'swap'
   "toAsset": string | null,
   "toChain": string | null,
@@ -77,6 +109,13 @@ RESPONSE FORMAT:
   "settleAmount": number | null,
   "settleAddress": string | null,
 
+  // Fill for 'yield_migrate'
+  "fromProject": string | null,    // Current yield platform/project
+  "fromYield": number | null,      // Current yield rate (percentage)
+  "toProject": string | null,      // Target yield platform/project
+  "toChain": string | null,        // Target chain for migration
+
+  "confidence": number,  // 0-100, lower for ambiguous
   "validationErrors": string[],
   "parsedMessage": "Human readable summary",
   "requiresConfirmation": boolean
@@ -84,10 +123,34 @@ RESPONSE FORMAT:
 
 EXAMPLES:
 1. "Split 1 ETH on Base into 50% USDC on Arb and 50% SOL"
-   -> intent: "portfolio", fromAsset: "ETH", fromChain: "base", amount: 1, portfolio: [{toAsset: "USDC", toChain: "arbitrum", percentage: 50}, {toAsset: "SOL", toChain: "solana", percentage: 50}]
+   -> intent: "portfolio", fromAsset: "ETH", fromChain: "base", amount: 1, portfolio: [{toAsset: "USDC", toChain: "arbitrum", percentage: 50}, {toAsset: "SOL", toChain: "solana", percentage: 50}], confidence: 95
 
 2. "Where can I get good yield on stables?"
-   -> intent: "yield_scout"
+   -> intent: "yield_scout", confidence: 100
+
+3. "Swap 1 ETH to BTC or USDC" (ambiguous)
+   -> intent: "swap", fromAsset: "ETH", toAsset: null, confidence: 20, validationErrors: ["Command is ambiguous. Please specify clearly."], requiresConfirmation: true
+
+4. "If ETH > $3000, swap to BTC, else to USDC" (conditional)
+   -> intent: "portfolio", fromAsset: "ETH", portfolio: [{toAsset: "BTC", toChain: "bitcoin", percentage: 100}], confidence: 70, parsedMessage: "Conditional swap: If ETH > $3000, swap to BTC", requiresConfirmation: true
+
+5. "Deposit 1 ETH to yield"
+   -> intent: "yield_deposit", fromAsset: "ETH", amount: 1, confidence: 95
+
+6. "Swap 1 ETH to mywallet"
+   -> intent: "swap", fromAsset: "ETH", toAsset: "ETH", toChain: "ethereum", amount: 1, settleAddress: "mywallet", confidence: 95
+
+7. "Send 5 USDC to vitalik.eth"
+   -> intent: "checkout", settleAsset: "USDC", settleNetwork: "ethereum", settleAmount: 5, settleAddress: "vitalik.eth", confidence: 95
+
+8. "Move my USDC from Aave on Base to a higher yield pool"
+   -> intent: "yield_migrate", fromAsset: "USDC", fromChain: "base", fromProject: "Aave", confidence: 95
+
+9. "Switch my ETH yield from 5% to something better"
+   -> intent: "yield_migrate", fromAsset: "ETH", fromYield: 5, confidence: 90
+
+10. "Migrate my stables to the best APY pool"
+    -> intent: "yield_migrate", fromAsset: "USDC", confidence: 85
 `;
 
 export async function parseUserCommand(
@@ -129,7 +192,7 @@ export async function parseUserCommand(
 
     const parsed = JSON.parse(completion.choices[0].message.content || '{}');
     console.log("Parsed:", parsed);
-    return validateParsedCommand(parsed, userInput);
+    return validateParsedCommand(parsed, userInput, inputType);
   } catch (error) {
     console.error("Groq Error:", error);
     return {
@@ -142,16 +205,21 @@ export async function parseUserCommand(
 }
 
 export async function transcribeAudio(mp3FilePath: string): Promise<string> {
-  const transcription = await groq.audio.transcriptions.create({
-      file: fs.createReadStream(mp3FilePath),
-      model: "whisper-large-v3",
-      response_format: "json",
-  });
-  return transcription.text;
+  try {
+    const transcription = await groq.audio.transcriptions.create({
+        file: fs.createReadStream(mp3FilePath),
+        model: "whisper-large-v3",
+        response_format: "json",
+    });
+    return transcription.text;
+  } catch (error) {
+    await handleError('TranscriptionError', { error: error instanceof Error ? error.message : 'Unknown error', filePath: mp3FilePath }, null, false);
+    throw error; // Re-throw to let caller handle
+  }
 }
 
 // --- MISSING FUNCTION RESTORED & UPDATED ---
-function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string): ParsedCommand {
+function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string, inputType: 'text' | 'voice' = 'text'): ParsedCommand {
   const errors: string[] = [];
   
   const hasValidAmount = (parsed.amount && parsed.amount > 0) || parsed.amountType === 'all';
@@ -191,6 +259,9 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
        // If AI marked as failed but didn't give a reason, we might still accept it if intent is clear
        // But usually, we trust the AI's success flag here.
     }
+  } else if (parsed.intent === "yield_migrate") {
+    if (!parsed.fromAsset) errors.push("Source asset not specified for migration");
+    if (parsed.amount && parsed.amount <= 0) errors.push("Invalid migration amount");
   } else if (!parsed.intent || parsed.intent === "unknown") {
       if (parsed.success === false && parsed.validationErrors && parsed.validationErrors.length > 0) {
          // Keep prompt-level validation errors
@@ -202,11 +273,16 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
   // Combine all errors
   const allErrors = [...(parsed.validationErrors || []), ...errors];
 
+  // Additional validation for low confidence
+  if ((parsed.confidence || 0) < 50) {
+    allErrors.push("Low confidence in parsing. Please rephrase your command for clarity.");
+  }
+
   // Update success status based on validation
   const success = parsed.success !== false && allErrors.length === 0;
   const confidence = allErrors.length > 0 ? Math.max(0, (parsed.confidence || 0) - 30) : parsed.confidence;
   
-  return {
+  const result: ParsedCommand = {
     success,
     intent: parsed.intent || 'unknown',
     fromAsset: parsed.fromAsset || null,
@@ -220,131 +296,54 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     settleAsset: parsed.settleAsset || null,
     settleNetwork: parsed.settleNetwork || null,
     settleAmount: parsed.settleAmount || null,
-    settleAddress: parsed.settleAddress || null, 
+    settleAddress: parsed.settleAddress || null,
+    fromProject: parsed.fromProject || null,
+    fromYield: parsed.fromYield || null,
+    toProject: parsed.toProject || null,
+    toYield: parsed.toYield || null,
     confidence: confidence || 0,
     validationErrors: allErrors,
     parsedMessage: parsed.parsedMessage || '',
     requiresConfirmation: parsed.requiresConfirmation || false,
     originalInput: userInput
   };
-}
 
-function parseWithRegex(text: string): ParsedCommand | null {
-  const normalized = text.toLowerCase().trim()
-    .replace(/\s+/g, ' ')
-    .replace('percent', '%')
-    .replace('convert', 'swap')
-    .replace('exchange', 'swap')
-    .replace('transfer', 'send');
-
-  // Basic Intent Detection
-  let intent: ParsedCommand['intent'] = 'unknown';
-  if (normalized.includes('swap') || normalized.includes('buy') || normalized.includes('sell') || normalized.includes('trade')) {
-    intent = 'swap';
-  } else if (normalized.startsWith('send') || normalized.includes('pay') || normalized.includes('checkout')) {
-    intent = 'checkout';
-  }
-
-  if (intent === 'unknown') return null;
-
-  const result: Partial<ParsedCommand> = {
-    intent,
-    success: true,
-    confidence: 0.9,
-    validationErrors: [],
-    parsedMessage: `Parsed via Regex: ${text}`
-  };
-
-  // 1. Max / All
-  if (/\b(max|all|everything)\b/i.test(normalized)) {
-    result.amountType = 'all';
-  }
-
-  // 2. Percentage
-  // Fix: Allow space between number and %
-  const percentMatch = normalized.match(/(\d+)\s*%/);
-  if (percentMatch) {
-    result.amountType = 'percentage';
-    result.amount = Number(percentMatch[1]);
-  }
-
-  // 3. Half
-  if (/\bhalf\b/i.test(normalized)) {
-    result.amountType = 'percentage';
-    result.amount = 50;
-  }
-
-  // 4. Except
-  const exceptMatch = normalized.match(/except\s+(\d+(\.\d+)?)/i);
-  if (exceptMatch) {
-    result.excludeAmount = Number(exceptMatch[1]);
-  }
-
-  // 5. Amount (if not percentage/max/half)
-  if (!result.amountType && !result.excludeAmount) {
-      // Avoid matching numbers inside "except 10" or "50%"
-      const allNumbers = [...normalized.matchAll(/(\d+(\.\d+)?)/g)];
-      for (const m of allNumbers) {
-          const val = Number(m[0]);
-          const idx = m.index!;
-          // Check if this number is part of percentage match
-          if (percentMatch && Math.abs(idx - percentMatch.index!) < 10 && val === result.amount) continue;
-          // Check if this number is part of except match
-          if (exceptMatch && Math.abs(idx - exceptMatch.index!) < 20 && val === result.excludeAmount) continue;
-
-          // Use this as amount
-          result.amount = val;
-          break;
-      }
-  }
-
-  // 6. Tokens & Prepositions
-  const commonTokens = ['ETH', 'BTC', 'USDT', 'USDC', 'MATIC', 'SOL', 'DAI', 'WETH', 'WBTC', 'ARB', 'OP', 'BNB', 'AVAX', 'BASE', 'LINK', 'UNI', 'AAVE'];
-  const tokenPattern = new RegExp(`\\b(${commonTokens.join('|')})\\b`, 'gi');
-  const tokenMatches = [...normalized.matchAll(tokenPattern)];
-
-  for (const m of tokenMatches) {
-      const token = m[0].toUpperCase();
-      const idx = m.index!;
-      const precedingText = normalized.substring(0, idx);
-
-      let isTo = /(to|into|for)\s+$/.test(precedingText);
-      let isFrom = /(with|from)\s+$/.test(precedingText);
-
-      if (intent === 'checkout') {
-           if (!result.settleAsset) result.settleAsset = token;
+  // Generate contextual help if there are errors or low confidence
+  if (allErrors.length > 0 || (confidence ?? 0) < 50) {
+    try {
+      console.log('🔍 Generating contextual help...');
+      console.log('Errors:', allErrors);
+      console.log('Confidence:', confidence);
+      
+      const analysis = analyzeCommand(result);
+      console.log('Analysis:', JSON.stringify(analysis, null, 2));
+      
+      const contextualHelp = generateContextualHelp(analysis, userInput, inputType);
+      console.log('Contextual Help Generated:', contextualHelp);
+      
+      // Replace generic low confidence message with contextual help
+      const lowConfidenceIndex = result.validationErrors.findIndex(err => 
+        err.includes('Low confidence') || err.includes('Please rephrase')
+      );
+      
+      if (lowConfidenceIndex !== -1) {
+        result.validationErrors[lowConfidenceIndex] = contextualHelp;
+        console.log('✅ Replaced low confidence message');
+      } else if (result.validationErrors.length > 0) {
+        // Add contextual help as additional guidance
+        result.validationErrors.push(contextualHelp);
+        console.log('✅ Added contextual help to errors');
       } else {
-          // Swap logic
-          if (isTo) {
-              result.toAsset = token;
-          } else if (isFrom) {
-              result.fromAsset = token;
-          } else {
-              // Default order
-              if (!result.fromAsset) {
-                  result.fromAsset = token;
-              } else if (!result.toAsset) {
-                  result.toAsset = token;
-              }
-          }
+        result.validationErrors = [contextualHelp];
+        console.log('✅ Set contextual help as only error');
       }
+      
+      console.log('Final validation errors:', result.validationErrors);
+    } catch (error) {
+      console.error('❌ Contextual help generation failed:', error);
+      // Fallback to existing error messages
+    }
   }
-
-  // Decision Priority Logic
-  if (result.amountType === 'all') {
-      result.amount = undefined;
-  }
-
-  // Validate
-  const validated = validateParsedCommand(result, text);
-  if (validated.success) {
-      return validated;
-  }
-
-  // Return partial if strong signals
-  if (result.intent !== 'unknown' && (result.amountType || result.excludeAmount || result.fromAsset || result.settleAsset)) {
-      return validated;
-  }
-
-  return null;
+  
+  return result;
 }
