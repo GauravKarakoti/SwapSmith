@@ -44,7 +44,12 @@ const sideshift_client_1 = require("./services/sideshift-client");
 const yield_client_1 = require("./services/yield-client");
 const db = __importStar(require("./services/database"));
 const limitOrderWorker_1 = require("./workers/limitOrderWorker");
+const dcaWorker_1 = require("./workers/dcaWorker");
 const parseLimitOrder_1 = require("./utils/parseLimitOrder");
+const network_1 = require("./utils/network");
+const tokens_1 = require("./utils/tokens");
+const auth_1 = require("./utils/auth");
+const portfolio_1 = require("./handlers/portfolio");
 const ethers_1 = require("ethers");
 const axios_1 = __importDefault(require("axios"));
 const fs_1 = __importDefault(require("fs"));
@@ -57,6 +62,7 @@ const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 const bot = new telegraf_1.Telegraf(process.env.BOT_TOKEN);
 // Start Limit Order Worker
 (0, limitOrderWorker_1.startLimitOrderWorker)(bot);
+(0, dcaWorker_1.startDcaWorker)(bot);
 // --- FFMPEG CHECK ---
 try {
     (0, child_process_1.execSync)('ffmpeg -version');
@@ -65,35 +71,6 @@ try {
 catch (error) {
     console.warn('⚠️ ffmpeg not found. Voice messages will fail. Please install ffmpeg.');
 }
-// --- ERC20 CONFIGURATION ---
-const ERC20_ABI = [
-    "function transfer(address to, uint256 amount) returns (bool)"
-];
-// Map of common tokens -> Address & Decimals
-const TOKEN_MAP = {
-    ethereum: {
-        USDC: { address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", decimals: 6 },
-        USDT: { address: "0xdAC17F958D2ee523a2206206994597C13D831ec7", decimals: 6 },
-        DAI: { address: "0x6B175474E89094C44Da98b954EedeAC495271d0F", decimals: 18 },
-        WBTC: { address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", decimals: 8 }
-    },
-    base: {
-        USDC: { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", decimals: 6 },
-        WETH: { address: "0x4200000000000000000000000000000000000006", decimals: 18 }
-    },
-    arbitrum: {
-        USDC: { address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", decimals: 6 },
-        USDT: { address: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9", decimals: 6 }
-    },
-    polygon: {
-        USDC: { address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", decimals: 6 },
-        USDT: { address: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", decimals: 6 }
-    },
-    bsc: {
-        USDC: { address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", decimals: 18 },
-        USDT: { address: "0x55d398326f99059fF775485246999027B3197955", decimals: 18 }
-    }
-};
 async function logAnalytics(ctx, errorType, details) {
     console.error(`[Analytics] ${errorType}:`, details);
     if (ADMIN_CHAT_ID) {
@@ -216,24 +193,6 @@ bot.on((0, filters_1.message)('voice'), async (ctx) => {
         ctx.reply("Sorry, I couldn't hear that clearly. Please try again.");
     }
 });
-function inferNetwork(asset) {
-    const map = {
-        'BTC': 'bitcoin',
-        'ETH': 'ethereum',
-        'SOL': 'solana',
-        'USDT': 'ethereum',
-        'USDC': 'ethereum',
-        'DAI': 'ethereum',
-        'WBTC': 'ethereum',
-        'BNB': 'bsc',
-        'AVAX': 'avalanche',
-        'MATIC': 'polygon',
-        'ARB': 'arbitrum',
-        'OP': 'optimism',
-        'BASE': 'base'
-    };
-    return map[asset?.toUpperCase()] || 'ethereum';
-}
 async function handleTextMessage(ctx, text, inputType = 'text') {
     const userId = ctx.from.id;
     // NEW: Check for limit order pattern first
@@ -255,8 +214,8 @@ async function handleTextMessage(ctx, text, inputType = 'text') {
         if (address.length < 10)
             return ctx.reply("Address too short. Please try again or /clear.");
         const orderData = state.data;
-        const fromNetwork = inferNetwork(orderData.fromAsset);
-        const toNetwork = inferNetwork(orderData.toAsset);
+        const fromNetwork = (0, network_1.inferNetwork)(orderData.fromAsset);
+        const toNetwork = (0, network_1.inferNetwork)(orderData.toAsset);
         await db.createLimitOrder({
             telegramId: userId,
             fromAsset: orderData.fromAsset,
@@ -316,6 +275,7 @@ async function handleTextMessage(ctx, text, inputType = 'text') {
         const webAppUrl = `${MINI_APP_URL}?${params.toString()}`;
         return ctx.replyWithMarkdown(msg, telegraf_1.Markup.inlineKeyboard([
             telegraf_1.Markup.button.webApp('📱 Batch Sign (Frontend)', webAppUrl),
+            telegraf_1.Markup.button.callback('🤖 Execute via Bot', 'confirm_portfolio'),
             telegraf_1.Markup.button.callback('❌ Cancel', 'cancel_swap')
         ]));
     }
@@ -337,9 +297,7 @@ async function handleTextMessage(ctx, text, inputType = 'text') {
         await ctx.reply(`🗣️ ${parsed.parsedMessage}`);
 }
 // --- ACTION HANDLERS ---
-bot.action('confirm_portfolio', async (ctx) => {
-    ctx.reply("Portfolio execution not fully implemented in this snippet.");
-});
+bot.action('confirm_portfolio', portfolio_1.confirmPortfolioHandler);
 bot.action('confirm_swap', async (ctx) => {
     const userId = ctx.from.id;
     const state = await db.getConversationState(userId);
@@ -382,7 +340,7 @@ bot.action('place_order', async (ctx) => {
         const depositMemo = typeof order.depositAddress === 'object' ? order.depositAddress.memo : null;
         const chainKey = fromChain?.toLowerCase() || 'ethereum';
         const assetKey = fromAsset?.toUpperCase() || 'ETH';
-        const tokenData = TOKEN_MAP[chainKey]?.[assetKey];
+        const tokenData = tokens_1.TOKEN_MAP[chainKey]?.[assetKey];
         let txTo = rawDepositAddress;
         let txValueHex = '0x0';
         let txData = '0x';
@@ -392,7 +350,7 @@ bot.action('place_order', async (ctx) => {
                 txTo = tokenData.address;
                 txValueHex = '0x0'; // Value is 0 for tokens
                 const amountBigInt = ethers_1.ethers.parseUnits(amount.toString(), tokenData.decimals);
-                const iface = new ethers_1.ethers.Interface(ERC20_ABI);
+                const iface = new ethers_1.ethers.Interface(tokens_1.ERC20_ABI);
                 txData = iface.encodeFunctionData("transfer", [rawDepositAddress, amountBigInt]);
             }
             else {
@@ -480,7 +438,64 @@ bot.action('cancel_swap', (ctx) => {
     ctx.editMessageText('❌ Cancelled.');
 });
 const app = (0, express_1.default)();
+app.use(express_1.default.json());
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    next();
+});
 app.get('/', (req, res) => res.send('SwapSmith Alive'));
+app.get('/api/dca', async (req, res) => {
+    const initData = req.headers.authorization;
+    if (!initData)
+        return res.status(401).json({ error: 'Unauthorized' });
+    const user = (0, auth_1.validateWebAppData)(initData, process.env.BOT_TOKEN);
+    if (!user)
+        return res.status(401).json({ error: 'Invalid initData' });
+    try {
+        const plans = await db.getUserDcaPlans(user.id);
+        res.json(plans);
+    }
+    catch (e) {
+        res.status(500).json({ error: e instanceof Error ? e.message : 'Error' });
+    }
+});
+app.post('/api/dca', async (req, res) => {
+    const initData = req.headers.authorization;
+    if (!initData)
+        return res.status(401).json({ error: 'Unauthorized' });
+    const user = (0, auth_1.validateWebAppData)(initData, process.env.BOT_TOKEN);
+    if (!user)
+        return res.status(401).json({ error: 'Invalid initData' });
+    try {
+        const plan = req.body;
+        // Basic validation
+        if (!plan.amount || !plan.frequencyDays) {
+            return res.status(400).json({ error: "Missing fields" });
+        }
+        const newPlan = await db.createDcaPlan({
+            telegramId: user.id,
+            fromAsset: plan.fromAsset,
+            toAsset: plan.toAsset,
+            fromNetwork: plan.fromNetwork || 'ethereum',
+            toNetwork: plan.toNetwork || 'bitcoin',
+            amount: plan.amount,
+            frequencyDays: plan.frequencyDays,
+            settleAddress: plan.settleAddress,
+            status: 'active',
+            nextRun: new Date(Date.now() + plan.frequencyDays * 24 * 60 * 60 * 1000)
+        });
+        res.json(newPlan);
+    }
+    catch (e) {
+        console.error(e);
+        res.status(500).json({ error: e instanceof Error ? e.message : 'Error' });
+    }
+});
 app.listen(process.env.PORT || 3000, () => console.log(`Express server live`));
+bot.catch((err, ctx) => {
+    console.error(`Ooops, encountered an error for ${ctx.updateType}`, err);
+    logAnalytics(ctx, 'UnhandledError', { input: 'unknown', error: err instanceof Error ? err.message : String(err) });
+});
 bot.launch();
 console.log('🤖 Bot is running...');

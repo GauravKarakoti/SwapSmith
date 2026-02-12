@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.limitOrders = exports.checkouts = exports.orders = exports.conversations = exports.users = void 0;
+exports.dcaPlans = exports.limitOrders = exports.checkouts = exports.orders = exports.conversations = exports.users = void 0;
 exports.getUser = getUser;
 exports.setUserWalletAndSession = setUserWalletAndSession;
 exports.getConversationState = getConversationState;
@@ -19,6 +19,10 @@ exports.createLimitOrder = createLimitOrder;
 exports.getPendingLimitOrders = getPendingLimitOrders;
 exports.updateLimitOrderStatus = updateLimitOrderStatus;
 exports.getLimitOrdersByUser = getLimitOrdersByUser;
+exports.createDcaPlan = createDcaPlan;
+exports.getDueDcaPlans = getDueDcaPlans;
+exports.updateDcaRun = updateDcaRun;
+exports.getUserDcaPlans = getUserDcaPlans;
 const serverless_1 = require("@neondatabase/serverless");
 const neon_http_1 = require("drizzle-orm/neon-http");
 const pg_core_1 = require("drizzle-orm/pg-core");
@@ -82,6 +86,21 @@ exports.limitOrders = (0, pg_core_1.pgTable)('limit_orders', {
     sideshiftOrderId: (0, pg_core_1.text)('sideshift_order_id'),
     settleAddress: (0, pg_core_1.text)('settle_address'),
     errorMessage: (0, pg_core_1.text)('error_message'),
+    createdAt: (0, pg_core_1.timestamp)('created_at').defaultNow(),
+});
+exports.dcaPlans = (0, pg_core_1.pgTable)('dca_plans', {
+    id: (0, pg_core_1.serial)('id').primaryKey(),
+    telegramId: (0, pg_core_1.bigint)('telegram_id', { mode: 'number' }).notNull(),
+    fromAsset: (0, pg_core_1.text)('from_asset').notNull(),
+    toAsset: (0, pg_core_1.text)('to_asset').notNull(),
+    fromNetwork: (0, pg_core_1.text)('from_network'),
+    toNetwork: (0, pg_core_1.text)('to_network'),
+    amount: (0, pg_core_1.real)('amount').notNull(),
+    frequencyDays: (0, pg_core_1.integer)('frequency_days').notNull(),
+    lastRun: (0, pg_core_1.timestamp)('last_run'),
+    nextRun: (0, pg_core_1.timestamp)('next_run').notNull(),
+    status: (0, pg_core_1.text)('status').notNull().default('active'), // active, paused, cancelled
+    settleAddress: (0, pg_core_1.text)('settle_address'),
     createdAt: (0, pg_core_1.timestamp)('created_at').defaultNow(),
 });
 // --- FUNCTIONS ---
@@ -184,4 +203,23 @@ async function getLimitOrdersByUser(telegramId) {
     return await db.select().from(exports.limitOrders)
         .where((0, drizzle_orm_1.eq)(exports.limitOrders.telegramId, telegramId))
         .orderBy((0, drizzle_orm_1.desc)(exports.limitOrders.createdAt));
+}
+// --- DCA FUNCTIONS ---
+async function createDcaPlan(plan) {
+    return await db.insert(exports.dcaPlans).values(plan).returning();
+}
+async function getDueDcaPlans() {
+    const now = new Date();
+    return await db.select().from(exports.dcaPlans)
+        .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(exports.dcaPlans.status, 'active'), (0, drizzle_orm_1.lte)(exports.dcaPlans.nextRun, now)));
+}
+async function updateDcaRun(id, nextRun) {
+    await db.update(exports.dcaPlans)
+        .set({ lastRun: new Date(), nextRun })
+        .where((0, drizzle_orm_1.eq)(exports.dcaPlans.id, id));
+}
+async function getUserDcaPlans(telegramId) {
+    return await db.select().from(exports.dcaPlans)
+        .where((0, drizzle_orm_1.eq)(exports.dcaPlans.telegramId, telegramId))
+        .orderBy((0, drizzle_orm_1.desc)(exports.dcaPlans.createdAt));
 }

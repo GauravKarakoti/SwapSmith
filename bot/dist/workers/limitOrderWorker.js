@@ -39,6 +39,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.startLimitOrderWorker = startLimitOrderWorker;
 const node_cron_1 = __importDefault(require("node-cron"));
 const db = __importStar(require("../services/database"));
+const network_1 = require("../utils/network");
 const price_client_1 = require("../services/price-client");
 const sideshift_client_1 = require("../services/sideshift-client");
 function startLimitOrderWorker(bot) {
@@ -87,9 +88,12 @@ async function executeOrder(bot, order, triggerPrice) {
             bot.telegram.sendMessage(order.telegramId, `❌ Limit Order ${order.id} failed: Missing destination address.`);
             return;
         }
-        // Default networks if missing (Bot should handle this better at creation, but safe defaults here)
-        const fromNetwork = order.fromNetwork || 'ethereum'; // Default to ETH mainnet? Dangerous but MVP.
-        const toNetwork = order.toNetwork || 'bitcoin'; // Default to Bitcoin?
+        // Infer networks if missing
+        const fromNetwork = order.fromNetwork || (0, network_1.inferNetwork)(order.fromAsset);
+        const toNetwork = order.toNetwork || (0, network_1.inferNetwork)(order.toAsset);
+        if (!fromNetwork || !toNetwork) {
+            throw new Error(`Could not determine network for ${order.fromAsset} -> ${order.toAsset}`);
+        }
         // 1. Create Quote
         // Use a user IP placeholder or 1.1.1.1
         const quote = await (0, sideshift_client_1.createQuote)(order.fromAsset, fromNetwork, // We might need to map short names to network IDs if they differ
