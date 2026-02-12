@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { Telegraf, Markup } from 'telegraf';
 import * as db from '../services/database';
+import { inferNetwork } from '../utils/network';
 import { getPrices } from '../services/price-client';
 import { createQuote, createOrder } from '../services/sideshift-client';
 
@@ -55,9 +56,13 @@ async function executeOrder(bot: Telegraf, order: db.LimitOrder, triggerPrice: n
        return;
     }
 
-    // Default networks if missing (Bot should handle this better at creation, but safe defaults here)
-    const fromNetwork = order.fromNetwork || 'ethereum'; // Default to ETH mainnet? Dangerous but MVP.
-    const toNetwork = order.toNetwork || 'bitcoin'; // Default to Bitcoin?
+    // Infer networks if missing
+    const fromNetwork = order.fromNetwork || inferNetwork(order.fromAsset);
+    const toNetwork = order.toNetwork || inferNetwork(order.toAsset);
+
+    if (!fromNetwork || !toNetwork) {
+        throw new Error(`Could not determine network for ${order.fromAsset} -> ${order.toAsset}`);
+    }
 
     // 1. Create Quote
     // Use a user IP placeholder or 1.1.1.1

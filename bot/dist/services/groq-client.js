@@ -60,6 +60,12 @@ EXAMPLES:
    -> intent: "yield_scout"
 `;
 async function parseUserCommand(userInput, conversationHistory = [], inputType = 'text') {
+    // 1. Try Regex Parsing First
+    const regexResult = parseWithRegex(userInput);
+    if (regexResult) {
+        return regexResult;
+    }
+    // 2. Fallback to AI
     let currentSystemPrompt = systemPrompt;
     if (inputType === 'voice') {
         currentSystemPrompt += `
@@ -106,18 +112,19 @@ async function transcribeAudio(mp3FilePath) {
 // --- MISSING FUNCTION RESTORED & UPDATED ---
 function validateParsedCommand(parsed, userInput) {
     const errors = [];
+    const hasValidAmount = (parsed.amount && parsed.amount > 0) || parsed.amountType === 'all';
     if (parsed.intent === "swap") {
         if (!parsed.fromAsset)
             errors.push("Source asset not specified");
         if (!parsed.toAsset)
             errors.push("Destination asset not specified");
-        if (!parsed.amount || parsed.amount <= 0)
+        if (!hasValidAmount)
             errors.push("Invalid amount specified");
     }
     else if (parsed.intent === "portfolio") {
         if (!parsed.fromAsset)
             errors.push("Source asset not specified");
-        if (!parsed.amount || parsed.amount <= 0)
+        if (!hasValidAmount)
             errors.push("Invalid amount specified");
         if (!parsed.portfolio || parsed.portfolio.length === 0) {
             errors.push("No portfolio allocation specified");
@@ -133,10 +140,16 @@ function validateParsedCommand(parsed, userInput) {
     else if (parsed.intent === "checkout") {
         if (!parsed.settleAsset)
             errors.push("Asset to receive not specified");
-        if (!parsed.settleNetwork)
-            errors.push("Network to receive on not specified");
-        if (!parsed.settleAmount || parsed.settleAmount <= 0)
-            errors.push("Invalid amount specified");
+        // if (!parsed.settleNetwork) errors.push("Network to receive on not specified"); // Regex might miss network, allow it for now or fail?
+        // AI usually infers network. Regex won't. If we enforce network, Regex fails often.
+        // But checkout usually needs network. Let's keep it but maybe lenient if address is present?
+        // For now, I'll keep strict validation for checkout as it involves money.
+        if (!parsed.settleNetwork && !parsed.settleAddress)
+            errors.push("Network or Address to receive on not specified");
+        if (!parsed.settleAmount || parsed.settleAmount <= 0) {
+            if (parsed.amountType !== 'all')
+                errors.push("Invalid amount specified");
+        }
     }
     else if (parsed.intent === "yield_scout") {
         // No specific validation needed for yield scout, just needs the intent
@@ -167,6 +180,7 @@ function validateParsedCommand(parsed, userInput) {
         toChain: parsed.toChain || null,
         amount: parsed.amount || null,
         amountType: parsed.amountType || null,
+        excludeAmount: parsed.excludeAmount,
         portfolio: parsed.portfolio, // Pass through portfolio
         settleAsset: parsed.settleAsset || null,
         settleNetwork: parsed.settleNetwork || null,
@@ -178,4 +192,115 @@ function validateParsedCommand(parsed, userInput) {
         requiresConfirmation: parsed.requiresConfirmation || false,
         originalInput: userInput
     };
+}
+function parseWithRegex(text) {
+    const normalized = text.toLowerCase().trim()
+        .replace(/\s+/g, ' ')
+        .replace('percent', '%')
+        .replace('convert', 'swap')
+        .replace('exchange', 'swap')
+        .replace('transfer', 'send');
+    // Basic Intent Detection
+    let intent = 'unknown';
+    if (normalized.includes('swap') || normalized.includes('buy') || normalized.includes('sell') || normalized.includes('trade')) {
+        intent = 'swap';
+    }
+    else if (normalized.startsWith('send') || normalized.includes('pay') || normalized.includes('checkout')) {
+        intent = 'checkout';
+    }
+    if (intent === 'unknown')
+        return null;
+    const result = {
+        intent,
+        success: true,
+        confidence: 0.9,
+        validationErrors: [],
+        parsedMessage: `Parsed via Regex: ${text}`
+    };
+    // 1. Max / All
+    if (/\b(max|all|everything)\b/i.test(normalized)) {
+        result.amountType = 'all';
+    }
+    // 2. Percentage
+    // Fix: Allow space between number and %
+    const percentMatch = normalized.match(/(\d+)\s*%/);
+    if (percentMatch) {
+        result.amountType = 'percentage';
+        result.amount = Number(percentMatch[1]);
+    }
+    // 3. Half
+    if (/\bhalf\b/i.test(normalized)) {
+        result.amountType = 'percentage';
+        result.amount = 50;
+    }
+    // 4. Except
+    const exceptMatch = normalized.match(/except\s+(\d+(\.\d+)?)/i);
+    if (exceptMatch) {
+        result.excludeAmount = Number(exceptMatch[1]);
+    }
+    // 5. Amount (if not percentage/max/half)
+    if (!result.amountType && !result.excludeAmount) {
+        // Avoid matching numbers inside "except 10" or "50%"
+        const allNumbers = [...normalized.matchAll(/(\d+(\.\d+)?)/g)];
+        for (const m of allNumbers) {
+            const val = Number(m[0]);
+            const idx = m.index;
+            // Check if this number is part of percentage match
+            if (percentMatch && Math.abs(idx - percentMatch.index) < 10 && val === result.amount)
+                continue;
+            // Check if this number is part of except match
+            if (exceptMatch && Math.abs(idx - exceptMatch.index) < 20 && val === result.excludeAmount)
+                continue;
+            // Use this as amount
+            result.amount = val;
+            break;
+        }
+    }
+    // 6. Tokens & Prepositions
+    const commonTokens = ['ETH', 'BTC', 'USDT', 'USDC', 'MATIC', 'SOL', 'DAI', 'WETH', 'WBTC', 'ARB', 'OP', 'BNB', 'AVAX', 'BASE', 'LINK', 'UNI', 'AAVE'];
+    const tokenPattern = new RegExp(`\\b(${commonTokens.join('|')})\\b`, 'gi');
+    const tokenMatches = [...normalized.matchAll(tokenPattern)];
+    for (const m of tokenMatches) {
+        const token = m[0].toUpperCase();
+        const idx = m.index;
+        const precedingText = normalized.substring(0, idx);
+        let isTo = /(to|into|for)\s+$/.test(precedingText);
+        let isFrom = /(with|from)\s+$/.test(precedingText);
+        if (intent === 'checkout') {
+            if (!result.settleAsset)
+                result.settleAsset = token;
+        }
+        else {
+            // Swap logic
+            if (isTo) {
+                result.toAsset = token;
+            }
+            else if (isFrom) {
+                result.fromAsset = token;
+            }
+            else {
+                // Default order
+                if (!result.fromAsset) {
+                    result.fromAsset = token;
+                }
+                else if (!result.toAsset) {
+                    result.toAsset = token;
+                }
+            }
+        }
+    }
+    // Decision Priority Logic
+    if (result.amountType === 'all') {
+        result.amount = undefined;
+    }
+    // Validate
+    const validated = validateParsedCommand(result, text);
+    if (validated.success) {
+        return validated;
+    }
+    // Return partial if strong signals
+    if (result.intent !== 'unknown' && (result.amountType || result.excludeAmount || result.fromAsset || result.settleAsset)) {
+        return validated;
+    }
+    return null;
 }

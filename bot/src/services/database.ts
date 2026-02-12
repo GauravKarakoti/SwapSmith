@@ -1,7 +1,7 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { pgTable, serial, text, real, timestamp, bigint } from 'drizzle-orm/pg-core';
-import { eq, desc } from 'drizzle-orm';
+import { pgTable, serial, text, real, timestamp, bigint, integer } from 'drizzle-orm/pg-core';
+import { eq, desc, lte, and } from 'drizzle-orm';
 import dotenv from 'dotenv';
 import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
 import type { ParsedCommand } from './groq-client';
@@ -74,11 +74,28 @@ export const limitOrders = pgTable('limit_orders', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const dcaPlans = pgTable('dca_plans', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
+  fromAsset: text('from_asset').notNull(),
+  toAsset: text('to_asset').notNull(),
+  fromNetwork: text('from_network'),
+  toNetwork: text('to_network'),
+  amount: real('amount').notNull(),
+  frequencyDays: integer('frequency_days').notNull(),
+  lastRun: timestamp('last_run'),
+  nextRun: timestamp('next_run').notNull(),
+  status: text('status').notNull().default('active'), // active, paused, cancelled
+  settleAddress: text('settle_address'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 // --- TYPE DEFINITIONS ---
 export type User = typeof users.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Checkout = typeof checkouts.$inferSelect;
 export type LimitOrder = typeof limitOrders.$inferSelect;
+export type DcaPlan = typeof dcaPlans.$inferSelect;
 
 // --- FUNCTIONS ---
 
@@ -202,4 +219,31 @@ export async function getLimitOrdersByUser(telegramId: number): Promise<LimitOrd
   return await db.select().from(limitOrders)
     .where(eq(limitOrders.telegramId, telegramId))
     .orderBy(desc(limitOrders.createdAt));
+}
+
+// --- DCA FUNCTIONS ---
+
+export async function createDcaPlan(plan: Omit<DcaPlan, 'id' | 'createdAt' | 'lastRun'>) {
+  return await db.insert(dcaPlans).values(plan).returning();
+}
+
+export async function getDueDcaPlans(): Promise<DcaPlan[]> {
+  const now = new Date();
+  return await db.select().from(dcaPlans)
+    .where(and(
+      eq(dcaPlans.status, 'active'),
+      lte(dcaPlans.nextRun, now)
+    ));
+}
+
+export async function updateDcaRun(id: number, nextRun: Date) {
+  await db.update(dcaPlans)
+    .set({ lastRun: new Date(), nextRun })
+    .where(eq(dcaPlans.id, id));
+}
+
+export async function getUserDcaPlans(telegramId: number): Promise<DcaPlan[]> {
+  return await db.select().from(dcaPlans)
+    .where(eq(dcaPlans.telegramId, telegramId))
+    .orderBy(desc(dcaPlans.createdAt));
 }
