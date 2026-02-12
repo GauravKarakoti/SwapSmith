@@ -88,6 +88,33 @@ export default function ChatInterface() {
     }
   };
 
+  // Wrapper handlers for proper error handling and chat feedback
+  const _handleStartRecording = async () => {
+    try {
+      await startRecording();
+    } catch (err) {
+      console.error(err);
+      addMessage({
+        role: 'assistant',
+        content: '🎤 Could not access microphone. Please check permissions.',
+        type: 'message'
+      });
+    }
+  };
+
+  const _handleStopRecording = () => {
+    try {
+      stopRecording();
+    } catch (err) {
+      console.error(err);
+      addMessage({
+        role: 'assistant',
+        content: '⚠️ Error stopping recording.',
+        type: 'message'
+      });
+    }
+  };
+
   const handleVoiceInput = async (audioBlob: Blob) => {
     setIsLoading(true);
     addMessage({ role: 'user', content: '🎤 [Sending Voice...]', type: 'message' });
@@ -363,7 +390,7 @@ export default function ChatInterface() {
       <div className="border-t border-gray-200 p-4 bg-white">
         <div className="flex gap-2 items-center">
           <button 
-            onClick={isRecording ? stopRecording : startRecording}
+            onClick={isRecording ? _handleStopRecording : _handleStartRecording}
             className={`p-3 rounded-full transition-all ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
             title={isRecording ? "Stop Recording" : "Start Voice Input"}
           >
