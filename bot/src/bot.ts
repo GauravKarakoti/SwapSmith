@@ -7,6 +7,8 @@ import { getTopStablecoinYields } from './services/yield-client';
 import * as db from './services/database';
 import { startLimitOrderWorker } from './workers/limitOrderWorker';
 import { parseLimitOrder } from './utils/parseLimitOrder';
+import { inferNetwork } from './utils/network';
+import { confirmPortfolioHandler } from './handlers/portfolio';
 import { ethers } from 'ethers';
 import axios from 'axios';
 import fs from 'fs';
@@ -204,25 +206,6 @@ bot.on(message('voice'), async (ctx) => {
     }
 });
 
-function inferNetwork(asset: string): string {
-  const map: Record<string, string> = {
-    'BTC': 'bitcoin',
-    'ETH': 'ethereum',
-    'SOL': 'solana',
-    'USDT': 'ethereum',
-    'USDC': 'ethereum',
-    'DAI': 'ethereum',
-    'WBTC': 'ethereum',
-    'BNB': 'bsc',
-    'AVAX': 'avalanche',
-    'MATIC': 'polygon',
-    'ARB': 'arbitrum',
-    'OP': 'optimism',
-    'BASE': 'base'
-  };
-  return map[asset?.toUpperCase()] || 'ethereum';
-}
-
 async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'voice' = 'text') {
   const userId = ctx.from.id;
 
@@ -324,6 +307,7 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
 
       return ctx.replyWithMarkdown(msg, Markup.inlineKeyboard([
           Markup.button.webApp('📱 Batch Sign (Frontend)', webAppUrl),
+          Markup.button.callback('🤖 Execute via Bot', 'confirm_portfolio'),
           Markup.button.callback('❌ Cancel', 'cancel_swap')
       ]));
   }
@@ -351,9 +335,7 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
 
 // --- ACTION HANDLERS ---
 
-bot.action('confirm_portfolio', async (ctx) => {
-    ctx.reply("Portfolio execution not fully implemented in this snippet.");
-});
+bot.action('confirm_portfolio', confirmPortfolioHandler);
 
 bot.action('confirm_swap', async (ctx) => {
     const userId = ctx.from.id;
