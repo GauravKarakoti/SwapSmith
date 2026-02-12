@@ -12,6 +12,7 @@ import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { MessageCircle, Plus, Clock, Settings, Menu } from 'lucide-react';
+import Link from 'next/link';
 
 interface QuoteData {
   depositAmount: string;
@@ -547,10 +548,14 @@ export default function TerminalPage() {
                   <MessageCircle className="w-4 h-4" />
                   Support
                 </a>
-                <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors text-sm text-zinc-400 hover:text-white">
-                  <Settings className="w-4 h-4" />
-                  Settings
-                </button>
+                <Link
+                  href="/profile"
+                >
+                  <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors text-sm text-zinc-400 hover:text-white">
+                    <Settings className="w-4 h-4" />
+                    Settings
+                  </button>
+                </Link>
               </div>
             </>
           )}
