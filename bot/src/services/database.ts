@@ -144,7 +144,7 @@ export async function createOrderEntry(
     toNetwork: parsedCommand.toChain!,
     settleAmount: settleAmount.toString(),
     depositAddress: depositAddr!,
-    depositMemo: depositMemo || null
+    depositMemo: depositMemo || null,
   });
 }
 
@@ -187,6 +187,30 @@ export async function getUserCheckouts(telegramId: number): Promise<Checkout[]> 
     .limit(10);
 }
 
+// --- LIMIT ORDER FUNCTIONS ---
+
+export async function createLimitOrder(order: Omit<LimitOrder, 'id' | 'createdAt' | 'status' | 'sideshiftOrderId' | 'errorMessage'>) {
+  return await db.insert(limitOrders).values(order).returning();
+}
+
+export async function getPendingLimitOrders(): Promise<LimitOrder[]> {
+  return await db.select().from(limitOrders).where(eq(limitOrders.status, 'pending'));
+}
+
+export async function updateLimitOrderStatus(id: number, status: string, sideshiftOrderId?: string, errorMessage?: string) {
+  const updates: any = { status };
+  if (sideshiftOrderId) updates.sideshiftOrderId = sideshiftOrderId;
+  if (errorMessage) updates.errorMessage = errorMessage;
+
+  await db.update(limitOrders)
+    .set(updates)
+    .where(eq(limitOrders.id, id));
+}
+
+export async function getLimitOrdersByUser(telegramId: number): Promise<LimitOrder[]> {
+  return await db.select().from(limitOrders)
+    .where(eq(limitOrders.telegramId, telegramId))
+    .orderBy(desc(limitOrders.createdAt));
 export async function addAddressBookEntry(telegramId: number, nickname: string, address: string, chain: string) {
   await db.insert(addressBook)
     .values({ telegramId, nickname, address, chain })

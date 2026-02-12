@@ -128,6 +128,33 @@ export default function ChatInterface() {
     }
   };
 
+  // Wrapper handlers for proper error handling and chat feedback
+  const _handleStartRecording = async () => {
+    try {
+      await startRecording();
+    } catch (err) {
+      console.error(err);
+      addMessage({
+        role: 'assistant',
+        content: '🎤 Could not access microphone. Please check permissions.',
+        type: 'message'
+      });
+    }
+  };
+
+  const _handleStopRecording = () => {
+    try {
+      stopRecording();
+    } catch (err) {
+      console.error(err);
+      addMessage({
+        role: 'assistant',
+        content: '⚠️ Error stopping recording.',
+        type: 'message'
+      });
+    }
+  };
+
   const handleVoiceInput = async (audioBlob: Blob) => {
     setIsLoading(true);
     addMessage({ role: 'user', content: '🎤 [Sending Voice...]', type: 'message' });

@@ -5,6 +5,10 @@ import { parseUserCommand, transcribeAudio } from './services/groq-client';
 import { createQuote, createOrder, createCheckout, getOrderStatus } from './services/sideshift-client';
 import { getTopStablecoinYields, getTopYieldPools, suggestMigration, findHigherYieldPools, formatMigrationMessage, MigrationSuggestion } from './services/yield-client';
 import * as db from './services/database';
+import { startLimitOrderWorker } from './workers/limitOrderWorker';
+import { parseLimitOrder } from './utils/parseLimitOrder';
+import { inferNetwork } from './utils/network';
+import { confirmPortfolioHandler } from './handlers/portfolio';
 import { ethers } from 'ethers';
 import axios from 'axios';
 import fs from 'fs';
@@ -483,8 +487,72 @@ bot.on(message('voice'), async (ctx) => {
 });
 
 async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'voice' = 'text') {
-    const userId = ctx.from.id;
-    const state = await db.getConversationState(userId);
+  const userId = ctx.from.id;
+
+  // NEW: Check for limit order pattern first
+  const limitOrder = parseLimitOrder(text);
+  if (limitOrder.success) {
+      await db.setConversationState(userId, {
+          intent: 'limit_order',
+          data: limitOrder,
+          step: 'awaiting_address'
+      });
+
+      return ctx.reply(
+          `👍 I understood: Swap ${limitOrder.amount} ${limitOrder.fromAsset} for ${limitOrder.toAsset} ` +
+          `if ${limitOrder.conditionAsset || limitOrder.toAsset} is ${limitOrder.conditionType} $${limitOrder.targetPrice}.\n\n` +
+          `Please enter the destination ${limitOrder.toAsset} wallet address:`
+      );
+  }
+  
+  const state = await db.getConversationState(userId); 
+
+  // Check if we are in 'limit_order' flow
+  if (state?.intent === 'limit_order' && state.step === 'awaiting_address') {
+      const address = text.trim();
+      if (address.length < 10) return ctx.reply("Address too short. Please try again or /clear.");
+
+      const orderData = state.data;
+      const fromNetwork = inferNetwork(orderData.fromAsset);
+      const toNetwork = inferNetwork(orderData.toAsset);
+
+      await db.createLimitOrder({
+          telegramId: userId,
+          fromAsset: orderData.fromAsset,
+          toAsset: orderData.toAsset,
+          fromNetwork: fromNetwork,
+          toNetwork: toNetwork,
+          amount: orderData.amount,
+          conditionAsset: orderData.conditionAsset || orderData.toAsset,
+          conditionType: orderData.conditionType,
+          targetPrice: orderData.targetPrice,
+          settleAddress: address
+      });
+
+      await db.clearConversationState(userId);
+      return ctx.reply(`✅ Limit Order Created! I'll watch the price for you.`);
+  }
+  
+  // 1. Check for pending address input
+  if (state?.parsedCommand && (state.parsedCommand.intent === 'swap' || state.parsedCommand.intent === 'checkout') && !state.parsedCommand.settleAddress) {
+      const potentialAddress = text.trim();
+      // Basic address validation (can be improved)
+      if (potentialAddress.length > 25) { // Arbitrary length check for now
+          const updatedCommand = { ...state.parsedCommand, settleAddress: potentialAddress };
+          await db.setConversationState(userId, { parsedCommand: updatedCommand });
+          
+          await ctx.reply(`Address received: \`${potentialAddress}\``, { parse_mode: 'Markdown' });
+          
+          // Re-trigger the confirmation logic with the complete command
+          const confirmAction = updatedCommand.intent === 'checkout' ? 'confirm_checkout' : 'confirm_swap';
+          return ctx.reply("Ready to proceed?", Markup.inlineKeyboard([
+              Markup.button.callback('✅ Yes', confirmAction), 
+              Markup.button.callback('❌ No', 'cancel_swap')
+          ]));
+      } else {
+          return ctx.reply("That doesn't look like a valid address. Please try again or /clear to cancel.");
+      }
+  }
 
     if (state?.parsedCommand && (state.parsedCommand.intent === 'swap' || state.parsedCommand.intent === 'checkout' || state.parsedCommand.intent === 'portfolio') && !state.parsedCommand.settleAddress) {
         const potentialAddress = text.trim();
@@ -550,6 +618,28 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
     await ctx.sendChatAction('typing');
     const parsed = await parseUserCommand(text, history, inputType);
 
+  if (parsed.intent === 'portfolio') {
+      await db.setConversationState(userId, { parsedCommand: parsed });
+      
+      let msg = `📊 *Portfolio Strategy Detected*\nInput: ${parsed.amount} ${parsed.fromAsset} (${parsed.fromChain})\n\n*Allocation Plan:*\n`;
+      parsed.portfolio?.forEach(item => { msg += `• ${item.percentage}% → ${item.toAsset} on ${item.toChain}\n`; });
+      
+      const params = new URLSearchParams({
+          mode: 'portfolio',
+          data: JSON.stringify(parsed.portfolio),
+          amount: parsed.amount?.toString() || '0',
+          token: parsed.fromAsset || '',
+          chain: parsed.fromChain || ''
+      });
+      
+      const webAppUrl = `${MINI_APP_URL}?${params.toString()}`;
+
+      return ctx.replyWithMarkdown(msg, Markup.inlineKeyboard([
+          Markup.button.webApp('📱 Batch Sign (Frontend)', webAppUrl),
+          Markup.button.callback('🤖 Execute via Bot', 'confirm_portfolio'),
+          Markup.button.callback('❌ Cancel', 'cancel_swap')
+      ]));
+  }
     if (!parsed.success && parsed.intent !== 'yield_scout') {
         await logAnalytics(ctx, 'ValidationError', { input: text, error: parsed.validationErrors.join(", ") });
         
@@ -780,6 +870,8 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
 }
 
 // --- ACTION HANDLERS ---
+
+bot.action('confirm_portfolio', confirmPortfolioHandler);
 
 bot.action('confirm_swap', async (ctx) => {
     const userId = ctx.from.id;

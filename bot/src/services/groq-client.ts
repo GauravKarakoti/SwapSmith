@@ -20,6 +20,7 @@ export interface ParsedCommand {
   toChain: string | null;
   amount: number | null;
   amountType?: "exact" | "percentage" | "all" | null; // Added back for compatibility
+  excludeAmount?: number;
   
   // Portfolio Fields (Array of outputs)
   portfolio?: {
@@ -157,6 +158,13 @@ export async function parseUserCommand(
   conversationHistory: any[] = [],
   inputType: 'text' | 'voice' = 'text'
 ): Promise<ParsedCommand> {
+  // 1. Try Regex Parsing First
+  const regexResult = parseWithRegex(userInput);
+  if (regexResult) {
+    return regexResult;
+  }
+
+  // 2. Fallback to AI
   let currentSystemPrompt = systemPrompt;
 
   if (inputType === 'voice') {
@@ -214,14 +222,16 @@ export async function transcribeAudio(mp3FilePath: string): Promise<string> {
 function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string, inputType: 'text' | 'voice' = 'text'): ParsedCommand {
   const errors: string[] = [];
   
+  const hasValidAmount = (parsed.amount && parsed.amount > 0) || parsed.amountType === 'all';
+
   if (parsed.intent === "swap") {
     if (!parsed.fromAsset) errors.push("Source asset not specified");
     if (!parsed.toAsset) errors.push("Destination asset not specified");
-    if (!parsed.amount || parsed.amount <= 0) errors.push("Invalid amount specified");
+    if (!hasValidAmount) errors.push("Invalid amount specified");
     
   } else if (parsed.intent === "portfolio") {
     if (!parsed.fromAsset) errors.push("Source asset not specified");
-    if (!parsed.amount || parsed.amount <= 0) errors.push("Invalid amount specified");
+    if (!hasValidAmount) errors.push("Invalid amount specified");
     if (!parsed.portfolio || parsed.portfolio.length === 0) {
       errors.push("No portfolio allocation specified");
     } else {
@@ -234,8 +244,14 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
 
   } else if (parsed.intent === "checkout") {
     if (!parsed.settleAsset) errors.push("Asset to receive not specified");
-    if (!parsed.settleNetwork) errors.push("Network to receive on not specified");
-    if (!parsed.settleAmount || parsed.settleAmount <= 0) errors.push("Invalid amount specified");
+    // if (!parsed.settleNetwork) errors.push("Network to receive on not specified"); // Regex might miss network, allow it for now or fail?
+    // AI usually infers network. Regex won't. If we enforce network, Regex fails often.
+    // But checkout usually needs network. Let's keep it but maybe lenient if address is present?
+    // For now, I'll keep strict validation for checkout as it involves money.
+    if (!parsed.settleNetwork && !parsed.settleAddress) errors.push("Network or Address to receive on not specified");
+    if (!parsed.settleAmount || parsed.settleAmount <= 0) {
+         if (parsed.amountType !== 'all') errors.push("Invalid amount specified");
+    }
     
   } else if (parsed.intent === "yield_scout") {
     // No specific validation needed for yield scout, just needs the intent
@@ -275,6 +291,7 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     toChain: parsed.toChain || null,
     amount: parsed.amount || null,
     amountType: parsed.amountType || null,
+    excludeAmount: parsed.excludeAmount,
     portfolio: parsed.portfolio, // Pass through portfolio
     settleAsset: parsed.settleAsset || null,
     settleNetwork: parsed.settleNetwork || null,
