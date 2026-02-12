@@ -51,32 +51,31 @@ export default function WalletConnector() {
   };
 
   useEffect(() => {
-    if (isConnected && connectionError) {
-      setConnectionError('');
-      return;
-    }
+    let errorMessage = '';
     
-    if (!error || isConnected) return;
-
-    let errorMessage: string;
-    
-    if (error instanceof ConnectorNotFoundError) {
-      errorMessage = 'Wallet not detected.';
-    } else if (error instanceof ChainNotConfiguredError) {
-      errorMessage = 'Unsupported network. Please switch.';
-    } else if (error instanceof ConnectorUnavailableReconnectingError ) {
-      errorMessage = 'Reconnecting to wallet...';
-    } else if (error instanceof ConnectorAlreadyConnectedError) {
-      errorMessage = 'Request already pending in wallet.';
-    } else {
-      errorMessage = handleError(error, ErrorType.WALLET_ERROR, {
-        operation: 'wallet_connect',
-        retryable: true,
-      });
+    if (isConnected) {
+      // Clear error when successfully connected
+      errorMessage = '';
+    } else if (error) {
+      if (error instanceof ConnectorNotFoundError) {
+        errorMessage = 'Wallet not detected.';
+      } else if (error instanceof ChainNotConfiguredError) {
+        errorMessage = 'Unsupported network. Please switch.';
+      } else if (error instanceof ConnectorUnavailableReconnectingError ) {
+        errorMessage = 'Reconnecting to wallet...';
+      } else if (error instanceof ConnectorAlreadyConnectedError) {
+        errorMessage = 'Request already pending in wallet.';
+      } else {
+        errorMessage = handleError(error, ErrorType.WALLET_ERROR, {
+          operation: 'wallet_connect',
+          retryable: true,
+        });
+      }
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setConnectionError(errorMessage);
-  }, [error, isConnected, handleError, connectionError]);
+  }, [error, isConnected, handleError]);
 
   // 1. Loading/Syncing State
   if (isReconnecting) {

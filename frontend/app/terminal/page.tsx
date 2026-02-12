@@ -1,26 +1,17 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { useAuth } from "@/hooks/useAuth";
-import { useAccount } from "wagmi";
-import Link from "next/link";
-import WalletConnector from "@/components/WalletConnector";
-import Navbar from "@/components/Navbar";
-import ClaudeChatInput from "@/components/ClaudeChatInput";
-import SwapConfirmation from "@/components/SwapConfirmation";
-import IntentConfirmation from "@/components/IntentConfirmation";
-import { ParsedCommand } from "@/utils/groq-client";
-import { useErrorHandler, ErrorType } from "@/hooks/useErrorHandler";
-import { useAudioRecorder } from "@/hooks/useAudioRecorder";
-import {
-  MessageCircle,
-  Plus,
-  Clock,
-  Settings,
-  HelpCircle,
-  PanelLeftClose,
-  PanelLeft,
-} from "lucide-react";
+import { useEffect, useState, useRef } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import { useAccount } from 'wagmi';
+import { useRouter } from 'next/navigation';
+import Navbar from '@/components/Navbar';
+import ClaudeChatInput from '@/components/ClaudeChatInput';
+import SwapConfirmation from '@/components/SwapConfirmation';
+import IntentConfirmation from '@/components/IntentConfirmation';
+import { ParsedCommand } from '@/utils/groq-client';
+import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
+import { useAudioRecorder } from '@/hooks/useAudioRecorder';
+import { MessageCircle, Plus, Clock, Settings, Menu } from 'lucide-react';
 
 interface QuoteData {
   depositAmount: string;
@@ -94,6 +85,9 @@ const MessageListSkeleton = () => (
 );
 
 export default function TerminalPage() {
+  const router = useRouter();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [chatHistory, setChatHistory] = useState([
@@ -131,6 +125,13 @@ export default function TerminalPage() {
     sampleRate: 16000,
     numberOfAudioChannels: 1,
   });
+
+  // Protect route - redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push('/login');
+    }
+  }, [authLoading, isAuthenticated, router]);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -472,12 +473,31 @@ export default function TerminalPage() {
     }
   };
 
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <div className="flex h-screen bg-[#050505] items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-zinc-400">Authenticating...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render if not authenticated (will redirect)
+  if (!isAuthenticated) {
+    return null;
+  }
+
   return (
     <>
-      <div className="flex h-screen bg-[#050505] text-white overflow-hidden">
+      <Navbar />
+      
+      <div className="flex h-screen bg-[#050505] text-white overflow-hidden pt-16">
         {/* Sidebar */}
         <aside
-          className={`${isSidebarOpen ? "w-80" : "w-0"} transition-all duration-300 bg-zinc-900/50 border-r border-zinc-800 flex flex-col overflow-hidden`}
+          className={`${isSidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 bg-zinc-900/50 border-r border-zinc-800 flex flex-col overflow-hidden`}
         >
           {isSidebarOpen && (
             <>
@@ -540,6 +560,16 @@ export default function TerminalPage() {
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Chat Area */}
           <main className="flex-1 overflow-y-auto flex flex-col">
+            
+            {/* Sidebar Toggle Button */}
+            <button
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="fixed top-20 left-4 z-40 p-2 bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700 rounded-lg transition-colors shadow-lg"
+              title={isSidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+            >
+              <Menu className="w-5 h-5 text-zinc-300" />
+            </button>
+
             {/* Header Section */}
             <div className="flex-shrink-0 pt-12 pb-8 px-4">
               <div className="max-w-3xl mx-auto text-center space-y-4">
@@ -565,26 +595,30 @@ export default function TerminalPage() {
                     {messages.map((msg, index) => (
                       <div
                         key={index}
-                        className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} animate-in fade-in slide-in-from-bottom-2`}
+                        className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2`}
                       >
                         <div className={`max-w-[85%]`}>
-                          <div
-                            className={`px-5 py-3 rounded-2xl text-sm leading-relaxed backdrop-blur-sm ${
-                              msg.role === "user"
-                                ? "bg-blue-600 text-white rounded-tr-none shadow-lg"
-                                : "bg-zinc-900/50 border border-zinc-800 text-gray-200 rounded-tl-none"
-                            }`}
-                          >
-                            {/* Your existing msg rendering logic */}
-                            {msg.type === "message" && (
-                              <div className="whitespace-pre-line">
-                                {msg.content}
+                          {msg.role === 'user' ? (
+                            <div className="bg-blue-600 text-white px-5 py-3 rounded-2xl rounded-tr-none shadow-lg shadow-blue-600/20 text-sm font-medium">
+                              {msg.content}
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              <div className="bg-zinc-900/50 border border-zinc-800 text-gray-200 px-5 py-4 rounded-2xl rounded-tl-none text-sm leading-relaxed backdrop-blur-sm">
+                                {msg.type === 'message' && <div className="whitespace-pre-line">{msg.content}</div>}
+                                {msg.type === 'yield_info' && <div className="font-mono text-xs text-blue-300">{msg.content}</div>}
+                                {msg.type === 'intent_confirmation' && msg.data && 'parsedCommand' in msg.data && <IntentConfirmation command={msg.data.parsedCommand} onConfirm={handleIntentConfirm} />}
+                                {msg.type === 'swap_confirmation' && msg.data && 'quoteData' in msg.data && <SwapConfirmation quote={msg.data.quoteData as QuoteData} confidence={msg.data.confidence} />}
+                                {msg.type === 'checkout_link' && msg.data && 'url' in msg.data && (
+                                  <a href={msg.data.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+                                    {msg.data.url}
+                                  </a>
+                                )}
                               </div>
-                            )}
-                            {/* ... other types (yield, confirmation, etc) */}
-                          </div>
+                            </div>
+                          )}
                           <p
-                            className={`text-[10px] text-gray-500 mt-2 px-1 ${msg.role === "user" ? "text-right" : "text-left"}`}
+                            className={`text-[10px] text-gray-500 mt-2 px-1 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}
                           >
                             {formatTime(msg.timestamp)}
                           </p>

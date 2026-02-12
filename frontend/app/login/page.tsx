@@ -17,11 +17,12 @@ export default function LoginPage() {
     try {
       // login is now an async function returning a promise from Firebase
       await login(email, password)
-    } catch (err: any) {
+    } catch (err) {
       // Map Firebase error codes to user-friendly messages
-      if (err.includes('user-not-found') || err.includes('wrong-password') || err.includes('invalid-credential')) {
+      const errorMessage = String(err)
+      if (errorMessage.includes('user-not-found') || errorMessage.includes('wrong-password') || errorMessage.includes('invalid-credential')) {
         setError('Invalid email or password. Please try again.')
-      } else if (err.includes('too-many-requests')) {
+      } else if (errorMessage.includes('too-many-requests')) {
         setError('Too many failed attempts. Please try again later.')
       } else {
         setError('Authentication failed. Please verify your connection.')

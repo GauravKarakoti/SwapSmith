@@ -17,11 +17,12 @@ export default function RegisterPage() {
     if (formData.name && formData.email && formData.password) {
       try {
         await register(formData.email, formData.password)
-      } catch (err: any) {
+      } catch (err) {
         // Handle common Firebase errors professionally
-        if (err.includes('email-already-in-use')) {
+        const errorMessage = String(err)
+        if (errorMessage.includes('email-already-in-use')) {
           setError('This email is already registered.')
-        } else if (err.includes('weak-password')) {
+        } else if (errorMessage.includes('weak-password')) {
           setError('Password should be at least 6 characters.')
         } else {
           setError('Failed to create account. Please try again.')
