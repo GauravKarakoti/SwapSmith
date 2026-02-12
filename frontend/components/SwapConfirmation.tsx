@@ -138,10 +138,11 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
 
         setSimulationPassed(true);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Simulation failed:", error);
         // Extract meaningful error message
-        const msg = error.shortMessage || error.message || "Transaction likely to fail";
+        const errorObj = error as Error;
+        const msg = errorObj.message || "Transaction likely to fail";
         
         if (msg.includes("insufficient funds")) {
             alert(`Simulation Failed: Insufficient funds for ${quote.depositAmount} ${quote.depositCoin} + Gas.`);
