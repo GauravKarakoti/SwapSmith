@@ -61,9 +61,21 @@ MODES:
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
 
 ADDRESS RESOLUTION:
-- Users can specify addresses as raw wallet addresses, ENS names (ending in .eth), Lens handles (ending in .lens), or nicknames from their address book.
+- Users can specify addresses as raw wallet addresses (0x...), ENS names (ending in .eth), Lens handles (ending in .lens), Unstoppable Domains (ending in .crypto, .nft, .blockchain, etc.), or nicknames from their address book.
 - If an address is specified, include it in settleAddress field.
-- The system will resolve nicknames, ENS, and Lens automatically.
+- The system will resolve nicknames, ENS, Lens, and Unstoppable Domains automatically.
+
+IMPORTANT: ENS/ADDRESS HANDLING:
+- When a user says "Swap X ETH to vitalik.eth" or "Send X ETH to vitalik.eth", they mean:
+  * Keep the same asset (ETH)
+  * Send it to the address vitalik.eth
+  * This should be parsed as: toAsset: "ETH", toChain: "ethereum", settleAddress: "vitalik.eth"
+- Patterns to recognize as addresses (not assets):
+  * Ends with .eth (ENS)
+  * Ends with .lens (Lens Protocol)
+  * Ends with .crypto, .nft, .blockchain, .wallet, etc. (Unstoppable Domains)
+  * Starts with 0x followed by 40 hex characters
+  * Looks like a nickname (single word, lowercase, no special chars)
 
 AMBIGUITY HANDLING:
 - If the command is ambiguous (e.g., "swap all my ETH to BTC or USDC"), set confidence low (0-30) and add validation error "Command is ambiguous. Please specify clearly."
@@ -125,7 +137,7 @@ EXAMPLES:
    -> intent: "yield_deposit", fromAsset: "ETH", amount: 1, confidence: 95
 
 6. "Swap 1 ETH to mywallet"
-   -> intent: "swap", fromAsset: "ETH", toAsset: "BTC", toChain: "bitcoin", amount: 1, settleAddress: "mywallet", confidence: 95
+   -> intent: "swap", fromAsset: "ETH", toAsset: "ETH", toChain: "ethereum", amount: 1, settleAddress: "mywallet", confidence: 95
 
 7. "Send 5 USDC to vitalik.eth"
    -> intent: "checkout", settleAsset: "USDC", settleNetwork: "ethereum", settleAmount: 5, settleAddress: "vitalik.eth", confidence: 95
