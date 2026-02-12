@@ -1,0 +1,14 @@
+services:
+ frontend:
+  build:
+    context:  ./frontend
+    dockerfile: Dockerfile
+    args:
+     GROQ_API_KEY: ${GROQ_API_KEY}
+  container_name: swapsmith-frontend
+  ports:
+   - "3002:3000"
+  env_file:
+   - ./frontend/.env
+  
+  restart: unless-stopped

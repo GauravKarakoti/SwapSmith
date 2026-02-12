@@ -14,18 +14,20 @@
         .btn-primary:active { transform: scale(0.98); }
         .loader { border: 3px solid #333; border-top: 3px solid #3b82f6; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body class="flex flex-col items-center justify-center min-h-screen p-4">
 
-    <div class="mb-8 text-center">
+    <div class="mb-8 text-center fade-in">
         <h1 class="text-3xl font-bold tracking-tight">Swap<span class="gradient-text">Smith</span></h1>
         <p class="text-slate-400 text-sm mt-1">Secure Transaction Signer</p>
     </div>
 
-    <div class="glass-panel w-full max-w-md rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+    <div class="glass-panel w-full max-w-md rounded-2xl p-6 shadow-2xl relative overflow-hidden fade-in">
         
-        <div id="statusBadge" class="absolute top-4 right-4 bg-yellow-500/10 text-yellow-500 text-xs px-2 py-1 rounded-full border border-yellow-500/20">
+        <div id="statusBadge" class="absolute top-4 right-4 bg-yellow-500/10 text-yellow-500 text-xs px-2 py-1 rounded-full border border-yellow-500/20 transition-colors duration-300">
             Pending Sign
         </div>
 
@@ -59,7 +61,7 @@
         </div>
 
         <div class="mt-8 space-y-3">
-            <button id="btnAction" class="btn-primary w-full py-4 rounded-xl font-bold text-lg shadow-lg flex justify-center items-center space-x-2">
+            <button id="btnAction" class="btn-primary w-full py-4 rounded-xl font-bold text-lg shadow-lg flex justify-center items-center space-x-2 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed">
                 <span>Connect Wallet</span>
             </button>
             
@@ -68,10 +70,10 @@
             </button>
         </div>
 
-        <p id="statusText" class="mt-4 text-center text-xs text-slate-500 h-4"></p>
+        <p id="statusText" class="mt-4 text-center text-xs text-slate-500 h-4 transition-all duration-300"></p>
     </div>
 
-    <p class="mt-6 text-xs text-slate-600 max-w-xs text-center">
+    <p class="mt-6 text-xs text-slate-600 max-w-xs text-center fade-in">
         <span class="mr-1">🔒</span> This transaction is executed directly by your wallet. SwapSmith never accesses your private keys.
     </p>
 
@@ -106,7 +108,7 @@
             token: urlParams.get('token') || 'ETH',
             chain: urlParams.get('chain') || 'Ethereum',
             intent: urlParams.get('intent') || 'swap',
-            amount: urlParams.get('amount') // Capture explicit amount param
+            amount: urlParams.get('amount')
         };
 
         // --- UPDATE UI ---
@@ -118,7 +120,6 @@
         document.getElementById('actionLabel').innerText = actionLabels[txParams.intent] || 'You are Sending';
 
         try {
-            // Priority: Explicit amount param > value param (which is 0 for ERC20)
             let displayAmt;
             if (txParams.amount) {
                 displayAmt = txParams.amount;
@@ -134,6 +135,14 @@
             console.error(e);
         }
 
+        // --- GUARD AGAINST INVALID PARAMS ---
+        if (!txParams.to) {
+            document.getElementById('statusText').innerText = "Invalid transaction parameters";
+            document.getElementById('statusText').classList.add('text-red-400');
+            document.getElementById('btnAction').disabled = true;
+            document.getElementById('btnAction').classList.add('opacity-50', 'cursor-not-allowed');
+        }
+
         const btn = document.getElementById('btnAction');
         const btnDisconnect = document.getElementById('btnDisconnect');
         const statusText = document.getElementById('statusText');
@@ -144,12 +153,13 @@
         modal.subscribeProvider(async ({ provider, address, chainId }) => {
             if (provider) {
                 walletProvider = provider;
+                btn.disabled = false;
                 btn.innerHTML = `Sign Transaction <span class="ml-2">✍️</span>`;
                 btn.classList.remove('btn-primary');
                 btn.classList.add('bg-green-600', 'hover:bg-green-700', 'text-white');
                 btnDisconnect.style.display = "block";
                 statusBadge.innerText = "Wallet Connected";
-                statusBadge.classList.replace('text-yellow-500', 'text-green-400');
+                statusBadge.className = "absolute top-4 right-4 bg-green-500/10 text-green-400 text-xs px-2 py-1 rounded-full border border-green-500/20 transition-colors duration-300";
                 
                 if (chainId !== txParams.chainId) {
                     statusText.innerText = `Switching network to ${txParams.chain}...`;
@@ -164,22 +174,34 @@
             walletProvider = null;
             btn.innerText = "Connect Wallet";
             btn.classList.add('btn-primary');
-            btn.classList.remove('bg-green-600');
+            btn.classList.remove('bg-green-600', 'hover:bg-green-700', 'text-white');
+            btn.disabled = false;
             btnDisconnect.style.display = "none";
-            statusBadge.innerText = "Pending Connection";
+            statusBadge.innerText = "Pending Sign";
+            statusBadge.className = "absolute top-4 right-4 bg-yellow-500/10 text-yellow-500 text-xs px-2 py-1 rounded-full border border-yellow-500/20 transition-colors duration-300";
+            statusText.innerText = "";
         }
 
         btn.onclick = async () => {
             if (!walletProvider) {
+                // Disable button while connecting to prevent double-click
+                btn.disabled = true;
+                statusText.innerText = "Connecting wallet...";
+                statusText.classList.remove('text-red-400');
                 await modal.open();
+                // Re-enable button after modal interaction (subscribeProvider will update state)
+                setTimeout(() => {
+                    if (!walletProvider) {
+                        btn.disabled = false;
+                        statusText.innerText = "";
+                    }
+                }, 500);
             } else {
                 await sendTransaction();
             }
         };
 
-        // --- FIXED: Open the Account view instead of calling disconnect() ---
         btnDisconnect.onclick = async () => {
-            // Open the modal to the 'Account' view where the disconnect button exists
             await modal.open({ view: 'Account' });
         };
 
@@ -208,6 +230,7 @@
                 btn.disabled = false;
                 btn.innerText = "Retry Sign";
                 statusText.innerText = "Error: " + (error.shortMessage || "Transaction rejected");
+                statusText.classList.add('text-red-400');
             }
         }
     </script>

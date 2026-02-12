@@ -45,7 +45,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
     
     res.status(200).json(quote);
-  } catch (error) {
+  } catch (error: unknown) {
     // ✅ FIX: Changed `error: any` to a safer type guard.
     const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     console.error('API Route Error - Error creating quote:', errorMessage);
