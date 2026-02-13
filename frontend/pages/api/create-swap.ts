@@ -1,6 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { createQuote } from '@/utils/sideshift-client';
 
+const SIDESHIFT_CLIENT_IP = process.env.SIDESHIFT_CLIENT_IP || "127.0.0.1";
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -24,7 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (userIP === '::1' || userIP === '127.0.0.1') {
       console.log('Detected localhost IP, providing a public fallback for development.');
       // This is a common practice for local testing against APIs that require a real IP.
-      userIP = '1.1.1.1'; 
+      userIP = SIDESHIFT_CLIENT_IP; 
     }
 
     if (!userIP) {
