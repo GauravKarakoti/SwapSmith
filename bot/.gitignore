@@ -1,3 +1,5 @@
 .env
 node_modules
 temp_*
+dist
+logs
