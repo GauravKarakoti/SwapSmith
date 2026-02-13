@@ -4,7 +4,7 @@ dotenv.config();
 const SIDESHIFT_BASE_URL = "https://sideshift.ai/api/v2";
 const AFFILIATE_ID = process.env.SIDESHIFT_AFFILIATE_ID || process.env.NEXT_PUBLIC_AFFILIATE_ID || '';
 const API_KEY = process.env.SIDESHIFT_API_KEY || process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
-const DEFAULT_USER_IP = process.env.SIDESHIFT_USER_IP;
+const DEFAULT_USER_IP = process.env.SIDESHIFT_CLIENT_IP;
 
 export interface SideShiftPair {
   depositCoin: string;
