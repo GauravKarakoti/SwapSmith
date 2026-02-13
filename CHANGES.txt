@@ -1,0 +1,45 @@
+PULL REQUEST CHANGES
+
+Build fixes
+- Fixed cleanExpiredCache return type
+- Fixed user.email null safety
+- Removed deprecated instrumentationHook
+- Removed unused imports
+- Replaced img with Image component
+- Fixed TypeScript types
+
+Chat persistence
+- Added getChatSessions database function
+- Created chat sessions API
+- Added useChatSessions hook
+- Implemented database-backed chat history
+- Added new chat creation
+- Added delete chat functionality
+- Added session switching
+- Replaced hardcoded history with database
+- Auto-generated session titles
+- Added relative timestamps
+
+Database updates
+- Added chat_history table support
+- Added session management functions
+- Added getChatHistory function
+- Added addChatMessage function
+- Added clearChatHistory function
+
+API endpoints
+- Created /api/chat/sessions
+- Enhanced /api/chat/history
+- Added session filtering
+
+UI improvements
+- Added delete button
+- Highlighted active session
+- Added empty state
+- Improved session layout
+
+Code quality
+- Resolved lint warnings
+- Fixed build errors
+- TypeScript compliance
+- Null safety checks
