@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAccount } from 'wagmi';
 import { useRouter } from 'next/navigation';
@@ -11,7 +11,8 @@ import IntentConfirmation from '@/components/IntentConfirmation';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
-import { MessageCircle, Plus, Clock, Settings, Menu } from 'lucide-react';
+import { MessageCircle, Plus, Clock, Settings, Menu, Trash2 } from 'lucide-react';
+import { useChatHistory, useChatSessions } from '@/hooks/useCachedData';
 
 interface QuoteData {
   depositAmount: string;
@@ -86,16 +87,12 @@ const MessageListSkeleton = () => (
 
 export default function TerminalPage() {
   const router = useRouter();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
+  const [currentSessionId, setCurrentSessionId] = useState<string>(crypto.randomUUID());
+  const sessionIdRef = useRef<string>(currentSessionId);
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
-  const [chatHistory, setChatHistory] = useState([
-    { id: 1, title: "Swap ETH to USDC", timestamp: "2 hours ago" },
-    { id: 2, title: "Check yield opportunities", timestamp: "Yesterday" },
-    { id: 3, title: "Create payment link", timestamp: "2 days ago" },
-    { id: 4, title: "Swap BTC to ETH", timestamp: "1 week ago" },
-  ]);
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -114,6 +111,10 @@ export default function TerminalPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { address, isConnected } = useAccount();
   const { handleError } = useErrorHandler();
+  
+  // Load chat sessions and history from database
+  const { data: chatSessions, refetch: refetchSessions } = useChatSessions(user?.uid);
+  const { data: dbChatHistory } = useChatHistory(user?.uid, currentSessionId);
 
   const {
     isRecording,
@@ -132,6 +133,56 @@ export default function TerminalPage() {
       router.push('/login');
     }
   }, [authLoading, isAuthenticated, router]);
+  
+  // Load messages from database on mount or when session changes
+  useEffect(() => {
+    if (dbChatHistory?.history && dbChatHistory.history.length > 0) {
+      const loadedMessages = dbChatHistory.history.map((msg) => ({
+        role: msg.role as "user" | "assistant",
+        content: msg.content,
+        timestamp: new Date(msg.createdAt),
+        type: "message" as const,
+      }));
+      setMessages(loadedMessages);
+    } else {
+      // Reset to welcome message for new/empty sessions
+      setMessages([
+        {
+          role: "assistant",
+          content: "Hello! I can help you swap assets, create payment links, or scout yields.\\n\\n\ud83d\udca1 Tip: Try our Telegram Bot for on-the-go access!",
+          timestamp: new Date(),
+          type: "message",
+        },
+      ]);
+    }
+  }, [dbChatHistory, currentSessionId]);
+
+  const addMessage = useCallback(async (message: Omit<Message, "timestamp">) => {
+    const newMessage = { ...message, timestamp: new Date() };
+    setMessages((prev) => [...prev, newMessage]);
+    
+    // Save to database if user is authenticated
+    if (user?.uid && (message.type === "message" || !message.type)) {
+      try {
+        await fetch('/api/chat/history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user.uid,
+            walletAddress: address,
+            role: message.role,
+            content: message.content,
+            sessionId: sessionIdRef.current,
+            metadata: message.data ? { type: message.type, data: message.data } : null
+          })
+        });
+        // Refresh sessions list after adding a message
+        refetchSessions();
+      } catch (error) {
+        console.error('Failed to save message to database:', error);
+      }
+    }
+  }, [user?.uid, address, refetchSessions]);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -142,6 +193,70 @@ export default function TerminalPage() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Update sessionIdRef when currentSessionId changes
+  useEffect(() => {
+    sessionIdRef.current = currentSessionId;
+  }, [currentSessionId]);
+
+  // Handle new chat
+  const handleNewChat = useCallback(() => {
+    const newSessionId = crypto.randomUUID();
+    setCurrentSessionId(newSessionId);
+    setMessages([
+      {
+        role: "assistant",
+        content: "Hello! I can help you swap assets, create payment links, or scout yields.\n\n💡 Tip: Try our Telegram Bot for on-the-go access!",
+        timestamp: new Date(),
+        type: "message",
+      },
+    ]);
+  }, []);
+
+  // Handle switch session
+  const handleSwitchSession = useCallback((sessionId: string) => {
+    setCurrentSessionId(sessionId);
+  }, []);
+
+  // Handle delete session
+  const handleDeleteSession = useCallback(async (sessionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!user?.uid) return;
+    
+    try {
+      const response = await fetch(`/api/chat/history?userId=${user.uid}&sessionId=${sessionId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        // If deleted session is current, create new session
+        if (sessionId === currentSessionId) {
+          handleNewChat();
+        }
+        // Refresh sessions list
+        await refetchSessions();
+      }
+    } catch (error) {
+      console.error('Failed to delete session:', error);
+    }
+  }, [user?.uid, currentSessionId, handleNewChat, refetchSessions]);
+
+  // Format relative time
+  const formatRelativeTime = (timestamp: string) => {
+    const now = new Date();
+    const then = new Date(timestamp);
+    const diffMs = now.getTime() - then.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    return then.toLocaleDateString();
+  };
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -150,7 +265,7 @@ export default function TerminalPage() {
     if (audioError) {
       addMessage({ role: "assistant", content: audioError, type: "message" });
     }
-  }, [audioError]);
+  }, [audioError, addMessage]);
 
   const formatTime = (date: Date) => {
     const hours = date.getHours();
@@ -158,10 +273,6 @@ export default function TerminalPage() {
     const ampm = hours >= 12 ? "PM" : "AM";
     const displayHours = hours % 12 || 12;
     return `${displayHours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")} ${ampm}`;
-  };
-
-  const addMessage = (message: Omit<Message, "timestamp">) => {
-    setMessages((prev) => [...prev, { ...message, timestamp: new Date() }]);
   };
 
   const handleStartRecording = async () => {
@@ -385,6 +496,8 @@ export default function TerminalPage() {
           amount: command.amount,
           fromChain: command.fromChain,
           toChain: command.toChain,
+          userId: user?.uid,
+          walletAddress: address,
         }),
       });
       const quote = await quoteResponse.json();
@@ -462,14 +575,6 @@ export default function TerminalPage() {
     if (data.message.trim()) {
       addMessage({ role: "user", content: data.message, type: "message" });
       processCommand(data.message);
-      setChatHistory([
-        {
-          id: Date.now(),
-          title: data.message.slice(0, 50),
-          timestamp: "Just now",
-        },
-        ...chatHistory,
-      ]);
     }
   };
 
@@ -502,7 +607,10 @@ export default function TerminalPage() {
           {isSidebarOpen && (
             <>
               <div className="p-4 border-b border-zinc-800">
-                <button className="w-full flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors text-sm font-medium">
+                <button 
+                  onClick={handleNewChat}
+                  className="w-full flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors text-sm font-medium"
+                >
                   <Plus className="w-4 h-4" />
                   New Chat
                 </button>
@@ -518,20 +626,38 @@ export default function TerminalPage() {
                   <div className="space-y-1">
                     {isHistoryLoading ? (
                       <SidebarSkeleton />
-                    ) : (
-                      chatHistory.map((chat) => (
-                        <button
-                          key={chat.id}
-                          className="w-full text-left px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors group"
+                    ) : chatSessions?.sessions && chatSessions.sessions.length > 0 ? (
+                      chatSessions.sessions.map((chat) => (
+                        <div
+                          key={chat.sessionId}
+                          className={`w-full text-left px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors group relative ${
+                            chat.sessionId === currentSessionId ? 'bg-zinc-800' : ''
+                          }`}
                         >
-                          <p className="text-sm text-zinc-200 truncate group-hover:text-white transition-colors">
-                            {chat.title}
-                          </p>
-                          <p className="text-xs text-zinc-600 mt-0.5">
-                            {chat.timestamp}
-                          </p>
-                        </button>
+                          <button
+                            onClick={() => handleSwitchSession(chat.sessionId)}
+                            className="w-full text-left pr-8"
+                          >
+                            <p className="text-sm text-zinc-200 truncate group-hover:text-white transition-colors">
+                              {chat.title}
+                            </p>
+                            <p className="text-xs text-zinc-600 mt-0.5">
+                              {formatRelativeTime(chat.timestamp)}
+                            </p>
+                          </button>
+                          <button
+                            onClick={(e) => handleDeleteSession(chat.sessionId, e)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 rounded transition-all"
+                            title="Delete chat"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                          </button>
+                        </div>
                       ))
+                    ) : (
+                      <div className="px-3 py-4 text-center text-sm text-zinc-500">
+                        No chat history yet
+                      </div>
                     )}
                   </div>
                 </div>
