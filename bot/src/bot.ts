@@ -16,6 +16,8 @@ import { handleError } from './services/logger';
 import { tokenResolver } from './services/token-resolver';
 import { OrderMonitor } from './services/order-monitor';
 import { resolveAddress, isNamingService } from './services/address-resolver';
+import { ADDRESS_PATTERNS } from './config/address-patterns';
+
 
 dotenv.config();
 const MINI_APP_URL = process.env.MINI_APP_URL!;
@@ -23,93 +25,6 @@ const bot = new Telegraf(process.env.BOT_TOKEN!);
 
 // Initialize order monitor
 const orderMonitor = new OrderMonitor(bot);
-
-// --- ADDRESS VALIDATION PATTERNS ---
-const ADDRESS_PATTERNS: Record<string, RegExp> = {
-  // EVM chains
-  ethereum: /^0x[a-fA-F0-9]{40}$/,
-  base: /^0x[a-fA-F0-9]{40}$/,
-  arbitrum: /^0x[a-fA-F0-9]{40}$/,
-  polygon: /^0x[a-fA-F0-9]{40}$/,
-  bsc: /^0x[a-fA-F0-9]{40}$/,
-  optimism: /^0x[a-fA-F0-9]{40}$/,
-  avalanche: /^0x[a-fA-F0-9]{40}$/,
-  fantom: /^0x[a-fA-F0-9]{40}$/,
-  cronos: /^0x[a-fA-F0-9]{40}$/,
-  moonbeam: /^0x[a-fA-F0-9]{40}$/,
-  moonriver: /^0x[a-fA-F0-9]{40}$/,
-  celo: /^0x[a-fA-F0-9]{40}$/,
-  gnosis: /^0x[a-fA-F0-9]{40}$/,
-  harmony: /^0x[a-fA-F0-9]{40}$/,
-  metis: /^0x[a-fA-F0-9]{40}$/,
-  aurora: /^0x[a-fA-F0-9]{40}$/,
-  kava: /^0x[a-fA-F0-9]{40}$/,
-  evmos: /^0x[a-fA-F0-9]{40}$/,
-  boba: /^0x[a-fA-F0-9]{40}$/,
-  okc: /^0x[a-fA-F0-9]{40}$/,
-  heco: /^0x[a-fA-F0-9]{40}$/,
-  iotex: /^0x[a-fA-F0-9]{40}$/,
-  klaytn: /^0x[a-fA-F0-9]{40}$/,
-  conflux: /^0x[a-fA-F0-9]{40}$/,
-  astar: /^0x[a-fA-F0-9]{40}$/,
-  shiden: /^0x[a-fA-F0-9]{40}$/,
-  telos: /^0x[a-fA-F0-9]{40}$/,
-  fuse: /^0x[a-fA-F0-9]{40}$/,
-  velas: /^0x[a-fA-F0-9]{40}$/,
-  thundercore: /^0x[a-fA-F0-9]{40}$/,
-  xdc: /^xdc[a-fA-F0-9]{40}$/,
-  nahmii: /^0x[a-fA-F0-9]{40}$/,
-  callisto: /^0x[a-fA-F0-9]{40}$/,
-  smartbch: /^0x[a-fA-F0-9]{40}$/,
-  energyweb: /^0x[a-fA-F0-9]{40}$/,
-  theta: /^0x[a-fA-F0-9]{40}$/,
-  flare: /^0x[a-fA-F0-9]{40}$/,
-  songbird: /^0x[a-fA-F0-9]{40}$/,
-  coston: /^0x[a-fA-F0-9]{40}$/,
-  coston2: /^0x[a-fA-F0-9]{40}$/,
-  rei: /^0x[a-fA-F0-9]{40}$/,
-  kekchain: /^0x[a-fA-F0-9]{40}$/,
-  tomochain: /^0x[a-fA-F0-9]{40}$/,
-  bitgert: /^0x[a-fA-F0-9]{40}$/,
-  clover: /^0x[a-fA-F0-9]{40}$/,
-  defichain: /^0x[a-fA-F0-9]{40}$/,
-  findora: /^0x[a-fA-F0-9]{40}$/,
-  gatechain: /^0x[a-fA-F0-9]{40}$/,
-  meter: /^0x[a-fA-F0-9]{40}$/,
-  nova: /^0x[a-fA-F0-9]{40}$/,
-  syscoin: /^0x[a-fA-F0-9]{40}$/,
-  zksync: /^0x[a-fA-F0-9]{40}$/,
-  polygonzkevm: /^0x[a-fA-F0-9]{40}$/,
-  linea: /^0x[a-fA-F0-9]{40}$/,
-  mantle: /^0x[a-fA-F0-9]{40}$/,
-  scroll: /^0x[a-fA-F0-9]{40}$/,
-  taiko: /^0x[a-fA-F0-9]{40}$/,
-  bitcoin: /^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$|^bc1[a-z0-9]{39,59}$/,
-  solana: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/,
-  polkadot: /^1[a-zA-Z0-9]{47}$/,
-  cardano: /^addr1[a-z0-9]{98}$|^Ae2tdPwUPEZ[a-zA-Z0-9]{50}$/,
-  monero: /^[48][0-9AB][1-9A-HJ-NP-Za-km-z]{93}$/,
-  litecoin: /^[LM3][a-km-zA-HJ-NP-Z1-9]{26,33}$/,
-  dogecoin: /^D[5-9A-HJ-NP-U][1-9A-HJ-NP-Za-km-z]{24,33}$/,
-  dash: /^X[1-9A-HJ-NP-Za-km-z]{33}$/,
-  zcash: /^t1[a-zA-Z0-9]{33}$|^t3[a-zA-Z0-9]{33}$/,
-  ripple: /^r[1-9A-HJ-NP-Za-km-z]{24,34}$/,
-  stellar: /^G[A-Z0-9]{55}$/,
-  cosmos: /^cosmos1[a-z0-9]{38}$/,
-  osmosis: /^osmo1[a-z0-9]{38}$/,
-  terra: /^terra1[a-z0-9]{38}$/,
-  tron: /^T[1-9A-HJ-NP-Za-km-z]{33}$/,
-  tezos: /^tz[1-3][a-zA-Z0-9]{33}$/,
-  algorand: /^[A-Z0-9]{58}$/,
-  near: /^[a-z0-9_-]{2,64}\.near$|^[a-fA-F0-9]{64}$/,
-  flow: /^0x[a-fA-F0-9]{16}$/,
-  hedera: /^0\.0\.\d+$/,
-  elrond: /^erd1[a-z0-9]{58}$/,
-  kusama: /^[A-Z0-9]{47}$/,
-  rsk: /^0x[a-fA-F0-9]{40}$/,
-  waves: /^3P[a-zA-Z0-9]{33}$/,
-  zilliqa: /^zil1[a-z0-9]{38}$/,
-};
 
 function isValidAddress(address: string, chain?: string): boolean {
   if (!address) return false;
@@ -500,7 +415,7 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
 
     if (state?.parsedCommand && (state.parsedCommand.intent === 'swap' || state.parsedCommand.intent === 'checkout' || state.parsedCommand.intent === 'portfolio') && !state.parsedCommand.settleAddress) {
         const potentialAddress = text.trim();
-        const targetChain = state.parsedCommand.toChain || state.parsedCommand.settleNetwork || state.parsedCommand.fromChain;
+        const targetChain = state.parsedCommand.toChain ?? state.parsedCommand.settleNetwork ?? state.parsedCommand.fromChain ?? undefined;
 
         // Try to resolve the address (supports ENS, Lens, Unstoppable Domains, nicknames, and raw addresses)
         const resolved = await resolveAddress(userId, potentialAddress);
@@ -725,7 +640,7 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
         }
 
         // If settleAddress is provided in the initial parse, resolve it (ENS, Lens, etc.)
-        const targetChain = parsed.toChain || parsed.settleNetwork || parsed.fromChain;
+        const targetChain = parsed.toChain ?? parsed.settleNetwork ?? parsed.fromChain ?? undefined;
         const resolved = await resolveAddress(userId, parsed.settleAddress);
         
         if (resolved.address && isValidAddress(resolved.address, targetChain)) {
@@ -1280,16 +1195,25 @@ app.get('/', (req, res) => res.send('SwapSmith Alive'));
 app.listen(process.env.PORT || 3000, () => console.log(`Express server live`));
 
 // Start the order monitor
-orderMonitor.start();
+const dbUrl = process.env.DATABASE_URL;
+let monitorStarted = false;
+
+// Start order monitor only if DATABASE_URL is real (not placeholder)
+if (dbUrl && !dbUrl.includes('user:password@host/dbname')) {
+  orderMonitor.start();
+  monitorStarted = true;
+} else {
+  console.warn('⚠️ OrderMonitor disabled (no real DATABASE_URL).');
+}
 
 bot.launch();
 
 // Graceful shutdown
 process.once('SIGINT', () => {
-    orderMonitor.stop();
+    if (monitorStarted) orderMonitor.stop();
     bot.stop('SIGINT');
 });
 process.once('SIGTERM', () => {
-    orderMonitor.stop();
+   if (monitorStarted) orderMonitor.stop();
     bot.stop('SIGTERM');
 });

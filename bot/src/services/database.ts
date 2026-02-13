@@ -7,7 +7,9 @@ import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-clie
 import type { ParsedCommand } from './groq-client';
 
 dotenv.config();
-
+const memoryAddressBook = new Map<number, Map<string, { address: string; chain: string }>>();
+const memoryState = new Map<number, any>();
+//newly added
 const sql = neon(process.env.DATABASE_URL!);
 const db = drizzle(sql);
 
@@ -97,30 +99,42 @@ export async function setUserWalletAndSession(telegramId: number, walletAddress:
 }
 
 export async function getConversationState(telegramId: number) {
-  const result = await db.select({ state: conversations.state, lastUpdated: conversations.lastUpdated }).from(conversations).where(eq(conversations.telegramId, telegramId));
-  if (!result[0]?.state) return null;
+  try{
+    const result = await db.select({ state: conversations.state, lastUpdated: conversations.lastUpdated }).from(conversations).where(eq(conversations.telegramId, telegramId));
+    if (!result[0]?.state) return null;
 
-  const state = JSON.parse(result[0].state);
-  const lastUpdated = result[0].lastUpdated;
+    const state = JSON.parse(result[0].state);
+    const lastUpdated = result[0].lastUpdated;
 
-  if (lastUpdated && (Date.now() - new Date(lastUpdated).getTime()) > 60 * 60 * 1000) {
+    if (lastUpdated && (Date.now() - new Date(lastUpdated).getTime()) > 60 * 60 * 1000) {
     await clearConversationState(telegramId);
     return null;
+    }
+    return state;
+  }catch(err){
+    return memoryState.get(telegramId) || null;
   }
-  return state;
 }
 
 export async function setConversationState(telegramId: number, state: any) {
-  await db.insert(conversations)
+  try{
+    await db.insert(conversations)
     .values({ telegramId, state: JSON.stringify(state), lastUpdated: new Date() })
     .onConflictDoUpdate({
       target: conversations.telegramId,
       set: { state: JSON.stringify(state), lastUpdated: new Date() }
     });
+  }catch(err){
+    memoryState.set(telegramId, state);
+  }
 }
 
 export async function clearConversationState(telegramId: number) {
-  await db.delete(conversations).where(eq(conversations.telegramId, telegramId));
+  try{
+    await db.delete(conversations).where(eq(conversations.telegramId, telegramId));
+  }catch(err){
+    memoryState.delete(telegramId);
+  }
 }
 
 export async function createOrderEntry(
@@ -188,22 +202,42 @@ export async function getUserCheckouts(telegramId: number): Promise<Checkout[]> 
 }
 
 export async function addAddressBookEntry(telegramId: number, nickname: string, address: string, chain: string) {
-  await db.insert(addressBook)
+  try{
+    await db.insert(addressBook)
     .values({ telegramId, nickname, address, chain })
     .onConflictDoUpdate({
       target: [addressBook.telegramId, addressBook.nickname],
       set: { address, chain }
     });
+  }catch(err){
+    if (!memoryAddressBook.has(telegramId)) memoryAddressBook.set(telegramId, new Map());
+    memoryAddressBook.get(telegramId)!.set(nickname.toLowerCase(), { address, chain });
+  }
 }
 
 export async function getAddressBookEntries(telegramId: number): Promise<AddressBookEntry[]> {
-  return await db.select().from(addressBook)
-    .where(eq(addressBook.telegramId, telegramId))
-    .orderBy(desc(addressBook.createdAt));
+  try {
+    return await db.select().from(addressBook)
+      .where(eq(addressBook.telegramId, telegramId))
+      .orderBy(desc(addressBook.createdAt));
+  }catch(arr){
+    const m = memoryAddressBook.get(telegramId);
+    if (!m) return [];
+    // return a compatible shape (cast is fine for dev fallback)
+    return [...m.entries()].map(([nickname, v]) => ({
+      id: 0 as any,
+      telegramId,
+      nickname,
+      address: v.address,
+      chain: v.chain,
+      createdAt: new Date() as any,
+    }));
+  }
 }
 
 export async function resolveNickname(telegramId: number, nickname: string): Promise<string | null> {
-  const result = await db.select({ address: addressBook.address })
+  try{
+    const result = await db.select({ address: addressBook.address })
     .from(addressBook)
     .where(
       and(
@@ -212,7 +246,10 @@ export async function resolveNickname(telegramId: number, nickname: string): Pro
       )
     ) // Corrected multi-where syntax
     .limit(1);
-  return result[0]?.address || null;
+    return result[0]?.address || null;
+  }catch(err){
+    return null;
+  }
 }
 
 
