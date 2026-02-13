@@ -454,13 +454,15 @@ bot.on(message('voice'), async (ctx) => {
     const userId = ctx.from.id;
     await ctx.reply('👂 Listening...');
 
+    const tempDir = os.tmpdir();
+    const ogaPath = path.join(tempDir, `temp_${userId}.oga`);
+    const mp3Path = path.join(tempDir, `temp_${userId}.mp3`);
+
     try {
         const file_id = ctx.message.voice.file_id;
         const fileLink = await ctx.telegram.getFileLink(file_id);
 
         const response = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
-        const ogaPath = path.join(__dirname, `temp_${userId}.oga`);
-        const mp3Path = path.join(__dirname, `temp_${userId}.mp3`);
         fs.writeFileSync(ogaPath, Buffer.from(response.data));
         // execSync(`ffmpeg -i ${ogaPath} ${mp3Path} -y`);
         await new Promise<void>((resolve, reject) => {
@@ -473,14 +475,24 @@ bot.on(message('voice'), async (ctx) => {
 
         const transcribedText = await transcribeAudio(mp3Path);
         await handleTextMessage(ctx, transcribedText, 'voice');
-
-        fs.unlinkSync(ogaPath);
-        fs.unlinkSync(mp3Path);
     } catch (error) {
         console.error("Voice error:", error);
         ctx.reply("Sorry, I couldn't hear that clearly. Please try again.");
+    } finally {
+        // Always clean up temp files, regardless of success or failure
+        try {
+            if (fs.existsSync(ogaPath)) {
+                fs.unlinkSync(ogaPath);
+            }
+            if (fs.existsSync(mp3Path)) {
+                fs.unlinkSync(mp3Path);
+            }
+        } catch (cleanupError) {
+            console.error("Failed to clean up temp files:", cleanupError);
+        }
     }
 });
+
 
 async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'voice' = 'text') {
     const userId = ctx.from.id;
