@@ -76,6 +76,62 @@ bot.on(message('text'), async (ctx) => {
   await handleTextMessage(ctx, ctx.message.text);
 });
 
+// ------------------ VOICE HANDLER ------------------
+bot.on(message('voice'), async (ctx) => {
+  const userId = ctx.from.id;
+  await ctx.sendChatAction('typing');
+
+  try {
+    const fileId = ctx.message.voice.file_id;
+    const fileLink = await bot.telegram.getFileLink(fileId);
+    
+    // FIX: Using unique filename with timestamp and random suffix to prevent race conditions
+    const timestamp = Date.now();
+    const uniqueId = Math.random().toString(36).substring(7);
+    const tempOga = path.join(os.tmpdir(), `temp_${userId}_${timestamp}_${uniqueId}.oga`);
+    const tempMp3 = path.join(os.tmpdir(), `temp_${userId}_${timestamp}_${uniqueId}.mp3`);
+
+    const writer = fs.createWriteStream(tempOga);
+    const response = await axios({
+      url: fileLink.href,
+      method: 'GET',
+      responseType: 'stream',
+    });
+
+    response.data.pipe(writer);
+
+    await new Promise((resolve, reject) => {
+      writer.on('finish', () => resolve(true));
+      writer.on('error', reject);
+    });
+
+    // Convert to mp3
+    await new Promise((resolve, reject) => {
+        exec(`ffmpeg -i "${tempOga}" "${tempMp3}" -y`, (error) => {
+            if (error) reject(error);
+            else resolve(true);
+        });
+    });
+
+    const text = await transcribeAudio(tempMp3);
+    
+    // Cleanup
+    if (fs.existsSync(tempOga)) fs.unlinkSync(tempOga);
+    if (fs.existsSync(tempMp3)) fs.unlinkSync(tempMp3);
+
+    if (!text) {
+        return ctx.reply('âŒ Could not transcribe audio. Please try again.');
+    }
+
+    ctx.reply(`ðŸŽ¤ *Transcribed:* "${text}"`, { parse_mode: 'Markdown' });
+    await handleTextMessage(ctx, text);
+
+  } catch (error) {
+    console.error('Voice processing error:', error);
+    ctx.reply('âŒ Error processing voice message.');
+  }
+});
+
 async function handleTextMessage(ctx: any, text: string) {
   const userId = ctx.from.id;
   const state = await db.getConversationState(userId);
@@ -251,12 +307,12 @@ bot.action('confirm_portfolio', async (ctx) => {
         const { fromAsset, fromChain, amount, portfolio, settleAddress } = state.parsedCommand;
         
         if (!portfolio || portfolio.length === 0) {
-            return ctx.editMessageText('G¥î No portfolio allocation found.');
+            return ctx.editMessageText('Gï¿½ï¿½ No portfolio allocation found.');
         }
 
         // Create quotes for each allocation
         const quotes: Array<{ quote: any; allocation: any; swapAmount: number }> = [];
-        let quoteSummary = `=ƒôè *Portfolio Swap Summary*\n\nFrom: ${amount} ${fromAsset} on ${fromChain}\n\n*Swaps:*\n`;
+        let quoteSummary = `=ï¿½ï¿½ï¿½ *Portfolio Swap Summary*\n\nFrom: ${amount} ${fromAsset} on ${fromChain}\n\n*Swaps:*\n`;
 
         for (const allocation of portfolio) {
             const swapAmount = (amount! * allocation.percentage) / 100;
@@ -275,9 +331,9 @@ bot.action('confirm_portfolio', async (ctx) => {
                 }
 
                 quotes.push({ quote, allocation, swapAmount });
-                quoteSummary += `GÇó ${allocation.percentage}% (${swapAmount} ${fromAsset}) GåÆ ~${quote.settleAmount} ${allocation.toAsset}\n`;
+                quoteSummary += `Gï¿½ï¿½ ${allocation.percentage}% (${swapAmount} ${fromAsset}) Gï¿½ï¿½ ~${quote.settleAmount} ${allocation.toAsset}\n`;
             } catch (error) {
-                return ctx.editMessageText(`G¥î Failed to create quote for ${allocation.toAsset}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                return ctx.editMessageText(`Gï¿½ï¿½ Failed to create quote for ${allocation.toAsset}: ${error instanceof Error ? error.message : 'Unknown error'}`);
             }
         }
 
@@ -297,8 +353,8 @@ bot.action('confirm_portfolio', async (ctx) => {
         ctx.editMessageText(quoteSummary, {
             parse_mode: 'Markdown',
             ...Markup.inlineKeyboard([
-                Markup.button.callback('G£à Place Orders', 'place_portfolio_orders'),
-                Markup.button.callback('G¥î Cancel', 'cancel_swap')
+                Markup.button.callback('Gï¿½ï¿½ Place Orders', 'place_portfolio_orders'),
+                Markup.button.callback('Gï¿½ï¿½ Cancel', 'cancel_swap')
             ])
         });
     } catch (error) {
@@ -336,7 +392,7 @@ bot.action('place_portfolio_orders', async (ctx) => {
 
                 orders.push({ order, allocation: quoteData.allocation, quoteId: quoteData.quoteId });
             } catch (error) {
-                return ctx.editMessageText(`G¥î Failed to create order for ${quoteData.allocation.toAsset}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                return ctx.editMessageText(`Gï¿½ï¿½ Failed to create order for ${quoteData.allocation.toAsset}: ${error instanceof Error ? error.message : 'Unknown error'}`);
             }
         }
 
@@ -375,17 +431,17 @@ bot.action('place_portfolio_orders', async (ctx) => {
             token: assetKey, amount: totalAmount.toString()
         });
 
-        let orderSummary = `G£à *Portfolio Orders Created!*\n\n*Orders:*\n`;
+        let orderSummary = `Gï¿½ï¿½ *Portfolio Orders Created!*\n\n*Orders:*\n`;
         orders.forEach((o, i) => {
-            orderSummary += `${i + 1}. Order ${o.order.id.substring(0, 8)}... GåÆ ${o.allocation.toAsset}\n`;
+            orderSummary += `${i + 1}. Order ${o.order.id.substring(0, 8)}... Gï¿½ï¿½ ${o.allocation.toAsset}\n`;
         });
-        orderSummary += `\nSign the transaction to complete all swaps.\n\n=ƒöö *Auto-Watch Enabled:* I'll notify you when each swap completes!`;
+        orderSummary += `\nSign the transaction to complete all swaps.\n\n=ï¿½ï¿½ï¿½ *Auto-Watch Enabled:* I'll notify you when each swap completes!`;
 
         ctx.editMessageText(orderSummary, {
             parse_mode: 'Markdown',
             ...Markup.inlineKeyboard([
-                Markup.button.webApp('=ƒô¦ Sign Transaction', `${MINI_APP_URL}?${params.toString()}`),
-                Markup.button.callback('G¥î Close', 'cancel_swap')
+                Markup.button.webApp('=ï¿½ï¿½ï¿½ Sign Transaction', `${MINI_APP_URL}?${params.toString()}`),
+                Markup.button.callback('Gï¿½ï¿½ Close', 'cancel_swap')
             ])
         });
     } catch (error) {
@@ -397,7 +453,7 @@ bot.action('place_portfolio_orders', async (ctx) => {
 
 bot.action('cancel_swap', (ctx) => {
     db.clearConversationState(ctx.from.id);
-    ctx.editMessageText('G¥î Cancelled.');
+    ctx.editMessageText('Gï¿½ï¿½ Cancelled.');
 });
 
 bot.action('confirm_migration', async (ctx) => {
@@ -414,7 +470,7 @@ bot.action('confirm_migration', async (ctx) => {
         const { fromChain, toChain, fromAsset, toAsset, amount, isCrossChain } = state.parsedCommand;
 
         if (!isCrossChain) {
-            return ctx.editMessageText(`=ƒîë *Same-Chain Migration*\n\n` +
+            return ctx.editMessageText(`=ï¿½ï¿½ï¿½ *Same-Chain Migration*\n\n` +
                 `Since both pools are on the same chain, you can migrate directly:\n\n` +
                 `1. Withdraw your ${fromAsset} from ${state.parsedCommand.fromProject}\n` +
                 `2. Deposit to ${state.parsedCommand.toProject}\n\n` +
@@ -422,8 +478,8 @@ bot.action('confirm_migration', async (ctx) => {
                 `Do you need a quote to swap ${fromAsset} to a different chain?`, {
                 parse_mode: 'Markdown',
                 ...Markup.inlineKeyboard([
-                    Markup.button.callback('=ƒöä Find Cross-Chain Options', 'find_bridge_options'),
-                    Markup.button.callback('G¥î Cancel', 'cancel_swap')
+                    Markup.button.callback('=ï¿½ï¿½ï¿½ Find Cross-Chain Options', 'find_bridge_options'),
+                    Markup.button.callback('Gï¿½ï¿½ Cancel', 'cancel_swap')
                 ])
             });
         }
@@ -444,11 +500,11 @@ bot.action('confirm_migration', async (ctx) => {
               `To: ${state.parsedCommand.toProject} (${state.parsedCommand.toYield}% APY)\n\n`
             : '';
 
-        ctx.editMessageText(`${migrationText}GPín+Å *Send:* \`${quote.depositAmount} ${quote.depositCoin}\`\nG¼àn+Å *Receive:* \`${quote.settleAmount} ${quote.settleCoin}\`\n\nReady to migrate?`, {
+        ctx.editMessageText(`${migrationText}GPï¿½n+ï¿½ *Send:* \`${quote.depositAmount} ${quote.depositCoin}\`\nGï¿½ï¿½n+ï¿½ *Receive:* \`${quote.settleAmount} ${quote.settleCoin}\`\n\nReady to migrate?`, {
             parse_mode: 'Markdown',
             ...Markup.inlineKeyboard([
-                Markup.button.callback('G£à Migrate', 'place_migration'),
-                Markup.button.callback('G¥î Cancel', 'cancel_swap'),
+                Markup.button.callback('Gï¿½ï¿½ Migrate', 'place_migration'),
+                Markup.button.callback('Gï¿½ï¿½ Cancel', 'cancel_swap'),
             ])
         });
     } catch (error) {
@@ -464,16 +520,16 @@ bot.action('show_deposit_instructions', async (ctx) => {
 
     const { fromPool, toPool } = state.migrationSuggestion;
 
-    ctx.editMessageText(`=ƒôû *Direct Deposit Instructions*\n\n` +
+    ctx.editMessageText(`=ï¿½ï¿½ï¿½ *Direct Deposit Instructions*\n\n` +
         `1. Go to ${toPool.project}\n` +
         `2. Connect your wallet\n` +
         `3. Withdraw from ${fromPool.project}\n` +
         `4. Deposit to ${toPool.project}\n\n` +
         `This is instant and saves bridge fees!\n\n` +
-        `*APY Improvement:* ${fromPool.apy.toFixed(2)}% GåÆ ${toPool.apy.toFixed(2)}%`, {
+        `*APY Improvement:* ${fromPool.apy.toFixed(2)}% Gï¿½ï¿½ ${toPool.apy.toFixed(2)}%`, {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
-            Markup.button.callback('=ƒöÖ Back', 'cancel_swap')
+            Markup.button.callback('=ï¿½ï¿½ï¿½ Back', 'cancel_swap')
         ])
     });
 });
@@ -496,21 +552,21 @@ bot.action('sign_portfolio_transaction', async (ctx) => {
 
   if (!q) {
     await db.clearConversationState(ctx.from.id);
-    return ctx.editMessageText(`=ƒÄë Portfolio complete!`);
+    return ctx.editMessageText(`=ï¿½ï¿½ï¿½ Portfolio complete!`);
   }
 
   ctx.editMessageText(
-    `=ƒô¥ Transaction ${i + 1}/${state.portfolioQuotes.length}\n\n` +
+    `=ï¿½ï¿½ï¿½ Transaction ${i + 1}/${state.portfolioQuotes.length}\n\n` +
       `Send ${q.amount} ${state.parsedCommand.fromAsset}`,
     {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
         Markup.button.webApp(
-          '=ƒô¦ Sign Transaction',
+          '=ï¿½ï¿½ï¿½ Sign Transaction',
           `${MINI_APP_URL}?amount=${q.amount}`
         ),
         Markup.button.callback(
-          'GÅ¡n+Å Next',
+          'GÅ¡n+ï¿½ Next',
           'next_portfolio_transaction'
         ),
       ]),
@@ -536,7 +592,7 @@ bot.action('next_portfolio_transaction', async (ctx) => {
 
 bot.action('cancel_swap', async (ctx) => {
   await db.clearConversationState(ctx.from.id);
-  ctx.editMessageText('G¥î Cancelled.');
+  ctx.editMessageText('Gï¿½ï¿½ Cancelled.');
 });
 
 // ------------------ START BOT ------------------
