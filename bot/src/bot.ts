@@ -714,7 +714,7 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
 
         // If settleAddress is provided in the initial parse, resolve it (ENS, Lens, etc.)
         const targetChain = parsed.toChain || parsed.settleNetwork || parsed.fromChain;
-        const resolved = await resolveAddress(userId, parsed.settleAddress);
+        const resolved = await resolveAddress(userId, parsed.settleAddress!);
         
         if (resolved.address && isValidAddress(resolved.address, targetChain)) {
             // Successfully resolved and validated
@@ -741,7 +741,7 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
                     Markup.button.callback('❌ No', 'cancel_swap')
                 ])
             });
-        } else if (isNamingService(parsed.settleAddress)) {
+        } else if (isNamingService(parsed.settleAddress!)) {
             // It's a naming service domain but resolution failed
             return ctx.reply(
                 `❌ Could not resolve \`${parsed.settleAddress}\`.\n\n` +
@@ -752,7 +752,7 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
                 `Or /clear to cancel.`,
                 { parse_mode: 'Markdown' }
             );
-        } else if (!isValidAddress(parsed.settleAddress, targetChain)) {
+        } else if (!isValidAddress(parsed.settleAddress!, targetChain)) {
             // Not a naming service and not a valid address
             const chainHint = targetChain ? ` for ${targetChain}` : '';
             return ctx.reply(
@@ -991,53 +991,58 @@ bot.action('place_portfolio_orders', async (ctx) => {
             }
         }
 
-        // For portfolio swaps, we need to execute multiple transactions
-        // The user will need to send the full amount to the first order's deposit address
-        // Then the system will handle the splits via SideShift
-        const firstOrder = orders[0].order;
-        const rawDepositAddress = typeof firstOrder.depositAddress === 'string' ? firstOrder.depositAddress : firstOrder.depositAddress.address;
-        const depositMemo = typeof firstOrder.depositAddress === 'object' ? firstOrder.depositAddress.memo : null;
-
+        // Generate transactions for each order
+        const buttons: any[] = [];
         const chainKey = fromChain?.toLowerCase() || 'ethereum';
         const assetKey = fromAsset?.toUpperCase() || 'ETH';
-        const totalAmount = amount!;
         
         // Use dynamic token resolver
         const tokenData = await tokenResolver.getTokenInfo(assetKey, chainKey);
 
-        let txTo = rawDepositAddress, txValueHex = '0x0', txData = '0x';
+        for (let i = 0; i < orders.length; i++) {
+            const o = orders[i];
+            const quoteData = state.portfolioQuotes![i]; 
+            const swapAmount = quoteData.swapAmount;
+            
+            const rawDepositAddress = typeof o.order.depositAddress === 'string' ? o.order.depositAddress : o.order.depositAddress.address;
+            const depositMemo = typeof o.order.depositAddress === 'object' ? o.order.depositAddress.memo : null;
+            
+            let txTo = rawDepositAddress, txValueHex = '0x0', txData = '0x';
 
-        if (tokenData) {
-            // ERC20 token
-            txTo = tokenData.address;
-            const amountBigInt = ethers.parseUnits(totalAmount.toString(), tokenData.decimals);
-            const iface = new ethers.Interface(ERC20_ABI);
-            txData = iface.encodeFunctionData("transfer", [rawDepositAddress, amountBigInt]);
-        } else {
-            // Native token
-            const amountBigInt = ethers.parseUnits(totalAmount.toString(), 18);
-            txValueHex = '0x' + amountBigInt.toString(16);
-            if (depositMemo) txData = ethers.hexlify(ethers.toUtf8Bytes(depositMemo));
+            if (tokenData) {
+                // ERC20 token
+                txTo = tokenData.address;
+                const amountBigInt = ethers.parseUnits(swapAmount.toString(), tokenData.decimals);
+                const iface = new ethers.Interface(ERC20_ABI);
+                txData = iface.encodeFunctionData("transfer", [rawDepositAddress, amountBigInt]);
+            } else {
+                // Native token
+                const amountBigInt = ethers.parseUnits(swapAmount.toString(), 18);
+                txValueHex = '0x' + amountBigInt.toString(16);
+                if (depositMemo) txData = ethers.hexlify(ethers.toUtf8Bytes(depositMemo));
+            }
+
+            const params = new URLSearchParams({
+                to: txTo, value: txValueHex, data: txData,
+                chainId: chainIdMap[chainKey] || '1',
+                token: assetKey, amount: swapAmount.toString()
+            });
+            
+            buttons.push(Markup.button.webApp(`📱 Sign Swap ${i + 1} (${o.allocation.toAsset})`, `${MINI_APP_URL}?${params.toString()}`));
         }
-
-        const params = new URLSearchParams({
-            to: txTo, value: txValueHex, data: txData,
-            chainId: chainIdMap[chainKey] || '1',
-            token: assetKey, amount: totalAmount.toString()
-        });
+        
+        buttons.push(Markup.button.callback('❌ Close', 'cancel_swap'));
 
         let orderSummary = `✅ *Portfolio Orders Created!*\n\n*Orders:*\n`;
         orders.forEach((o, i) => {
-            orderSummary += `${i + 1}. Order ${o.order.id.substring(0, 8)}... → ${o.allocation.toAsset}\n`;
+            const quoteData = state.portfolioQuotes![i];
+            orderSummary += `${i + 1}. Order ${o.order.id.substring(0, 8)}... → ${o.allocation.toAsset} (${quoteData.swapAmount} ${fromAsset})\n`;
         });
-        orderSummary += `\nSign the transaction to complete all swaps.\n\n🔔 *Auto-Watch Enabled:* I'll notify you when each swap completes!`;
+        orderSummary += `\n⚠️ *Action Required:* Please sign *each* transaction below to complete your portfolio split.\n\n🔔 *Auto-Watch Enabled:* I'll notify you when each swap completes!`;
 
         ctx.editMessageText(orderSummary, {
             parse_mode: 'Markdown',
-            ...Markup.inlineKeyboard([
-                Markup.button.webApp('📱 Sign Transaction', `${MINI_APP_URL}?${params.toString()}`),
-                Markup.button.callback('❌ Close', 'cancel_swap')
-            ])
+            ...Markup.inlineKeyboard(buttons, { columns: 1 })
         });
     } catch (error) {
         ctx.editMessageText(`Failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
