@@ -1,3 +1,23 @@
+/* FAQ Section Styles */
+.faq-section {
+  background: linear-gradient(135deg, #18122B 60%, #44318D 100%);
+  border-radius: 1.5rem;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+  margin-bottom: 3rem;
+}
+.faq-section h2 {
+  color: #fff;
+  letter-spacing: 0.02em;
+}
+.faq-section h3 {
+  color: #A084E8;
+}
+.faq-section p {
+  color: #e0e0e0;
+}
+.faq-section .border-b {
+  border-color: #44318D33;
+}
 @import "tailwindcss";
 @tailwind base;
 @tailwind components;
