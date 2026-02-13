@@ -17,6 +17,7 @@ import { chainIdMap } from './config/chains';
 import { handleError } from './services/logger';
 import { tokenResolver } from './services/token-resolver';
 import { OrderMonitor } from './services/order-monitor';
+import { resolveAddress, isNamingService } from './services/address-resolver';
 
 dotenv.config();
 const MINI_APP_URL = process.env.MINI_APP_URL!;
@@ -464,13 +465,15 @@ bot.on(message('voice'), async (ctx) => {
     const userId = ctx.from.id;
     await ctx.reply('👂 Listening...');
 
+    const tempDir = os.tmpdir();
+    const ogaPath = path.join(tempDir, `temp_${userId}.oga`);
+    const mp3Path = path.join(tempDir, `temp_${userId}.mp3`);
+
     try {
         const file_id = ctx.message.voice.file_id;
         const fileLink = await ctx.telegram.getFileLink(file_id);
 
         const response = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
-        const ogaPath = path.join(__dirname, `temp_${userId}.oga`);
-        const mp3Path = path.join(__dirname, `temp_${userId}.mp3`);
         fs.writeFileSync(ogaPath, Buffer.from(response.data));
         // execSync(`ffmpeg -i ${ogaPath} ${mp3Path} -y`);
         await new Promise<void>((resolve, reject) => {
@@ -483,12 +486,21 @@ bot.on(message('voice'), async (ctx) => {
 
         const transcribedText = await transcribeAudio(mp3Path);
         await handleTextMessage(ctx, transcribedText, 'voice');
-
-        fs.unlinkSync(ogaPath);
-        fs.unlinkSync(mp3Path);
     } catch (error) {
         console.error("Voice error:", error);
         ctx.reply("Sorry, I couldn't hear that clearly. Please try again.");
+    } finally {
+        // Always clean up temp files, regardless of success or failure
+        try {
+            if (fs.existsSync(ogaPath)) {
+                fs.unlinkSync(ogaPath);
+            }
+            if (fs.existsSync(mp3Path)) {
+                fs.unlinkSync(mp3Path);
+            }
+        } catch (cleanupError) {
+            console.error("Failed to clean up temp files:", cleanupError);
+        }
     }
 });
 
@@ -585,19 +597,59 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
         const potentialAddress = text.trim();
         const targetChain = state.parsedCommand.toChain || state.parsedCommand.settleNetwork || state.parsedCommand.fromChain;
 
-        if (isValidAddress(potentialAddress, targetChain)) {
-            const updatedCommand = { ...state.parsedCommand, settleAddress: potentialAddress };
+        // Try to resolve the address (supports ENS, Lens, Unstoppable Domains, nicknames, and raw addresses)
+        const resolved = await resolveAddress(userId, potentialAddress);
+        
+        if (resolved.address && isValidAddress(resolved.address, targetChain)) {
+            // Successfully resolved and validated
+            const updatedCommand = { ...state.parsedCommand, settleAddress: resolved.address };
             await db.setConversationState(userId, { parsedCommand: updatedCommand });
-            await ctx.reply(`Address received: \`${potentialAddress}\``, { parse_mode: 'Markdown' });
+            
+            // Provide feedback based on resolution type
+            let feedbackMessage = '';
+            if (resolved.type === 'ens') {
+                feedbackMessage = `✅ ENS resolved: \`${resolved.originalInput}\` → \`${resolved.address}\``;
+            } else if (resolved.type === 'lens') {
+                feedbackMessage = `✅ Lens handle resolved: \`${resolved.originalInput}\` → \`${resolved.address}\``;
+            } else if (resolved.type === 'unstoppable') {
+                feedbackMessage = `✅ Unstoppable Domain resolved: \`${resolved.originalInput}\` → \`${resolved.address}\``;
+            } else if (resolved.type === 'nickname') {
+                feedbackMessage = `✅ Nickname resolved: \`${resolved.originalInput}\` → \`${resolved.address}\``;
+            } else {
+                feedbackMessage = `✅ Address received: \`${resolved.address}\``;
+            }
+            
+            await ctx.reply(feedbackMessage, { parse_mode: 'Markdown' });
 
             const confirmAction = updatedCommand.intent === 'checkout' ? 'confirm_checkout' : updatedCommand.intent === 'portfolio' ? 'confirm_portfolio' : 'confirm_swap';
             return ctx.reply("Ready to proceed?", Markup.inlineKeyboard([
                 Markup.button.callback('✅ Yes', confirmAction),
                 Markup.button.callback('❌ No', 'cancel_swap')
             ]));
+        } else if (isNamingService(potentialAddress)) {
+            // It's a naming service domain but resolution failed
+            return ctx.reply(
+                `❌ Could not resolve \`${potentialAddress}\`.\n\n` +
+                `This appears to be a naming service domain, but resolution failed. Please check:\n` +
+                `• The domain is registered and active\n` +
+                `• The domain has a wallet address set\n` +
+                `• Try using a raw wallet address instead\n\n` +
+                `Or /clear to cancel.`,
+                { parse_mode: 'Markdown' }
+            );
         } else {
+            // Not a naming service and not a valid address
             const chainHint = targetChain ? ` for ${targetChain}` : '';
-            return ctx.reply(`That doesn't look like a valid wallet address${chainHint}. Please provide a valid address or /clear to cancel.`);
+            return ctx.reply(
+                `❌ That doesn't look like a valid wallet address${chainHint}.\n\n` +
+                `You can provide:\n` +
+                `• A wallet address (0x...)\n` +
+                `• An ENS name (vitalik.eth)\n` +
+                `• A Lens handle (lens.lens)\n` +
+                `• An Unstoppable Domain (example.crypto)\n` +
+                `• A saved nickname\n\n` +
+                `Or /clear to cancel.`
+            );
         }
     }
 
@@ -767,6 +819,62 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
             return ctx.reply(`Okay, I see you want to ${parsed.intent}. Please provide the destination address.`);
         }
 
+        // If settleAddress is provided in the initial parse, resolve it (ENS, Lens, etc.)
+        const targetChain = parsed.toChain || parsed.settleNetwork || parsed.fromChain;
+        const resolved = await resolveAddress(userId, parsed.settleAddress);
+        
+        if (resolved.address && isValidAddress(resolved.address, targetChain)) {
+            // Successfully resolved and validated
+            const updatedCommand = { ...parsed, settleAddress: resolved.address };
+            await db.setConversationState(userId, { parsedCommand: updatedCommand });
+            
+            // Provide feedback based on resolution type
+            let feedbackMessage = '';
+            if (resolved.type === 'ens') {
+                feedbackMessage = `✅ ENS resolved: \`${resolved.originalInput}\` → \`${resolved.address}\`\n\n`;
+            } else if (resolved.type === 'lens') {
+                feedbackMessage = `✅ Lens handle resolved: \`${resolved.originalInput}\` → \`${resolved.address}\`\n\n`;
+            } else if (resolved.type === 'unstoppable') {
+                feedbackMessage = `✅ Unstoppable Domain resolved: \`${resolved.originalInput}\` → \`${resolved.address}\`\n\n`;
+            } else if (resolved.type === 'nickname') {
+                feedbackMessage = `✅ Nickname resolved: \`${resolved.originalInput}\` → \`${resolved.address}\`\n\n`;
+            }
+            
+            const confirmAction = parsed.intent === 'checkout' ? 'confirm_checkout' : 'confirm_swap';
+            return ctx.reply(feedbackMessage + "Ready to proceed?", {
+                parse_mode: 'Markdown',
+                ...Markup.inlineKeyboard([
+                    Markup.button.callback('✅ Yes', confirmAction),
+                    Markup.button.callback('❌ No', 'cancel_swap')
+                ])
+            });
+        } else if (isNamingService(parsed.settleAddress)) {
+            // It's a naming service domain but resolution failed
+            return ctx.reply(
+                `❌ Could not resolve \`${parsed.settleAddress}\`.\n\n` +
+                `This appears to be a naming service domain, but resolution failed. Please check:\n` +
+                `• The domain is registered and active\n` +
+                `• The domain has a wallet address set\n` +
+                `• Try using a raw wallet address instead\n\n` +
+                `Or /clear to cancel.`,
+                { parse_mode: 'Markdown' }
+            );
+        } else if (!isValidAddress(parsed.settleAddress, targetChain)) {
+            // Not a naming service and not a valid address
+            const chainHint = targetChain ? ` for ${targetChain}` : '';
+            return ctx.reply(
+                `❌ That doesn't look like a valid wallet address${chainHint}.\n\n` +
+                `You can provide:\n` +
+                `• A wallet address (0x...)\n` +
+                `• An ENS name (vitalik.eth)\n` +
+                `• A Lens handle (lens.lens)\n` +
+                `• An Unstoppable Domain (example.crypto)\n` +
+                `• A saved nickname\n\n` +
+                `Or /clear to cancel.`
+            );
+        }
+
+        // If it's already a valid raw address, proceed normally
         await db.setConversationState(userId, { parsedCommand: parsed });
         const confirmAction = parsed.intent === 'checkout' ? 'confirm_checkout' : 'confirm_swap';
         ctx.reply("Confirm...", Markup.inlineKeyboard([
