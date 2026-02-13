@@ -10,6 +10,7 @@ import { animate, scroll } from 'motion'
 import Footer from '@/components/Footer'
 import Navbar from '@/components/Navbar'
 import { RandomizedTextEffect } from '@/components/RandomizedTextEffect'
+import FAQSection from '@/components/FAQSection'
 
 // Dashboard Preview Component - Customized for SwapSmith (Crypto Theme)
 const DashboardPreview = () => (
@@ -998,6 +999,9 @@ export default function LandingPage() {
             </li>
           </ul>
         </section>
+        {/* FAQ Section */}
+        <FAQSection />
+
         <footer className='relative font-medium text-white grid place-content-center h-[80vh] overflow-hidden'>
           {/* Background Image with Blur */}
           <div 

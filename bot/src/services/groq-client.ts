@@ -11,7 +11,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 // Enhanced Interface to support Portfolio and Yield
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "unknown";
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "unknown";
   
   // Single Swap Fields
   fromAsset: string | null;
@@ -27,6 +27,11 @@ export interface ParsedCommand {
     toChain: string;
     percentage: number; // e.g., 50 for 50%
   }[];
+
+  // DCA Fields
+  frequency?: "daily" | "weekly" | "monthly" | null;
+  dayOfWeek?: string | null; // For weekly: "monday", "tuesday", etc.
+  dayOfMonth?: string | null; // For monthly: "1", "15", etc.
 
   // Checkout Fields
   settleAsset: string | null;
@@ -57,13 +62,26 @@ MODES:
 4. "yield_scout": User asking for high APY/Yield info.
 5. "yield_deposit": Deposit assets into yield platforms, possibly bridging if needed.
 6. "yield_migrate": Move funds from a lower-yielding pool to a higher-yielding pool on the same or different chain.
+7. "dca": Dollar Cost Averaging - Recurring automated swaps at regular intervals (daily, weekly, monthly).
 
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
 
 ADDRESS RESOLUTION:
-- Users can specify addresses as raw wallet addresses, ENS names (ending in .eth), Lens handles (ending in .lens), or nicknames from their address book.
+- Users can specify addresses as raw wallet addresses (0x...), ENS names (ending in .eth), Lens handles (ending in .lens), Unstoppable Domains (ending in .crypto, .nft, .blockchain, etc.), or nicknames from their address book.
 - If an address is specified, include it in settleAddress field.
-- The system will resolve nicknames, ENS, and Lens automatically.
+- The system will resolve nicknames, ENS, Lens, and Unstoppable Domains automatically.
+
+IMPORTANT: ENS/ADDRESS HANDLING:
+- When a user says "Swap X ETH to vitalik.eth" or "Send X ETH to vitalik.eth", they mean:
+  * Keep the same asset (ETH)
+  * Send it to the address vitalik.eth
+  * This should be parsed as: toAsset: "ETH", toChain: "ethereum", settleAddress: "vitalik.eth"
+- Patterns to recognize as addresses (not assets):
+  * Ends with .eth (ENS)
+  * Ends with .lens (Lens Protocol)
+  * Ends with .crypto, .nft, .blockchain, .wallet, etc. (Unstoppable Domains)
+  * Starts with 0x followed by 40 hex characters
+  * Looks like a nickname (single word, lowercase, no special chars)
 
 AMBIGUITY HANDLING:
 - If the command is ambiguous (e.g., "swap all my ETH to BTC or USDC"), set confidence low (0-30) and add validation error "Command is ambiguous. Please specify clearly."
@@ -74,7 +92,7 @@ AMBIGUITY HANDLING:
 RESPONSE FORMAT:
 {
   "success": boolean,
-  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate",
+  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca",
   "fromAsset": string | null,
   "fromChain": string | null,
   "amount": number | null,
@@ -89,6 +107,11 @@ RESPONSE FORMAT:
     { "toAsset": "BTC", "toChain": "bitcoin", "percentage": 50 },
     { "toAsset": "SOL", "toChain": "solana", "percentage": 50 }
   ],
+
+  // Fill for 'dca'
+  "frequency": "daily" | "weekly" | "monthly",
+  "dayOfWeek": "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday" | null,
+  "dayOfMonth": "1" | "15" | "28" | null,
 
   // Fill for 'checkout'
   "settleAsset": string | null,
@@ -125,7 +148,7 @@ EXAMPLES:
    -> intent: "yield_deposit", fromAsset: "ETH", amount: 1, confidence: 95
 
 6. "Swap 1 ETH to mywallet"
-   -> intent: "swap", fromAsset: "ETH", toAsset: "BTC", toChain: "bitcoin", amount: 1, settleAddress: "mywallet", confidence: 95
+   -> intent: "swap", fromAsset: "ETH", toAsset: "ETH", toChain: "ethereum", amount: 1, settleAddress: "mywallet", confidence: 95
 
 7. "Send 5 USDC to vitalik.eth"
    -> intent: "checkout", settleAsset: "USDC", settleNetwork: "ethereum", settleAmount: 5, settleAddress: "vitalik.eth", confidence: 95
@@ -138,6 +161,15 @@ EXAMPLES:
 
 10. "Migrate my stables to the best APY pool"
     -> intent: "yield_migrate", fromAsset: "USDC", confidence: 85
+
+11. "Swap $50 of USDC for ETH every Monday"
+    -> intent: "dca", fromAsset: "USDC", toAsset: "ETH", amount: 50, frequency: "weekly", dayOfWeek: "monday", confidence: 95
+
+12. "Buy 100 USDC of BTC daily"
+    -> intent: "dca", fromAsset: "USDC", toAsset: "BTC", amount: 100, frequency: "daily", confidence: 95
+
+13. "DCA 200 USDC into ETH every month on the 1st"
+    -> intent: "dca", fromAsset: "USDC", toAsset: "ETH", amount: 200, frequency: "monthly", dayOfMonth: "1", confidence: 95
 `;
 
 export async function parseUserCommand(
@@ -234,6 +266,13 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
   } else if (parsed.intent === "yield_migrate") {
     if (!parsed.fromAsset) errors.push("Source asset not specified for migration");
     if (parsed.amount && parsed.amount <= 0) errors.push("Invalid migration amount");
+  } else if (parsed.intent === "dca") {
+    if (!parsed.fromAsset) errors.push("Source asset not specified");
+    if (!parsed.toAsset) errors.push("Destination asset not specified");
+    if (!parsed.amount || parsed.amount <= 0) errors.push("Invalid amount specified");
+    if (!parsed.frequency) errors.push("Frequency not specified (daily, weekly, or monthly)");
+    if (parsed.frequency === "weekly" && !parsed.dayOfWeek) errors.push("Day of week not specified for weekly DCA");
+    if (parsed.frequency === "monthly" && !parsed.dayOfMonth) errors.push("Day of month not specified for monthly DCA");
   } else if (!parsed.intent || parsed.intent === "unknown") {
       if (parsed.success === false && parsed.validationErrors && parsed.validationErrors.length > 0) {
          // Keep prompt-level validation errors
@@ -264,6 +303,9 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     amount: parsed.amount || null,
     amountType: parsed.amountType || null,
     portfolio: parsed.portfolio, // Pass through portfolio
+    frequency: parsed.frequency || null,
+    dayOfWeek: parsed.dayOfWeek || null,
+    dayOfMonth: parsed.dayOfMonth || null,
     settleAsset: parsed.settleAsset || null,
     settleNetwork: parsed.settleNetwork || null,
     settleAmount: parsed.settleAmount || null,
