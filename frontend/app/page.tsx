@@ -343,15 +343,21 @@ export default function LandingPage() {
   const router = useRouter()
   const { isAuthenticated } = useAuth()
   const ulRef = useRef<HTMLUListElement>(null)
-  const [particles] = useState(() =>
-    Array.from({ length: 30 }, (_, i) => ({
-      id: i,
-      delay: Math.random() * 3,
-      duration: 4 + Math.random() * 4,
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-    }))
-  )
+const [particles, setParticles] = useState<
+  { id: number; delay: number; duration: number; x: number; y: number }[]
+>([])
+
+useEffect(() => {
+  const generated = Array.from({ length: 30 }, (_, i) => ({
+    id: i,
+    delay: Math.random() * 3,
+    duration: 4 + Math.random() * 4,
+    x: Math.random() * 100,
+    y: Math.random() * 100,
+  }))
+
+  setParticles(generated)
+}, [])
   
   const handleAccess = () => {
     if (isAuthenticated) {
