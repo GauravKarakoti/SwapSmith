@@ -42,7 +42,7 @@ jobs:
           echo "NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID }}" >> .env
           echo "BREVO_API_KEY=${{ secrets.BREVO_API_KEY }}" >> .env
           echo "BREVO_SENDER_EMAIL=${{ secrets.BREVO_SENDER_EMAIL }}" >> .env
-          echo "NEXT_PUBLIC_APP_URL=${{ secrets.NEXT_PUBLIC_APP_URL }}" >> .env
+          echo "NEXT_PUBLIC_APP_URL=http://localhost:3000" >> .env
 
       - name: Run ESLint
         working-directory: frontend
