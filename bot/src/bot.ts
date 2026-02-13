@@ -18,6 +18,9 @@ import { OrderMonitor } from './services/order-monitor';
 import { resolveAddress, isNamingService } from './services/address-resolver';
 import { ADDRESS_PATTERNS } from './config/address-patterns';
 
+console.log("SIDESHIFT_CLIENT_IP =", process.env.SIDESHIFT_CLIENT_IP);
+console.log("BOT_TOKEN exists =", Boolean(process.env.BOT_TOKEN));
+
 
 dotenv.config();
 const MINI_APP_URL = process.env.MINI_APP_URL!;
@@ -706,7 +709,7 @@ bot.action('confirm_swap', async (ctx) => {
         const quote = await createQuote(
             state.parsedCommand.fromAsset!, state.parsedCommand.fromChain!,
             state.parsedCommand.toAsset!, state.parsedCommand.toChain!,
-            state.parsedCommand.amount!, '1.1.1.1'
+            state.parsedCommand.amount!
         );
 
         if (quote.error) return ctx.editMessageText(`Error: ${quote.error.message}`);
@@ -791,7 +794,7 @@ bot.action('confirm_checkout', async (ctx) => {
     try {
         await ctx.answerCbQuery('Creating link...');
         const { settleAsset, settleNetwork, settleAmount, settleAddress } = state.parsedCommand;
-        const checkout = await createCheckout(settleAsset!, settleNetwork!, settleAmount!, settleAddress!, '1.1.1.1');
+        const checkout = await createCheckout(settleAsset!, settleNetwork!, settleAmount!, settleAddress!);
         if (!checkout?.id) throw new Error("API Error");
 
         db.createCheckoutEntry(userId, checkout);
@@ -832,8 +835,7 @@ bot.action('confirm_portfolio', async (ctx) => {
                     fromChain!,
                     allocation.toAsset,
                     allocation.toChain,
-                    swapAmount,
-                    '1.1.1.1'
+                    swapAmount
                 );
 
                 if (quote.error) {
@@ -997,7 +999,7 @@ bot.action('confirm_migration', async (ctx) => {
         const quote = await createQuote(
             fromAsset!, fromChain!,
             toAsset!, toChain!,
-            amount!, '1.1.1.1'
+            amount!
         );
 
         if (quote.error) return ctx.editMessageText(`Error: ${quote.error.message}`);
