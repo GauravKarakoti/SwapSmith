@@ -129,7 +129,7 @@ async function handleTextMessage(ctx: any, text: string) {
     await db.setConversationState(userId, { parsedCommand: parsed });
 
     let msg = `📊 *Portfolio Detected*\n\n`;
-    parsed.portfolio.forEach((p: any) => {
+    parsed.portfolio?.forEach((p: any) => {
       msg += `• ${p.percentage}% → ${p.toAsset} (${p.toChain})\n`;
     });
     msg += `\nProvide destination address.`;
@@ -155,8 +155,7 @@ bot.action('confirm_swap', async (ctx) => {
     state.parsedCommand.fromChain,
     state.parsedCommand.toAsset,
     state.parsedCommand.toChain,
-    state.parsedCommand.amount,
-    '1.1.1.1'
+    state.parsedCommand.amount
   );
 
   await db.setConversationState(ctx.from.id, {
@@ -228,8 +227,7 @@ bot.action('confirm_portfolio', async (ctx) => {
       state.parsedCommand.fromChain,
       p.toAsset,
       p.toChain,
-      amt,
-      '1.1.1.1'
+      amt
     );
 
     quotes.push({ allocation: p, quote: q, amount: amt });
