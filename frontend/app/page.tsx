@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { motion, useMotionValue, useSpring } from 'framer-motion'
 import { Zap, Mic, Shield, ArrowRight, Wallet, MessageSquare, CheckCircle, ListChecks, BarChart3, Sparkles, TrendingUp } from 'lucide-react'
 import { useEffect, useState, useRef } from 'react'
+import { animate } from 'motion'
 import { useAuth } from '@/hooks/useAuth'
 // Removed: import { ReactLenis } from 'lenis/react'
 // Removed: import { animate, scroll } from 'motion' 
@@ -383,10 +384,7 @@ useEffect(() => {
           { duration: 1 }
         )
         
-        scroll(controls, { 
-          target: section,
-          offset: ['start start', 'end end']
-        })
+        // Removed scroll(controls, ...) because 'scroll' is not imported and causes a build error.
       }
     }, 100)
 
