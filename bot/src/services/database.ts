@@ -1,7 +1,7 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { pgTable, serial, text, real, timestamp, bigint } from 'drizzle-orm/pg-core';
-import { eq, desc, and } from 'drizzle-orm'; // Added 'and'
+import { pgTable, serial, text, real, timestamp, bigint, integer } from 'drizzle-orm/pg-core';
+import { eq, desc, and, sql } from 'drizzle-orm'; // Added 'and', 'sql'
 import dotenv from 'dotenv';
 import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
 import type { ParsedCommand } from './groq-client';
@@ -10,8 +10,9 @@ dotenv.config();
 const memoryAddressBook = new Map<number, Map<string, { address: string; chain: string }>>();
 const memoryState = new Map<number, any>();
 //newly added
-const sql = neon(process.env.DATABASE_URL!);
-const db = drizzle(sql);
+const connectionString = process.env.DATABASE_URL || 'postgres://mock:mock@localhost:5432/mock';
+const client = neon(connectionString);
+const db = drizzle(client);
 
 // --- SCHEMAS ---
 export const users = pgTable('users', {
@@ -76,11 +77,32 @@ export const watchedOrders = pgTable('watched_orders', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// DCA (Dollar Cost Averaging) Schedules
+export const dcaSchedules = pgTable('dca_schedules', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
+  fromAsset: text('from_asset').notNull(),
+  fromChain: text('from_chain').notNull(),
+  toAsset: text('to_asset').notNull(),
+  toChain: text('to_chain').notNull(),
+  amount: real('amount').notNull(),
+  frequency: text('frequency').notNull(), // 'daily', 'weekly', 'monthly'
+  dayOfWeek: text('day_of_week'), // For weekly: 'monday', 'tuesday', etc.
+  dayOfMonth: text('day_of_month'), // For monthly: '1', '15', etc.
+  settleAddress: text('settle_address').notNull(),
+  isActive: text('is_active').notNull().default('true'),
+  lastExecuted: timestamp('last_executed'),
+  nextExecution: timestamp('next_execution').notNull(),
+  executionCount: integer('execution_count').notNull().default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 export type User = typeof users.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Checkout = typeof checkouts.$inferSelect;
 export type AddressBookEntry = typeof addressBook.$inferSelect;
 export type WatchedOrder = typeof watchedOrders.$inferSelect;
+export type DCASchedule = typeof dcaSchedules.$inferSelect;
 
 // --- FUNCTIONS ---
 
@@ -287,4 +309,95 @@ export async function updateWatchedOrderStatus(sideshiftOrderId: string, newStat
   await db.update(watchedOrders)
     .set({ lastStatus: newStatus, lastChecked: new Date() })
     .where(eq(watchedOrders.sideshiftOrderId, sideshiftOrderId));
+}
+
+
+// --- DCA SCHEDULE FUNCTIONS ---
+
+export async function createDCASchedule(
+  telegramId: number,
+  fromAsset: string,
+  fromChain: string,
+  toAsset: string,
+  toChain: string,
+  amount: number,
+  frequency: string,
+  settleAddress: string,
+  dayOfWeek?: string,
+  dayOfMonth?: string
+) {
+  const nextExecution = calculateNextExecution(frequency, dayOfWeek, dayOfMonth);
+  
+  const result = await db.insert(dcaSchedules).values({
+    telegramId,
+    fromAsset,
+    fromChain,
+    toAsset,
+    toChain,
+    amount,
+    frequency,
+    dayOfWeek: dayOfWeek || null,
+    dayOfMonth: dayOfMonth || null,
+    settleAddress,
+    nextExecution,
+    isActive: 'true'
+  }).returning();
+  
+  return result[0];
+}
+
+export async function getUserDCASchedules(telegramId: number): Promise<DCASchedule[]> {
+  return await db.select().from(dcaSchedules)
+    .where(eq(dcaSchedules.telegramId, telegramId))
+    .orderBy(desc(dcaSchedules.createdAt));
+}
+
+export async function getActiveDCASchedules(): Promise<DCASchedule[]> {
+  return await db.select().from(dcaSchedules)
+    .where(eq(dcaSchedules.isActive, 'true'));
+}
+
+export async function updateDCAScheduleStatus(id: number, isActive: boolean) {
+  await db.update(dcaSchedules)
+    .set({ isActive: isActive ? 'true' : 'false' })
+    .where(eq(dcaSchedules.id, id));
+}
+
+export async function updateDCAScheduleExecution(id: number, frequency: string, dayOfWeek?: string, dayOfMonth?: string) {
+  const nextExecution = calculateNextExecution(frequency, dayOfWeek, dayOfMonth);
+  
+  await db.update(dcaSchedules)
+    .set({ 
+      lastExecuted: new Date(),
+      nextExecution,
+      executionCount: sql`${dcaSchedules.executionCount} + 1`
+    })
+    .where(eq(dcaSchedules.id, id));
+}
+
+export async function deleteDCASchedule(id: number) {
+  await db.delete(dcaSchedules).where(eq(dcaSchedules.id, id));
+}
+
+function calculateNextExecution(frequency: string, dayOfWeek?: string, dayOfMonth?: string): Date {
+  const now = new Date();
+  const next = new Date(now);
+  
+  if (frequency === 'daily') {
+    next.setDate(next.getDate() + 1);
+    next.setHours(9, 0, 0, 0); // 9 AM next day
+  } else if (frequency === 'weekly') {
+    const targetDay = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].indexOf(dayOfWeek?.toLowerCase() || 'monday');
+    const currentDay = next.getDay();
+    const daysUntilTarget = (targetDay - currentDay + 7) % 7 || 7;
+    next.setDate(next.getDate() + daysUntilTarget);
+    next.setHours(9, 0, 0, 0);
+  } else if (frequency === 'monthly') {
+    const targetDate = parseInt(dayOfMonth || '1');
+    next.setMonth(next.getMonth() + 1);
+    next.setDate(Math.min(targetDate, new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()));
+    next.setHours(9, 0, 0, 0);
+  }
+  
+  return next;
 }
