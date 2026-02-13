@@ -47,7 +47,6 @@ const limitOrderWorker_1 = require("./workers/limitOrderWorker");
 const dcaWorker_1 = require("./workers/dcaWorker");
 const parseLimitOrder_1 = require("./utils/parseLimitOrder");
 const network_1 = require("./utils/network");
-const tokens_1 = require("./utils/tokens");
 const auth_1 = require("./utils/auth");
 const portfolio_1 = require("./handlers/portfolio");
 const ethers_1 = require("ethers");
@@ -71,6 +70,35 @@ try {
 catch (error) {
     console.warn('⚠️ ffmpeg not found. Voice messages will fail. Please install ffmpeg.');
 }
+// --- ERC20 CONFIGURATION ---
+const ERC20_ABI = [
+    "function transfer(address to, uint256 amount) returns (bool)"
+];
+// Map of common tokens -> Address & Decimals
+const TOKEN_MAP = {
+    ethereum: {
+        USDC: { address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", decimals: 6 },
+        USDT: { address: "0xdAC17F958D2ee523a2206206994597C13D831ec7", decimals: 6 },
+        DAI: { address: "0x6B175474E89094C44Da98b954EedeAC495271d0F", decimals: 18 },
+        WBTC: { address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", decimals: 8 }
+    },
+    base: {
+        USDC: { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", decimals: 6 },
+        WETH: { address: "0x4200000000000000000000000000000000000006", decimals: 18 }
+    },
+    arbitrum: {
+        USDC: { address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", decimals: 6 },
+        USDT: { address: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9", decimals: 6 }
+    },
+    polygon: {
+        USDC: { address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", decimals: 6 },
+        USDT: { address: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", decimals: 6 }
+    },
+    bsc: {
+        USDC: { address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", decimals: 18 },
+        USDT: { address: "0x55d398326f99059fF775485246999027B3197955", decimals: 18 }
+    }
+};
 async function logAnalytics(ctx, errorType, details) {
     console.error(`[Analytics] ${errorType}:`, details);
     if (ADMIN_CHAT_ID) {
@@ -340,7 +368,7 @@ bot.action('place_order', async (ctx) => {
         const depositMemo = typeof order.depositAddress === 'object' ? order.depositAddress.memo : null;
         const chainKey = fromChain?.toLowerCase() || 'ethereum';
         const assetKey = fromAsset?.toUpperCase() || 'ETH';
-        const tokenData = tokens_1.TOKEN_MAP[chainKey]?.[assetKey];
+        const tokenData = TOKEN_MAP[chainKey]?.[assetKey];
         let txTo = rawDepositAddress;
         let txValueHex = '0x0';
         let txData = '0x';
@@ -350,7 +378,7 @@ bot.action('place_order', async (ctx) => {
                 txTo = tokenData.address;
                 txValueHex = '0x0'; // Value is 0 for tokens
                 const amountBigInt = ethers_1.ethers.parseUnits(amount.toString(), tokenData.decimals);
-                const iface = new ethers_1.ethers.Interface(tokens_1.ERC20_ABI);
+                const iface = new ethers_1.ethers.Interface(ERC20_ABI);
                 txData = iface.encodeFunctionData("transfer", [rawDepositAddress, amountBigInt]);
             }
             else {
@@ -493,9 +521,5 @@ app.post('/api/dca', async (req, res) => {
     }
 });
 app.listen(process.env.PORT || 3000, () => console.log(`Express server live`));
-bot.catch((err, ctx) => {
-    console.error(`Ooops, encountered an error for ${ctx.updateType}`, err);
-    logAnalytics(ctx, 'UnhandledError', { input: 'unknown', error: err instanceof Error ? err.message : String(err) });
-});
 bot.launch();
 console.log('🤖 Bot is running...');

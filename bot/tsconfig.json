@@ -8,5 +8,5 @@
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "exclude": ["drizzle.config.ts", "tests"]
+  "exclude": ["drizzle.config.ts"]
 }

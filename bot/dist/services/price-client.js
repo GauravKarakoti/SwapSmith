@@ -4,7 +4,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getPrices = getPrices;
-exports.getPricesWithChange = getPricesWithChange;
 const axios_1 = __importDefault(require("axios"));
 const COINGECKO_API = 'https://api.coingecko.com/api/v3/simple/price';
 // Expanded list of common tokens
@@ -82,51 +81,6 @@ async function getPrices(symbols) {
     catch (error) {
         console.error('[PriceClient] Error fetching prices:', error instanceof Error ? error.message : String(error));
         // Return partial results or empty object.
-        return {};
-    }
-}
-async function getPricesWithChange(symbols) {
-    if (symbols.length === 0)
-        return {};
-    const uniqueSymbols = [...new Set(symbols.map(s => s.toUpperCase()))];
-    const ids = [];
-    const idToSymbols = {};
-    for (const symbol of uniqueSymbols) {
-        const id = SYMBOL_TO_ID[symbol];
-        if (id) {
-            if (!idToSymbols[id]) {
-                idToSymbols[id] = [];
-                ids.push(id);
-            }
-            idToSymbols[id].push(symbol);
-        }
-    }
-    if (ids.length === 0)
-        return {};
-    try {
-        const response = await axios_1.default.get(COINGECKO_API, {
-            params: {
-                ids: ids.join(','),
-                vs_currencies: 'usd',
-                include_24hr_change: 'true'
-            }
-        });
-        const result = {};
-        for (const id of ids) {
-            if (response.data[id] && response.data[id].usd) {
-                const price = response.data[id].usd;
-                const change24h = response.data[id].usd_24h_change || 0;
-                if (idToSymbols[id]) {
-                    for (const symbol of idToSymbols[id]) {
-                        result[symbol] = { price, change24h };
-                    }
-                }
-            }
-        }
-        return result;
-    }
-    catch (error) {
-        console.error('[PriceClient] Error fetching prices with change:', error instanceof Error ? error.message : String(error));
         return {};
     }
 }
