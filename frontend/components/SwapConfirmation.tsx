@@ -526,7 +526,7 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
       <div className="mt-4 space-y-2">
         <button
           onClick={handleConfirm}
-          disabled={!isConnected || isPending || !address || (safetyCheck && safetyCheck.riskLevel === 'unsafe')} 
+          disabled={!isConnected || isPending || !address || (safetyCheck?.riskLevel === 'unsafe') || false} 
           className={`w-full py-3 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
             safetyCheck?.riskLevel === 'safe' 
               ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700'
