@@ -11,6 +11,7 @@ import {
   TrendingUp,
   Terminal as TerminalIcon,
 } from "lucide-react";
+import Image from "next/image";
 import { useAuth } from "@/hooks/useAuth";
 import WalletConnector from "./WalletConnector";
 
@@ -143,7 +144,7 @@ export default function Navbar() {
               >
                 {profileImageUrl ? (
                   <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-blue-500">
-                    <img src={profileImageUrl} alt="Profile" className="w-full h-full object-cover" />
+                    <Image src={profileImageUrl} alt="Profile" className="w-full h-full object-cover"  />                
                   </div>
                 ) : (
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">

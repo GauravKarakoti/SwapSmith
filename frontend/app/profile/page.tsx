@@ -34,6 +34,7 @@ import {
   Calendar,
   TrendingUp,
 } from 'lucide-react'
+import Image  from 'next/image'
 import { useAuth } from '@/hooks/useAuth'
 import Navbar from '@/components/Navbar'
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth'
@@ -534,7 +535,7 @@ export default function ProfilePage() {
               <div className="relative group">
                 <div className="h-20 w-20 rounded-2xl overflow-hidden shadow-lg shadow-blue-500/20 border-2 border-zinc-800 group-hover:border-blue-500 transition-colors">
                   {profileImageUrl ? (
-                    <img src={profileImageUrl} alt="Profile" className="w-full h-full object-cover" />
+                    <Image src={profileImageUrl} alt="Profile" className="w-full h-full object-cover"  />
                   ) : (
                     <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
                       <User className="w-10 h-10 text-white" />
