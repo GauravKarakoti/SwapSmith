@@ -1,7 +1,6 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
 dotenv.config();
-
 const SIDESHIFT_BASE_URL = "https://sideshift.ai/api/v2";
 const AFFILIATE_ID = process.env.SIDESHIFT_AFFILIATE_ID || process.env.NEXT_PUBLIC_AFFILIATE_ID || '';
 const API_KEY = process.env.SIDESHIFT_API_KEY || process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
