@@ -11,7 +11,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 // Enhanced Interface to support Portfolio and Yield
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "unknown";
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "unknown";
   
   // Single Swap Fields
   fromAsset: string | null;
@@ -27,6 +27,11 @@ export interface ParsedCommand {
     toChain: string;
     percentage: number; // e.g., 50 for 50%
   }[];
+
+  // DCA Fields
+  frequency?: "daily" | "weekly" | "monthly" | null;
+  dayOfWeek?: string | null; // For weekly: "monday", "tuesday", etc.
+  dayOfMonth?: string | null; // For monthly: "1", "15", etc.
 
   // Checkout Fields
   settleAsset: string | null;
@@ -57,6 +62,7 @@ MODES:
 4. "yield_scout": User asking for high APY/Yield info.
 5. "yield_deposit": Deposit assets into yield platforms, possibly bridging if needed.
 6. "yield_migrate": Move funds from a lower-yielding pool to a higher-yielding pool on the same or different chain.
+7. "dca": Dollar Cost Averaging - Recurring automated swaps at regular intervals (daily, weekly, monthly).
 
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
 
@@ -86,7 +92,7 @@ AMBIGUITY HANDLING:
 RESPONSE FORMAT:
 {
   "success": boolean,
-  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate",
+  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca",
   "fromAsset": string | null,
   "fromChain": string | null,
   "amount": number | null,
@@ -101,6 +107,11 @@ RESPONSE FORMAT:
     { "toAsset": "BTC", "toChain": "bitcoin", "percentage": 50 },
     { "toAsset": "SOL", "toChain": "solana", "percentage": 50 }
   ],
+
+  // Fill for 'dca'
+  "frequency": "daily" | "weekly" | "monthly",
+  "dayOfWeek": "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday" | null,
+  "dayOfMonth": "1" | "15" | "28" | null,
 
   // Fill for 'checkout'
   "settleAsset": string | null,
@@ -150,6 +161,15 @@ EXAMPLES:
 
 10. "Migrate my stables to the best APY pool"
     -> intent: "yield_migrate", fromAsset: "USDC", confidence: 85
+
+11. "Swap $50 of USDC for ETH every Monday"
+    -> intent: "dca", fromAsset: "USDC", toAsset: "ETH", amount: 50, frequency: "weekly", dayOfWeek: "monday", confidence: 95
+
+12. "Buy 100 USDC of BTC daily"
+    -> intent: "dca", fromAsset: "USDC", toAsset: "BTC", amount: 100, frequency: "daily", confidence: 95
+
+13. "DCA 200 USDC into ETH every month on the 1st"
+    -> intent: "dca", fromAsset: "USDC", toAsset: "ETH", amount: 200, frequency: "monthly", dayOfMonth: "1", confidence: 95
 `;
 
 export async function parseUserCommand(
@@ -246,6 +266,13 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
   } else if (parsed.intent === "yield_migrate") {
     if (!parsed.fromAsset) errors.push("Source asset not specified for migration");
     if (parsed.amount && parsed.amount <= 0) errors.push("Invalid migration amount");
+  } else if (parsed.intent === "dca") {
+    if (!parsed.fromAsset) errors.push("Source asset not specified");
+    if (!parsed.toAsset) errors.push("Destination asset not specified");
+    if (!parsed.amount || parsed.amount <= 0) errors.push("Invalid amount specified");
+    if (!parsed.frequency) errors.push("Frequency not specified (daily, weekly, or monthly)");
+    if (parsed.frequency === "weekly" && !parsed.dayOfWeek) errors.push("Day of week not specified for weekly DCA");
+    if (parsed.frequency === "monthly" && !parsed.dayOfMonth) errors.push("Day of month not specified for monthly DCA");
   } else if (!parsed.intent || parsed.intent === "unknown") {
       if (parsed.success === false && parsed.validationErrors && parsed.validationErrors.length > 0) {
          // Keep prompt-level validation errors
@@ -276,6 +303,9 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     amount: parsed.amount || null,
     amountType: parsed.amountType || null,
     portfolio: parsed.portfolio, // Pass through portfolio
+    frequency: parsed.frequency || null,
+    dayOfWeek: parsed.dayOfWeek || null,
+    dayOfMonth: parsed.dayOfMonth || null,
     settleAsset: parsed.settleAsset || null,
     settleNetwork: parsed.settleNetwork || null,
     settleAmount: parsed.settleAmount || null,
