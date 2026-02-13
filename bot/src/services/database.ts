@@ -1,7 +1,7 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import { pgTable, serial, text, real, timestamp, bigint, integer } from 'drizzle-orm/pg-core';
-import { eq, desc, and } from 'drizzle-orm'; // Added 'and'
+import { eq, desc, and, sql } from 'drizzle-orm'; // Added 'and', 'sql'
 import dotenv from 'dotenv';
 import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
 import type { ParsedCommand } from './groq-client';
@@ -10,8 +10,9 @@ dotenv.config();
 const memoryAddressBook = new Map<number, Map<string, { address: string; chain: string }>>();
 const memoryState = new Map<number, any>();
 //newly added
-const sql = neon(process.env.DATABASE_URL!);
-const db = drizzle(sql);
+const connectionString = process.env.DATABASE_URL || 'postgres://mock:mock@localhost:5432/mock';
+const client = neon(connectionString);
+const db = drizzle(client);
 
 // --- SCHEMAS ---
 export const users = pgTable('users', {

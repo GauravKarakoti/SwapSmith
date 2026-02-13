@@ -78,32 +78,59 @@ bot.on(message('text'), async (ctx) => {
   await handleTextMessage(ctx, ctx.message.text, 'text');
 });
 
-// ------------------ VOICE ------------------
-
+// ------------------ VOICE HANDLER ------------------
 bot.on(message('voice'), async (ctx) => {
   const userId = ctx.from.id;
-  await ctx.reply('👂 Listening...');
-
-  const tempDir = os.tmpdir();
-  const oga = path.join(tempDir, `${userId}.oga`);
-  const mp3 = path.join(tempDir, `${userId}.mp3`);
+  await ctx.sendChatAction('typing');
 
   try {
-    const fileLink = await ctx.telegram.getFileLink(ctx.message.voice.file_id);
-    const audio = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
-    fs.writeFileSync(oga, Buffer.from(audio.data));
+    const fileId = ctx.message.voice.file_id;
+    const fileLink = await bot.telegram.getFileLink(fileId);
+    
+    // FIX: Using unique filename with timestamp and random suffix to prevent race conditions
+    const timestamp = Date.now();
+    const uniqueId = Math.random().toString(36).substring(7);
+    const tempOga = path.join(os.tmpdir(), `temp_${userId}_${timestamp}_${uniqueId}.oga`);
+    const tempMp3 = path.join(os.tmpdir(), `temp_${userId}_${timestamp}_${uniqueId}.mp3`);
 
-    await new Promise<void>((res, rej) =>
-      exec(`ffmpeg -i "${oga}" "${mp3}" -y`, (e) => (e ? rej(e) : res()))
-    );
+    const writer = fs.createWriteStream(tempOga);
+    const response = await axios({
+      url: fileLink.href,
+      method: 'GET',
+      responseType: 'stream',
+    });
 
-    const text = await transcribeAudio(mp3);
+    response.data.pipe(writer);
+
+    await new Promise((resolve, reject) => {
+      writer.on('finish', () => resolve(true));
+      writer.on('error', reject);
+    });
+
+    // Convert to mp3
+    await new Promise((resolve, reject) => {
+        exec(`ffmpeg -i "${tempOga}" "${tempMp3}" -y`, (error) => {
+            if (error) reject(error);
+            else resolve(true);
+        });
+    });
+
+    const text = await transcribeAudio(tempMp3);
+    
+    // Cleanup
+    if (fs.existsSync(tempOga)) fs.unlinkSync(tempOga);
+    if (fs.existsSync(tempMp3)) fs.unlinkSync(tempMp3);
+
+    if (!text) {
+        return ctx.reply('❌ Could not transcribe audio. Please try again.');
+    }
+
+    ctx.reply(`🎤 *Transcribed:* "${text}"`, { parse_mode: 'Markdown' });
     await handleTextMessage(ctx, text, 'voice');
-  } catch {
-    ctx.reply("Couldn't understand audio.");
-  } finally {
-    if (fs.existsSync(oga)) fs.unlinkSync(oga);
-    if (fs.existsSync(mp3)) fs.unlinkSync(mp3);
+
+  } catch (error) {
+    console.error('Voice processing error:', error);
+    ctx.reply('❌ Error processing voice message.');
   }
 });
 
@@ -112,7 +139,7 @@ bot.on(message('voice'), async (ctx) => {
 async function handleTextMessage(
   ctx: any,
   text: string,
-  inputType: 'text' | 'voice'
+  inputType: 'text' | 'voice' = 'text'
 ) {
   const userId = ctx.from.id;
   const state = await db.getConversationState(userId);
@@ -227,15 +254,332 @@ bot.action('place_order', async (ctx) => {
     state.quoteId
   );
 
-  ctx.editMessageText('✅ Order created. Sign transaction.', {
-    parse_mode: 'Markdown',
-    ...Markup.inlineKeyboard([
-      Markup.button.webApp(
-        '📱 Sign Transaction',
-        `${MINI_APP_URL}?to=${order.depositAddress}`
-      ),
-    ]),
+  await db.addWatchedOrder(ctx.from.id, order.id, 'pending');
+
+  ctx.editMessageText(
+    `✅ *Order Created*\n\nSign transaction to complete.`,
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        Markup.button.webApp(
+          '📱 Sign Transaction',
+          `${MINI_APP_URL}?to=${order.depositAddress}`
+        ),
+      ]),
+    }
+  );
+});
+
+bot.action('confirm_checkout', async (ctx) => {
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+    if (!state?.parsedCommand || state.parsedCommand.intent !== 'checkout') return ctx.answerCbQuery('Start over.');
+
+    try {
+        await ctx.answerCbQuery('Creating link...');
+        const { settleAsset, settleNetwork, settleAmount, settleAddress } = state.parsedCommand;
+        const checkout = await createCheckout(settleAsset!, settleNetwork!, settleAmount!, settleAddress!);
+        if (!checkout?.id) throw new Error("API Error");
+
+        db.createCheckoutEntry(userId, checkout);
+        ctx.editMessageText(`✅ *Checkout Link Created!*\n💰 *Receive:* ${checkout.settleAmount} ${checkout.settleCoin}\n[Pay Here](https://pay.sideshift.ai/checkout/${checkout.id})`, {
+            parse_mode: 'Markdown',
+            link_preview_options: { is_disabled: true }
+        });
+    } catch (error) {
+        ctx.editMessageText(`Error creating link.`);
+    } finally {
+        db.clearConversationState(userId);
+    }
+});
+
+bot.action('confirm_portfolio', async (ctx) => {
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+    if (!state?.parsedCommand || state.parsedCommand.intent !== 'portfolio') return ctx.answerCbQuery('Session expired.');
+
+    try {
+        await ctx.answerCbQuery('Creating portfolio swaps...');
+        const { fromAsset, fromChain, amount, portfolio, settleAddress } = state.parsedCommand;
+        
+        if (!portfolio || portfolio.length === 0) {
+            return ctx.editMessageText('❌ No portfolio allocation found.');
+        }
+
+        // Create quotes for each allocation
+        const quotes: Array<{ quote: any; allocation: any; swapAmount: number }> = [];
+        let quoteSummary = `📊 *Portfolio Swap Summary*\n\nFrom: ${amount} ${fromAsset} on ${fromChain}\n\n*Swaps:*\n`;
+
+        for (const allocation of portfolio) {
+            const swapAmount = (amount! * allocation.percentage) / 100;
+            
+            try {
+                const quote = await createQuote(
+                    fromAsset!,
+                    fromChain!,
+                    allocation.toAsset,
+                    allocation.toChain,
+                    swapAmount
+                );
+
+                if (quote.error) {
+                    throw new Error(`${allocation.toAsset}: ${quote.error.message}`);
+                }
+
+                quotes.push({ quote, allocation, swapAmount });
+                quoteSummary += `• ${allocation.percentage}% (${swapAmount} ${fromAsset}) → ~${quote.settleAmount} ${allocation.toAsset}\n`;
+            } catch (error) {
+                return ctx.editMessageText(`❌ Failed to create quote for ${allocation.toAsset}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+        }
+
+        // Store quotes in state
+        await db.setConversationState(userId, { 
+            ...state, 
+            portfolioQuotes: quotes.map(q => ({ 
+                quoteId: q.quote.id, 
+                allocation: q.allocation, 
+                swapAmount: q.swapAmount,
+                settleAmount: q.quote.settleAmount
+            }))
+        });
+
+        quoteSummary += `\nReady to place orders?`;
+
+        ctx.editMessageText(quoteSummary, {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+                Markup.button.callback('✅ Place Orders', 'place_portfolio_orders'),
+                Markup.button.callback('❌ Cancel', 'cancel_swap')
+            ])
+        });
+    } catch (error) {
+        ctx.editMessageText(`Error: ${error instanceof Error ? error.message : 'Unknown'}`);
+    }
+});
+
+bot.action('place_portfolio_orders', async (ctx) => {
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+    if (!state?.portfolioQuotes || !state.parsedCommand) return ctx.answerCbQuery('Session expired.');
+
+    try {
+        await ctx.answerCbQuery('Placing orders...');
+        const { settleAddress, fromAsset, fromChain, amount } = state.parsedCommand;
+        const orders: Array<{ order: any; allocation: any; quoteId: string }> = [];
+
+        // Create orders for each quote
+        for (const quoteData of state.portfolioQuotes) {
+            try {
+                const order = await createOrder(quoteData.quoteId, settleAddress!, settleAddress!);
+                if (!order.id) throw new Error(`Failed to create order for ${quoteData.allocation.toAsset}`);
+
+                // Store each order in database
+                const orderCommand = {
+                    ...state.parsedCommand,
+                    toAsset: quoteData.allocation.toAsset,
+                    toChain: quoteData.allocation.toChain,
+                    amount: quoteData.swapAmount
+                };
+                db.createOrderEntry(userId, orderCommand, order, quoteData.settleAmount, quoteData.quoteId);
+                
+                // Automatically add each order to watch list
+                await db.addWatchedOrder(userId, order.id, 'pending');
+
+                orders.push({ order, allocation: quoteData.allocation, quoteId: quoteData.quoteId });
+            } catch (error) {
+                return ctx.editMessageText(`❌ Failed to create order for ${quoteData.allocation.toAsset}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+        }
+
+        // For portfolio swaps, we need to execute multiple transactions
+        // The user will need to send the full amount to the first order's deposit address
+        // Then the system will handle the splits via SideShift
+        const firstOrder = orders[0].order;
+        const rawDepositAddress = typeof firstOrder.depositAddress === 'string' ? firstOrder.depositAddress : firstOrder.depositAddress.address;
+        const depositMemo = typeof firstOrder.depositAddress === 'object' ? firstOrder.depositAddress.memo : null;
+
+        const chainKey = fromChain?.toLowerCase() || 'ethereum';
+        const assetKey = fromAsset?.toUpperCase() || 'ETH';
+        const totalAmount = amount!;
+        
+        // Use dynamic token resolver
+        const tokenData = await tokenResolver.getTokenInfo(assetKey, chainKey);
+
+        let txTo = rawDepositAddress, txValueHex = '0x0', txData = '0x';
+
+        if (tokenData) {
+            // ERC20 token
+            txTo = tokenData.address;
+            const amountBigInt = ethers.parseUnits(totalAmount.toString(), tokenData.decimals);
+            const iface = new ethers.Interface(ERC20_ABI);
+            txData = iface.encodeFunctionData("transfer", [rawDepositAddress, amountBigInt]);
+        } else {
+            // Native token
+            const amountBigInt = ethers.parseUnits(totalAmount.toString(), 18);
+            txValueHex = '0x' + amountBigInt.toString(16);
+            if (depositMemo) txData = ethers.hexlify(ethers.toUtf8Bytes(depositMemo));
+        }
+
+        const params = new URLSearchParams({
+            to: txTo, value: txValueHex, data: txData,
+            chainId: chainIdMap[chainKey] || '1',
+            token: assetKey, amount: totalAmount.toString()
+        });
+
+        let orderSummary = `✅ *Portfolio Orders Created!*\n\n*Orders:*\n`;
+        orders.forEach((o, i) => {
+            orderSummary += `${i + 1}. Order ${o.order.id.substring(0, 8)}... → ${o.allocation.toAsset}\n`;
+        });
+        orderSummary += `\nSign the transaction to complete all swaps.\n\n🔔 *Auto-Watch Enabled:* I'll notify you when each swap completes!`;
+
+        ctx.editMessageText(orderSummary, {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+                Markup.button.webApp('📱 Sign Transaction', `${MINI_APP_URL}?${params.toString()}`),
+                Markup.button.callback('❌ Close', 'cancel_swap')
+            ])
+        });
+    } catch (error) {
+        ctx.editMessageText(`Failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+        db.clearConversationState(userId);
+    }
+});
+
+bot.action('confirm_migration', async (ctx) => {
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+
+    if (!state?.parsedCommand || state.parsedCommand.intent !== 'yield_migrate') {
+        return ctx.answerCbQuery('Session expired.');
+    }
+
+    try {
+        await ctx.answerCbQuery('Preparing migration...');
+
+        const { fromChain, toChain, fromAsset, toAsset, amount, isCrossChain } = state.parsedCommand;
+
+        if (!isCrossChain) {
+            return ctx.editMessageText(`✅ *Same-Chain Migration*\n\n` +
+                `Since both pools are on the same chain, you can migrate directly:\n\n` +
+                `1. Withdraw your ${fromAsset} from ${state.parsedCommand.fromProject}\n` +
+                `2. Deposit to ${state.parsedCommand.toProject}\n\n` +
+                `This saves on bridge fees and is instant.\n\n` +
+                `Do you need a quote to swap ${fromAsset} to a different chain?`, {
+                parse_mode: 'Markdown',
+                ...Markup.inlineKeyboard([
+                    Markup.button.callback('🔄 Find Cross-Chain Options', 'find_bridge_options'),
+                    Markup.button.callback('❌ Cancel', 'cancel_swap')
+                ])
+            });
+        }
+
+        const quote = await createQuote(
+            fromAsset!, fromChain!,
+            toAsset!, toChain!,
+            amount!
+        );
+
+        if (quote.error) return ctx.editMessageText(`Error: ${quote.error.message}`);
+
+        db.setConversationState(userId, { ...state, quoteId: quote.id, settleAmount: quote.settleAmount });
+
+        const migrationText = state.migrationSuggestion
+            ? `*Yield Migration*\n\n` +
+              `From: ${state.parsedCommand.fromProject} (${state.parsedCommand.fromYield}% APY)\n` +
+              `To: ${state.parsedCommand.toProject} (${state.parsedCommand.toYield}% APY)\n\n`
+            : '';
+
+        ctx.editMessageText(`${migrationText}➡️ *Send:* \`${quote.depositAmount} ${quote.depositCoin}\`\n⬅️ *Receive:* \`${quote.settleAmount} ${quote.settleCoin}\`\n\nReady to migrate?`, {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+                Markup.button.callback('✅ Migrate', 'place_migration'),
+                Markup.button.callback('❌ Cancel', 'cancel_swap'),
+            ])
+        });
+    } catch (error) {
+        ctx.editMessageText(`Error: ${error instanceof Error ? error.message : 'Unknown'}`);
+    }
+});
+
+bot.action('show_deposit_instructions', async (ctx) => {
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+
+    if (!state?.migrationSuggestion) return ctx.answerCbQuery('Session expired.');
+
+    const { fromPool, toPool } = state.migrationSuggestion;
+
+    ctx.editMessageText(`📖 *Direct Deposit Instructions*\n\n` +
+        `1. Go to ${toPool.project}\n` +
+        `2. Connect your wallet\n` +
+        `3. Withdraw from ${fromPool.project}\n` +
+        `4. Deposit to ${toPool.project}\n\n` +
+        `This is instant and saves bridge fees!\n\n` +
+        `*APY Improvement:* ${fromPool.apy.toFixed(2)}% → ${toPool.apy.toFixed(2)}%`, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+            Markup.button.callback('🔙 Back', 'cancel_swap')
+        ])
+    });
+});
+
+bot.action('find_bridge_options', async (ctx) => {
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+
+    if (!state?.migrationSuggestion) return ctx.answerCbQuery('Session expired.');
+
+    const { fromAsset } = state.parsedCommand;
+    ctx.reply('Bridge options feature pending.');
+});
+
+bot.action('sign_portfolio_transaction', async (ctx) => {
+  const state = await db.getConversationState(ctx.from.id);
+  if (!state?.portfolioQuotes) return;
+
+  const i = state.currentTransactionIndex;
+  const q = state.portfolioQuotes[i];
+
+  if (!q) {
+    await db.clearConversationState(ctx.from.id);
+    return ctx.editMessageText(`🎉 Portfolio complete!`);
+  }
+
+  ctx.editMessageText(
+    `📝 Transaction ${i + 1}/${state.portfolioQuotes.length}\n\n` +
+      `Send ${q.amount} ${state.parsedCommand.fromAsset}`,
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        Markup.button.webApp(
+          '📱 Sign Transaction',
+          `${MINI_APP_URL}?amount=${q.amount}`
+        ),
+        Markup.button.callback(
+          '➡️ Next',
+          'next_portfolio_transaction'
+        ),
+      ]),
+    }
+  );
+});
+
+bot.action('next_portfolio_transaction', async (ctx) => {
+  const state = await db.getConversationState(ctx.from.id);
+  await db.setConversationState(ctx.from.id, {
+    ...state,
+    currentTransactionIndex: state.currentTransactionIndex + 1,
   });
+
+  return bot.handleUpdate({
+    ...ctx.update,
+    callback_query: {
+      ...ctx.callbackQuery,
+      data: 'sign_portfolio_transaction',
+    },
+  } as any);
 });
 
 bot.action('cancel_swap', async (ctx) => {

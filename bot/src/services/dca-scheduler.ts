@@ -69,6 +69,10 @@ export class DCAScheduler {
         throw new Error(`Quote error: ${quote.error.message}`);
       }
 
+      if (!quote.id) {
+        throw new Error('Quote returned no ID');
+      }
+
       // Create order
       const order = await createOrder(quote.id, schedule.settleAddress, schedule.settleAddress);
       
