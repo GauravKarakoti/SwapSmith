@@ -503,7 +503,7 @@ export default function TerminalPage() {
           {isSidebarOpen && (
             <>
               <div className="p-4 border-b border-zinc-800">
-                <button className="w-full flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors text-sm font-medium">
+                <button className=" flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors text-sm font-medium">
                   <Plus className="w-4 h-4" />
                   New Chat
                 </button>
@@ -566,14 +566,31 @@ export default function TerminalPage() {
           {/* Chat Area */}
           <main className="flex-1 overflow-y-auto flex flex-col">
             
-            {/* Sidebar Toggle Button */}
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="fixed top-20 left-4 z-40 p-2 bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700 rounded-lg transition-colors shadow-lg"
-              title={isSidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-            >
-              <Menu className="w-5 h-5 text-zinc-300" />
-            </button>
+
+            {/* Sidebar Toggle Button (Open) */}
+            {!isSidebarOpen && (
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="fixed top-20 left-4 z-40 p-2 bg-zinc-900/90 border border-zinc-700 rounded-lg transition-colors shadow-lg group"
+                title="Show sidebar"
+              >
+                <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" style={{background: 'linear-gradient(90deg, #2563eb 0%, #1e40af 100%)', zIndex: 0}}></span>
+                <Menu className="w-5 h-5 text-zinc-300 relative z-10 group-hover:text-white transition-colors" />
+              </button>
+            )}
+
+            {/* Sidebar Close Button (inside sidebar, only when open) */}
+            {isSidebarOpen && (
+              <button
+                onClick={() => setIsSidebarOpen(false)}
+                className="absolute top-20 left-80 z-40 p-2 bg-zinc-900/90 border border-zinc-700 rounded-lg transition-colors shadow-lg group"
+                title="Hide sidebar"
+                style={{ marginLeft: '-48px' }}
+              >
+                <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" style={{background: 'linear-gradient(90deg, #2563eb 0%, #1e40af 100%)', zIndex: 0}}></span>
+                <Menu className="w-5 h-5 text-zinc-300 rotate-180 relative z-10 group-hover:text-white transition-colors" />
+              </button>
+            )}
 
             {/* Header Section */}
             <div className="flex-shrink-0 pt-12 pb-8 px-4">
