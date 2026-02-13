@@ -1,6 +1,7 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
 dotenv.config();
+const SIDESHIFT_CLIENT_IP = process.env.SIDESHIFT_CLIENT_IP || "127.0.0.1";
 
 const SIDESHIFT_BASE_URL = "https://sideshift.ai/api/v2";
 const AFFILIATE_ID = process.env.SIDESHIFT_AFFILIATE_ID || process.env.NEXT_PUBLIC_AFFILIATE_ID || '';
@@ -121,7 +122,7 @@ export async function getCoins(): Promise<SideShiftCoin[]> {
       {
         headers: { 
           'x-sideshift-secret': API_KEY,
-          'x-user-ip': '1.1.1.1'
+          'x-user-ip': SIDESHIFT_CLIENT_IP
         },
       }
     );
@@ -143,7 +144,7 @@ export async function getPairs(): Promise<SideShiftPair[]> {
       {
         headers: { 
           'x-sideshift-secret': API_KEY,
-          'x-user-ip': '0.0.0.0'
+          'x-user-ip': SIDESHIFT_CLIENT_IP
         },
       }
     );
@@ -162,7 +163,7 @@ export async function createQuote(
   toAsset: string, 
   toNetwork: string, 
   amount: number,
-  userIP: string
+  userIP?: string
 ): Promise<SideShiftQuote> {
   try {
     const response = await axios.post<SideShiftQuote & { id?: string }>(
@@ -179,7 +180,7 @@ export async function createQuote(
         headers: {
           'Content-Type': 'application/json',
           'x-sideshift-secret': API_KEY,
-          'x-user-ip': userIP
+          'x-user-ip': userIP || SIDESHIFT_CLIENT_IP
         }
       }
     );
@@ -220,7 +221,7 @@ export async function createOrder(quoteId: string, settleAddress: string, refund
                 headers: {
                     'Content-Type': 'application/json',
                     'x-sideshift-secret': API_KEY,
-                    'x-user-ip': '1.1.1.1' 
+                    'x-user-ip': SIDESHIFT_CLIENT_IP 
                 }
             }
         );
@@ -242,7 +243,7 @@ export async function getOrderStatus(orderId: string): Promise<SideShiftOrderSta
                 headers: {
                     'Accept': 'application/json',
                     'x-sideshift-secret': API_KEY,
-                    'x-user-ip': '1.1.1.1' 
+                    'x-user-ip': SIDESHIFT_CLIENT_IP 
                 }
             }
         );
@@ -262,7 +263,7 @@ export async function createCheckout(
   settleNetwork: string,
   settleAmount: number,
   settleAddress: string,
-  userIP: string
+  userIP?: string
 ): Promise<SideShiftCheckoutResponse> {
   const payload: Partial<SideShiftCheckoutRequest> = {
     settleCoin,
@@ -284,7 +285,7 @@ export async function createCheckout(
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'x-sideshift-secret': API_KEY,
-          'x-user-ip': userIP,
+          'x-user-ip': userIP || SIDESHIFT_CLIENT_IP
         },
       }
     );

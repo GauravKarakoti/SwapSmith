@@ -2,15 +2,25 @@ import { Telegraf, Markup } from 'telegraf';
 import { message } from 'telegraf/filters';
 import dotenv from 'dotenv';
 import { parseUserCommand, transcribeAudio } from './services/groq-client';
-import { createQuote, createOrder, createCheckout, getOrderStatus } from './services/sideshift-client';
-import { getTopStablecoinYields, getTopYieldPools, suggestMigration, findHigherYieldPools, formatMigrationMessage, MigrationSuggestion } from './services/yield-client';
+import {
+  createQuote,
+  createOrder,
+  createCheckout,
+  getOrderStatus,
+} from './services/sideshift-client';
+import {
+  getTopStablecoinYields,
+  getTopYieldPools,
+  suggestMigration,
+  findHigherYieldPools,
+  formatMigrationMessage,
+} from './services/yield-client';
 import * as db from './services/database';
 import { ethers } from 'ethers';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
-import express from 'express';
 import { chainIdMap } from './config/chains';
 import { handleError } from './services/logger';
 import { tokenResolver } from './services/token-resolver';
@@ -20,12 +30,15 @@ import { resolveAddress, isNamingService } from './services/address-resolver';
 import { ADDRESS_PATTERNS } from './config/address-patterns';
 import * as os from 'os';
 
-dotenv.config();
-const MINI_APP_URL = process.env.MINI_APP_URL!;
-const bot = new Telegraf(process.env.BOT_TOKEN!);
+console.log("SIDESHIFT_CLIENT_IP =", process.env.SIDESHIFT_CLIENT_IP);
+console.log("BOT_TOKEN exists =", Boolean(process.env.BOT_TOKEN));
 
-// Initialize order monitor
-const orderMonitor = new OrderMonitor(bot);
+dotenv.config();
+
+const bot = new Telegraf(process.env.BOT_TOKEN!);
+const MINI_APP_URL = process.env.MINI_APP_URL!;
+
+// ------------------ INIT ------------------
 
 // Initialize DCA scheduler
 const dcaScheduler = new DCAScheduler(bot);
@@ -37,24 +50,18 @@ function isValidAddress(address: string, chain?: string): boolean {
   return pattern.test(address.trim());
 }
 
-// --- FFMPEG CHECK ---
-// --- FFMPEG CHECK (non-blocking, correct) ---
 exec('ffmpeg -version', (error) => {
-    if (error) {
-        console.warn('⚠️ ffmpeg not found. Voice messages will fail. Please install ffmpeg.');
-    } else {
-        console.log('✅ ffmpeg is installed. Voice messages enabled.');
-    }
+  if (error) console.warn('⚠️ ffmpeg not found. Voice messages disabled.');
+  else console.log('✅ ffmpeg detected.');
 });
 
+const ERC20_ABI = ['function transfer(address to, uint256 amount) returns (bool)'];
 
-// --- ERC20 CONFIGURATION ---
-const ERC20_ABI = [
-    "function transfer(address to, uint256 amount) returns (bool)"
-];
-
-async function logAnalytics(ctx: any, errorType: string, details: any) {
-    await handleError(errorType, details, ctx, true);
+function isValidAddress(address: string, chain?: string): boolean {
+  const pattern =
+    ADDRESS_PATTERNS[chain?.toLowerCase() || 'ethereum'] ??
+    ADDRESS_PATTERNS.ethereum;
+  return pattern.test(address.trim());
 }
 
 // --- COMMANDS ---
@@ -85,265 +92,74 @@ bot.start((ctx) => {
     );
 });
 
-bot.command('history', async (ctx) => {
-    const userId = ctx.from.id;
-    const orders = await db.getUserHistory(userId);
-
-    if (orders.length === 0) return ctx.reply("You have no order history yet.");
-
-    let message = "Your last 10 orders:\n\n";
-    orders.forEach((order) => {
-        message += `*Order ${order.sideshiftOrderId}* (${order.status})\n`;
-        message += `  *Send:* ${order.fromAmount} ${order.fromAsset} (${order.fromNetwork})\n`;
-        message += `  *Rcv:* ~${order.settleAmount} ${order.toAsset} (${order.toNetwork})\n`;
-        message += `  *To:* \`${order.depositAddress}\`\n`;
-        if (order.txHash) message += `  *TxHash:* \`${order.txHash.substring(0, 10)}...\`\n`;
-        message += `  *Date:* ${new Date(order.createdAt as Date).toLocaleString()}\n\n`;
-    });
-    ctx.replyWithMarkdown(message);
-});
-
-bot.command('status', async (ctx) => {
-    const userId = ctx.from.id;
-    const args = ctx.message.text.split(' ');
-    let orderIdToCheck: string | null = args[1];
-
-    try {
-        if (!orderIdToCheck) {
-            const lastOrder = await db.getLatestUserOrder(userId);
-            if (!lastOrder) return ctx.reply("You have no order history to check. Send a swap first.");
-            orderIdToCheck = lastOrder.sideshiftOrderId;
-            await ctx.reply(`Checking status of your latest order: \`${orderIdToCheck}\``);
-        }
-
-        await ctx.reply(`⏳ Checking status...`);
-        const status = await getOrderStatus(orderIdToCheck);
-        db.updateOrderStatus(orderIdToCheck, status.status);
-
-        let message = `*Order Status: ${status.id}*\n\n`;
-        message += `  *Status:* \`${status.status.toUpperCase()}\`\n`;
-        message += `  *Send:* ${status.depositAmount || '?'} ${status.depositCoin} (${status.depositNetwork})\n`;
-        message += `  *Receive:* ${status.settleAmount || '?'} ${status.settleCoin} (${status.settleNetwork})\n`;
-        message += `  *Created:* ${new Date(status.createdAt).toLocaleString()}\n`;
-
-        ctx.replyWithMarkdown(message);
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-        ctx.reply(`Sorry, couldn't get status. Error: ${errorMessage}`);
+bot.start((ctx) =>
+  ctx.reply(
+    `🤖 *Welcome to SwapSmith!*\n\nVoice-Activated Crypto Trading Assistant.`,
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        Markup.button.url('🌐 Visit Website', 'https://swap-smith.vercel.app'),
+      ]),
     }
+  )
+);
+
+// ------------------ MESSAGE HANDLER ------------------
+
+bot.on(message('text'), async (ctx) => {
+  if (ctx.message.text.startsWith('/')) return;
+  await handleTextMessage(ctx, ctx.message.text);
 });
 
-bot.command('watch', async (ctx) => {
-    const userId = ctx.from.id;
-    const args = ctx.message.text.split(' ');
-    let orderIdToWatch: string | null = args[1];
-
-    try {
-        if (!orderIdToWatch) {
-            const lastOrder = await db.getLatestUserOrder(userId);
-            if (!lastOrder) return ctx.reply("You have no order history to watch. Send a swap first.");
-            orderIdToWatch = lastOrder.sideshiftOrderId;
-        }
-
-        // Check if order exists and get its current status
-        await ctx.reply(`⏳ Setting up watch for order \`${orderIdToWatch}\`...`, { parse_mode: 'Markdown' });
-        const status = await getOrderStatus(orderIdToWatch);
-        
-        // Check if already completed
-        if (status.status.toLowerCase() === 'settled' || status.status.toLowerCase() === 'refunded') {
-            return ctx.reply(`⚠️ Order \`${orderIdToWatch}\` is already ${status.status}. No need to watch.`, { parse_mode: 'Markdown' });
-        }
-
-        // Add to watch list
-        await db.addWatchedOrder(userId, orderIdToWatch, status.status);
-        
-        let message = `✅ *Now watching order:* \`${orderIdToWatch}\`\n\n`;
-        message += `*Current Status:* \`${status.status.toUpperCase()}\`\n`;
-        message += `*Send:* ${status.depositAmount || '?'} ${status.depositCoin} (${status.depositNetwork})\n`;
-        message += `*Receive:* ${status.settleAmount || '?'} ${status.settleCoin} (${status.settleNetwork})\n\n`;
-        message += `🔔 I'll notify you when the status changes or when it's completed!`;
-
-        ctx.replyWithMarkdown(message);
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-        ctx.reply(`Sorry, couldn't watch order. Error: ${errorMessage}`);
-    }
-});
-
-bot.command('unwatch', async (ctx) => {
-    const userId = ctx.from.id;
-    const args = ctx.message.text.split(' ');
-    let orderIdToUnwatch: string | null = args[1];
-
-    try {
-        if (!orderIdToUnwatch) {
-            const watchedOrders = await db.getUserWatchedOrders(userId);
-            if (watchedOrders.length === 0) {
-                return ctx.reply("You have no watched orders.");
-            }
-            orderIdToUnwatch = watchedOrders[0].sideshiftOrderId;
-        }
-
-        await db.removeWatchedOrder(orderIdToUnwatch);
-        ctx.reply(`✅ Stopped watching order \`${orderIdToUnwatch}\``, { parse_mode: 'Markdown' });
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-        ctx.reply(`Sorry, couldn't unwatch order. Error: ${errorMessage}`);
-    }
-});
-
-bot.command('watching', async (ctx) => {
-    const userId = ctx.from.id;
-    
-    try {
-        const watchedOrders = await db.getUserWatchedOrders(userId);
-        
-        if (watchedOrders.length === 0) {
-            return ctx.reply("You are not watching any orders.\n\nUse /watch [order_id] to start monitoring an order.");
-        }
-
-        let message = `🔍 *Your Watched Orders:*\n\n`;
-        
-        for (const watched of watchedOrders) {
-            message += `*Order:* \`${watched.sideshiftOrderId}\`\n`;
-            message += `  *Status:* \`${watched.lastStatus.toUpperCase()}\`\n`;
-            message += `  *Last Checked:* ${new Date(watched.lastChecked as Date).toLocaleString()}\n\n`;
-        }
-        
-        message += `💡 Use /unwatch [order_id] to stop watching an order.`;
-        
-        ctx.replyWithMarkdown(message);
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-        ctx.reply(`Sorry, couldn't fetch watched orders. Error: ${errorMessage}`);
-    }
-});
-
-bot.command('checkouts', async (ctx) => {
-    const userId = ctx.from.id;
-    const checkouts = await db.getUserCheckouts(userId);
-    if (checkouts.length === 0) return ctx.reply("You have no checkout history yet.");
-
-    let message = "Your last 10 checkouts (payment links):\n\n";
-    checkouts.forEach((checkout) => {
-        const paymentUrl = `https://pay.sideshift.ai/checkout/${checkout.checkoutId}`;
-        message += `*Checkout ${checkout.id}* (${checkout.status})\n`;
-        message += `  *Receive:* ${checkout.settleAmount} ${checkout.settleAsset} (${checkout.settleNetwork})\n`;
-        message += `  *Link:* [Pay Here](${paymentUrl})\n`;
-    });
-    ctx.replyWithMarkdown(message, { link_preview_options: { is_disabled: true } });
-});
-
-bot.command('clear', (ctx) => {
-    db.clearConversationState(ctx.from.id);
-    ctx.reply('✅ Conversation history cleared.');
-});
-
-bot.command('website', (ctx) => {
-    ctx.reply(
-        "🌐 *SwapSmith Web Interface*\n\nClick the button below to access the full graphical interface.",
-        {
-            parse_mode: 'Markdown',
-            ...Markup.inlineKeyboard([
-                Markup.button.url('🚀 Open Website', "https://swap-smith.vercel.app/")
-            ])
-        }
-    );
-});
-
-bot.command('yield', async (ctx) => {
-    await ctx.reply('📈 Fetching top yield opportunities...');
-    const yields = await getTopStablecoinYields();
-    ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields:*\n\n${yields}`);
-});
-
-bot.command('migrate', async (ctx) => {
-    const args = ctx.message.text.split(' ').slice(1);
-    const userId = ctx.from.id;
-
-    if (args.length < 1) {
-        return ctx.replyWithMarkdown(
-            `*Yield Migration Command*\n\n` +
-            `Usage: /migrate <asset> [chain] [current_project]\n\n` +
-            `Examples:\n` +
-            `• /migrate USDC\n` +
-            `• /migrate USDC base\n` +
-            `• /migrate USDC base aave\n\n` +
-            `This will find higher-yielding pools and suggest a migration.`
-        );
-    }
-
-    await ctx.reply('🔍 Analyzing yield opportunities...');
-
-    const asset = args[0];
-    const chain = args[1] || null;
-    const project = args[2] || null;
-    const amount = 10000;
-
-    const suggestion = await suggestMigration(asset, chain || undefined, project || undefined, amount);
-
-    if (!suggestion) {
-        const higherPools = await findHigherYieldPools(asset, chain || undefined);
-        if (higherPools.length === 0) {
-            return ctx.reply(`No higher-yielding pools found for ${asset}.`);
-        }
-        return ctx.replyWithMarkdown(
-            `*Higher Yield Options for ${asset}:*\n\n` +
-            higherPools.slice(0, 3).map(p =>
-                `• ${p.symbol} on ${p.chain} via ${p.project}: *${p.apy.toFixed(2)}% APY*`
-            ).join('\n')
-        );
-    }
-
-    const message = formatMigrationMessage(suggestion, amount);
-    const isCrossChain = suggestion.isCrossChain;
-
-    const migrationCommand = {
-        intent: 'yield_migrate',
-        fromAsset: suggestion.fromPool.symbol,
-        fromChain: suggestion.fromPool.chain.toLowerCase(),
-        toAsset: suggestion.toPool.symbol,
-        toChain: suggestion.toPool.chain.toLowerCase(),
-        amount: amount,
-        fromProject: suggestion.fromPool.project,
-        toProject: suggestion.toPool.project,
-        fromYield: suggestion.fromPool.apy,
-        toYield: suggestion.toPool.apy,
-        isCrossChain
-    };
-
-    await db.setConversationState(userId, { parsedCommand: migrationCommand, migrationSuggestion: suggestion });
-
-    if (isCrossChain) {
-        ctx.replyWithMarkdown(message, Markup.inlineKeyboard([
-            Markup.button.callback('✅ Migrate', 'confirm_migration'),
-            Markup.button.callback('❌ Cancel', 'cancel_swap'),
-            Markup.button.callback('🔄 See Alternatives', 'see_alternatives')
-        ]));
-    } else {
-        ctx.replyWithMarkdown(message + `\n\n*Same-chain: Deposit directly to save fees.*`, Markup.inlineKeyboard([
-            Markup.button.callback('📖 Show Deposit Instructions', 'show_deposit_instructions'),
-            Markup.button.callback('🔄 See Alternatives', 'see_alternatives'),
-            Markup.button.callback('❌ Cancel', 'cancel_swap')
-        ]));
-    }
-});
-
-bot.command('add_address', async (ctx) => {
+async function handleTextMessage(ctx: any, text: string) {
   const userId = ctx.from.id;
-  const args = ctx.message.text.split(' ').slice(1);
+  const state = await db.getConversationState(userId);
 
-  if (args.length < 3) {
-    return ctx.reply("Usage: /add_address <nickname> <address> <chain>\nExample: /add_address mywallet 0x123... ethereum");
+  // ---------- ADDRESS COLLECTION ----------
+  if (state?.parsedCommand && !state.parsedCommand.settleAddress) {
+    const targetChain =
+      state.parsedCommand.toChain ??
+      state.parsedCommand.settleNetwork ??
+      state.parsedCommand.fromChain ??
+      undefined;
+
+    const resolved = await resolveAddress(userId, text.trim());
+
+    if (resolved.address && isValidAddress(resolved.address, targetChain)) {
+      const updated = { ...state.parsedCommand, settleAddress: resolved.address };
+      await db.setConversationState(userId, { parsedCommand: updated });
+
+      return ctx.reply(
+        `✅ Address resolved: \`${resolved.address}\`\n\nProceed?`,
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([
+            Markup.button.callback(
+              '✅ Yes',
+              updated.intent === 'checkout'
+                ? 'confirm_checkout'
+                : updated.intent === 'portfolio'
+                ? 'confirm_portfolio'
+                : 'confirm_swap'
+            ),
+            Markup.button.callback('❌ Cancel', 'cancel_swap'),
+          ]),
+        }
+      );
+    }
+
+    if (isNamingService(text)) {
+      return ctx.reply(`❌ Could not resolve domain. Try a raw address.`);
+    }
+
+    return ctx.reply(`❌ Invalid address. Try again or /clear.`);
   }
 
-  const [nickname, address, chain] = args;
+  // ---------- PARSE COMMAND ----------
+  const parsed = await parseUserCommand(text, state?.messages || []);
 
-  try {
-    await db.addAddressBookEntry(userId, nickname, address, chain);
-    ctx.reply(`✅ Added "${nickname}" → \`${address}\` on ${chain}`, { parse_mode: 'Markdown' });
-  } catch (error) {
-    ctx.reply("❌ Failed to add address. It might already exist.");
+  if (!parsed.success) {
+    return ctx.reply(parsed.validationErrors.join('\n'));
   }
 });
 
@@ -685,27 +501,9 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
                 message += `${i + 1}. ${p.symbol} on ${p.chain} via ${p.project}: *${p.apy.toFixed(2)}% APY*\n`;
             });
 
-            return ctx.replyWithMarkdown(message, Markup.inlineKeyboard([
-                Markup.button.callback('🔄 Refresh', 'refresh_yields'),
-                Markup.button.callback('❌ Cancel', 'cancel_swap')
-            ]));
-        }
-
-        const message = formatMigrationMessage(suggestion, parsed.amount || 10000);
-
-        const isCrossChain = suggestion.isCrossChain;
-
-        const migrationCommand = {
-            ...parsed,
-            intent: 'yield_migrate',
-            fromProject: suggestion.fromPool.project,
-            toProject: suggestion.toPool.project,
-            fromYield: suggestion.fromPool.apy,
-            toYield: suggestion.toPool.apy,
-            toChain: suggestion.toPool.chain.toLowerCase(),
-            toAsset: suggestion.toPool.symbol,
-            isCrossChain
-        };
+  // ---------- PORTFOLIO ----------
+  if (parsed.intent === 'portfolio') {
+    await db.setConversationState(userId, { parsedCommand: parsed });
 
         await db.setConversationState(userId, { parsedCommand: migrationCommand, migrationSuggestion: suggestion });
 
@@ -828,19 +626,17 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
             );
         }
 
-        // If it's already a valid raw address, proceed normally
-        await db.setConversationState(userId, { parsedCommand: parsed });
-        const confirmAction = parsed.intent === 'checkout' ? 'confirm_checkout' : 'confirm_swap';
-        ctx.reply("Confirm...", Markup.inlineKeyboard([
-            Markup.button.callback('✅ Yes', confirmAction),
-            Markup.button.callback('❌ No', 'cancel_swap')
-        ]));
-    }
+    return ctx.replyWithMarkdown(msg);
+  }
 
-    if (inputType === 'voice' && parsed.success) await ctx.reply(`🗣️ ${parsed.parsedMessage}`);
+  // ---------- SWAP / CHECKOUT ----------
+  if (parsed.intent === 'swap' || parsed.intent === 'checkout') {
+    await db.setConversationState(userId, { parsedCommand: parsed });
+    return ctx.reply(`Provide destination wallet address.`);
+  }
 }
 
-// --- ACTION HANDLERS ---
+// ------------------ ACTIONS ------------------
 
 bot.action('confirm_swap', async (ctx) => {
     const userId = ctx.from.id;
@@ -852,81 +648,53 @@ bot.action('confirm_swap', async (ctx) => {
         const quote = await createQuote(
             state.parsedCommand.fromAsset!, state.parsedCommand.fromChain!,
             state.parsedCommand.toAsset!, state.parsedCommand.toChain!,
-            state.parsedCommand.amount!, '1.1.1.1'
+            state.parsedCommand.amount!
         );
 
-        if (quote.error) return ctx.editMessageText(`Error: ${quote.error.message}`);
-        db.setConversationState(userId, { ...state, quoteId: quote.id, settleAmount: quote.settleAmount });
-        
-        ctx.editMessageText(`➡️ *Send:* \`${quote.depositAmount} ${quote.depositCoin}\`\n⬅️ *Receive:* \`${quote.settleAmount} ${quote.settleCoin}\`\n\nReady?`, {
-            parse_mode: 'Markdown',
-            ...Markup.inlineKeyboard([
-                Markup.button.callback('✅ Place Order', 'place_order'),
-                Markup.button.callback('❌ Cancel', 'cancel_swap'),
-            ])
-        });
-    } catch (error) {
-        ctx.editMessageText(`Error: ${error instanceof Error ? error.message : 'Unknown'}`);
+  ctx.editMessageText(
+    `➡️ Send: ${q.depositAmount} ${q.depositCoin}\n⬅️ Receive: ${q.settleAmount} ${q.settleCoin}`,
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        Markup.button.callback('✅ Place Order', 'place_order'),
+        Markup.button.callback('❌ Cancel', 'cancel_swap'),
+      ]),
     }
+  );
 });
 
 bot.action('place_order', async (ctx) => {
-    const userId = ctx.from.id;
-    const state = await db.getConversationState(userId);
-    if (!state?.quoteId || !state.parsedCommand) return ctx.answerCbQuery('Session expired.');
+  const state = await db.getConversationState(ctx.from.id);
+  if (!state?.quoteId) return;
 
-    try {
-        await ctx.answerCbQuery('Setting up order...');
-        const destinationAddress = state.parsedCommand.settleAddress!;
-        const order = await createOrder(state.quoteId, destinationAddress, destinationAddress);
-        if (!order.id) throw new Error("Failed to create order");
+  const order = await createOrder(
+    state.quoteId,
+    state.parsedCommand.settleAddress,
+    state.parsedCommand.settleAddress
+  );
 
-        db.createOrderEntry(userId, state.parsedCommand, order, state.settleAmount, state.quoteId);
-        
-        // Automatically add order to watch list
-        await db.addWatchedOrder(userId, order.id, 'pending');
+  await db.createOrderEntry(
+    ctx.from.id,
+    state.parsedCommand,
+    order,
+    state.settleAmount,
+    state.quoteId
+  );
 
-        const { amount, fromChain, fromAsset } = state.parsedCommand;
-        const rawDepositAddress = typeof order.depositAddress === 'string' ? order.depositAddress : order.depositAddress.address;
-        const depositMemo = typeof order.depositAddress === 'object' ? order.depositAddress.memo : null;
+  await db.addWatchedOrder(ctx.from.id, order.id, 'pending');
 
-        const chainKey = fromChain?.toLowerCase() || 'ethereum';
-        const assetKey = fromAsset?.toUpperCase() || 'ETH';
-        
-        // Use dynamic token resolver instead of hardcoded TOKEN_MAP
-        const tokenData = await tokenResolver.getTokenInfo(assetKey, chainKey);
-
-        let txTo = rawDepositAddress, txValueHex = '0x0', txData = '0x';
-
-        if (tokenData) {
-            // This is an ERC20 token - construct transfer transaction
-            txTo = tokenData.address;
-            const amountBigInt = ethers.parseUnits(amount!.toString(), tokenData.decimals);
-            const iface = new ethers.Interface(ERC20_ABI);
-            txData = iface.encodeFunctionData("transfer", [rawDepositAddress, amountBigInt]);
-        } else {
-            // This is a native token (ETH, AVAX, BNB, etc.) - send value directly
-            const amountBigInt = ethers.parseUnits(amount!.toString(), 18);
-            txValueHex = '0x' + amountBigInt.toString(16);
-            if (depositMemo) txData = ethers.hexlify(ethers.toUtf8Bytes(depositMemo));
-        }
-
-        const params = new URLSearchParams({
-            to: txTo, value: txValueHex, data: txData,
-            chainId: chainIdMap[chainKey] || '1',
-            token: assetKey, amount: amount!.toString()
-        });
-
-        ctx.editMessageText(`✅ *Order Created!*\nTo complete the swap, sign in your wallet.\n\n🔔 *Auto-Watch Enabled:* I'll notify you when your swap completes!`, {
-            parse_mode: 'Markdown',
-            ...Markup.inlineKeyboard([
-                Markup.button.webApp('📱 Sign Transaction', `${MINI_APP_URL}?${params.toString()}`),
-                Markup.button.callback('❌ Close', 'cancel_swap')
-            ])
-        });
-    } catch (error) {
-        ctx.editMessageText(`Failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  ctx.editMessageText(
+    `✅ *Order Created*\n\nSign transaction to complete.`,
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        Markup.button.webApp(
+          '📱 Sign Transaction',
+          `${MINI_APP_URL}?to=${order.depositAddress}`
+        ),
+      ]),
     }
+  );
 });
 
 bot.action('confirm_checkout', async (ctx) => {
@@ -937,7 +705,7 @@ bot.action('confirm_checkout', async (ctx) => {
     try {
         await ctx.answerCbQuery('Creating link...');
         const { settleAsset, settleNetwork, settleAmount, settleAddress } = state.parsedCommand;
-        const checkout = await createCheckout(settleAsset!, settleNetwork!, settleAmount!, settleAddress!, '1.1.1.1');
+        const checkout = await createCheckout(settleAsset!, settleNetwork!, settleAmount!, settleAddress!);
         if (!checkout?.id) throw new Error("API Error");
 
         db.createCheckoutEntry(userId, checkout);
@@ -1020,8 +788,7 @@ bot.action('confirm_portfolio', async (ctx) => {
                     fromChain!,
                     allocation.toAsset,
                     allocation.toChain,
-                    swapAmount,
-                    '1.1.1.1'
+                    swapAmount
                 );
 
                 if (quote.error) {
@@ -1185,7 +952,7 @@ bot.action('confirm_migration', async (ctx) => {
         const quote = await createQuote(
             fromAsset!, fromChain!,
             toAsset!, toChain!,
-            amount!, '1.1.1.1'
+            amount!
         );
 
         if (quote.error) return ctx.editMessageText(`Error: ${quote.error.message}`);
@@ -1245,142 +1012,80 @@ bot.action('find_bridge_options', async (ctx) => {
         p.chain.toLowerCase() !== state.parsedCommand.fromChain?.toLowerCase()
     );
 
-    if (crossChainPools.length === 0) {
-        return ctx.editMessageText(`No cross-chain yield options found for ${fromAsset}.`);
+    quotes.push({ allocation: p, quote: q, amount: amt });
+  }
+
+  await db.setConversationState(ctx.from.id, {
+    ...state,
+    portfolioQuotes: quotes,
+    currentTransactionIndex: 0,
+  });
+
+  ctx.editMessageText(
+    `📊 Portfolio quotes ready.\n\nYou will sign ${quotes.length} transactions.`,
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        Markup.button.callback(
+          '✅ Start Signing',
+          'sign_portfolio_transaction'
+        ),
+      ]),
     }
-
-    ctx.editMessageText(`🌉 *Cross-Chain Migration Options*\n\n` +
-        crossChainPools.slice(0, 3).map((p, i) =>
-            `${i + 1}. ${p.symbol} on ${p.chain} via ${p.project}: *${p.apy.toFixed(2)}% APY*`
-        ).join('\n'), {
-        parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([
-            Markup.button.callback('❌ Cancel', 'cancel_swap')
-        ])
-    });
+  );
 });
 
-bot.action('place_migration', async (ctx) => {
-    const userId = ctx.from.id;
-    const state = await db.getConversationState(userId);
+bot.action('sign_portfolio_transaction', async (ctx) => {
+  const state = await db.getConversationState(ctx.from.id);
+  if (!state?.portfolioQuotes) return;
 
-    if (!state?.quoteId || !state.parsedCommand) return ctx.answerCbQuery('Session expired.');
+  const i = state.currentTransactionIndex;
+  const q = state.portfolioQuotes[i];
 
-    try {
-        await ctx.answerCbQuery('Creating migration order...');
+  if (!q) {
+    await db.clearConversationState(ctx.from.id);
+    return ctx.editMessageText(`🎉 Portfolio complete!`);
+  }
 
-        const destinationAddress = state.parsedCommand.settleAddress || state.parsedCommand.toAsset!;
-        const order = await createOrder(state.quoteId, destinationAddress, destinationAddress);
-
-        if (!order.id) throw new Error("Failed to create order");
-
-        const migrationData = {
-            intent: 'yield_migrate',
-            fromAsset: state.parsedCommand.fromAsset,
-            fromChain: state.parsedCommand.fromChain,
-            toAsset: state.parsedCommand.toAsset,
-            toChain: state.parsedCommand.toChain,
-            amount: state.parsedCommand.amount,
-            fromProject: state.parsedCommand.fromProject,
-            toProject: state.parsedCommand.toProject,
-            fromYield: state.parsedCommand.fromYield,
-            toYield: state.parsedCommand.toYield
-        };
-
-        db.createOrderEntry(userId, migrationData as any, order, state.settleAmount, state.quoteId);
-
-        const { amount, fromChain, fromAsset } = state.parsedCommand;
-        const rawDepositAddress = typeof order.depositAddress === 'string' ? order.depositAddress : order.depositAddress.address;
-        const depositMemo = typeof order.depositAddress === 'object' ? order.depositAddress.memo : null;
-
-        const chainKey = fromChain?.toLowerCase() || 'ethereum';
-        const assetKey = fromAsset?.toUpperCase() || 'ETH';
-
-        const tokenData = await tokenResolver.getTokenInfo(assetKey, chainKey);
-
-        let txTo = rawDepositAddress, txValueHex = '0x0', txData = '0x';
-
-        if (tokenData) {
-            txTo = tokenData.address;
-            const amountBigInt = ethers.parseUnits(amount!.toString(), tokenData.decimals);
-            const iface = new ethers.Interface(ERC20_ABI);
-            txData = iface.encodeFunctionData("transfer", [rawDepositAddress, amountBigInt]);
-        } else {
-            const amountBigInt = ethers.parseUnits(amount!.toString(), 18);
-            txValueHex = '0x' + amountBigInt.toString(16);
-            if (depositMemo) txData = ethers.hexlify(ethers.toUtf8Bytes(depositMemo));
-        }
-
-        const params = new URLSearchParams({
-            to: txTo, value: txValueHex, data: txData,
-            chainId: chainIdMap[chainKey] || '1',
-            token: assetKey, amount: amount!.toString()
-        });
-
-        ctx.editMessageText(`✅ *Migration Order Created!*\n\nYour funds will be moved to the higher-yielding pool.\n\nSign to complete the migration.`, {
-            parse_mode: 'Markdown',
-            ...Markup.inlineKeyboard([
-                Markup.button.webApp('📱 Sign Transaction', `${MINI_APP_URL}?${params.toString()}`),
-                Markup.button.callback('❌ Close', 'cancel_swap')
-            ])
-        });
-    } catch (error) {
-        ctx.editMessageText(`Failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  ctx.editMessageText(
+    `📝 Transaction ${i + 1}/${state.portfolioQuotes.length}\n\n` +
+      `Send ${q.amount} ${state.parsedCommand.fromAsset}`,
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        Markup.button.webApp(
+          '📱 Sign Transaction',
+          `${MINI_APP_URL}?amount=${q.amount}`
+        ),
+        Markup.button.callback(
+          '⏭️ Next',
+          'next_portfolio_transaction'
+        ),
+      ]),
     }
+  );
 });
 
-bot.action('see_alternatives', async (ctx) => {
-    const userId = ctx.from.id;
-    const state = await db.getConversationState(userId);
+bot.action('next_portfolio_transaction', async (ctx) => {
+  const state = await db.getConversationState(ctx.from.id);
+  await db.setConversationState(ctx.from.id, {
+    ...state,
+    currentTransactionIndex: state.currentTransactionIndex + 1,
+  });
 
-    if (!state?.parsedCommand) return ctx.answerCbQuery('Session expired.');
-
-    const { fromAsset, fromChain } = state.parsedCommand;
-    const pools = await getTopYieldPools();
-
-    const alternatives = pools
-        .filter(p =>
-            p.symbol.toUpperCase() === (fromAsset?.toUpperCase()) &&
-            (!fromChain || p.chain.toLowerCase() === fromChain.toLowerCase())
-        )
-        .sort((a, b) => b.apy - a.apy)
-        .slice(0, 5);
-
-    if (alternatives.length === 0) {
-        return ctx.answerCbQuery('No alternative pools found.');
-    }
-
-    ctx.editMessageText(`*Alternative Yield Pools for ${fromAsset}:*\n\n` +
-        alternatives.map((p, i) =>
-            `${i + 1}. ${p.symbol} on ${p.chain} via ${p.project}: *${p.apy.toFixed(2)}% APY*`
-        ).join('\n'), { parse_mode: 'Markdown' });
+  return bot.handleUpdate({
+    ...ctx.update,
+    callback_query: {
+      ...ctx.callbackQuery,
+      data: 'sign_portfolio_transaction',
+    },
+  } as any);
 });
 
-bot.action('refresh_yields', async (ctx) => {
-    const userId = ctx.from.id;
-    const state = await db.getConversationState(userId);
-
-    if (!state?.parsedCommand) return ctx.answerCbQuery('Session expired.');
-
-    await ctx.answerCbQuery('Refreshing yields...');
-    return ctx.reply('🔄 Refreshing yield data... Use /migrate to try again.');
+bot.action('cancel_swap', async (ctx) => {
+  await db.clearConversationState(ctx.from.id);
+  ctx.editMessageText('❌ Cancelled.');
 });
-
-const app = express();
-app.get('/', (req, res) => res.send('SwapSmith Alive'));
-app.listen(process.env.PORT || 3000, () => console.log(`Express server live`));
-
-// Start the order monitor
-const dbUrl = process.env.DATABASE_URL;
-let monitorStarted = false;
-
-// Start order monitor only if DATABASE_URL is real (not placeholder)
-if (dbUrl && !dbUrl.includes('user:password@host/dbname')) {
-  orderMonitor.start();
-  monitorStarted = true;
-} else {
-  console.warn('⚠️ OrderMonitor disabled (no real DATABASE_URL).');
-}
 
 // Start DCA scheduler
 let dcaStarted = false;
