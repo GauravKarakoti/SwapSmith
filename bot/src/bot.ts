@@ -14,6 +14,7 @@ import express from 'express';
 import { chainIdMap } from './config/chains';
 import { handleError } from './services/logger';
 import { tokenResolver } from './services/token-resolver';
+import { DCAScheduler } from './services/dca-scheduler';
 import { OrderMonitor } from './services/order-monitor';
 import { resolveAddress, isNamingService } from './services/address-resolver';
 import { ADDRESS_PATTERNS } from './config/address-patterns';
@@ -25,6 +26,9 @@ const bot = new Telegraf(process.env.BOT_TOKEN!);
 
 // Initialize order monitor
 const orderMonitor = new OrderMonitor(bot);
+
+// Initialize DCA scheduler
+const dcaScheduler = new DCAScheduler(bot);
 
 function isValidAddress(address: string, chain?: string): boolean {
   if (!address) return false;
@@ -69,8 +73,9 @@ bot.start((ctx) => {
         "/watch [id] - Watch order for completion\n" +
         "/unwatch [id] - Stop watching order\n" +
         "/watching - List watched orders\n" +
+        "/dca_list - View DCA schedules\n" +
         "/clear - Reset conversation\n\n" +
-        "💡 *Tip:* Check out our web interface for a graphical experience!",
+        "💡 *Tip:* Try saying 'Swap $50 of USDC for ETH every Monday' to set up recurring swaps!",
         {
             parse_mode: 'Markdown',
             ...Markup.inlineKeyboard([
@@ -358,6 +363,113 @@ bot.command('list_addresses', async (ctx) => {
   ctx.replyWithMarkdown(message);
 });
 
+// --- DCA COMMANDS ---
+
+bot.command('dca_list', async (ctx) => {
+  const userId = ctx.from.id;
+  const schedules = await db.getUserDCASchedules(userId);
+
+  if (schedules.length === 0) {
+    return ctx.reply(
+      "You have no DCA schedules yet.\n\n" +
+      "Create one by saying:\n" +
+      '"Swap $50 of USDC for ETH every Monday"\n' +
+      '"Buy 100 USDC of BTC daily"\n' +
+      '"DCA 200 USDC into ETH monthly on the 1st"'
+    );
+  }
+
+  let message = "🔄 *Your DCA Schedules:*\n\n";
+  schedules.forEach((schedule, i) => {
+    const status = schedule.isActive === 'true' ? '✅ Active' : '⏸️ Paused';
+    message += `${i + 1}. ${status}\n`;
+    message += `   *Swap:* ${schedule.amount} ${schedule.fromAsset} → ${schedule.toAsset}\n`;
+    message += `   *Frequency:* ${schedule.frequency}`;
+    if (schedule.dayOfWeek) message += ` (${schedule.dayOfWeek})`;
+    if (schedule.dayOfMonth) message += ` (day ${schedule.dayOfMonth})`;
+    message += `\n`;
+    message += `   *Next:* ${new Date(schedule.nextExecution).toLocaleString()}\n`;
+    message += `   *Executed:* ${schedule.executionCount} times\n`;
+    message += `   *ID:* \`${schedule.id}\`\n\n`;
+  });
+
+  message += "Use /dca_pause [id] or /dca_cancel [id] to manage schedules.";
+
+  ctx.replyWithMarkdown(message);
+});
+
+bot.command('dca_pause', async (ctx) => {
+  const userId = ctx.from.id;
+  const args = ctx.message.text.split(' ');
+  const scheduleId = parseInt(args[1]);
+
+  if (!scheduleId) {
+    return ctx.reply("Usage: /dca_pause [schedule_id]\n\nUse /dca_list to see your schedules.");
+  }
+
+  try {
+    const schedules = await db.getUserDCASchedules(userId);
+    const schedule = schedules.find(s => s.id === scheduleId);
+
+    if (!schedule) {
+      return ctx.reply("Schedule not found. Use /dca_list to see your schedules.");
+    }
+
+    await db.updateDCAScheduleStatus(scheduleId, false);
+    ctx.reply(`⏸️ DCA schedule ${scheduleId} paused.\n\nUse /dca_resume ${scheduleId} to resume it.`);
+  } catch (error) {
+    ctx.reply("Failed to pause schedule. Please try again.");
+  }
+});
+
+bot.command('dca_resume', async (ctx) => {
+  const userId = ctx.from.id;
+  const args = ctx.message.text.split(' ');
+  const scheduleId = parseInt(args[1]);
+
+  if (!scheduleId) {
+    return ctx.reply("Usage: /dca_resume [schedule_id]\n\nUse /dca_list to see your schedules.");
+  }
+
+  try {
+    const schedules = await db.getUserDCASchedules(userId);
+    const schedule = schedules.find(s => s.id === scheduleId);
+
+    if (!schedule) {
+      return ctx.reply("Schedule not found. Use /dca_list to see your schedules.");
+    }
+
+    await db.updateDCAScheduleStatus(scheduleId, true);
+    ctx.reply(`✅ DCA schedule ${scheduleId} resumed.`);
+  } catch (error) {
+    ctx.reply("Failed to resume schedule. Please try again.");
+  }
+});
+
+bot.command('dca_cancel', async (ctx) => {
+  const userId = ctx.from.id;
+  const args = ctx.message.text.split(' ');
+  const scheduleId = parseInt(args[1]);
+
+  if (!scheduleId) {
+    return ctx.reply("Usage: /dca_cancel [schedule_id]\n\nUse /dca_list to see your schedules.");
+  }
+
+  try {
+    const schedules = await db.getUserDCASchedules(userId);
+    const schedule = schedules.find(s => s.id === scheduleId);
+
+    if (!schedule) {
+      return ctx.reply("Schedule not found. Use /dca_list to see your schedules.");
+    }
+
+    await db.deleteDCASchedule(scheduleId);
+    ctx.reply(`❌ DCA schedule ${scheduleId} cancelled and deleted.`);
+  } catch (error) {
+    ctx.reply("Failed to cancel schedule. Please try again.");
+  }
+});
+
 // --- MESSAGE HANDLERS ---
 
 bot.on(message('text'), async (ctx) => {
@@ -633,6 +745,28 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
         ]));
     }
 
+    if (parsed.intent === 'dca') {
+        if (!parsed.settleAddress) {
+            await db.setConversationState(userId, { parsedCommand: parsed });
+            let msg = `🔄 *DCA (Dollar Cost Averaging) Detected*\n\n`;
+            msg += `*Recurring Swap:*\n`;
+            msg += `• Amount: ${parsed.amount} ${parsed.fromAsset}\n`;
+            msg += `• Target: ${parsed.toAsset}\n`;
+            msg += `• Frequency: ${parsed.frequency}`;
+            if (parsed.dayOfWeek) msg += ` (every ${parsed.dayOfWeek})`;
+            if (parsed.dayOfMonth) msg += ` (day ${parsed.dayOfMonth} of month)`;
+            msg += `\n\n`;
+            msg += `Please provide your destination wallet address to receive the ${parsed.toAsset}.`;
+            return ctx.replyWithMarkdown(msg);
+        }
+
+        await db.setConversationState(userId, { parsedCommand: parsed });
+        return ctx.reply("Ready to create DCA schedule?", Markup.inlineKeyboard([
+            Markup.button.callback('✅ Yes', 'confirm_dca'),
+            Markup.button.callback('❌ No', 'cancel_swap')
+        ]));
+    }
+
     if (parsed.intent === 'swap' || parsed.intent === 'checkout') {
         if (!parsed.settleAddress) {
             await db.setConversationState(userId, { parsedCommand: parsed });
@@ -813,6 +947,48 @@ bot.action('confirm_checkout', async (ctx) => {
         });
     } catch (error) {
         ctx.editMessageText(`Error creating link.`);
+    } finally {
+        db.clearConversationState(userId);
+    }
+});
+
+bot.action('confirm_dca', async (ctx) => {
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+    if (!state?.parsedCommand || state.parsedCommand.intent !== 'dca') return ctx.answerCbQuery('Session expired.');
+
+    try {
+        await ctx.answerCbQuery('Creating DCA schedule...');
+        const { fromAsset, fromChain, toAsset, toChain, amount, frequency, dayOfWeek, dayOfMonth, settleAddress } = state.parsedCommand;
+
+        const schedule = await db.createDCASchedule(
+            userId,
+            fromAsset!,
+            fromChain || 'ethereum',
+            toAsset!,
+            toChain || 'ethereum',
+            amount!,
+            frequency!,
+            settleAddress!,
+            dayOfWeek || undefined,
+            dayOfMonth || undefined
+        );
+
+        let message = `✅ *DCA Schedule Created!*\n\n`;
+        message += `*Recurring Swap:*\n`;
+        message += `• ${amount} ${fromAsset} → ${toAsset}\n`;
+        message += `• Frequency: ${frequency}`;
+        if (dayOfWeek) message += ` (every ${dayOfWeek})`;
+        if (dayOfMonth) message += ` (day ${dayOfMonth} of month)`;
+        message += `\n`;
+        message += `• Next execution: ${new Date(schedule.nextExecution).toLocaleString()}\n\n`;
+        message += `*Schedule ID:* \`${schedule.id}\`\n\n`;
+        message += `I'll notify you when it's time to execute each swap.\n`;
+        message += `Use /dca_list to manage your schedules.`;
+
+        ctx.editMessageText(message, { parse_mode: 'Markdown' });
+    } catch (error) {
+        ctx.editMessageText(`Failed to create DCA schedule: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
         db.clearConversationState(userId);
     }
@@ -1206,14 +1382,25 @@ if (dbUrl && !dbUrl.includes('user:password@host/dbname')) {
   console.warn('⚠️ OrderMonitor disabled (no real DATABASE_URL).');
 }
 
+// Start DCA scheduler
+let dcaStarted = false;
+if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('memory')) {
+  dcaScheduler.start();
+  dcaStarted = true;
+} else {
+  console.warn('⚠️ DCA Scheduler disabled (no real DATABASE_URL).');
+}
+
 bot.launch();
 
 // Graceful shutdown
 process.once('SIGINT', () => {
     if (monitorStarted) orderMonitor.stop();
+    if (dcaStarted) dcaScheduler.stop();
     bot.stop('SIGINT');
 });
 process.once('SIGTERM', () => {
    if (monitorStarted) orderMonitor.stop();
+   if (dcaStarted) dcaScheduler.stop();
     bot.stop('SIGTERM');
 });
