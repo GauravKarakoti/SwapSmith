@@ -17,7 +17,7 @@ import { tokenResolver } from './services/token-resolver';
 import { OrderMonitor } from './services/order-monitor';
 import { resolveAddress, isNamingService } from './services/address-resolver';
 import { ADDRESS_PATTERNS } from './config/address-patterns';
-
+import * as os from 'os';
 
 dotenv.config();
 const MINI_APP_URL = process.env.MINI_APP_URL!;
