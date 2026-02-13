@@ -965,7 +965,7 @@ bot.action('place_portfolio_orders', async (ctx) => {
     try {
         await ctx.answerCbQuery('Placing orders...');
         const { settleAddress, fromAsset, fromChain, amount } = state.parsedCommand;
-        const orders: Array<{ order: any; allocation: any; quoteId: string }> = [];
+        const orders: Array<{ order: any; allocation: any; quoteId: string; swapAmount: number }> = [];
 
         // Create orders for each quote
         for (const quoteData of state.portfolioQuotes) {
@@ -985,22 +985,86 @@ bot.action('place_portfolio_orders', async (ctx) => {
                 // Automatically add each order to watch list
                 await db.addWatchedOrder(userId, order.id, 'pending');
 
-                orders.push({ order, allocation: quoteData.allocation, quoteId: quoteData.quoteId });
+                orders.push({ 
+                    order, 
+                    allocation: quoteData.allocation, 
+                    quoteId: quoteData.quoteId,
+                    swapAmount: quoteData.swapAmount
+                });
             } catch (error) {
                 return ctx.editMessageText(`❌ Failed to create order for ${quoteData.allocation.toAsset}: ${error instanceof Error ? error.message : 'Unknown error'}`);
             }
         }
 
-        // For portfolio swaps, we need to execute multiple transactions
-        // The user will need to send the full amount to the first order's deposit address
-        // Then the system will handle the splits via SideShift
-        const firstOrder = orders[0].order;
-        const rawDepositAddress = typeof firstOrder.depositAddress === 'string' ? firstOrder.depositAddress : firstOrder.depositAddress.address;
-        const depositMemo = typeof firstOrder.depositAddress === 'object' ? firstOrder.depositAddress.memo : null;
+        // Store orders in state for sequential transaction signing
+        await db.setConversationState(userId, {
+            ...state,
+            portfolioOrders: orders,
+            currentTransactionIndex: 0
+        });
+
+        // Show summary and prompt for first transaction
+        let orderSummary = `✅ *Portfolio Orders Created!*\n\n*Orders:*\n`;
+        orders.forEach((o, i) => {
+            orderSummary += `${i + 1}. ${o.allocation.percentage}% (${o.swapAmount} ${fromAsset}) → ${o.allocation.toAsset}\n`;
+            orderSummary += `   Order: \`${o.order.id.substring(0, 12)}...\`\n`;
+        });
+        orderSummary += `\n⚠️ *Important:* You need to sign ${orders.length} separate transactions.\n`;
+        orderSummary += `Each transaction sends the correct amount to its respective order.\n\n`;
+        orderSummary += `🔔 *Auto-Watch Enabled:* I'll notify you when each swap completes!`;
+
+        ctx.editMessageText(orderSummary, {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+                Markup.button.callback('✅ Start Signing', 'sign_portfolio_transaction'),
+                Markup.button.callback('❌ Cancel', 'cancel_swap')
+            ])
+        });
+    } catch (error) {
+        ctx.editMessageText(`Failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+});
+
+bot.action('sign_portfolio_transaction', async (ctx) => {
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+    
+    if (!state?.portfolioOrders || !state.parsedCommand) {
+        return ctx.answerCbQuery('Session expired.');
+    }
+
+    const { portfolioOrders, currentTransactionIndex, parsedCommand } = state;
+    const { fromAsset, fromChain } = parsedCommand;
+
+    if (currentTransactionIndex >= portfolioOrders.length) {
+        // All transactions completed
+        await ctx.answerCbQuery('All transactions completed!');
+        db.clearConversationState(userId);
+        return ctx.editMessageText(
+            `🎉 *All Portfolio Transactions Signed!*\n\n` +
+            `${portfolioOrders.length} transactions have been submitted.\n` +
+            `Your swaps are now processing.\n\n` +
+            `Use /watching to monitor progress.`,
+            { parse_mode: 'Markdown' }
+        );
+    }
+
+    try {
+        await ctx.answerCbQuery(`Preparing transaction ${currentTransactionIndex + 1}...`);
+
+        const currentOrder = portfolioOrders[currentTransactionIndex];
+        const order = currentOrder.order;
+        const swapAmount = currentOrder.swapAmount;
+
+        const rawDepositAddress = typeof order.depositAddress === 'string' 
+            ? order.depositAddress 
+            : order.depositAddress.address;
+        const depositMemo = typeof order.depositAddress === 'object' 
+            ? order.depositAddress.memo 
+            : null;
 
         const chainKey = fromChain?.toLowerCase() || 'ethereum';
         const assetKey = fromAsset?.toUpperCase() || 'ETH';
-        const totalAmount = amount!;
         
         // Use dynamic token resolver
         const tokenData = await tokenResolver.getTokenInfo(assetKey, chainKey);
@@ -1008,42 +1072,79 @@ bot.action('place_portfolio_orders', async (ctx) => {
         let txTo = rawDepositAddress, txValueHex = '0x0', txData = '0x';
 
         if (tokenData) {
-            // ERC20 token
+            // ERC20 token - send split amount
             txTo = tokenData.address;
-            const amountBigInt = ethers.parseUnits(totalAmount.toString(), tokenData.decimals);
+            const amountBigInt = ethers.parseUnits(swapAmount.toString(), tokenData.decimals);
             const iface = new ethers.Interface(ERC20_ABI);
             txData = iface.encodeFunctionData("transfer", [rawDepositAddress, amountBigInt]);
         } else {
-            // Native token
-            const amountBigInt = ethers.parseUnits(totalAmount.toString(), 18);
+            // Native token - send split amount
+            const amountBigInt = ethers.parseUnits(swapAmount.toString(), 18);
             txValueHex = '0x' + amountBigInt.toString(16);
             if (depositMemo) txData = ethers.hexlify(ethers.toUtf8Bytes(depositMemo));
         }
 
         const params = new URLSearchParams({
-            to: txTo, value: txValueHex, data: txData,
+            to: txTo, 
+            value: txValueHex, 
+            data: txData,
             chainId: chainIdMap[chainKey] || '1',
-            token: assetKey, amount: totalAmount.toString()
+            token: assetKey, 
+            amount: swapAmount.toString()
         });
 
-        let orderSummary = `✅ *Portfolio Orders Created!*\n\n*Orders:*\n`;
-        orders.forEach((o, i) => {
-            orderSummary += `${i + 1}. Order ${o.order.id.substring(0, 8)}... → ${o.allocation.toAsset}\n`;
-        });
-        orderSummary += `\nSign the transaction to complete all swaps.\n\n🔔 *Auto-Watch Enabled:* I'll notify you when each swap completes!`;
+        let message = `📝 *Transaction ${currentTransactionIndex + 1} of ${portfolioOrders.length}*\n\n`;
+        message += `*Sending:* ${swapAmount} ${fromAsset}\n`;
+        message += `*To Order:* ${currentOrder.allocation.toAsset} (${currentOrder.allocation.percentage}%)\n`;
+        message += `*Order ID:* \`${order.id.substring(0, 12)}...\`\n`;
+        message += `*Deposit Address:* \`${rawDepositAddress.substring(0, 10)}...${rawDepositAddress.substring(rawDepositAddress.length - 8)}\`\n\n`;
+        
+        if (currentTransactionIndex < portfolioOrders.length - 1) {
+            message += `⏭️ After signing, you'll be prompted for transaction ${currentTransactionIndex + 2}.`;
+        } else {
+            message += `✅ This is the final transaction!`;
+        }
 
-        ctx.editMessageText(orderSummary, {
+        ctx.editMessageText(message, {
             parse_mode: 'Markdown',
             ...Markup.inlineKeyboard([
                 Markup.button.webApp('📱 Sign Transaction', `${MINI_APP_URL}?${params.toString()}`),
-                Markup.button.callback('❌ Close', 'cancel_swap')
+                Markup.button.callback('⏭️ Next Transaction', 'next_portfolio_transaction'),
+                Markup.button.callback('❌ Cancel', 'cancel_swap')
             ])
         });
     } catch (error) {
         ctx.editMessageText(`Failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-        db.clearConversationState(userId);
     }
+});
+
+bot.action('next_portfolio_transaction', async (ctx) => {
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+    
+    if (!state?.portfolioOrders) {
+        return ctx.answerCbQuery('Session expired.');
+    }
+
+    // Increment transaction index
+    const nextIndex = (state.currentTransactionIndex || 0) + 1;
+    
+    await db.setConversationState(userId, {
+        ...state,
+        currentTransactionIndex: nextIndex
+    });
+
+    // Trigger the next transaction
+    await ctx.answerCbQuery('Moving to next transaction...');
+    
+    // Re-trigger the sign action to show next transaction
+    return bot.handleUpdate({
+        ...ctx.update,
+        callback_query: {
+            ...ctx.callbackQuery,
+            data: 'sign_portfolio_transaction'
+        }
+    } as any);
 });
 
 bot.action('cancel_swap', (ctx) => {
