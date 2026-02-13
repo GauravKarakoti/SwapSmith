@@ -1,7 +1,7 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import { pgTable, serial, text, real, timestamp, bigint } from 'drizzle-orm/pg-core';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm'; // Added 'and'
 import dotenv from 'dotenv';
 import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
 import type { ParsedCommand } from './groq-client';
@@ -12,7 +12,6 @@ const sql = neon(process.env.DATABASE_URL!);
 const db = drizzle(sql);
 
 // --- SCHEMAS ---
-
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
   telegramId: bigint('telegram_id', { mode: 'number' }).notNull().unique(),
@@ -23,7 +22,8 @@ export const users = pgTable('users', {
 export const conversations = pgTable('conversations', {
   id: serial('id').primaryKey(),
   telegramId: bigint('telegram_id', { mode: 'number' }).notNull().unique(),
-  state: text('state'), // JSON string
+  state: text('state'),
+  lastUpdated: timestamp('last_updated').defaultNow(),
 });
 
 export const orders = pgTable('orders', {
@@ -65,11 +65,20 @@ export const addressBook = pgTable('address_book', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-// --- TYPE DEFINITIONS ---
+export const watchedOrders = pgTable('watched_orders', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
+  sideshiftOrderId: text('sideshift_order_id').notNull().unique(),
+  lastStatus: text('last_status').notNull().default('pending'),
+  lastChecked: timestamp('last_checked').defaultNow(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 export type User = typeof users.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Checkout = typeof checkouts.$inferSelect;
 export type AddressBookEntry = typeof addressBook.$inferSelect;
+export type WatchedOrder = typeof watchedOrders.$inferSelect;
 
 // --- FUNCTIONS ---
 
@@ -88,16 +97,25 @@ export async function setUserWalletAndSession(telegramId: number, walletAddress:
 }
 
 export async function getConversationState(telegramId: number) {
-  const result = await db.select({ state: conversations.state }).from(conversations).where(eq(conversations.telegramId, telegramId));
-  return result[0]?.state ? JSON.parse(result[0].state) : null;
+  const result = await db.select({ state: conversations.state, lastUpdated: conversations.lastUpdated }).from(conversations).where(eq(conversations.telegramId, telegramId));
+  if (!result[0]?.state) return null;
+
+  const state = JSON.parse(result[0].state);
+  const lastUpdated = result[0].lastUpdated;
+
+  if (lastUpdated && (Date.now() - new Date(lastUpdated).getTime()) > 60 * 60 * 1000) {
+    await clearConversationState(telegramId);
+    return null;
+  }
+  return state;
 }
 
 export async function setConversationState(telegramId: number, state: any) {
   await db.insert(conversations)
-    .values({ telegramId, state: JSON.stringify(state) })
+    .values({ telegramId, state: JSON.stringify(state), lastUpdated: new Date() })
     .onConflictDoUpdate({
       target: conversations.telegramId,
-      set: { state: JSON.stringify(state) }
+      set: { state: JSON.stringify(state), lastUpdated: new Date() }
     });
 }
 
@@ -169,8 +187,6 @@ export async function getUserCheckouts(telegramId: number): Promise<Checkout[]> 
     .limit(10);
 }
 
-// --- ADDRESS BOOK FUNCTIONS ---
-
 export async function addAddressBookEntry(telegramId: number, nickname: string, address: string, chain: string) {
   await db.insert(addressBook)
     .values({ telegramId, nickname, address, chain })
@@ -189,8 +205,49 @@ export async function getAddressBookEntries(telegramId: number): Promise<Address
 export async function resolveNickname(telegramId: number, nickname: string): Promise<string | null> {
   const result = await db.select({ address: addressBook.address })
     .from(addressBook)
-    .where(eq(addressBook.telegramId, telegramId))
-    .where(eq(addressBook.nickname, nickname))
+    .where(
+      and(
+        eq(addressBook.telegramId, telegramId), 
+        eq(addressBook.nickname, nickname)
+      )
+    ) // Corrected multi-where syntax
     .limit(1);
   return result[0]?.address || null;
+}
+
+
+// --- WATCHED ORDERS FUNCTIONS ---
+
+export async function addWatchedOrder(telegramId: number, sideshiftOrderId: string, initialStatus: string = 'pending') {
+  await db.insert(watchedOrders)
+    .values({ 
+      telegramId, 
+      sideshiftOrderId, 
+      lastStatus: initialStatus,
+      lastChecked: new Date()
+    })
+    .onConflictDoUpdate({
+      target: watchedOrders.sideshiftOrderId,
+      set: { lastChecked: new Date() }
+    });
+}
+
+export async function removeWatchedOrder(sideshiftOrderId: string) {
+  await db.delete(watchedOrders).where(eq(watchedOrders.sideshiftOrderId, sideshiftOrderId));
+}
+
+export async function getAllWatchedOrders(): Promise<WatchedOrder[]> {
+  return await db.select().from(watchedOrders);
+}
+
+export async function getUserWatchedOrders(telegramId: number): Promise<WatchedOrder[]> {
+  return await db.select().from(watchedOrders)
+    .where(eq(watchedOrders.telegramId, telegramId))
+    .orderBy(desc(watchedOrders.createdAt));
+}
+
+export async function updateWatchedOrderStatus(sideshiftOrderId: string, newStatus: string) {
+  await db.update(watchedOrders)
+    .set({ lastStatus: newStatus, lastChecked: new Date() })
+    .where(eq(watchedOrders.sideshiftOrderId, sideshiftOrderId));
 }
