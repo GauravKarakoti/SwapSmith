@@ -77,6 +77,66 @@ export const watchedOrders = pgTable('watched_orders', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// Caching tables
+export const coinPriceCache = pgTable('coin_price_cache', {
+  id: serial('id').primaryKey(),
+  coin: text('coin').notNull(),
+  network: text('network').notNull(),
+  name: text('name').notNull(),
+  usdPrice: text('usd_price'),
+  btcPrice: text('btc_price'),
+  available: text('available').notNull().default('true'),
+  expiresAt: timestamp('expires_at').notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const userSettings = pgTable('user_settings', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull().unique(),
+  walletAddress: text('wallet_address'),
+  theme: text('theme').default('dark'),
+  slippageTolerance: real('slippage_tolerance').default(0.5),
+  notificationsEnabled: text('notifications_enabled').default('true'),
+  defaultFromAsset: text('default_from_asset'),
+  defaultToAsset: text('default_to_asset'),
+  preferences: text('preferences'),
+  emailNotifications: text('email_notifications'),
+  telegramNotifications: text('telegram_notifications').default('false'),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const swapHistory = pgTable('swap_history', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  walletAddress: text('wallet_address'),
+  sideshiftOrderId: text('sideshift_order_id').notNull(),
+  quoteId: text('quote_id'),
+  fromAsset: text('from_asset').notNull(),
+  fromNetwork: text('from_network').notNull(),
+  fromAmount: real('from_amount').notNull(),
+  toAsset: text('to_asset').notNull(),
+  toNetwork: text('to_network').notNull(),
+  settleAmount: text('settle_amount').notNull(),
+  depositAddress: text('deposit_address'),
+  status: text('status').notNull().default('pending'),
+  txHash: text('tx_hash'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const chatHistory = pgTable('chat_history', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  walletAddress: text('wallet_address'),
+  role: text('role').notNull(),
+  content: text('content').notNull(),
+  metadata: text('metadata'),
+  sessionId: text('session_id'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 // DCA (Dollar Cost Averaging) Schedules
 export const dcaSchedules = pgTable('dca_schedules', {
   id: serial('id').primaryKey(),
@@ -95,24 +155,6 @@ export const dcaSchedules = pgTable('dca_schedules', {
   nextExecution: timestamp('next_execution').notNull(),
   executionCount: integer('execution_count').notNull().default(0),
   createdAt: timestamp('created_at').defaultNow(),
-});
-
-export const dcaSchedules = pgTable('dca_schedules', {
-  id: serial('id').primaryKey(),
-  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
-  fromAsset: text('from_asset').notNull(),
-  fromChain: text('from_chain').notNull(),
-  toAsset: text('to_asset').notNull(),
-  toChain: text('to_chain').notNull(),
-  amount: real('amount').notNull(),
-  settleAddress: text('settle_address').notNull(),
-  frequency: text('frequency').notNull(), // 'daily', 'weekly', 'monthly'
-  dayOfWeek: real('day_of_week'), // 0-6 for weekly
-  dayOfMonth: real('day_of_month'), // 1-31 for monthly
-  nextExecution: timestamp('next_execution').notNull(),
-  isActive: text('is_active').notNull().default('true'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
 export type User = typeof users.$inferSelect;
@@ -423,50 +465,3 @@ function calculateNextExecution(frequency: string, dayOfWeek?: string, dayOfMont
   
   return next;
 }
-
-// --- DCA SCHEDULE FUNCTIONS ---
-
-export async function getActiveDCASchedules(): Promise<DCASchedule[]> {
-  return await db.select().from(dcaSchedules)
-    .where(eq(dcaSchedules.isActive, 'true'))
-    .orderBy(dcaSchedules.nextExecution);
-}
-
-export async function updateDCAScheduleExecution(
-  scheduleId: number,
-  frequency: string,
-  dayOfWeek?: number,
-  dayOfMonth?: number
-) {
-  // Calculate next execution time
-  const now = new Date();
-  let nextExecution = new Date(now);
-
-  switch (frequency) {
-    case 'daily':
-      nextExecution.setDate(nextExecution.getDate() + 1);
-      break;
-    case 'weekly':
-      nextExecution.setDate(nextExecution.getDate() + 7);
-      if (dayOfWeek !== undefined) {
-        const currentDay = nextExecution.getDay();
-        const daysUntilTarget = (dayOfWeek - currentDay + 7) % 7;
-        nextExecution.setDate(nextExecution.getDate() + daysUntilTarget);
-      }
-      break;
-    case 'monthly':
-      nextExecution.setMonth(nextExecution.getMonth() + 1);
-      if (dayOfMonth !== undefined) {
-        nextExecution.setDate(dayOfMonth);
-      }
-      break;
-  }
-
-  await db.update(dcaSchedules)
-    .set({ 
-      nextExecution,
-      updatedAt: new Date()
-    })
-    .where(eq(dcaSchedules.id, scheduleId));
-}
-
