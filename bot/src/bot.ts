@@ -1,4 +1,4 @@
-import { Telegraf, Markup } from 'telegraf';
+import { Telegraf, Markup, Context } from 'telegraf';
 import { message } from 'telegraf/filters';
 import dotenv from 'dotenv';
 import { parseUserCommand, transcribeAudio } from './services/groq-client';
@@ -137,11 +137,15 @@ bot.on(message('voice'), async (ctx) => {
 // ------------------ CORE HANDLER ------------------
 
 async function handleTextMessage(
-  ctx: any,
+  ctx: Context,
   text: string,
   inputType: 'text' | 'voice' = 'text'
 ) {
-  const userId = ctx.from.id;
+  if (!ctx.from) {
+    return ctx.reply('❌ Unable to identify user.');
+  }
+  
+  const userId = ctx.from!.id;
   const state = await db.getConversationState(userId);
 
   // Address collection
