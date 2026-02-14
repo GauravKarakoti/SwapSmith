@@ -1,15 +1,18 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { pgTable, serial, text, real, timestamp, bigint, unique } from 'drizzle-orm/pg-core';
-import { eq, desc, and } from 'drizzle-orm'; // Added 'and'
+import { pgTable, serial, text, real, timestamp, bigint, integer } from 'drizzle-orm/pg-core';
+import { eq, desc, and, sql } from 'drizzle-orm'; // Added 'and', 'sql'
 import dotenv from 'dotenv';
 import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
 import type { ParsedCommand } from './groq-client';
 
 dotenv.config();
-
-const sql = neon(process.env.DATABASE_URL!);
-const db = drizzle(sql);
+const memoryAddressBook = new Map<number, Map<string, { address: string; chain: string }>>();
+const memoryState = new Map<number, any>();
+//newly added
+const connectionString = process.env.DATABASE_URL || 'postgres://mock:mock@localhost:5432/mock';
+const client = neon(connectionString);
+const db = drizzle(client);
 
 // --- SCHEMAS ---
 export const users = pgTable('users', {
@@ -74,66 +77,23 @@ export const watchedOrders = pgTable('watched_orders', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-// --- CACHING TABLES ---
-
-export const coinPriceCache = pgTable('coin_price_cache', {
+// DCA (Dollar Cost Averaging) Schedules
+export const dcaSchedules = pgTable('dca_schedules', {
   id: serial('id').primaryKey(),
-  coin: text('coin').notNull(),
-  network: text('network').notNull(),
-  name: text('name').notNull(),
-  usdPrice: text('usd_price'),
-  btcPrice: text('btc_price'),
-  available: text('available').notNull().default('true'),
-  expiresAt: timestamp('expires_at').notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-}, (table) => ({
-  coinNetworkUnique: unique().on(table.coin, table.network),
-}));
-
-export const userSettings = pgTable('user_settings', {
-  id: serial('id').primaryKey(),
-  userId: text('user_id').notNull().unique(), // Firebase UID or wallet address
-  walletAddress: text('wallet_address'),
-  theme: text('theme').default('dark'),
-  slippageTolerance: real('slippage_tolerance').default(0.5),
-  notificationsEnabled: text('notifications_enabled').default('true'),
-  defaultFromAsset: text('default_from_asset'),
-  defaultToAsset: text('default_to_asset'),
-  preferences: text('preferences'), // Additional JSON preferences  
-  emailNotifications: text('email_notifications'),
-  telegramNotifications: text('telegram_notifications').default('false'),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
-export const swapHistory = pgTable('swap_history', {
-  id: serial('id').primaryKey(),
-  userId: text('user_id').notNull(), // Firebase UID or wallet address
-  walletAddress: text('wallet_address'),
-  sideshiftOrderId: text('sideshift_order_id').notNull(),
-  quoteId: text('quote_id'),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
   fromAsset: text('from_asset').notNull(),
-  fromNetwork: text('from_network').notNull(),
-  fromAmount: real('from_amount').notNull(),
+  fromChain: text('from_chain').notNull(),
   toAsset: text('to_asset').notNull(),
-  toNetwork: text('to_network').notNull(),
-  settleAmount: text('settle_amount').notNull(),
-  depositAddress: text('deposit_address'),
-  status: text('status').notNull().default('pending'),
-  txHash: text('tx_hash'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
-export const chatHistory = pgTable('chat_history', {
-  id: serial('id').primaryKey(),
-  userId: text('user_id').notNull(), // Firebase UID or wallet address
-  walletAddress: text('wallet_address'),
-  role: text('role').notNull(), // 'user' or 'assistant'
-  content: text('content').notNull(),
-  metadata: text('metadata'), // JSON string for additional data
-  sessionId: text('session_id'),
+  toChain: text('to_chain').notNull(),
+  amount: real('amount').notNull(),
+  frequency: text('frequency').notNull(), // 'daily', 'weekly', 'monthly'
+  dayOfWeek: text('day_of_week'), // For weekly: 'monday', 'tuesday', etc.
+  dayOfMonth: text('day_of_month'), // For monthly: '1', '15', etc.
+  settleAddress: text('settle_address').notNull(),
+  isActive: text('is_active').notNull().default('true'),
+  lastExecuted: timestamp('last_executed'),
+  nextExecution: timestamp('next_execution').notNull(),
+  executionCount: integer('execution_count').notNull().default(0),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -142,10 +102,7 @@ export type Order = typeof orders.$inferSelect;
 export type Checkout = typeof checkouts.$inferSelect;
 export type AddressBookEntry = typeof addressBook.$inferSelect;
 export type WatchedOrder = typeof watchedOrders.$inferSelect;
-export type CoinPriceCache = typeof coinPriceCache.$inferSelect;
-export type UserSettings = typeof userSettings.$inferSelect;
-export type SwapHistory = typeof swapHistory.$inferSelect;
-export type ChatHistory = typeof chatHistory.$inferSelect;
+export type DCASchedule = typeof dcaSchedules.$inferSelect;
 
 // --- FUNCTIONS ---
 
@@ -164,30 +121,42 @@ export async function setUserWalletAndSession(telegramId: number, walletAddress:
 }
 
 export async function getConversationState(telegramId: number) {
-  const result = await db.select({ state: conversations.state, lastUpdated: conversations.lastUpdated }).from(conversations).where(eq(conversations.telegramId, telegramId));
-  if (!result[0]?.state) return null;
+  try{
+    const result = await db.select({ state: conversations.state, lastUpdated: conversations.lastUpdated }).from(conversations).where(eq(conversations.telegramId, telegramId));
+    if (!result[0]?.state) return null;
 
-  const state = JSON.parse(result[0].state);
-  const lastUpdated = result[0].lastUpdated;
+    const state = JSON.parse(result[0].state);
+    const lastUpdated = result[0].lastUpdated;
 
-  if (lastUpdated && (Date.now() - new Date(lastUpdated).getTime()) > 60 * 60 * 1000) {
+    if (lastUpdated && (Date.now() - new Date(lastUpdated).getTime()) > 60 * 60 * 1000) {
     await clearConversationState(telegramId);
     return null;
+    }
+    return state;
+  }catch(err){
+    return memoryState.get(telegramId) || null;
   }
-  return state;
 }
 
 export async function setConversationState(telegramId: number, state: any) {
-  await db.insert(conversations)
+  try{
+    await db.insert(conversations)
     .values({ telegramId, state: JSON.stringify(state), lastUpdated: new Date() })
     .onConflictDoUpdate({
       target: conversations.telegramId,
       set: { state: JSON.stringify(state), lastUpdated: new Date() }
     });
+  }catch(err){
+    memoryState.set(telegramId, state);
+  }
 }
 
 export async function clearConversationState(telegramId: number) {
-  await db.delete(conversations).where(eq(conversations.telegramId, telegramId));
+  try{
+    await db.delete(conversations).where(eq(conversations.telegramId, telegramId));
+  }catch(err){
+    memoryState.delete(telegramId);
+  }
 }
 
 export async function createOrderEntry(
@@ -255,22 +224,42 @@ export async function getUserCheckouts(telegramId: number): Promise<Checkout[]> 
 }
 
 export async function addAddressBookEntry(telegramId: number, nickname: string, address: string, chain: string) {
-  await db.insert(addressBook)
+  try{
+    await db.insert(addressBook)
     .values({ telegramId, nickname, address, chain })
     .onConflictDoUpdate({
       target: [addressBook.telegramId, addressBook.nickname],
       set: { address, chain }
     });
+  }catch(err){
+    if (!memoryAddressBook.has(telegramId)) memoryAddressBook.set(telegramId, new Map());
+    memoryAddressBook.get(telegramId)!.set(nickname.toLowerCase(), { address, chain });
+  }
 }
 
 export async function getAddressBookEntries(telegramId: number): Promise<AddressBookEntry[]> {
-  return await db.select().from(addressBook)
-    .where(eq(addressBook.telegramId, telegramId))
-    .orderBy(desc(addressBook.createdAt));
+  try {
+    return await db.select().from(addressBook)
+      .where(eq(addressBook.telegramId, telegramId))
+      .orderBy(desc(addressBook.createdAt));
+  }catch(arr){
+    const m = memoryAddressBook.get(telegramId);
+    if (!m) return [];
+    // return a compatible shape (cast is fine for dev fallback)
+    return [...m.entries()].map(([nickname, v]) => ({
+      id: 0 as any,
+      telegramId,
+      nickname,
+      address: v.address,
+      chain: v.chain,
+      createdAt: new Date() as any,
+    }));
+  }
 }
 
 export async function resolveNickname(telegramId: number, nickname: string): Promise<string | null> {
-  const result = await db.select({ address: addressBook.address })
+  try{
+    const result = await db.select({ address: addressBook.address })
     .from(addressBook)
     .where(
       and(
@@ -279,7 +268,10 @@ export async function resolveNickname(telegramId: number, nickname: string): Pro
       )
     ) // Corrected multi-where syntax
     .limit(1);
-  return result[0]?.address || null;
+    return result[0]?.address || null;
+  }catch(err){
+    return null;
+  }
 }
 
 
@@ -319,226 +311,93 @@ export async function updateWatchedOrderStatus(sideshiftOrderId: string, newStat
     .where(eq(watchedOrders.sideshiftOrderId, sideshiftOrderId));
 }
 
-// --- COIN PRICE CACHE FUNCTIONS ---
 
-export async function getCachedPrice(coin: string, network: string): Promise<CoinPriceCache | undefined> {
-  const result = await db.select().from(coinPriceCache)
-    .where(and(
-      eq(coinPriceCache.coin, coin),
-      eq(coinPriceCache.network, network)
-    ))
-    .limit(1);
-  
-  const cached = result[0];
-  if (!cached) return undefined;
-  
-  // Check if cache is still valid
-  if (new Date(cached.expiresAt) < new Date()) {
-    return undefined; // Expired
-  }
-  
-  return cached;
-}
+// --- DCA SCHEDULE FUNCTIONS ---
 
-export async function setCachedPrice(
-  coin: string,
-  network: string,
-  name: string,
-  usdPrice: string | undefined,
-  btcPrice: string | undefined,
-  available: boolean,
-  ttlMinutes: number = 5
+export async function createDCASchedule(
+  telegramId: number,
+  fromAsset: string,
+  fromChain: string,
+  toAsset: string,
+  toChain: string,
+  amount: number,
+  frequency: string,
+  settleAddress: string,
+  dayOfWeek?: string,
+  dayOfMonth?: string
 ) {
-  const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
+  const nextExecution = calculateNextExecution(frequency, dayOfWeek, dayOfMonth);
   
-  await db.insert(coinPriceCache)
-    .values({
-      coin,
-      network,
-      name,
-      usdPrice: usdPrice || null,
-      btcPrice: btcPrice || null,
-      available: available ? 'true' : 'false',
-      expiresAt,
-      updatedAt: new Date(),
-    })
-    .onConflictDoUpdate({
-      target: [coinPriceCache.coin, coinPriceCache.network],
-      set: {
-        name,
-        usdPrice: usdPrice || null,
-        btcPrice: btcPrice || null,
-        available: available ? 'true' : 'false',
-        expiresAt,
-        updatedAt: new Date(),
-      }
-    });
-}
-
-export async function getAllCachedPrices(): Promise<CoinPriceCache[]> {
-  const now = new Date();
-  return await db.select().from(coinPriceCache)
-    .where(and(
-      eq(coinPriceCache.available, 'true')
-    ));
-}
-
-export async function clearExpiredPriceCache() {
-  const now = new Date();
-  await db.delete(coinPriceCache)
-    .where(eq(coinPriceCache.expiresAt, now));
-}
-
-export async function clearAllCachedPrices() {
-  await db.delete(coinPriceCache);
-  console.log('[Database] Cleared all cached prices');
-}
-
-// --- USER SETTINGS FUNCTIONS ---
-
-export async function getUserSettings(userId: string): Promise<UserSettings | undefined> {
-  const result = await db.select().from(userSettings)
-    .where(eq(userSettings.userId, userId))
-    .limit(1);
+  const result = await db.insert(dcaSchedules).values({
+    telegramId,
+    fromAsset,
+    fromChain,
+    toAsset,
+    toChain,
+    amount,
+    frequency,
+    dayOfWeek: dayOfWeek || null,
+    dayOfMonth: dayOfMonth || null,
+    settleAddress,
+    nextExecution,
+    isActive: 'true'
+  }).returning();
+  
   return result[0];
 }
 
-export async function createOrUpdateUserSettings(
-  userId: string,
-  settings: {
-    walletAddress?: string;
-    theme?: string;
-    slippageTolerance?: number;
-    notificationsEnabled?: boolean;
-    defaultFromAsset?: string;
-    defaultToAsset?: string;
-    emailNotifications?: boolean;
-    telegramNotifications?: boolean;
-  }
-) {
-  await db.insert(userSettings)
-    .values({
-      userId,
-      walletAddress: settings.walletAddress,
-      theme: settings.theme,
-      slippageTolerance: settings.slippageTolerance,
-      notificationsEnabled: settings.notificationsEnabled ? 'true' : 'false',
-      defaultFromAsset: settings.defaultFromAsset,
-      defaultToAsset: settings.defaultToAsset,
-      emailNotifications: settings.emailNotifications ? 'true' : 'false',
-      telegramNotifications: settings.telegramNotifications ? 'true' : 'false',
-      updatedAt: new Date(),
+export async function getUserDCASchedules(telegramId: number): Promise<DCASchedule[]> {
+  return await db.select().from(dcaSchedules)
+    .where(eq(dcaSchedules.telegramId, telegramId))
+    .orderBy(desc(dcaSchedules.createdAt));
+}
+
+export async function getActiveDCASchedules(): Promise<DCASchedule[]> {
+  return await db.select().from(dcaSchedules)
+    .where(eq(dcaSchedules.isActive, 'true'));
+}
+
+export async function updateDCAScheduleStatus(id: number, isActive: boolean) {
+  await db.update(dcaSchedules)
+    .set({ isActive: isActive ? 'true' : 'false' })
+    .where(eq(dcaSchedules.id, id));
+}
+
+export async function updateDCAScheduleExecution(id: number, frequency: string, dayOfWeek?: string, dayOfMonth?: string) {
+  const nextExecution = calculateNextExecution(frequency, dayOfWeek, dayOfMonth);
+  
+  await db.update(dcaSchedules)
+    .set({ 
+      lastExecuted: new Date(),
+      nextExecution,
+      executionCount: sql`${dcaSchedules.executionCount} + 1`
     })
-    .onConflictDoUpdate({
-      target: userSettings.userId,
-      set: {
-        walletAddress: settings.walletAddress,
-        theme: settings.theme,
-        slippageTolerance: settings.slippageTolerance,
-        notificationsEnabled: settings.notificationsEnabled ? 'true' : 'false',
-        defaultFromAsset: settings.defaultFromAsset,
-        defaultToAsset: settings.defaultToAsset,
-        emailNotifications: settings.emailNotifications ? 'true' : 'false',
-        telegramNotifications: settings.telegramNotifications ? 'true' : 'false',
-        updatedAt: new Date(),
-      }
-    });
+    .where(eq(dcaSchedules.id, id));
 }
 
-// --- SWAP HISTORY FUNCTIONS ---
-
-export async function createSwapHistoryEntry(
-  userId: string,
-  walletAddress: string | undefined,
-  swapData: {
-    sideshiftOrderId: string;
-    quoteId?: string;
-    fromAsset: string;
-    fromNetwork: string;
-    fromAmount: number;
-    toAsset: string;
-    toNetwork: string;
-    settleAmount: string;
-    depositAddress?: string;
-    status?: string;
-    txHash?: string;
-  }
-) {
-  await db.insert(swapHistory).values({
-    userId,
-    walletAddress,
-    ...swapData,
-    status: swapData.status || 'pending',
-    updatedAt: new Date(),
-  });
+export async function deleteDCASchedule(id: number) {
+  await db.delete(dcaSchedules).where(eq(dcaSchedules.id, id));
 }
 
-export async function getSwapHistory(userId: string, limit: number = 50): Promise<SwapHistory[]> {
-  return await db.select().from(swapHistory)
-    .where(eq(swapHistory.userId, userId))
-    .orderBy(desc(swapHistory.createdAt))
-    .limit(limit);
-}
-
-export async function getSwapHistoryByWallet(walletAddress: string, limit: number = 50): Promise<SwapHistory[]> {
-  return await db.select().from(swapHistory)
-    .where(eq(swapHistory.walletAddress, walletAddress))
-    .orderBy(desc(swapHistory.createdAt))
-    .limit(limit);
-}
-
-export async function updateSwapHistoryStatus(sideshiftOrderId: string, status: string, txHash?: string) {
-  await db.update(swapHistory)
-    .set({ status, txHash, updatedAt: new Date() })
-    .where(eq(swapHistory.sideshiftOrderId, sideshiftOrderId));
-}
-
-// --- CHAT HISTORY FUNCTIONS ---
-
-export async function addChatMessage(
-  userId: string,
-  walletAddress: string | undefined,
-  role: 'user' | 'assistant',
-  content: string,
-  sessionId?: string,
-  metadata?: Record<string, any>
-) {
-  await db.insert(chatHistory).values({
-    userId,
-    walletAddress,
-    role,
-    content,
-    sessionId,
-    metadata: metadata ? JSON.stringify(metadata) : null,
-  });
-}
-
-export async function getChatHistory(userId: string, sessionId?: string, limit: number = 50): Promise<ChatHistory[]> {
-  if (sessionId) {
-    return await db.select().from(chatHistory)
-      .where(and(
-        eq(chatHistory.userId, userId),
-        eq(chatHistory.sessionId, sessionId)
-      ))
-      .orderBy(desc(chatHistory.createdAt))
-      .limit(limit);
+function calculateNextExecution(frequency: string, dayOfWeek?: string, dayOfMonth?: string): Date {
+  const now = new Date();
+  const next = new Date(now);
+  
+  if (frequency === 'daily') {
+    next.setDate(next.getDate() + 1);
+    next.setHours(9, 0, 0, 0); // 9 AM next day
+  } else if (frequency === 'weekly') {
+    const targetDay = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].indexOf(dayOfWeek?.toLowerCase() || 'monday');
+    const currentDay = next.getDay();
+    const daysUntilTarget = (targetDay - currentDay + 7) % 7 || 7;
+    next.setDate(next.getDate() + daysUntilTarget);
+    next.setHours(9, 0, 0, 0);
+  } else if (frequency === 'monthly') {
+    const targetDate = parseInt(dayOfMonth || '1');
+    next.setMonth(next.getMonth() + 1);
+    next.setDate(Math.min(targetDate, new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()));
+    next.setHours(9, 0, 0, 0);
   }
   
-  return await db.select().from(chatHistory)
-    .where(eq(chatHistory.userId, userId))
-    .orderBy(desc(chatHistory.createdAt))
-    .limit(limit);
-}
-
-export async function clearChatHistory(userId: string, sessionId?: string) {
-  if (sessionId) {
-    await db.delete(chatHistory)
-      .where(and(
-        eq(chatHistory.userId, userId),
-        eq(chatHistory.sessionId, sessionId)
-      ));
-  } else {
-    await db.delete(chatHistory)
-      .where(eq(chatHistory.userId, userId));
-  }
+  return next;
 }

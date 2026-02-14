@@ -13,27 +13,6 @@ SwapSmith allows you to execute complex, cross-chain cryptocurrency swaps using 
 - **Voice Input:** (Experimental) Use your microphone to command the agent.
 - **Secure:** Your keys stay yours. Transactions are only executed after your explicit confirmation.
 - **Real-Time Quotes:** Always get the best available rate via SideShift.
-- **🆕 Database Caching:** Neon PostgreSQL-powered caching reduces API calls by 80%+ and provides persistent swap history, user settings, and chat context.
-
-## 🗄️ What's New: Database Caching
-
-SwapSmith now includes a comprehensive caching system powered by Neon PostgreSQL:
-
-✅ **Price Caching** - 5-minute TTL reduces SideShift API calls by 80%+  
-✅ **Swap History** - Track all your swaps across sessions  
-✅ **User Settings** - Theme, slippage tolerance, and preferences persist  
-✅ **Chat History** - AI maintains conversation context
-
-**Quick Setup:**
-
-```bash
-# 1. Create a Neon database at https://neon.tech
-# 2. Add DATABASE_URL to frontend/.env.local and bot/.env
-# 3. Run setup:
-.\setup-caching.ps1
-```
-
-📖 **[Full Caching Guide](./DATABASE_CACHING_GUIDE.md)** | 🎯 **[Quick Reference](./QUICK_REFERENCE.md)**
 
 ## 🛠️ How It Works
 
@@ -54,26 +33,22 @@ SwapSmith now includes a comprehensive caching system powered by Neon PostgreSQL
 ### Local Development
 
 1.  **Clone the repository:**
-
     ```bash
     git clone https://github.com/your-username/swapsmith.git
     cd swapsmith
     ```
 
 2.  **Install dependencies:**
-
     ```bash
     npm install
     ```
 
 3.  **Environment Variables:**
-
     ```bash
     cp .env.example .env
     ```
 
 4.  **Run the development server:**
-
     ```bash
     npm run dev
     ```
@@ -98,9 +73,8 @@ SwapSmith now includes a comprehensive caching system powered by Neon PostgreSQL
 
 - **Frontend:** Next.js, React, Tailwind CSS, Web3.js
 - **Backend:** Next.js API Routes, Node.js
-- **Database:** Neon PostgreSQL + Drizzle ORM (for caching & persistence)
 - **APIs:** SideShift.ai API, OpenAI GPT-4 API
-- **Auth:** Web3 Wallet Connection (MetaMask) + Firebase Authentication
+- **Auth:** Web3 Wallet Connection (MetaMask)
 
 ## 🔮 Future Ideas
 
