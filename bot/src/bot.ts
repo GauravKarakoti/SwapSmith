@@ -261,35 +261,66 @@ bot.on(message('text'), async (ctx) => {
     await handleTextMessage(ctx, ctx.message.text, 'text');
 });
 
+// Voice message handler - merged implementation with unique filenames and timeout protection
 bot.on(message('voice'), async (ctx) => {
     const userId = ctx.from.id;
     await ctx.reply('👂 Listening...');
+
+    // Generate unique filenames to prevent race conditions
+    const timestamp = Date.now();
+    const tempDir = os.tmpdir();
+    const ogaPath = path.join(tempDir, `voice_${userId}_${timestamp}.oga`);
+    const mp3Path = path.join(tempDir, `voice_${userId}_${timestamp}.mp3`);
 
     try {
         const file_id = ctx.message.voice.file_id;
         const fileLink = await ctx.telegram.getFileLink(file_id);
 
         const response = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
-        const ogaPath = path.join(__dirname, `temp_${userId}.oga`);
-        const mp3Path = path.join(__dirname, `temp_${userId}.mp3`);
         fs.writeFileSync(ogaPath, Buffer.from(response.data));
-        execSync(`ffmpeg -i ${ogaPath} ${mp3Path} -y`);
+        
+        // Execute ffmpeg with timeout to prevent hanging processes
+        await new Promise<void>((resolve, reject) => {
+            const ffmpegProcess = exec(`ffmpeg -i "${ogaPath}" "${mp3Path}" -y`, (err) => {
+                if (err) reject(err);
+                else resolve();
+            });
 
-    // Cleanup
-    if (fs.existsSync(tempOga)) fs.unlinkSync(tempOga);
-    if (fs.existsSync(tempMp3)) fs.unlinkSync(tempMp3);
+            // Set a 30-second timeout for ffmpeg execution
+            const timeout = setTimeout(() => {
+                if (ffmpegProcess.pid) {
+                    ffmpegProcess.kill('SIGTERM');
+                }
+                reject(new Error('ffmpeg execution timed out after 30 seconds'));
+            }, 30000);
 
-    if (!text) {
-      return ctx.reply('❌ Could not transcribe audio. Please try again.');
+            // Clear timeout if process completes normally
+            ffmpegProcess.on('exit', () => {
+                clearTimeout(timeout);
+            });
+        });
+
+        const transcribedText = await transcribeAudio(mp3Path);
+        await handleTextMessage(ctx, transcribedText, 'voice');
+    } catch (error) {
+        console.error("Voice error:", error);
+        const errorMessage = error instanceof Error && error.message.includes('timed out') 
+            ? "Sorry, audio processing took too long. Please try a shorter message."
+            : "Sorry, I couldn't hear that clearly. Please try again.";
+        ctx.reply(errorMessage);
+    } finally {
+        // Always clean up temp files, regardless of success or failure
+        try {
+            if (fs.existsSync(ogaPath)) {
+                fs.unlinkSync(ogaPath);
+            }
+            if (fs.existsSync(mp3Path)) {
+                fs.unlinkSync(mp3Path);
+            }
+        } catch (cleanupError) {
+            console.error("Failed to clean up temp files:", cleanupError);
+        }
     }
-
-    ctx.reply(`🎤 *Transcribed:* "${text}"`, { parse_mode: 'Markdown' });
-    await handleTextMessage(ctx, text, 'voice');
-
-  } catch (error) {
-    console.error('Voice processing error:', error);
-    ctx.reply('❌ Error processing voice message.');
-  }
 });
 
 async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'voice' = 'text') {
@@ -425,64 +456,7 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
     if (inputType === 'voice' && parsed.success) await ctx.reply(`🗣️ ${parsed.parsedMessage}`);
 }
 
-bot.on(message('voice'), async (ctx) => {
-    const userId = ctx.from.id;
-    await ctx.reply('👂 Listening...');
 
-    const tempDir = os.tmpdir();
-    const ogaPath = path.join(tempDir, `temp_${userId}.oga`);
-    const mp3Path = path.join(tempDir, `temp_${userId}.mp3`);
-
-    try {
-        const file_id = ctx.message.voice.file_id;
-        const fileLink = await ctx.telegram.getFileLink(file_id);
-
-        const response = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
-        fs.writeFileSync(ogaPath, Buffer.from(response.data));
-        
-        // Execute ffmpeg with timeout to prevent hanging processes
-        await new Promise<void>((resolve, reject) => {
-            const ffmpegProcess = exec(`ffmpeg -i "${ogaPath}" "${mp3Path}" -y`, (err) => {
-                if (err) reject(err);
-                else resolve();
-            });
-
-            // Set a 30-second timeout for ffmpeg execution
-            const timeout = setTimeout(() => {
-                if (ffmpegProcess.pid) {
-                    ffmpegProcess.kill('SIGTERM');
-                }
-                reject(new Error('ffmpeg execution timed out after 30 seconds'));
-            }, 30000);
-
-            // Clear timeout if process completes normally
-            ffmpegProcess.on('exit', () => {
-                clearTimeout(timeout);
-            });
-        });
-
-        const transcribedText = await transcribeAudio(mp3Path);
-        await handleTextMessage(ctx, transcribedText, 'voice');
-    } catch (error) {
-        console.error("Voice error:", error);
-        const errorMessage = error instanceof Error && error.message.includes('timed out') 
-            ? "Sorry, audio processing took too long. Please try a shorter message."
-            : "Sorry, I couldn't hear that clearly. Please try again.";
-        ctx.reply(errorMessage);
-    } finally {
-        // Always clean up temp files, regardless of success or failure
-        try {
-            if (fs.existsSync(ogaPath)) {
-                fs.unlinkSync(ogaPath);
-            }
-            if (fs.existsSync(mp3Path)) {
-                fs.unlinkSync(mp3Path);
-            }
-        } catch (cleanupError) {
-            console.error("Failed to clean up temp files:", cleanupError);
-        }
-    }
-});
 
 // ------------------ ACTIONS ------------------
 
