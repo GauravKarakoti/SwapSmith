@@ -14,6 +14,8 @@ import {
   findHigherYieldPools,
 } from './services/yield-client';
 import * as db from './services/database';
+import { startLimitOrderWorker } from './workers/limitOrderWorker';
+import { parseLimitOrder } from './utils/parseLimitOrder';
 import { ethers } from 'ethers';
 import axios from 'axios';
 import fs from 'fs';
@@ -32,6 +34,104 @@ const bot = new Telegraf(process.env.BOT_TOKEN!);
 const MINI_APP_URL = process.env.MINI_APP_URL!;
 const ERC20_ABI = ['function transfer(address to, uint256 amount) returns (bool)'];
 
+// Start Limit Order Worker
+startLimitOrderWorker(bot);
+
+// --- FFMPEG CHECK ---
+try {
+    execSync('ffmpeg -version');
+    console.log('✅ ffmpeg is installed. Voice messages enabled.');
+} catch (error) {
+    console.warn('⚠️ ffmpeg not found. Voice messages will fail. Please install ffmpeg.');
+// Initialize order monitor
+const orderMonitor = new OrderMonitor(bot);
+
+// --- ADDRESS VALIDATION PATTERNS ---
+const ADDRESS_PATTERNS: Record<string, RegExp> = {
+  // EVM chains
+  ethereum: /^0x[a-fA-F0-9]{40}$/,
+  base: /^0x[a-fA-F0-9]{40}$/,
+  arbitrum: /^0x[a-fA-F0-9]{40}$/,
+  polygon: /^0x[a-fA-F0-9]{40}$/,
+  bsc: /^0x[a-fA-F0-9]{40}$/,
+  optimism: /^0x[a-fA-F0-9]{40}$/,
+  avalanche: /^0x[a-fA-F0-9]{40}$/,
+  fantom: /^0x[a-fA-F0-9]{40}$/,
+  cronos: /^0x[a-fA-F0-9]{40}$/,
+  moonbeam: /^0x[a-fA-F0-9]{40}$/,
+  moonriver: /^0x[a-fA-F0-9]{40}$/,
+  celo: /^0x[a-fA-F0-9]{40}$/,
+  gnosis: /^0x[a-fA-F0-9]{40}$/,
+  harmony: /^0x[a-fA-F0-9]{40}$/,
+  metis: /^0x[a-fA-F0-9]{40}$/,
+  aurora: /^0x[a-fA-F0-9]{40}$/,
+  kava: /^0x[a-fA-F0-9]{40}$/,
+  evmos: /^0x[a-fA-F0-9]{40}$/,
+  boba: /^0x[a-fA-F0-9]{40}$/,
+  okc: /^0x[a-fA-F0-9]{40}$/,
+  heco: /^0x[a-fA-F0-9]{40}$/,
+  iotex: /^0x[a-fA-F0-9]{40}$/,
+  klaytn: /^0x[a-fA-F0-9]{40}$/,
+  conflux: /^0x[a-fA-F0-9]{40}$/,
+  astar: /^0x[a-fA-F0-9]{40}$/,
+  shiden: /^0x[a-fA-F0-9]{40}$/,
+  telos: /^0x[a-fA-F0-9]{40}$/,
+  fuse: /^0x[a-fA-F0-9]{40}$/,
+  velas: /^0x[a-fA-F0-9]{40}$/,
+  thundercore: /^0x[a-fA-F0-9]{40}$/,
+  xdc: /^xdc[a-fA-F0-9]{40}$/,
+  nahmii: /^0x[a-fA-F0-9]{40}$/,
+  callisto: /^0x[a-fA-F0-9]{40}$/,
+  smartbch: /^0x[a-fA-F0-9]{40}$/,
+  energyweb: /^0x[a-fA-F0-9]{40}$/,
+  theta: /^0x[a-fA-F0-9]{40}$/,
+  flare: /^0x[a-fA-F0-9]{40}$/,
+  songbird: /^0x[a-fA-F0-9]{40}$/,
+  coston: /^0x[a-fA-F0-9]{40}$/,
+  coston2: /^0x[a-fA-F0-9]{40}$/,
+  rei: /^0x[a-fA-F0-9]{40}$/,
+  kekchain: /^0x[a-fA-F0-9]{40}$/,
+  tomochain: /^0x[a-fA-F0-9]{40}$/,
+  bitgert: /^0x[a-fA-F0-9]{40}$/,
+  clover: /^0x[a-fA-F0-9]{40}$/,
+  defichain: /^0x[a-fA-F0-9]{40}$/,
+  findora: /^0x[a-fA-F0-9]{40}$/,
+  gatechain: /^0x[a-fA-F0-9]{40}$/,
+  meter: /^0x[a-fA-F0-9]{40}$/,
+  nova: /^0x[a-fA-F0-9]{40}$/,
+  syscoin: /^0x[a-fA-F0-9]{40}$/,
+  zksync: /^0x[a-fA-F0-9]{40}$/,
+  polygonzkevm: /^0x[a-fA-F0-9]{40}$/,
+  linea: /^0x[a-fA-F0-9]{40}$/,
+  mantle: /^0x[a-fA-F0-9]{40}$/,
+  scroll: /^0x[a-fA-F0-9]{40}$/,
+  taiko: /^0x[a-fA-F0-9]{40}$/,
+  bitcoin: /^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$|^bc1[a-z0-9]{39,59}$/,
+  solana: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/,
+  polkadot: /^1[a-zA-Z0-9]{47}$/,
+  cardano: /^addr1[a-z0-9]{98}$|^Ae2tdPwUPEZ[a-zA-Z0-9]{50}$/,
+  monero: /^[48][0-9AB][1-9A-HJ-NP-Za-km-z]{93}$/,
+  litecoin: /^[LM3][a-km-zA-HJ-NP-Z1-9]{26,33}$/,
+  dogecoin: /^D[5-9A-HJ-NP-U][1-9A-HJ-NP-Za-km-z]{24,33}$/,
+  dash: /^X[1-9A-HJ-NP-Za-km-z]{33}$/,
+  zcash: /^t1[a-zA-Z0-9]{33}$|^t3[a-zA-Z0-9]{33}$/,
+  ripple: /^r[1-9A-HJ-NP-Za-km-z]{24,34}$/,
+  stellar: /^G[A-Z0-9]{55}$/,
+  cosmos: /^cosmos1[a-z0-9]{38}$/,
+  osmosis: /^osmo1[a-z0-9]{38}$/,
+  terra: /^terra1[a-z0-9]{38}$/,
+  tron: /^T[1-9A-HJ-NP-Za-km-z]{33}$/,
+  tezos: /^tz[1-3][a-zA-Z0-9]{33}$/,
+  algorand: /^[A-Z0-9]{58}$/,
+  near: /^[a-z0-9_-]{2,64}\.near$|^[a-fA-F0-9]{64}$/,
+  flow: /^0x[a-fA-F0-9]{16}$/,
+  hedera: /^0\.0\.\d+$/,
+  elrond: /^erd1[a-z0-9]{58}$/,
+  kusama: /^[A-Z0-9]{47}$/,
+  rsk: /^0x[a-fA-F0-9]{40}$/,
+  waves: /^3P[a-zA-Z0-9]{33}$/,
+  zilliqa: /^zil1[a-z0-9]{38}$/,
+};
 // ------------------ UTIL ------------------
 
 function isValidAddress(address: string, chain?: string): boolean {
@@ -134,7 +234,224 @@ bot.on(message('voice'), async (ctx) => {
   }
 });
 
-// ------------------ CORE HANDLER ------------------
+bot.command('list_addresses', async (ctx) => {
+  const userId = ctx.from.id;
+  const addresses = await db.getAddressBookEntries(userId);
+
+  if (addresses.length === 0) {
+    return ctx.reply("You have no saved addresses. Use /add_address to add some.");
+  }
+
+  let message = "📖 *Your Address Book:*\n\n";
+  addresses.forEach((entry) => {
+    message += `• **${entry.nickname}**: \`${entry.address}\` (${entry.chain})\n`;
+  });
+
+  ctx.replyWithMarkdown(message);
+});
+
+// --- MESSAGE HANDLERS ---
+
+bot.on(message('text'), async (ctx) => {
+    if (ctx.message.text.startsWith('/')) return;
+    await handleTextMessage(ctx, ctx.message.text, 'text');
+});
+
+bot.on(message('voice'), async (ctx) => {
+    const userId = ctx.from.id;
+    await ctx.reply('👂 Listening...');
+
+    const tempDir = os.tmpdir();
+    const ogaPath = path.join(tempDir, `temp_${userId}.oga`);
+    const mp3Path = path.join(tempDir, `temp_${userId}.mp3`);
+
+    try {
+        const file_id = ctx.message.voice.file_id;
+        const fileLink = await ctx.telegram.getFileLink(file_id);
+
+        const response = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
+        fs.writeFileSync(ogaPath, Buffer.from(response.data));
+        // execSync(`ffmpeg -i ${ogaPath} ${mp3Path} -y`);
+        await new Promise<void>((resolve, reject) => {
+         exec(`ffmpeg -i "${ogaPath}" "${mp3Path}" -y`, (err) => {
+           if (err) reject(err);
+           else resolve();
+         });
+        });
+
+
+        const transcribedText = await transcribeAudio(mp3Path);
+        await handleTextMessage(ctx, transcribedText, 'voice');
+    } catch (error) {
+        console.error("Voice error:", error);
+        ctx.reply("Sorry, I couldn't hear that clearly. Please try again.");
+    } finally {
+        // Always clean up temp files, regardless of success or failure
+        try {
+            if (fs.existsSync(ogaPath)) {
+                fs.unlinkSync(ogaPath);
+            }
+            if (fs.existsSync(mp3Path)) {
+                fs.unlinkSync(mp3Path);
+            }
+        } catch (cleanupError) {
+            console.error("Failed to clean up temp files:", cleanupError);
+        }
+    }
+});
+
+function inferNetwork(asset: string): string {
+  const map: Record<string, string> = {
+    'BTC': 'bitcoin',
+    'ETH': 'ethereum',
+    'SOL': 'solana',
+    'USDT': 'ethereum',
+    'USDC': 'ethereum',
+    'DAI': 'ethereum',
+    'WBTC': 'ethereum',
+    'BNB': 'bsc',
+    'AVAX': 'avalanche',
+    'MATIC': 'polygon',
+    'ARB': 'arbitrum',
+    'OP': 'optimism',
+    'BASE': 'base'
+  };
+  return map[asset?.toUpperCase()] || 'ethereum';
+}
+
+async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'voice' = 'text') {
+  const userId = ctx.from.id;
+
+  // NEW: Check for limit order pattern first
+  const limitOrder = parseLimitOrder(text);
+  if (limitOrder.success) {
+      await db.setConversationState(userId, {
+          intent: 'limit_order',
+          data: limitOrder,
+          step: 'awaiting_address'
+      });
+
+      return ctx.reply(
+          `👍 I understood: Swap ${limitOrder.amount} ${limitOrder.fromAsset} for ${limitOrder.toAsset} ` +
+          `if ${limitOrder.conditionAsset || limitOrder.toAsset} is ${limitOrder.conditionType} $${limitOrder.targetPrice}.\n\n` +
+          `Please enter the destination ${limitOrder.toAsset} wallet address:`
+      );
+  }
+  
+  const state = await db.getConversationState(userId); 
+
+  // Check if we are in 'limit_order' flow
+  if (state?.intent === 'limit_order' && state.step === 'awaiting_address') {
+      const address = text.trim();
+      if (address.length < 10) return ctx.reply("Address too short. Please try again or /clear.");
+
+      const orderData = state.data;
+      const fromNetwork = inferNetwork(orderData.fromAsset);
+      const toNetwork = inferNetwork(orderData.toAsset);
+
+      await db.createLimitOrder({
+          telegramId: userId,
+          fromAsset: orderData.fromAsset,
+          toAsset: orderData.toAsset,
+          fromNetwork: fromNetwork,
+          toNetwork: toNetwork,
+          amount: orderData.amount,
+          conditionAsset: orderData.conditionAsset || orderData.toAsset,
+          conditionType: orderData.conditionType,
+          targetPrice: orderData.targetPrice,
+          settleAddress: address
+      });
+
+      await db.clearConversationState(userId);
+      return ctx.reply(`✅ Limit Order Created! I'll watch the price for you.`);
+  }
+  
+  // 1. Check for pending address input
+  if (state?.parsedCommand && (state.parsedCommand.intent === 'swap' || state.parsedCommand.intent === 'checkout') && !state.parsedCommand.settleAddress) {
+      const potentialAddress = text.trim();
+      // Basic address validation (can be improved)
+      if (potentialAddress.length > 25) { // Arbitrary length check for now
+          const updatedCommand = { ...state.parsedCommand, settleAddress: potentialAddress };
+          await db.setConversationState(userId, { parsedCommand: updatedCommand });
+          
+          await ctx.reply(`Address received: \`${potentialAddress}\``, { parse_mode: 'Markdown' });
+          
+          // Re-trigger the confirmation logic with the complete command
+          const confirmAction = updatedCommand.intent === 'checkout' ? 'confirm_checkout' : 'confirm_swap';
+          return ctx.reply("Ready to proceed?", Markup.inlineKeyboard([
+              Markup.button.callback('✅ Yes', confirmAction), 
+              Markup.button.callback('❌ No', 'cancel_swap')
+          ]));
+      } else {
+          return ctx.reply("That doesn't look like a valid address. Please try again or /clear to cancel.");
+      }
+  }
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+
+    if (state?.parsedCommand && (state.parsedCommand.intent === 'swap' || state.parsedCommand.intent === 'checkout' || state.parsedCommand.intent === 'portfolio') && !state.parsedCommand.settleAddress) {
+        const potentialAddress = text.trim();
+        const targetChain = state.parsedCommand.toChain || state.parsedCommand.settleNetwork || state.parsedCommand.fromChain;
+
+        // Try to resolve the address (supports ENS, Lens, Unstoppable Domains, nicknames, and raw addresses)
+        const resolved = await resolveAddress(userId, potentialAddress);
+        
+        if (resolved.address && isValidAddress(resolved.address, targetChain)) {
+            // Successfully resolved and validated
+            const updatedCommand = { ...state.parsedCommand, settleAddress: resolved.address };
+            await db.setConversationState(userId, { parsedCommand: updatedCommand });
+            
+            // Provide feedback based on resolution type
+            let feedbackMessage = '';
+            if (resolved.type === 'ens') {
+                feedbackMessage = `✅ ENS resolved: \`${resolved.originalInput}\` → \`${resolved.address}\``;
+            } else if (resolved.type === 'lens') {
+                feedbackMessage = `✅ Lens handle resolved: \`${resolved.originalInput}\` → \`${resolved.address}\``;
+            } else if (resolved.type === 'unstoppable') {
+                feedbackMessage = `✅ Unstoppable Domain resolved: \`${resolved.originalInput}\` → \`${resolved.address}\``;
+            } else if (resolved.type === 'nickname') {
+                feedbackMessage = `✅ Nickname resolved: \`${resolved.originalInput}\` → \`${resolved.address}\``;
+            } else {
+                feedbackMessage = `✅ Address received: \`${resolved.address}\``;
+            }
+            
+            await ctx.reply(feedbackMessage, { parse_mode: 'Markdown' });
+
+            const confirmAction = updatedCommand.intent === 'checkout' ? 'confirm_checkout' : updatedCommand.intent === 'portfolio' ? 'confirm_portfolio' : 'confirm_swap';
+            return ctx.reply("Ready to proceed?", Markup.inlineKeyboard([
+                Markup.button.callback('✅ Yes', confirmAction),
+                Markup.button.callback('❌ No', 'cancel_swap')
+            ]));
+        } else if (isNamingService(potentialAddress)) {
+            // It's a naming service domain but resolution failed
+            return ctx.reply(
+                `❌ Could not resolve \`${potentialAddress}\`.\n\n` +
+                `This appears to be a naming service domain, but resolution failed. Please check:\n` +
+                `• The domain is registered and active\n` +
+                `• The domain has a wallet address set\n` +
+                `• Try using a raw wallet address instead\n\n` +
+                `Or /clear to cancel.`,
+                { parse_mode: 'Markdown' }
+            );
+        } else {
+            // Not a naming service and not a valid address
+            const chainHint = targetChain ? ` for ${targetChain}` : '';
+            return ctx.reply(
+                `❌ That doesn't look like a valid wallet address${chainHint}.\n\n` +
+                `You can provide:\n` +
+                `• A wallet address (0x...)\n` +
+                `• An ENS name (vitalik.eth)\n` +
+                `• A Lens handle (lens.lens)\n` +
+                `• An Unstoppable Domain (example.crypto)\n` +
+                `• A saved nickname\n\n` +
+                `Or /clear to cancel.`
+            );
+        }
+    }
+
+    const history = state?.messages || [];
+    await ctx.sendChatAction('typing');
+    const parsed = await parseUserCommand(text, history, inputType);
 
 async function handleTextMessage(
   ctx: any,
