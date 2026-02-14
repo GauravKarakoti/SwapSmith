@@ -1,5 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
+declare global {
+  interface Window {
+    webkitAudioContext: typeof AudioContext;
+  }
+}
+
 export interface AudioRecorderConfig {
   sampleRate?: number;
   numberOfAudioChannels?: number;
@@ -86,7 +92,7 @@ class WebAudioRecorder {
   }
 
   start() {
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     this.context = new AudioContextClass({ sampleRate: this.sampleRate });
     this.input = this.context.createMediaStreamSource(this.stream);
     
@@ -308,7 +314,7 @@ class AudioRecorderPolyfill {
     // Supported if MediaRecorder exists OR AudioContext exists
     return !!(
       (typeof window !== 'undefined' && window.MediaRecorder) || 
-      (typeof window !== 'undefined' && (window.AudioContext || (window as any).webkitAudioContext))
+      (typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext))
     );
   }
 

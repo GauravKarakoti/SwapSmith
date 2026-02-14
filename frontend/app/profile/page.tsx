@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { useAccount, useDisconnect } from 'wagmi'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -532,9 +533,15 @@ export default function ProfilePage() {
 
             <div className="flex items-center gap-4">
               <div className="relative group">
-                <div className="h-20 w-20 rounded-2xl overflow-hidden shadow-lg shadow-blue-500/20 border-2 border-zinc-800 group-hover:border-blue-500 transition-colors">
+                <div className="relative h-20 w-20 rounded-2xl overflow-hidden shadow-lg shadow-blue-500/20 border-2 border-zinc-800 group-hover:border-blue-500 transition-colors">
                   {profileImageUrl ? (
-                    <img src={profileImageUrl} alt="Profile" className="w-full h-full object-cover" />
+                    <Image
+                      src={profileImageUrl}
+                      alt="Profile"
+                      fill
+                      className="object-cover"
+                      unoptimized
+                    />
                   ) : (
                     <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
                       <User className="w-10 h-10 text-white" />
