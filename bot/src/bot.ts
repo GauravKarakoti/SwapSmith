@@ -27,6 +27,7 @@ import { tokenResolver } from './services/token-resolver';
 import { DCAScheduler } from './services/dca-scheduler';
 import { resolveAddress, isNamingService } from './services/address-resolver';
 import { ADDRESS_PATTERNS } from './config/address-patterns';
+import { limitOrderWorker } from './workers/limitOrderWorker';
 import * as os from 'os';
 
 dotenv.config();
@@ -315,6 +316,41 @@ async function handleTextMessage(
   }
 
   // 4. Handle Specific Intents
+
+  // --- Limit Order ---
+  if (parsed.intent === 'swap' && (parsed.conditionOperator && parsed.conditionValue)) {
+      const user = await db.getUser(userId);
+
+      // Check if we need settle address
+      if (!parsed.settleAddress && !user?.walletAddress) {
+          await db.setConversationState(userId, { parsedCommand: parsed });
+          return ctx.reply('To place this limit order, I need a destination wallet address. Please provide one.');
+      }
+
+      const settleAddress = parsed.settleAddress || user?.walletAddress!;
+
+      await db.createLimitOrder(
+          userId,
+          parsed.fromAsset!,
+          parsed.fromChain || 'ethereum',
+          parsed.toAsset!,
+          parsed.toChain || 'ethereum',
+          parsed.amount!,
+          parsed.conditionOperator!,
+          parsed.conditionValue!,
+          parsed.conditionAsset || parsed.fromAsset!,
+          settleAddress
+      );
+
+      return ctx.reply(
+          `✅ *Limit Order Placed*\n\n` +
+          `Swap: ${parsed.amount} ${parsed.fromAsset} -> ${parsed.toAsset}\n` +
+          `Condition: If ${parsed.conditionAsset || parsed.fromAsset} ${parsed.conditionOperator === 'gt' ? '>' : '<'} ${parsed.conditionValue}\n` +
+          `Status: Pending\n\n` +
+          `I will monitor the price and notify you when it executes.`,
+          { parse_mode: 'Markdown' }
+      );
+  }
 
   // --- Yield Scout ---
   if (parsed.intent === 'yield_scout') {
@@ -798,9 +834,14 @@ bot.action('cancel_swap', async (ctx) => {
 // ------------------ START SERVICES ------------------
 
 let dcaStarted = false;
+let limitOrderStarted = false;
+
 if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('memory')) {
   dcaScheduler.start();
   dcaStarted = true;
+
+  limitOrderWorker.start(bot);
+  limitOrderStarted = true;
 }
 
 // ------------------ LAUNCH ------------------
@@ -809,10 +850,12 @@ bot.launch();
 
 process.once('SIGINT', () => {
   if (dcaStarted) dcaScheduler.stop();
+  if (limitOrderStarted) limitOrderWorker.stop();
   bot.stop('SIGINT');
 });
 
 process.once('SIGTERM', () => {
   if (dcaStarted) dcaScheduler.stop();
+  if (limitOrderStarted) limitOrderWorker.stop();
   bot.stop('SIGTERM');
 });

@@ -14,6 +14,9 @@ const REGEX_TOKENS = /([A-Z]+)\s+(to|into|for)\s+([A-Z]+)/i; // "ETH to BTC"
 const REGEX_FROM_TO = /from\s+([A-Z]+)\s+to\s+([A-Z]+)/i; // "from ETH to BTC"
 const REGEX_AMOUNT_TOKEN = /\b(\d+(\.\d+)?)\s+(?!to|into|for|from|with|using\b)([A-Z]+)\b/i; // "10 ETH" (exclude prepositions)
 
+// New Regex for Conditions
+const REGEX_CONDITION = /(?:if|when)\s+(?:the\s+)?(?:price|rate|market|value)?\s*(?:of\s+)?([A-Z]+)?\s*(?:is|goes|drops|rises|falls)?\s*(above|below|greater|less|more|under|>|<)\s*(?:than)?\s*(\$?[\d,]+(\.\d+)?)/i;
+
 export async function parseUserCommand(
   userInput: string,
   conversationHistory: any[] = [],
@@ -38,6 +41,11 @@ export async function parseUserCommand(
     let fromAsset: string | null = null;
     let toAsset: string | null = null;
     let confidence = 0;
+
+    // Limit Order fields
+    let conditionOperator: 'gt' | 'lt' | undefined;
+    let conditionValue: number | undefined;
+    let conditionAsset: string | undefined;
 
     // A. Detect Exclusion
     const exclusionMatch = input.match(REGEX_EXCLUSION);
@@ -152,6 +160,35 @@ export async function parseUserCommand(
        }
     }
 
+    // E. Detect Limit Order Condition
+    const conditionMatch = input.match(REGEX_CONDITION);
+    if (conditionMatch) {
+        const assetStr = conditionMatch[1];
+        const operatorStr = conditionMatch[2].toLowerCase();
+        const valueStr = conditionMatch[3].replace(/[$,]/g, '');
+
+        conditionValue = parseFloat(valueStr);
+
+        if (assetStr) {
+            const candidate = assetStr.toUpperCase();
+            // Ignore common verbs/keywords if captured as asset
+            const ignoredWords = ['IS', 'GOES', 'DROPS', 'RISES', 'FALLS', 'THE', 'PRICE', 'OF'];
+            if (!ignoredWords.includes(candidate)) {
+                conditionAsset = candidate;
+            }
+        }
+
+        // above, greater, more, rises, >  => gt
+        // below, less, under, drops, falls, < => lt
+        if (['above', 'greater', 'more', 'rises', '>'].some(s => operatorStr.includes(s))) {
+            conditionOperator = 'gt';
+        } else {
+            conditionOperator = 'lt';
+        }
+
+        confidence += 30;
+    }
+
     // Construct Result if confidence is high enough
     // We need at least an intent and some token info.
     // If only "Swap 10", it's ambiguous.
@@ -161,6 +198,16 @@ export async function parseUserCommand(
     if (confidence >= 30) {
         // If amountType is 'all' or 'percentage', amount is optional/derived.
         // If 'exact', amount is required? No, might be missing.
+
+        // Default conditionAsset to fromAsset if not specified but condition exists
+        if ((conditionOperator || conditionValue) && !conditionAsset && fromAsset) {
+            conditionAsset = fromAsset;
+        }
+
+        let parsedMessage = `Parsed: ${amountType || amount} ${fromAsset || '?'} -> ${toAsset || '?'}`;
+        if (conditionOperator && conditionValue) {
+            parsedMessage += ` if ${conditionAsset || fromAsset} ${conditionOperator === 'gt' ? '>' : '<'} ${conditionValue}`;
+        }
 
         return {
             success: true, // Mark as success parsing, even if validation fails later
@@ -177,9 +224,15 @@ export async function parseUserCommand(
             frequency: null, dayOfWeek: null, dayOfMonth: null,
             settleAsset: null, settleNetwork: null, settleAmount: null, settleAddress: null,
             fromProject: null, fromYield: null, toProject: null, toYield: null,
+
+            // Limit Order fields
+            conditionOperator,
+            conditionValue,
+            conditionAsset,
+
             confidence: Math.min(100, confidence + 30),
             validationErrors: [],
-            parsedMessage: `Parsed: ${amountType || amount} ${fromAsset || '?'} -> ${toAsset || '?'}`,
+            parsedMessage,
             requiresConfirmation: false,
             originalInput: userInput
         };
