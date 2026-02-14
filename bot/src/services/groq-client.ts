@@ -6,7 +6,27 @@ import { analyzeCommand, generateContextualHelp } from './contextual-help';
 
 dotenv.config();
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// Global singleton declaration to prevent multiple instances
+declare global {
+  var _groqClient: Groq | undefined;
+}
+
+/**
+ * Production-grade singleton pattern for Groq client
+ * - Prevents new instance per request
+ * - Reuses client connection pool
+ * - Avoids TCP connection exhaustion
+ */
+function getGroqClient(): Groq {
+  if (!global._groqClient) {
+    global._groqClient = new Groq({
+      apiKey: process.env.GROQ_API_KEY,
+    });
+  }
+  return global._groqClient;
+}
+
+const groq = getGroqClient();
 
 // Enhanced Interface to support Portfolio and Yield
 export interface ParsedCommand {

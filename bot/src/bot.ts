@@ -1,22 +1,11 @@
 import { Telegraf, Markup, Context } from 'telegraf';
 import { message } from 'telegraf/filters';
 import dotenv from 'dotenv';
-import logger from './services/logger';
-import { executePortfolioStrategy } from './services/portfolio-service';
-import { transcribeAudio } from './services/groq-client';
-import { parseUserCommand } from './services/parseUserCommand';
-import {
-  createQuote,
-  createOrder,
-  createCheckout,
-} from './services/sideshift-client';
-import {
-  getTopStablecoinYields,
-  getTopYieldPools,
-  suggestMigration,
-  findHigherYieldPools,
-} from './services/yield-client';
+import { parseUserCommand, transcribeAudio } from './services/groq-client';
+import { createQuote, createOrder, createCheckout, getOrderStatus } from './services/sideshift-client';
+import { getTopStablecoinYields } from './services/yield-client';
 import * as db from './services/database';
+import { OrderMonitor } from './services/order-monitor';
 import { ethers } from 'ethers';
 import axios from 'axios';
 import fs from 'fs';
@@ -38,81 +27,178 @@ const ERC20_ABI = ['function transfer(address to, uint256 amount) returns (bool)
 
 // ------------------ UTIL ------------------
 
+// --- ADDRESS VALIDATION ---
+// Regex patterns for validating wallet addresses by chain type
+const ADDRESS_PATTERNS: Record<string, RegExp> = {
+    // EVM-compatible chains (Ethereum, BSC, Polygon, Arbitrum, Base, Avalanche, etc.)
+    ethereum: /^0x[a-fA-F0-9]{40}$/,
+    bsc: /^0x[a-fA-F0-9]{40}$/,
+    polygon: /^0x[a-fA-F0-9]{40}$/,
+    arbitrum: /^0x[a-fA-F0-9]{40}$/,
+    base: /^0x[a-fA-F0-9]{40}$/,
+    avalanche: /^0x[a-fA-F0-9]{40}$/,
+    optimism: /^0x[a-fA-F0-9]{40}$/,
+    fantom: /^0x[a-fA-F0-9]{40}$/,
+    // Bitcoin (Legacy, SegWit, Native SegWit, Taproot)
+    bitcoin: /^(1[a-km-zA-HJ-NP-Z1-9]{25,34}|3[a-km-zA-HJ-NP-Z1-9]{25,34}|bc1[a-zA-HJ-NP-Z0-9]{39,59}|bc1p[a-zA-HJ-NP-Z0-9]{58})$/,
+    // Litecoin (Legacy, SegWit)
+    litecoin: /^([LM3][a-km-zA-HJ-NP-Z1-9]{26,33}|ltc1[a-zA-HJ-NP-Z0-9]{39,59})$/,
+    // Solana
+    solana: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/,
+    // Tron
+    tron: /^T[a-zA-HJ-NP-Z0-9]{33}$/,
+    // Ripple (XRP)
+    ripple: /^r[0-9a-zA-Z]{24,34}$/,
+    xrp: /^r[0-9a-zA-Z]{24,34}$/,
+    // Dogecoin
+    dogecoin: /^D[5-9A-HJ-NP-U][1-9A-HJ-NP-Za-km-z]{32}$/,
+    // Cosmos-based chains
+    cosmos: /^cosmos[a-z0-9]{38,45}$/,
+    // Polkadot
+    polkadot: /^1[a-zA-Z0-9]{47}$/,
+    // Cardano
+    cardano: /^addr1[a-zA-Z0-9]{53,}$/,
+    // Monero
+    monero: /^4[0-9AB][1-9A-HJ-NP-Za-km-z]{93}$/,
+    // Zcash (transparent)
+    zcash: /^t1[a-zA-Z0-9]{33}$/,
+};
+
+// Default EVM pattern for unknown chains
+const DEFAULT_EVM_PATTERN = /^0x[a-fA-F0-9]{40}$/;
+
+/**
+ * Validates a wallet address against the expected format for a given chain.
+ * @param address - The wallet address to validate
+ * @param chain - The blockchain network (e.g., 'ethereum', 'bitcoin', 'solana')
+ * @returns boolean indicating if the address is valid for the specified chain
+ */
 function isValidAddress(address: string, chain?: string): boolean {
-  if (!address) return false;
-  const targetChain = chain?.toLowerCase() || 'ethereum';
-  const pattern = ADDRESS_PATTERNS[targetChain] || ADDRESS_PATTERNS.ethereum;
-  
-  // First check regex pattern
-  if (!pattern.test(address.trim())) {
-    return false;
-  }
-  
-  // For EVM chains, additionally verify checksum
-  const evmChains = [
-    'ethereum', 'base', 'arbitrum', 'polygon', 'bsc', 'optimism', 'avalanche',
-    'fantom', 'cronos', 'moonbeam', 'moonriver', 'celo', 'gnosis', 'harmony',
-    'metis', 'aurora', 'kava', 'evmos', 'boba', 'okc', 'heco', 'iotex',
-    'klaytn', 'conflux', 'astar', 'shiden', 'telos', 'fuse', 'velas',
-    'thundercore', 'nahmii', 'callisto', 'smartbch', 'energyweb', 'theta',
-    'flare', 'songbird', 'coston', 'coston2', 'rei', 'kekchain', 'tomochain',
-    'bitgert', 'clover', 'defichain', 'findora', 'gatechain', 'meter', 'nova',
-    'syscoin', 'zksync', 'polygonzkevm', 'linea', 'mantle', 'scroll', 'taiko', 'rsk'
-  ];
-  
-  if (evmChains.includes(targetChain)) {
-    const addr = address.trim();
-    
-    // Check if address (excluding 0x prefix) is all-lowercase or all-uppercase
-    const addrWithoutPrefix = addr.slice(2); // Remove '0x'
-    const isAllLower = addrWithoutPrefix === addrWithoutPrefix.toLowerCase();
-    const isAllUpper = addrWithoutPrefix === addrWithoutPrefix.toUpperCase();
-    
-    // Accept all-lowercase or all-uppercase (no checksum)
-    if (isAllLower || isAllUpper) {
-      return true;
+    if (!address || typeof address !== 'string') {
+        return false;
     }
-    
-    // For mixed-case, verify checksum
-    try {
-      const checksummed = ethers.getAddress(addr);
-      return checksummed === addr;
-    } catch {
-      // Invalid checksum
-      return false;
+
+    const trimmedAddress = address.trim();
+
+    // If no chain specified, check if it matches any known pattern
+    if (!chain) {
+        // Check EVM first (most common)
+        if (DEFAULT_EVM_PATTERN.test(trimmedAddress)) {
+            return true;
+        }
+        // Check other common patterns
+        for (const pattern of Object.values(ADDRESS_PATTERNS)) {
+            if (pattern.test(trimmedAddress)) {
+                return true;
+            }
+        }
+        return false;
     }
-  }
-  
-  return true;
+
+    // Normalize chain name
+    const normalizedChain = chain.toLowerCase().replace(/[^a-z]/g, '');
+
+    // Get the pattern for the specified chain
+    const pattern = ADDRESS_PATTERNS[normalizedChain];
+
+    if (pattern) {
+        return pattern.test(trimmedAddress);
+    }
+
+    // For unknown chains, assume EVM-compatible
+    return DEFAULT_EVM_PATTERN.test(trimmedAddress);
 }
 
 // ------------------ INIT ------------------
 
-exec('ffmpeg -version', (error) => {
-  if (error) console.warn('⚠️ ffmpeg not found. Voice disabled.');
-  else console.log('✅ ffmpeg detected.');
+// --- ORDER MONITOR ---
+const orderMonitor = new OrderMonitor({
+    getOrderStatus,
+    updateOrderStatus: db.updateOrderStatus,
+    getPendingOrders: db.getPendingOrders,
+    onStatusChange: async (telegramId, orderId, oldStatus, newStatus, details) => {
+        const statusEmoji: Record<string, string> = {
+            waiting: '⏳', pending: '⏳', processing: '⚙️',
+            settling: '📤', settled: '✅', refunded: '↩️',
+            expired: '⏰', failed: '❌',
+        };
+        const emoji = statusEmoji[newStatus] || '🔔';
+        const message =
+            `${emoji} *Order Status Update*\n\n` +
+            `*Order:* \`${orderId}\`\n` +
+            `*Status:* ${oldStatus} → *${newStatus.toUpperCase()}*\n` +
+            (details.depositAmount ? `*Sent:* ${details.depositAmount} ${details.depositCoin}\n` : '') +
+            (details.settleAmount ? `*Received:* ${details.settleAmount} ${details.settleCoin}\n` : '') +
+            (details.settleHash ? `*Tx:* \`${details.settleHash.substring(0, 16)}...\`\n` : '');
+        try {
+            await bot.telegram.sendMessage(telegramId, message, { parse_mode: 'Markdown' });
+        } catch (err) {
+            console.error(`[OrderMonitor] Failed to notify user ${telegramId}:`, err);
+        }
+    },
 });
 
-const dcaScheduler = new DCAScheduler(bot);
+// --- FFMPEG CHECK ---
+try {
+    execSync('ffmpeg -version');
+    console.log('✅ ffmpeg is installed. Voice messages enabled.');
+} catch (error) {
+    console.warn('⚠️ ffmpeg not found. Voice messages will fail. Please install ffmpeg.');
+}
+
+// --- ERC20 CONFIGURATION ---
+const ERC20_ABI = [
+    "function transfer(address to, uint256 amount) returns (bool)"
+];
+
+// Map of common tokens -> Address & Decimals
+const TOKEN_MAP: Record<string, Record<string, { address: string, decimals: number }>> = {
+    ethereum: {
+        USDC: { address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", decimals: 6 },
+        USDT: { address: "0xdAC17F958D2ee523a2206206994597C13D831ec7", decimals: 6 },
+        DAI: { address: "0x6B175474E89094C44Da98b954EedeAC495271d0F", decimals: 18 },
+        WBTC: { address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", decimals: 8 }
+    },
+    base: {
+        USDC: { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", decimals: 6 },
+        WETH: { address: "0x4200000000000000000000000000000000000006", decimals: 18 }
+    },
+    arbitrum: {
+        USDC: { address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", decimals: 6 },
+        USDT: { address: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9", decimals: 6 }
+    },
+    polygon: {
+        USDC: { address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", decimals: 6 },
+        USDT: { address: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", decimals: 6 }
+    },
+    bsc: {
+        USDC: { address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", decimals: 18 },
+        USDT: { address: "0x55d398326f99059fF775485246999027B3197955", decimals: 18 }
+    }
+};
 
 // ------------------ START ------------------
 
 bot.start((ctx) => {
-  ctx.reply(
-    "🤖 Welcome to SwapSmith!\n\n" +
-    "Voice-Activated Crypto Trading Assistant.\n\n" +
-    "📜 Commands\n" +
-    "/yield - Top yields\n" +
-    "/history - Orders\n" +
-    "/checkouts - Payment links\n" +
-    "/dca_list - DCA schedules\n\n" +
-    "💡 Try: Swap $50 of USDC for ETH every Monday",
-    {
-      ...Markup.inlineKeyboard([
-        Markup.button.url('🌐 Visit Website', 'https://swap-smith.vercel.app'),
-      ]),
-    }
-  );
+    ctx.reply(
+        "🤖 *Welcome to SwapSmith!*\n\n" +
+        "I am your Voice-Activated Crypto Trading Assistant.\n" +
+        "I use SideShift.ai for swaps and a Mini App for secure signing.\n\n" +
+        "📜 *Commands:*\n" +
+        "/website - Open Web App\n" +
+        "/yield - See top yield opportunities\n" +
+        "/history - See past orders\n" +
+        "/checkouts - See payment links\n" +
+        "/status [id] - Check order status\n" +
+        "/clear - Reset conversation\n\n" +
+        "💡 *Tip:* Check out our web interface for a graphical experience!",
+        {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+                Markup.button.url('🌐 Visit Website', "https://swap-smith.vercel.app/")
+            ])
+        }
+    );
 });
 
 // ------------------ YIELD COMMAND ------------------
@@ -150,43 +236,44 @@ bot.on(message('text'), async (ctx) => {
   await handleTextMessage(ctx, ctx.message.text, 'text');
 });
 
-bot.on(message('voice'), async (ctx) => {
-  const userId = ctx.from.id;
-  await ctx.sendChatAction('typing');
+bot.command('website', (ctx) => {
+    ctx.reply(
+        "🌐 *SwapSmith Web Interface*\n\nClick the button below to access the full graphical interface.",
+        {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+                Markup.button.url('🚀 Open Website', "https://swap-smith.vercel.app/")
+            ])
+        }
+    );
+});
 
-  try {
-    const fileId = ctx.message.voice.file_id;
-    const fileLink = await bot.telegram.getFileLink(fileId);
-
-    // Using unique filename with timestamp and random suffix to prevent race conditions
-    const timestamp = Date.now();
-    const uniqueId = Math.random().toString(36).substring(7);
-    const tempOga = path.join(os.tmpdir(), `temp_${userId}_${timestamp}_${uniqueId}.oga`);
-    const tempMp3 = path.join(os.tmpdir(), `temp_${userId}_${timestamp}_${uniqueId}.mp3`);
-
-    const writer = fs.createWriteStream(tempOga);
-    const response = await axios({
-      url: fileLink.href,
-      method: 'GET',
-      responseType: 'stream',
-    });
+bot.command('yield', async (ctx) => {
+    await ctx.reply('📈 Fetching top yield opportunities...');
+    const yields = await getTopStablecoinYields();
+    ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields:*\n\n${yields}`);
+});
 
     response.data.pipe(writer);
 
-    await new Promise((resolve, reject) => {
-      writer.on('finish', () => resolve(true));
-      writer.on('error', reject);
-    });
+bot.on(message('text'), async (ctx) => {
+    if (ctx.message.text.startsWith('/')) return;
+    await handleTextMessage(ctx, ctx.message.text, 'text');
+});
 
-    // Convert to mp3
-    await new Promise((resolve, reject) => {
-      exec(`ffmpeg -i "${tempOga}" "${tempMp3}" -y`, (error) => {
-        if (error) reject(error);
-        else resolve(true);
-      });
-    });
+bot.on(message('voice'), async (ctx) => {
+    const userId = ctx.from.id;
+    await ctx.reply('👂 Listening...');
 
-    const text = await transcribeAudio(tempMp3);
+    try {
+        const file_id = ctx.message.voice.file_id;
+        const fileLink = await ctx.telegram.getFileLink(file_id);
+
+        const response = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
+        const ogaPath = path.join(__dirname, `temp_${userId}.oga`);
+        const mp3Path = path.join(__dirname, `temp_${userId}.mp3`);
+        fs.writeFileSync(ogaPath, Buffer.from(response.data));
+        execSync(`ffmpeg -i ${ogaPath} ${mp3Path} -y`);
 
     // Cleanup
     if (fs.existsSync(tempOga)) fs.unlinkSync(tempOga);
@@ -205,268 +292,197 @@ bot.on(message('voice'), async (ctx) => {
   }
 });
 
-// ------------------ CORE HANDLER ------------------
+async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'voice' = 'text') {
+    const userId = ctx.from.id;
 
-async function handleTextMessage(
-  ctx: Context,
-  text: string,
-  inputType: 'text' | 'voice' = 'text'
-) {
-  if (!ctx.from) return;
-  const userId = ctx.from.id;
-  const state = await db.getConversationState(userId);
+    const state = await db.getConversationState(userId);
 
-  // 1. Check if we are waiting for an address resolution
-  if (state?.parsedCommand && 
-     (state.parsedCommand.intent === 'swap' || 
-      state.parsedCommand.intent === 'checkout' || 
-      state.parsedCommand.intent === 'portfolio') && 
-     !state.parsedCommand.settleAddress) {
+    // 1. Check for pending address input
+    if (state?.parsedCommand && (state.parsedCommand.intent === 'swap' || state.parsedCommand.intent === 'checkout') && !state.parsedCommand.settleAddress) {
+        const potentialAddress = text.trim();
+        // Get the target chain for validation (use toChain for swaps, settleNetwork for checkouts)
+        const targetChain = state.parsedCommand.toChain || state.parsedCommand.settleNetwork;
 
-    const potentialAddress = text.trim();
-    const targetChain = state.parsedCommand.toChain ?? state.parsedCommand.settleNetwork ?? state.parsedCommand.fromChain ?? undefined;
+        // Validate address format based on the target chain
+        if (isValidAddress(potentialAddress, targetChain)) {
+            const updatedCommand = { ...state.parsedCommand, settleAddress: potentialAddress };
+            await db.setConversationState(userId, { parsedCommand: updatedCommand });
 
-    // Try to resolve the address
-    const resolved = await resolveAddress(userId, potentialAddress);
-    
-    if (resolved.address && isValidAddress(resolved.address, targetChain)) {
-      // Successfully resolved and validated
-      const updatedCommand = { ...state.parsedCommand, settleAddress: resolved.address };
-      await db.setConversationState(userId, { parsedCommand: updatedCommand });
-      
-      // Provide feedback based on resolution type
-      let feedbackMessage = '';
-      if (resolved.type === 'ens') {
-        feedbackMessage = `✅ ENS resolved: \`${resolved.originalInput}\` → \`${resolved.address}\``;
-      } else if (resolved.type === 'lens') {
-        feedbackMessage = `✅ Lens handle resolved: \`${resolved.originalInput}\` → \`${resolved.address}\``;
-      } else if (resolved.type === 'unstoppable') {
-        feedbackMessage = `✅ Unstoppable Domain resolved: \`${resolved.originalInput}\` → \`${resolved.address}\``;
-      } else if (resolved.type === 'nickname') {
-        feedbackMessage = `✅ Nickname resolved: \`${resolved.originalInput}\` → \`${resolved.address}\``;
-      } else {
-        feedbackMessage = `✅ Address received: \`${resolved.address}\``;
-      }
-      
-      await ctx.reply(feedbackMessage, { parse_mode: 'Markdown' });
+            await ctx.reply(`Address received: \`${potentialAddress}\``, { parse_mode: 'Markdown' });
 
-      const confirmAction = updatedCommand.intent === 'checkout' ? 'confirm_checkout' : updatedCommand.intent === 'portfolio' ? 'confirm_portfolio' : 'confirm_swap';
-      return ctx.reply("Ready to proceed?", Markup.inlineKeyboard([
-        Markup.button.callback('✅ Yes', confirmAction),
-        Markup.button.callback('❌ No', 'cancel_swap')
-      ]));
-    } else if (isNamingService(potentialAddress)) {
-      // It's a naming service domain but resolution failed
-      return ctx.reply(
-        `❌ Could not resolve \`${potentialAddress}\`.\n\n` +
-        `This appears to be a naming service domain, but resolution failed. Please check:\n` +
-        `• The domain is registered and active\n` +
-        `• The domain has a wallet address set\n` +
-        `• Try using a raw wallet address instead\n\n` +
-        `Or /clear to cancel.`,
-        { parse_mode: 'Markdown' }
-      );
-    } else {
-      // Not a naming service and not a valid address
-      const chainHint = targetChain ? ` for ${targetChain}` : '';
-      return ctx.reply(
-        `❌ That doesn't look like a valid wallet address${chainHint}.\n\n` +
-        `You can provide:\n` +
-        `• A wallet address (0x...)\n` +
-        `• An ENS name (vitalik.eth)\n` +
-        `• A Lens handle (lens.lens)\n` +
-        `• An Unstoppable Domain (example.crypto)\n` +
-        `• A saved nickname\n\n` +
-        `Or /clear to cancel.`
-      );
+            // Re-trigger the confirmation logic with the complete command
+            const confirmAction = updatedCommand.intent === 'checkout' ? 'confirm_checkout' : 'confirm_swap';
+            return ctx.reply("Ready to proceed?", Markup.inlineKeyboard([
+                Markup.button.callback('✅ Yes', confirmAction),
+                Markup.button.callback('❌ No', 'cancel_swap')
+            ]));
+        } else {
+            const chainHint = targetChain ? ` for ${targetChain}` : '';
+            return ctx.reply(`That doesn't look like a valid wallet address${chainHint}. Please provide a valid address or /clear to cancel.`);
+        }
     }
-  }
 
-  // 2. Parse new command
-  const history = state?.messages || [];
-  await ctx.sendChatAction('typing');
-  const parsed = await parseUserCommand(text, history, inputType);
+    const history = state?.messages || [];
 
-  // 3. Handle Validation Errors
-  if (!parsed.success && parsed.intent !== 'yield_scout') {
-    // Log analytics removed as it was undefined
-    
-    console.log('📱 Bot received parsed command:', parsed);
-    
-    const contextualErrors = parsed.validationErrors.filter(err => 
-      err.includes('💡') || err.includes('How much') || err.includes('Which asset') || err.includes('Example:')
-    );
-    
-    const otherErrors = parsed.validationErrors.filter(err => 
-      !err.includes('💡') && !err.includes('How much') && !err.includes('Which asset') && !err.includes('Example:')
-    );
-    
-    let errorMessage = '';
-    if (otherErrors.length > 0) {
-      errorMessage = `⚠️ ${otherErrors.join(", ")}\n\n`;
-    }
-    
-    if (contextualErrors.length > 0) {
-      errorMessage += contextualErrors.join("\n\n");
-    } else if (errorMessage === '') {
-      errorMessage = `⚠️ I didn't understand.`;
-    }
-    
-    return ctx.replyWithMarkdown(errorMessage);
-  }
-
-  // 4. Handle Specific Intents
-
-  // --- Limit Order ---
-  if (parsed.intent === 'swap' && (parsed.conditionOperator && parsed.conditionValue)) {
-      const user = await db.getUser(userId);
-
-      // Check if we need settle address
-      if (!parsed.settleAddress && !user?.walletAddress) {
-          await db.setConversationState(userId, { parsedCommand: parsed });
-          return ctx.reply('To place this limit order, I need a destination wallet address. Please provide one.');
-      }
-
-      const settleAddress = parsed.settleAddress || user?.walletAddress!;
-
-      await db.createLimitOrder(
-          userId,
-          parsed.fromAsset!,
-          parsed.fromChain || 'ethereum',
-          parsed.toAsset!,
-          parsed.toChain || 'ethereum',
-          parsed.amount!,
-          parsed.conditionOperator!,
-          parsed.conditionValue!,
-          parsed.conditionAsset || parsed.fromAsset!,
-          settleAddress
-      );
-
-      return ctx.reply(
-          `✅ *Limit Order Placed*\n\n` +
-          `Swap: ${parsed.amount} ${parsed.fromAsset} -> ${parsed.toAsset}\n` +
-          `Condition: If ${parsed.conditionAsset || parsed.fromAsset} ${parsed.conditionOperator === 'gt' ? '>' : '<'} ${parsed.conditionValue}\n` +
-          `Status: Pending\n\n` +
-          `I will monitor the price and notify you when it executes.`,
-          { parse_mode: 'Markdown' }
-      );
-  }
-
-  // --- Yield Scout ---
-  if (parsed.intent === 'yield_scout') {
-    const yields = await getTopStablecoinYields();
-    return ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields:*\n\n${yields}`);
-  }
-
-  // --- Yield Deposit ---
-  if (parsed.intent === 'yield_deposit') {
-    const pools = await getTopYieldPools();
-    const matchingPool = pools.find(p => p.symbol === parsed.fromAsset?.toUpperCase());
-    if (!matchingPool) return ctx.reply(`Sorry, no suitable yield pool found for ${parsed.fromAsset}. Try /yield.`);
-
-    if (parsed.fromChain?.toLowerCase() !== matchingPool.chain.toLowerCase()) {
-      const bridgeCommand = {
-        intent: 'swap',
-        fromAsset: parsed.fromAsset,
-        fromChain: parsed.fromChain,
-        toAsset: parsed.fromAsset,
-        toChain: matchingPool.chain.toLowerCase(),
-        amount: parsed.amount,
-        settleAddress: null
-      };
-      await db.setConversationState(userId, { parsedCommand: bridgeCommand });
-      return ctx.reply(`To deposit to yield on ${matchingPool.chain}, we need to bridge first. Please provide your wallet address on ${matchingPool.chain}.`);
-    } else {
-      const depositCommand = {
-        intent: 'swap',
-        fromAsset: parsed.fromAsset,
-        fromChain: parsed.fromChain,
-        toAsset: matchingPool.symbol,
-        toChain: matchingPool.chain,
-        amount: parsed.amount,
-        settleAddress: null
-      };
-      await db.setConversationState(userId, { parsedCommand: depositCommand });
-      return ctx.reply(`Ready to deposit ${parsed.amount} ${parsed.fromAsset} to yield on ${matchingPool.chain} via ${matchingPool.project}. Please provide your address.`);
-    }
-  }
-
-  // --- Yield Migrate ---
-  if (parsed.intent === 'yield_migrate') {
     await ctx.sendChatAction('typing');
-    await ctx.reply('🔍 Analyzing yield migration opportunities...');
+    const parsed = await parseUserCommand(text, history, inputType);
 
-    const suggestion = await suggestMigration(
-      parsed.fromAsset!,
-      parsed.fromChain || undefined,
-      parsed.fromProject || undefined,
-      parsed.amount || 10000
-    );
-
-    if (!suggestion) {
-      const higherPools = await findHigherYieldPools(parsed.fromAsset!, parsed.fromChain || undefined, parsed.fromYield || 0);
-      if (higherPools.length === 0) {
-        return ctx.reply(`No higher-yielding pools found for ${parsed.fromAsset}.`);
-      }
-
-      let message = `*Higher Yield Options for ${parsed.fromAsset}:*\n\n`;
-      higherPools.slice(0, 5).forEach((p, i) => {
-        message += `${i + 1}. ${p.symbol} on ${p.chain} via ${p.project}: *${p.apy.toFixed(2)}% APY*\n`;
-      });
-
-      return ctx.replyWithMarkdown(message, Markup.inlineKeyboard([
-        Markup.button.callback('🔄 Refresh', 'refresh_yields'),
-        Markup.button.callback('❌ Cancel', 'cancel_swap')
-      ]));
+    if (!parsed.success && parsed.intent !== 'yield_scout') {
+        await logAnalytics(ctx, 'ValidationError', { input: text, error: parsed.validationErrors.join(", ") });
+        let errorMessage = `⚠️ ${parsed.validationErrors.join(", ") || "I didn't understand."}`;
+        if (parsed.confidence < 50) {
+            errorMessage += "\n\n💡 *Suggestion:* Try rephrasing your command. For example:\n- Instead of 'swap to BTC or USDC', say 'swap to BTC'\n- For splits: 'split 1 ETH into 50% BTC and 50% USDC'";
+        }
+        return ctx.replyWithMarkdown(errorMessage);
     }
 
-    // This function was assumed to exist in previous context, passing placeholder
-    const message = `Found better yield: ${suggestion.toPool.project} (${suggestion.toPool.apy}% APY)`; 
+    if (parsed.intent === 'yield_scout') {
+        const yields = await getTopStablecoinYields();
+        return ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields:*\n\n${yields}`);
+    }
 
-    const isCrossChain = suggestion.isCrossChain;
+    if (parsed.intent === 'yield_deposit') {
+        // For yield_deposit, we need to swap to the yield asset on the yield chain
+        // Simplified: assume user wants to deposit to the top yield pool for their fromAsset
+        const { getTopYieldPools } = await import('./services/yield-client');
+        const pools = await getTopYieldPools();
+        const matchingPool = pools.find(p => p.symbol === parsed.fromAsset?.toUpperCase());
 
-    const migrationCommand = {
-      ...parsed,
-      intent: 'yield_migrate',
-      fromProject: suggestion.fromPool.project,
-      toProject: suggestion.toPool.project,
-      fromYield: suggestion.fromPool.apy,
-      toYield: suggestion.toPool.apy,
-      toChain: suggestion.toPool.chain.toLowerCase(),
-      toAsset: suggestion.toPool.symbol,
-      isCrossChain
-    };
+        if (!matchingPool) {
+            return ctx.reply(`Sorry, no suitable yield pool found for ${parsed.fromAsset}. Try /yield to see options.`);
+        }
 
-    await db.setConversationState(userId, { 
-      parsedCommand: migrationCommand,
-      migrationSuggestion: suggestion 
-    });
+        // If user is not on the yield chain, bridge via SideShift
+        if (parsed.fromChain?.toLowerCase() !== matchingPool.chain.toLowerCase()) {
+            // Bridge to yield chain first
+            const bridgeCommand = {
+                intent: 'swap',
+                fromAsset: parsed.fromAsset,
+                fromChain: parsed.fromChain,
+                toAsset: parsed.fromAsset, // Same asset, different chain
+                toChain: matchingPool.chain.toLowerCase(),
+                amount: parsed.amount,
+                settleAddress: null // Will ask for address
+            };
+            await db.setConversationState(userId, { parsedCommand: bridgeCommand });
+            return ctx.reply(`To deposit to yield on ${matchingPool.chain}, we need to bridge first. Please provide your wallet address on ${matchingPool.chain}.`);
+        } else {
+            // Already on the right chain, proceed to swap to yield asset (simplified as swap to the stable)
+            const depositCommand = {
+                intent: 'swap',
+                fromAsset: parsed.fromAsset,
+                fromChain: parsed.fromChain,
+                toAsset: matchingPool.symbol, // Swap to the yield asset
+                toChain: matchingPool.chain,
+                amount: parsed.amount,
+                settleAddress: null
+            };
+            await db.setConversationState(userId, { parsedCommand: depositCommand });
+            return ctx.reply(`Ready to deposit ${parsed.amount} ${parsed.fromAsset} to yield on ${matchingPool.chain} via ${matchingPool.project}. Please provide your wallet address.`);
+        }
+    }
 
-    return ctx.replyWithMarkdown(message, Markup.inlineKeyboard([
-      Markup.button.callback('🚀 Migrate', 'confirm_migration'),
-      Markup.button.callback('❌ Cancel', 'cancel_swap')
-    ]));
-  }
+    if (parsed.intent === 'portfolio') {
+        await db.setConversationState(userId, { parsedCommand: parsed });
 
-  // --- Portfolio ---
-  if (parsed.intent === 'portfolio') {
-    await db.setConversationState(userId, { parsedCommand: parsed });
+        let msg = `📊 *Portfolio Strategy Detected*\nInput: ${parsed.amount} ${parsed.fromAsset} (${parsed.fromChain})\n\n*Allocation Plan:*\n`;
+        parsed.portfolio?.forEach(item => { msg += `• ${item.percentage}% → ${item.toAsset} on ${item.toChain}\n`; });
 
-    let msg = `📊 *Portfolio Strategy*\n\n`;
-    parsed.portfolio?.forEach((p) => {
-      msg += `• ${p.percentage}% → ${p.toAsset} on ${p.toChain}\n`;
-    });
+        const params = new URLSearchParams({
+            mode: 'portfolio',
+            data: JSON.stringify(parsed.portfolio),
+            amount: parsed.amount?.toString() || '0',
+            token: parsed.fromAsset || '',
+            chain: parsed.fromChain || ''
+        });
 
-    msg += `\nProvide destination address.`;
-    return ctx.replyWithMarkdown(msg);
-  }
+        const webAppUrl = `${MINI_APP_URL}?${params.toString()}`;
 
-  // --- Swap / Checkout ---
-  if (parsed.intent === 'swap' || parsed.intent === 'checkout') {
-    await db.setConversationState(userId, { parsedCommand: parsed });
-    return ctx.reply('Provide destination wallet address.');
-  }
+        return ctx.replyWithMarkdown(msg, Markup.inlineKeyboard([
+            Markup.button.webApp('📱 Batch Sign (Frontend)', webAppUrl),
+            Markup.button.callback('❌ Cancel', 'cancel_swap')
+        ]));
+    }
+
+    if (parsed.intent === 'swap' || parsed.intent === 'checkout') {
+        // 2. Handle missing address
+        if (!parsed.settleAddress) {
+            // Store partial state
+            await db.setConversationState(userId, { parsedCommand: parsed });
+            return ctx.reply(`Okay, I see you want to ${parsed.intent}. Please provide the destination/wallet address.`);
+        }
+
+        await db.setConversationState(userId, { parsedCommand: parsed });
+
+        const confirmAction = parsed.intent === 'checkout' ? 'confirm_checkout' : 'confirm_swap';
+
+        ctx.reply("Confirm...", Markup.inlineKeyboard([
+            Markup.button.callback('✅ Yes', confirmAction),
+            Markup.button.callback('❌ No', 'cancel_swap')
+        ]));
+    }
+
+    if (inputType === 'voice' && parsed.success) await ctx.reply(`🗣️ ${parsed.parsedMessage}`);
 }
+
+bot.on(message('voice'), async (ctx) => {
+    const userId = ctx.from.id;
+    await ctx.reply('👂 Listening...');
+
+    const tempDir = os.tmpdir();
+    const ogaPath = path.join(tempDir, `temp_${userId}.oga`);
+    const mp3Path = path.join(tempDir, `temp_${userId}.mp3`);
+
+    try {
+        const file_id = ctx.message.voice.file_id;
+        const fileLink = await ctx.telegram.getFileLink(file_id);
+
+        const response = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
+        fs.writeFileSync(ogaPath, Buffer.from(response.data));
+        
+        // Execute ffmpeg with timeout to prevent hanging processes
+        await new Promise<void>((resolve, reject) => {
+            const ffmpegProcess = exec(`ffmpeg -i "${ogaPath}" "${mp3Path}" -y`, (err) => {
+                if (err) reject(err);
+                else resolve();
+            });
+
+            // Set a 30-second timeout for ffmpeg execution
+            const timeout = setTimeout(() => {
+                if (ffmpegProcess.pid) {
+                    ffmpegProcess.kill('SIGTERM');
+                }
+                reject(new Error('ffmpeg execution timed out after 30 seconds'));
+            }, 30000);
+
+            // Clear timeout if process completes normally
+            ffmpegProcess.on('exit', () => {
+                clearTimeout(timeout);
+            });
+        });
+
+        const transcribedText = await transcribeAudio(mp3Path);
+        await handleTextMessage(ctx, transcribedText, 'voice');
+    } catch (error) {
+        console.error("Voice error:", error);
+        const errorMessage = error instanceof Error && error.message.includes('timed out') 
+            ? "Sorry, audio processing took too long. Please try a shorter message."
+            : "Sorry, I couldn't hear that clearly. Please try again.";
+        ctx.reply(errorMessage);
+    } finally {
+        // Always clean up temp files, regardless of success or failure
+        try {
+            if (fs.existsSync(ogaPath)) {
+                fs.unlinkSync(ogaPath);
+            }
+            if (fs.existsSync(mp3Path)) {
+                fs.unlinkSync(mp3Path);
+            }
+        } catch (cleanupError) {
+            console.error("Failed to clean up temp files:", cleanupError);
+        }
+    }
+});
 
 // ------------------ ACTIONS ------------------
 
@@ -520,15 +536,14 @@ bot.action('place_order', async (ctx) => {
     state.parsedCommand.settleAddress
   );
 
-  await db.createOrderEntry(
-    ctx.from.id,
-    state.parsedCommand,
-    order,
-    state.settleAmount,
-    state.quoteId
-  );
+        db.createOrderEntry(userId, state.parsedCommand, order, state.settleAmount, state.quoteId);
+        orderMonitor.trackOrder(order.id, userId);
 
-  await db.addWatchedOrder(ctx.from.id, order.id, 'pending');
+        const { amount, fromChain, fromAsset } = state.parsedCommand;
+
+        // --- ERC20 Logic ---
+        const rawDepositAddress = typeof order.depositAddress === 'string' ? order.depositAddress : order.depositAddress.address;
+        const depositMemo = typeof order.depositAddress === 'object' ? order.depositAddress.memo : null;
 
   ctx.editMessageText(
     `✅ *Order Created*\n\nSign transaction to complete.`,
@@ -555,22 +570,33 @@ bot.action('confirm_checkout', async (ctx) => {
     const checkout = await createCheckout(settleAsset!, settleNetwork!, settleAmount!, settleAddress!);
     if (!checkout?.id) throw new Error("API Error");
 
-    db.createCheckoutEntry(userId, checkout);
-    ctx.editMessageText(`✅ *Checkout Link Created!*\n💰 *Receive:* ${checkout.settleAmount} ${checkout.settleCoin}\n[Pay Here](https://pay.sideshift.ai/checkout/${checkout.id})`, {
-      parse_mode: 'Markdown',
-      link_preview_options: { is_disabled: true }
-    });
-  } catch (error) {
-    ctx.editMessageText(`Error creating link.`);
-  } finally {
-    db.clearConversationState(userId);
-  }
-});
+        const params = new URLSearchParams({
+            to: txTo,
+            value: txValueHex,
+            data: txData,
+            chainId: chainIdMap[fromChain?.toLowerCase() || 'ethereum'] || '1',
+            token: assetKey,
+            chain: fromChain || 'Ethereum',
+            amount: amount!.toString()
+        });
 
-bot.action('confirm_portfolio', async (ctx) => {
-  const userId = ctx.from.id;
-  const state = await db.getConversationState(userId);
-  if (!state?.parsedCommand || state.parsedCommand.intent !== 'portfolio') return ctx.answerCbQuery('Session expired.');
+        const webAppUrl = `${MINI_APP_URL}?${params.toString()}`;
+
+        const QV =
+            `✅ *Order Created!* (ID: \`${order.id}\`)\n\n` +
+            `To complete the swap, please sign the transaction in your wallet.\n\n` +
+            `1. Click the button below.\n` +
+            `2. Connect your wallet (MetaMask, etc).\n` +
+            `3. Confirm the transaction.\n\n` +
+            `_Destination: ${destinationAddress}_`;
+
+        ctx.editMessageText(QV, {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+                Markup.button.webApp('📱 Sign Transaction', webAppUrl),
+                Markup.button.callback('❌ Close', 'cancel_swap')
+            ])
+        });
 
   const { fromAsset, fromChain, amount, portfolio, settleAddress } = state.parsedCommand;
 
@@ -669,11 +695,13 @@ bot.action('confirm_migration', async (ctx) => {
       });
     }
 
-    const quote = await createQuote(
-      fromAsset!, fromChain!,
-      toAsset!, toChain!,
-      amount!
-    );
+    try {
+        await ctx.answerCbQuery('Creating link...');
+        const { settleAsset, settleNetwork, settleAmount, settleAddress } = state.parsedCommand;
+
+        const checkout = await createCheckout(
+            settleAsset!, settleNetwork!, settleAmount!, settleAddress!, '1.1.1.1'
+        );
 
     if (quote.error) return ctx.editMessageText(`Error: ${quote.error.message}`);
 
@@ -685,39 +713,16 @@ bot.action('confirm_migration', async (ctx) => {
       `To: ${state.parsedCommand.toProject} (${state.parsedCommand.toYield}% APY)\n\n`
       : '';
 
-    ctx.editMessageText(`${migrationText}➡️ *Send:* \`${quote.depositAmount} ${quote.depositCoin}\`\n⬅️ *Receive:* \`${quote.settleAmount} ${quote.settleCoin}\`\n\nReady to migrate?`, {
-      parse_mode: 'Markdown',
-      ...Markup.inlineKeyboard([
-        Markup.button.callback('✅ Migrate', 'place_migration'),
-        Markup.button.callback('❌ Cancel', 'cancel_swap'),
-      ])
-    });
-  } catch (error) {
-    ctx.editMessageText(`Error: ${error instanceof Error ? error.message : 'Unknown'}`);
-  }
-});
+        const checkoutMessage =
+            `✅ *Checkout Link Created!*\n\n` +
+            `💰 *Receive:* ${checkout.settleAmount} ${checkout.settleCoin}\n` +
+            `📬 *Address:* \`${checkout.settleAddress}\`\n\n` +
+            `[Pay Here](${paymentUrl})`;
 
-bot.action('show_deposit_instructions', async (ctx) => {
-  const userId = ctx.from.id;
-  const state = await db.getConversationState(userId);
-
-  if (!state?.migrationSuggestion) return ctx.answerCbQuery('Session expired.');
-
-  const { fromPool, toPool } = state.migrationSuggestion;
-
-  ctx.editMessageText(`📖 *Direct Deposit Instructions*\n\n` +
-    `1. Go to ${toPool.project}\n` +
-    `2. Connect your wallet\n` +
-    `3. Withdraw from ${fromPool.project}\n` +
-    `4. Deposit to ${toPool.project}\n\n` +
-    `This is instant and saves bridge fees!\n\n` +
-    `*APY Improvement:* ${fromPool.apy.toFixed(2)}% → ${toPool.apy.toFixed(2)}%`, {
-    parse_mode: 'Markdown',
-    ...Markup.inlineKeyboard([
-      Markup.button.callback('🔙 Back', 'cancel_swap')
-    ])
-  });
-});
+        ctx.editMessageText(checkoutMessage, {
+            parse_mode: 'Markdown',
+            link_preview_options: { is_disabled: true }
+        });
 
 bot.action('find_bridge_options', async (ctx) => {
   const userId = ctx.from.id;
@@ -831,31 +836,24 @@ bot.action('cancel_swap', async (ctx) => {
   ctx.editMessageText('❌ Cancelled.');
 });
 
-// ------------------ START SERVICES ------------------
+const app = express();
+app.get('/', (req, res) => res.send('SwapSmith Alive'));
+app.listen(process.env.PORT || 3000, () => console.log(`Express server live`));
 
-let dcaStarted = false;
-let limitOrderStarted = false;
-
-if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('memory')) {
-  dcaScheduler.start();
-  dcaStarted = true;
-
-  limitOrderWorker.start(bot);
-  limitOrderStarted = true;
-}
-
-// ------------------ LAUNCH ------------------
+// --- STARTUP: Load pending orders and start monitoring ---
+(async () => {
+    await orderMonitor.loadPendingOrders();
+    orderMonitor.start();
+})();
 
 bot.launch();
+console.log('🤖 Bot is running...');
 
-process.once('SIGINT', () => {
-  if (dcaStarted) dcaScheduler.stop();
-  if (limitOrderStarted) limitOrderWorker.stop();
-  bot.stop('SIGINT');
-});
-
-process.once('SIGTERM', () => {
-  if (dcaStarted) dcaScheduler.stop();
-  if (limitOrderStarted) limitOrderWorker.stop();
-  bot.stop('SIGTERM');
-});
+// --- GRACEFUL SHUTDOWN ---
+const shutdown = (signal: string) => {
+    console.log(`\n[${signal}] Shutting down...`);
+    orderMonitor.stop();
+    bot.stop(signal);
+};
+process.once('SIGINT', () => shutdown('SIGINT'));
+process.once('SIGTERM', () => shutdown('SIGTERM'));
