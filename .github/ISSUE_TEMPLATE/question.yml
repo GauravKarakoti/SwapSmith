@@ -1,0 +1,107 @@
+name: "❓ Question"
+description: Ask a question about using SwapSmith
+title: "[Question]: "
+labels: ["question", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Have a question? We're here to help! ❓
+        
+        **Before asking:**
+        - Check the [README](https://github.com/Omkarop0808/SwapSmith#readme) and documentation
+        - Search existing issues and discussions
+        - Try the [Discord community](https://discord.gg/swapsmith) for quick answers
+        
+        **Note:** For bug reports, please use the Bug Report template instead.
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Question Category
+      description: What is your question about?
+      options:
+        - Getting Started/Setup
+        - Usage/How-to
+        - Configuration
+        - Integration
+        - Best Practices
+        - Architecture/Design
+        - Troubleshooting
+        - Performance
+        - Security
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your Question
+      description: What would you like to know?
+      placeholder: Ask your question clearly and provide context
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What are you trying to accomplish?
+      placeholder: |
+        Describe your use case and what you've tried so far.
+        This helps us provide better answers.
+    validations:
+      required: true
+
+  - type: textarea
+    id: attempted
+    attributes:
+      label: What Have You Tried?
+      description: What solutions or approaches have you already attempted?
+      placeholder: |
+        - Tried approach 1: ...
+        - Checked documentation: ...
+        - Searched for: ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment (if relevant)
+      description: Provide environment details if applicable
+      placeholder: |
+        - OS: 
+        - Browser: 
+        - Node Version: 
+        - SwapSmith Version: 
+    validations:
+      required: false
+
+  - type: textarea
+    id: code
+    attributes:
+      label: Relevant Code/Configuration
+      description: Share any relevant code or configuration
+      placeholder: |
+        ```javascript
+        // Your code here
+        ```
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm the following
+      options:
+        - label: I have searched existing issues and discussions
+          required: true
+        - label: I have checked the documentation
+          required: true
+        - label: This is a question, not a bug report or feature request
+          required: true

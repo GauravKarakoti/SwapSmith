@@ -1,0 +1,118 @@
+name: "📚 Documentation"
+description: Report missing, unclear, or incorrect documentation
+title: "[Docs]: "
+labels: ["documentation", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Thanks for helping improve our documentation! 📚
+        
+        Good documentation is crucial for the success of SwapSmith.
+        Your feedback helps make it better for everyone.
+
+  - type: dropdown
+    id: doc-type
+    attributes:
+      label: Documentation Type
+      description: What type of documentation needs attention?
+      options:
+        - README
+        - API Documentation
+        - Setup/Installation Guide
+        - User Guide
+        - Developer Guide
+        - Code Comments
+        - Architecture Documentation
+        - Contributing Guidelines
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: Issue Type
+      description: What's wrong with the documentation?
+      options:
+        - Missing Documentation
+        - Incorrect Information
+        - Unclear/Confusing
+        - Outdated
+        - Typo/Grammar
+        - Broken Links
+        - Missing Examples
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: location
+    attributes:
+      label: Documentation Location
+      description: Where is the documentation issue?
+      placeholder: |
+        Provide a link or file path:
+        - URL: https://github.com/Omkarop0808/SwapSmith/...
+        - File: docs/api/swap.md
+        - Section: "Getting Started" > "Installation"
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: Current Documentation
+      description: What does the current documentation say? (if applicable)
+      placeholder: Quote the current text or describe what's there now
+    validations:
+      required: false
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Description
+      description: What's the issue with the current documentation?
+      placeholder: |
+        Explain what's wrong, missing, or confusing.
+        How does this affect users?
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggested
+    attributes:
+      label: Suggested Improvement
+      description: How should the documentation be improved?
+      placeholder: |
+        Provide your suggested changes, additions, or clarifications.
+        Include examples if relevant.
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other information that would help
+      placeholder: |
+        - Screenshots of confusing sections
+        - Links to related documentation
+        - User feedback or questions
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm the following
+      options:
+        - label: I have searched existing documentation issues to avoid duplicates
+          required: true
+        - label: I have provided specific location and clear description
+          required: true
+        - label: I am willing to help improve this documentation
+          required: false

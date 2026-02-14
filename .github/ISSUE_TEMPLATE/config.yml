@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Discord Community
+    url: https://discord.gg/swapsmith
+    about: Join our Discord for general questions and community support
+  - name: 📚 Documentation
+    url: https://github.com/Omkarop0808/SwapSmith#readme
+    about: Check our documentation for guides and API references
+  - name: 🔒 Security Issue
+    url: https://github.com/Omkarop0808/SwapSmith/security/advisories/new
+    about: Report security vulnerabilities privately

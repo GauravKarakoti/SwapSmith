@@ -1,0 +1,173 @@
+name: "✨ Feature Request"
+description: Suggest a new feature or enhancement for SwapSmith
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Thanks for suggesting a feature! ✨
+        
+        Help us understand your idea by providing as much detail as possible.
+        
+        **Before submitting:**
+        - Search existing feature requests to avoid duplicates
+        - Check if this aligns with the project's goals
+        - Consider if this could be implemented as a plugin/extension
+
+  - type: textarea
+    id: user-story
+    attributes:
+      label: User Story
+      description: Describe the feature from a user's perspective
+      placeholder: |
+        As a [type of user],
+        I want to [perform some action],
+        So that [I can achieve some goal].
+        
+        Example:
+        As a crypto trader,
+        I want to set up recurring buys with custom schedules,
+        So that I can automate my DCA strategy more flexibly.
+      value: |
+        As a [type of user],
+        I want to [action],
+        So that [benefit].
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve?
+      placeholder: |
+        Describe the pain point or limitation you're experiencing.
+        What can't you do today that you wish you could?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: How would you like this feature to work?
+      placeholder: |
+        Describe your ideal solution in detail.
+        Include user flows, UI mockups, or examples if possible.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What alternative solutions or workarounds have you considered?
+      placeholder: |
+        - Alternative 1: ...
+        - Alternative 2: ...
+        - Current workaround: ...
+    validations:
+      required: false
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of SwapSmith would this feature affect?
+      options:
+        - Frontend (Web UI)
+        - Bot (Telegram)
+        - Backend/API
+        - Database
+        - Wallet Integration
+        - Voice Input
+        - Swap Functionality
+        - Portfolio Management
+        - DCA (Dollar Cost Averaging)
+        - Limit Orders
+        - Analytics/Reporting
+        - Notifications
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      options:
+        - Critical (Blocking my use of SwapSmith)
+        - High (Would significantly improve my experience)
+        - Medium (Nice to have)
+        - Low (Minor improvement)
+    validations:
+      required: true
+
+  - type: textarea
+    id: implementation
+    attributes:
+      label: Implementation Ideas
+      description: Do you have technical suggestions for implementation?
+      placeholder: |
+        - APIs or libraries that could be used
+        - Technical approach or architecture
+        - Potential challenges or considerations
+        - Code examples or pseudocode
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: How will we know when this feature is complete?
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+        - [ ] Criterion 3
+      value: |
+        - [ ] 
+        - [ ] 
+        - [ ] 
+    validations:
+      required: false
+
+  - type: textarea
+    id: mockups
+    attributes:
+      label: Mockups/Examples
+      description: Add any mockups, wireframes, or examples
+      placeholder: Drag and drop images or provide links to mockups
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other information that would help us understand this feature
+      placeholder: |
+        - Similar features in other apps
+        - User research or feedback
+        - Business impact or metrics
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm the following
+      options:
+        - label: I have searched existing feature requests to avoid duplicates
+          required: true
+        - label: I have provided a clear user story and problem statement
+          required: true
+        - label: This feature aligns with SwapSmith's goals
+          required: false
+        - label: I am willing to help implement this feature
+          required: false
