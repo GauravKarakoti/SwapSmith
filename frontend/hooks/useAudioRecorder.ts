@@ -86,6 +86,7 @@ class WebAudioRecorder {
   }
 
   start() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     this.context = new AudioContextClass({ sampleRate: this.sampleRate });
     this.input = this.context.createMediaStreamSource(this.stream);
@@ -308,6 +309,7 @@ class AudioRecorderPolyfill {
     // Supported if MediaRecorder exists OR AudioContext exists
     return !!(
       (typeof window !== 'undefined' && window.MediaRecorder) || 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (typeof window !== 'undefined' && (window.AudioContext || (window as any).webkitAudioContext))
     );
   }

@@ -11,7 +11,6 @@ import {
   Clock,
   Settings,
   Menu,
-  Sparkles,
   Zap,
   Activity,
   Trash2,
@@ -23,8 +22,6 @@ import SwapConfirmation from "@/components/SwapConfirmation";
 import IntentConfirmation from "@/components/IntentConfirmation";
 
 import { useAuth } from "@/hooks/useAuth";
-import { useErrorHandler, ErrorType } from "@/hooks/useErrorHandler";
-import { useAudioRecorder } from "@/hooks/useAudioRecorder";
 import { useChatHistory, useChatSessions } from "@/hooks/useCachedData";
 
 import { ParsedCommand } from "@/utils/groq-client";
@@ -56,36 +53,12 @@ interface Message {
     | "swap_confirmation"
     | "yield_info"
     | "checkout_link";
-  data?: any;
+  data?: ParsedCommand | { quoteData: QuoteData; confidence: number } | { url: string } | { parsedCommand: ParsedCommand } | Record<string, unknown>;
 }
 
 /* -------------------------------------------------------------------------- */
 /*                               UI Components                                */
 /* -------------------------------------------------------------------------- */
-
-const FloatingParticle = ({
-  delay,
-  duration,
-  x,
-  y,
-}: {
-  delay: number;
-  duration: number;
-  x: number;
-  y: number;
-}) => (
-  <motion.div
-    className="absolute w-1 h-1 bg-gradient-to-r from-cyan-400 to-purple-500 rounded-full"
-    style={{ left: `${x}%`, top: `${y}%` }}
-    animate={{
-      y: [-20, 20, -20],
-      x: [-10, 10, -10],
-      opacity: [0.2, 0.8, 0.2],
-      scale: [1, 1.5, 1],
-    }}
-    transition={{ duration, delay, repeat: Infinity, ease: "easeInOut" }}
-  />
-);
 
 const SidebarSkeleton = () => (
   <div className="space-y-4 p-2">
@@ -95,14 +68,6 @@ const SidebarSkeleton = () => (
         <div className="h-2 w-1/4 bg-white/5 rounded animate-pulse" />
       </div>
     ))}
-  </div>
-);
-
-const MessageListSkeleton = () => (
-  <div className="space-y-6">
-    <div className="h-20 bg-white/5 rounded-xl animate-pulse" />
-    <div className="h-12 bg-white/5 rounded-xl animate-pulse" />
-    <div className="h-24 bg-white/5 rounded-xl animate-pulse" />
   </div>
 );
 
@@ -159,9 +124,8 @@ const LiveStatsCard = () => {
 
 export default function TerminalPage() {
   const router = useRouter();
-  const { address, isConnected } = useAccount();
+  const { isConnected } = useAccount();
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
-  const { handleError } = useErrorHandler();
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -175,14 +139,12 @@ export default function TerminalPage() {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
-  const [pendingCommand, setPendingCommand] =
-    useState<ParsedCommand | null>(null);
 
   const [currentSessionId, setCurrentSessionId] = useState(
     crypto.randomUUID(),
   );
   const sessionIdRef = useRef(currentSessionId);
+  const loadedSessionRef = useRef<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -202,21 +164,31 @@ export default function TerminalPage() {
 
   useEffect(() => {
     sessionIdRef.current = currentSessionId;
+    loadedSessionRef.current = null; // Reset on session change
   }, [currentSessionId]);
 
+  // Load chat history from database when available
   useEffect(() => {
+    // Only load once per session to prevent cascading renders
+    if (loadedSessionRef.current === currentSessionId) return;
+    
     if (dbChatHistory?.history?.length) {
-      setMessages(
-        dbChatHistory.history.map((m) => ({
-          role: m.role,
-          content: m.content,
-          timestamp: new Date(m.createdAt),
-          type: "message",
-        })),
-      );
+      const loadedMessages = dbChatHistory.history.map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+        timestamp: new Date(m.createdAt),
+        type: "message" as const,
+      }));
+      // Using queueMicrotask to defer state updates and prevent cascading renders
+      queueMicrotask(() => {
+        setMessages(loadedMessages);
+        setIsHistoryLoading(false);
+      });
+      loadedSessionRef.current = currentSessionId;
+    } else {
+      queueMicrotask(() => setIsHistoryLoading(false));
     }
-    setIsHistoryLoading(false);
-  }, [dbChatHistory]);
+  }, [dbChatHistory, currentSessionId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -384,14 +356,14 @@ export default function TerminalPage() {
                           : "bg-zinc-900/70 border border-zinc-800"
                       }`}
                     >
-                      {msg.type === "swap_confirmation" ? (
+                      {msg.type === "swap_confirmation" && msg.data && 'quoteData' in msg.data ? (
                         <SwapConfirmation
                           quote={msg.data.quoteData as QuoteData}
-                          confidence={msg.data.confidence}
+                          confidence={msg.data.confidence as number}
                         />
-                      ) : msg.type === "intent_confirmation" ? (
+                      ) : msg.type === "intent_confirmation" && msg.data && 'parsedCommand' in msg.data ? (
                         <IntentConfirmation
-                          command={msg.data.parsedCommand}
+                          command={msg.data.parsedCommand as ParsedCommand}
                           onConfirm={() => {}}
                         />
                       ) : (
@@ -403,7 +375,6 @@ export default function TerminalPage() {
                   </div>
                 </div>
               ))}
-              {isLoading && <MessageListSkeleton />}
               <div ref={messagesEndRef} />
             </div>
           </div>
