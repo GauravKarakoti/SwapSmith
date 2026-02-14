@@ -14,6 +14,12 @@ import {
   findHigherYieldPools,
 } from './services/yield-client';
 import * as db from './services/database';
+import { startLimitOrderWorker } from './workers/limitOrderWorker';
+import { startDcaWorker } from './workers/dcaWorker';
+import { parseLimitOrder } from './utils/parseLimitOrder';
+import { inferNetwork } from './utils/network';
+import { validateWebAppData } from './utils/auth';
+import { confirmPortfolioHandler } from './handlers/portfolio';
 import { ethers } from 'ethers';
 import axios from 'axios';
 import fs from 'fs';
@@ -32,6 +38,16 @@ const bot = new Telegraf(process.env.BOT_TOKEN!);
 const MINI_APP_URL = process.env.MINI_APP_URL!;
 const ERC20_ABI = ['function transfer(address to, uint256 amount) returns (bool)'];
 
+// Start Limit Order Worker
+startLimitOrderWorker(bot);
+startDcaWorker(bot);
+
+// --- FFMPEG CHECK ---
+try {
+    execSync('ffmpeg -version');
+    console.log('✅ ffmpeg is installed. Voice messages enabled.');
+} catch (error) {
+    console.warn('⚠️ ffmpeg not found. Voice messages will fail. Please install ffmpeg.');
 // ------------------ UTIL ------------------
 
 function isValidAddress(address: string, chain?: string): boolean {
@@ -173,6 +189,72 @@ async function handleTextMessage(
       );
     }
 
+async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'voice' = 'text') {
+  const userId = ctx.from.id;
+
+  // NEW: Check for limit order pattern first
+  const limitOrder = parseLimitOrder(text);
+  if (limitOrder.success) {
+      await db.setConversationState(userId, {
+          intent: 'limit_order',
+          data: limitOrder,
+          step: 'awaiting_address'
+      });
+
+      return ctx.reply(
+          `👍 I understood: Swap ${limitOrder.amount} ${limitOrder.fromAsset} for ${limitOrder.toAsset} ` +
+          `if ${limitOrder.conditionAsset || limitOrder.toAsset} is ${limitOrder.conditionType} $${limitOrder.targetPrice}.\n\n` +
+          `Please enter the destination ${limitOrder.toAsset} wallet address:`
+      );
+  }
+  
+  const state = await db.getConversationState(userId); 
+
+  // Check if we are in 'limit_order' flow
+  if (state?.intent === 'limit_order' && state.step === 'awaiting_address') {
+      const address = text.trim();
+      if (address.length < 10) return ctx.reply("Address too short. Please try again or /clear.");
+
+      const orderData = state.data;
+      const fromNetwork = inferNetwork(orderData.fromAsset);
+      const toNetwork = inferNetwork(orderData.toAsset);
+
+      await db.createLimitOrder({
+          telegramId: userId,
+          fromAsset: orderData.fromAsset,
+          toAsset: orderData.toAsset,
+          fromNetwork: fromNetwork,
+          toNetwork: toNetwork,
+          amount: orderData.amount,
+          conditionAsset: orderData.conditionAsset || orderData.toAsset,
+          conditionType: orderData.conditionType,
+          targetPrice: orderData.targetPrice,
+          settleAddress: address
+      });
+
+      await db.clearConversationState(userId);
+      return ctx.reply(`✅ Limit Order Created! I'll watch the price for you.`);
+  }
+  
+  // 1. Check for pending address input
+  if (state?.parsedCommand && (state.parsedCommand.intent === 'swap' || state.parsedCommand.intent === 'checkout') && !state.parsedCommand.settleAddress) {
+      const potentialAddress = text.trim();
+      // Basic address validation (can be improved)
+      if (potentialAddress.length > 25) { // Arbitrary length check for now
+          const updatedCommand = { ...state.parsedCommand, settleAddress: potentialAddress };
+          await db.setConversationState(userId, { parsedCommand: updatedCommand });
+          
+          await ctx.reply(`Address received: \`${potentialAddress}\``, { parse_mode: 'Markdown' });
+          
+          // Re-trigger the confirmation logic with the complete command
+          const confirmAction = updatedCommand.intent === 'checkout' ? 'confirm_checkout' : 'confirm_swap';
+          return ctx.reply("Ready to proceed?", Markup.inlineKeyboard([
+              Markup.button.callback('✅ Yes', confirmAction), 
+              Markup.button.callback('❌ No', 'cancel_swap')
+          ]));
+      } else {
+          return ctx.reply("That doesn't look like a valid address. Please try again or /clear to cancel.");
+      }
     return ctx.reply('❌ Invalid address. Try again or /clear');
   }
 
@@ -192,6 +274,11 @@ async function handleTextMessage(
   if (parsed.intent === 'portfolio') {
     await db.setConversationState(userId, { parsedCommand: parsed });
 
+      return ctx.replyWithMarkdown(msg, Markup.inlineKeyboard([
+          Markup.button.webApp('📱 Batch Sign (Frontend)', webAppUrl),
+          Markup.button.callback('🤖 Execute via Bot', 'confirm_portfolio'),
+          Markup.button.callback('❌ Cancel', 'cancel_swap')
+      ]));
     let msg = `📊 *Portfolio Strategy*\n\n`;
     parsed.portfolio?.forEach((p) => {
       msg += `• ${p.percentage}% → ${p.toAsset} on ${p.toChain}\n`;
@@ -464,6 +551,7 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
 
 // ------------------ ACTIONS ------------------
 
+bot.action('confirm_portfolio', confirmPortfolioHandler);
 bot.action('confirm_swap', async (ctx) => {
   const state = await db.getConversationState(ctx.from.id);
   if (!state?.parsedCommand) return;
@@ -783,6 +871,65 @@ bot.action('show_deposit_instructions', async (ctx) => {
     });
 });
 
+const app = express();
+app.use(express.json());
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  next();
+});
+
+app.get('/', (req, res) => res.send('SwapSmith Alive'));
+
+app.get('/api/dca', async (req, res) => {
+    const initData = req.headers.authorization;
+    if (!initData) return res.status(401).json({ error: 'Unauthorized' });
+
+    const user = validateWebAppData(initData, process.env.BOT_TOKEN!);
+    if (!user) return res.status(401).json({ error: 'Invalid initData' });
+
+    try {
+        const plans = await db.getUserDcaPlans(user.id);
+        res.json(plans);
+    } catch (e) {
+        res.status(500).json({ error: e instanceof Error ? e.message : 'Error' });
+    }
+});
+
+app.post('/api/dca', async (req, res) => {
+    const initData = req.headers.authorization;
+    if (!initData) return res.status(401).json({ error: 'Unauthorized' });
+
+    const user = validateWebAppData(initData, process.env.BOT_TOKEN!);
+    if (!user) return res.status(401).json({ error: 'Invalid initData' });
+
+    try {
+        const plan = req.body;
+        // Basic validation
+        if (!plan.amount || !plan.frequencyDays) {
+            return res.status(400).json({ error: "Missing fields" });
+        }
+
+        const newPlan = await db.createDcaPlan({
+            telegramId: user.id,
+            fromAsset: plan.fromAsset,
+            toAsset: plan.toAsset,
+            fromNetwork: plan.fromNetwork || 'ethereum',
+            toNetwork: plan.toNetwork || 'bitcoin',
+            amount: plan.amount,
+            frequencyDays: plan.frequencyDays,
+            settleAddress: plan.settleAddress,
+            status: 'active',
+            nextRun: new Date(Date.now() + plan.frequencyDays * 24 * 60 * 60 * 1000)
+        });
+        res.json(newPlan);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: e instanceof Error ? e.message : 'Error' });
+    }
+});
+
+app.listen(process.env.PORT || 3000, () => console.log(`Express server live`));
 bot.action('find_bridge_options', async (ctx) => {
     const userId = ctx.from.id;
     const state = await db.getConversationState(userId);

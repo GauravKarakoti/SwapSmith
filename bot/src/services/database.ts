@@ -59,6 +59,46 @@ export const checkouts = pgTable('checkouts', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const limitOrders = pgTable('limit_orders', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
+  fromAsset: text('from_asset').notNull(),
+  toAsset: text('to_asset').notNull(),
+  fromNetwork: text('from_network'), // Can be null if inferred later
+  toNetwork: text('to_network'),     // Can be null if inferred later
+  amount: real('amount').notNull(),
+  conditionAsset: text('condition_asset').notNull(), // The asset to watch price for
+  conditionType: text('condition_type').notNull(), // 'above' | 'below'
+  targetPrice: real('target_price').notNull(),
+  status: text('status').notNull().default('pending'), // 'pending', 'executed', 'cancelled', 'failed'
+  sideshiftOrderId: text('sideshift_order_id'),
+  settleAddress: text('settle_address'),
+  errorMessage: text('error_message'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const dcaPlans = pgTable('dca_plans', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
+  fromAsset: text('from_asset').notNull(),
+  toAsset: text('to_asset').notNull(),
+  fromNetwork: text('from_network'),
+  toNetwork: text('to_network'),
+  amount: real('amount').notNull(),
+  frequencyDays: integer('frequency_days').notNull(),
+  lastRun: timestamp('last_run'),
+  nextRun: timestamp('next_run').notNull(),
+  status: text('status').notNull().default('active'), // active, paused, cancelled
+  settleAddress: text('settle_address'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// --- TYPE DEFINITIONS ---
+export type User = typeof users.$inferSelect;
+export type Order = typeof orders.$inferSelect;
+export type Checkout = typeof checkouts.$inferSelect;
+export type LimitOrder = typeof limitOrders.$inferSelect;
+export type DcaPlan = typeof dcaPlans.$inferSelect;
 export const addressBook = pgTable('address_book', {
   id: serial('id').primaryKey(),
   telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
@@ -180,7 +220,7 @@ export async function createOrderEntry(
     toNetwork: parsedCommand.toChain!,
     settleAmount: settleAmount.toString(),
     depositAddress: depositAddr!,
-    depositMemo: depositMemo || null
+    depositMemo: depositMemo || null,
   });
 }
 
@@ -223,6 +263,57 @@ export async function getUserCheckouts(telegramId: number): Promise<Checkout[]> 
     .limit(10);
 }
 
+// --- LIMIT ORDER FUNCTIONS ---
+
+export async function createLimitOrder(order: Omit<LimitOrder, 'id' | 'createdAt' | 'status' | 'sideshiftOrderId' | 'errorMessage'>) {
+  return await db.insert(limitOrders).values(order).returning();
+}
+
+export async function getPendingLimitOrders(): Promise<LimitOrder[]> {
+  return await db.select().from(limitOrders).where(eq(limitOrders.status, 'pending'));
+}
+
+export async function updateLimitOrderStatus(id: number, status: string, sideshiftOrderId?: string, errorMessage?: string) {
+  const updates: any = { status };
+  if (sideshiftOrderId) updates.sideshiftOrderId = sideshiftOrderId;
+  if (errorMessage) updates.errorMessage = errorMessage;
+
+  await db.update(limitOrders)
+    .set(updates)
+    .where(eq(limitOrders.id, id));
+}
+
+export async function getLimitOrdersByUser(telegramId: number): Promise<LimitOrder[]> {
+  return await db.select().from(limitOrders)
+    .where(eq(limitOrders.telegramId, telegramId))
+    .orderBy(desc(limitOrders.createdAt));
+}
+
+// --- DCA FUNCTIONS ---
+
+export async function createDcaPlan(plan: Omit<DcaPlan, 'id' | 'createdAt' | 'lastRun'>) {
+  return await db.insert(dcaPlans).values(plan).returning();
+}
+
+export async function getDueDcaPlans(): Promise<DcaPlan[]> {
+  const now = new Date();
+  return await db.select().from(dcaPlans)
+    .where(and(
+      eq(dcaPlans.status, 'active'),
+      lte(dcaPlans.nextRun, now)
+    ));
+}
+
+export async function updateDcaRun(id: number, nextRun: Date) {
+  await db.update(dcaPlans)
+    .set({ lastRun: new Date(), nextRun })
+    .where(eq(dcaPlans.id, id));
+}
+
+export async function getUserDcaPlans(telegramId: number): Promise<DcaPlan[]> {
+  return await db.select().from(dcaPlans)
+    .where(eq(dcaPlans.telegramId, telegramId))
+    .orderBy(desc(dcaPlans.createdAt));
 export async function addAddressBookEntry(telegramId: number, nickname: string, address: string, chain: string) {
   try{
     await db.insert(addressBook)
