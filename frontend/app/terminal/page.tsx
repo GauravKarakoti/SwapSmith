@@ -14,7 +14,7 @@ import IntentConfirmation from '@/components/IntentConfirmation';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
-import { MessageCircle, Plus, Clock, Settings, Menu, Sparkles, TrendingUp, Zap, BarChart3, Activity } from 'lucide-react';
+import { MessageCircle, Plus, Clock, Settings, Menu, Sparkles, Zap, Activity } from 'lucide-react';
 import Link from 'next/link';
 
 interface QuoteData {
@@ -70,8 +70,8 @@ const FloatingParticle = ({ delay, duration, x, y }: { delay: number; duration: 
 const SidebarSkeleton = () => (
   <div className="space-y-4 p-2">
     {[1, 2, 3, 4].map((i) => (
-      <motion.div 
-        key={i} 
+      <motion.div
+        key={i}
         className="px-3 py-2 space-y-2"
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
@@ -87,7 +87,7 @@ const SidebarSkeleton = () => (
 const MessageListSkeleton = () => (
   <div className="space-y-6">
     {/* Assistant Bubble 1 */}
-    <motion.div 
+    <motion.div
       className="flex justify-start"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -100,9 +100,9 @@ const MessageListSkeleton = () => (
         </div>
       </div>
     </motion.div>
-    
+
     {/* User Bubble (Right side) */}
-    <motion.div 
+    <motion.div
       className="flex justify-end"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -112,9 +112,9 @@ const MessageListSkeleton = () => (
         <div className="h-2 w-full bg-blue-400/20 rounded-full animate-pulse" />
       </div>
     </motion.div>
-    
+
     {/* Assistant Bubble 2 (Longer) */}
-    <motion.div 
+    <motion.div
       className="flex justify-start"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -134,19 +134,22 @@ const MessageListSkeleton = () => (
 // Live Stats Card Component
 const LiveStatsCard = () => {
   const [stats, setStats] = useState({
-    gasPrice: Math.floor(Math.random() * 20) + 10,
-    volume24h: (Math.random() * 5 + 1).toFixed(1),
-    activeSwaps: Math.floor(Math.random() * 50) + 100,
+    gasPrice: 0,
+    volume24h: "0",
+    activeSwaps: 0,
   });
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    const updateStats = () => {
       setStats({
         gasPrice: Math.floor(Math.random() * 20) + 10,
         volume24h: (Math.random() * 5 + 1).toFixed(1),
         activeSwaps: Math.floor(Math.random() * 50) + 100,
       });
-    }, 5000);
+    };
+
+    updateStats();
+    const interval = setInterval(updateStats, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -165,10 +168,10 @@ const LiveStatsCard = () => {
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Live
         </span>
       </div>
-      
+
       <div className="grid grid-cols-3 gap-3">
         <div className="text-center">
-          <motion.div 
+          <motion.div
             key={stats.gasPrice}
             initial={{ scale: 1.2, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -179,9 +182,9 @@ const LiveStatsCard = () => {
           </motion.div>
           <div className="text-[10px] text-zinc-500 font-medium">Gwei</div>
         </div>
-        
+
         <div className="text-center">
-          <motion.div 
+          <motion.div
             key={stats.volume24h}
             initial={{ scale: 1.2, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -191,9 +194,9 @@ const LiveStatsCard = () => {
           </motion.div>
           <div className="text-[10px] text-zinc-500 font-medium">24h Vol</div>
         </div>
-        
+
         <div className="text-center">
-          <motion.div 
+          <motion.div
             key={stats.activeSwaps}
             initial={{ scale: 1.2, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -211,7 +214,7 @@ const LiveStatsCard = () => {
 export default function TerminalPage() {
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [chatHistory, setChatHistory] = useState([
@@ -609,7 +612,7 @@ export default function TerminalPage() {
     return (
       <div className="flex h-screen bg-[#050505] items-center justify-center">
         <div className="text-center">
-          <motion.div 
+          <motion.div
             className="mx-auto mb-4 w-12 h-12 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full"
             animate={{ rotate: 360 }}
             transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
@@ -628,7 +631,7 @@ export default function TerminalPage() {
   return (
     <>
       <Navbar />
-      
+
       <div className="flex h-screen bg-[#030308] text-white overflow-hidden pt-16 relative">
         {/* Animated background gradient */}
         <div className="fixed inset-0 pointer-events-none">
@@ -650,7 +653,7 @@ export default function TerminalPage() {
             }}
             transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
           />
-          
+
           {/* Floating particles */}
           {particles.map((p) => (
             <FloatingParticle key={p.id} {...p} />
@@ -677,7 +680,7 @@ export default function TerminalPage() {
               className="bg-gradient-to-b from-zinc-900/50 to-zinc-900/30 border-r border-zinc-800/50 flex flex-col overflow-hidden backdrop-blur-xl relative z-10"
             >
               <div className="p-4 border-b border-zinc-800/50">
-                <motion.button 
+                <motion.button
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 rounded-xl transition-all duration-300 text-sm font-bold shadow-lg shadow-cyan-900/20"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
@@ -737,7 +740,7 @@ export default function TerminalPage() {
                   Support
                 </motion.a>
                 <Link href="/profile">
-                  <motion.button 
+                  <motion.button
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 transition-all duration-200 text-sm text-zinc-400 hover:text-purple-400 group"
                     whileHover={{ x: 4 }}
                   >
@@ -754,7 +757,7 @@ export default function TerminalPage() {
         <div className="flex-1 flex flex-col overflow-hidden relative z-10">
           {/* Chat Area */}
           <main className="flex-1 overflow-y-auto flex flex-col">
-            
+
             {/* Sidebar Toggle Button */}
             <motion.button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -768,7 +771,7 @@ export default function TerminalPage() {
 
             {/* Header Section */}
             <div className="flex-shrink-0 pt-16 pb-8 px-4">
-              <motion.div 
+              <motion.div
                 className="max-w-3xl mx-auto text-center space-y-4"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -782,12 +785,12 @@ export default function TerminalPage() {
                 >
                   <motion.div
                     className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500/10 to-purple-500/10 border border-cyan-500/20 rounded-full"
-                    animate={{ 
+                    animate={{
                       boxShadow: [
-                        "0 0 20px rgba(34,211,238,0.1)", 
-                        "0 0 40px rgba(34,211,238,0.2)", 
+                        "0 0 20px rgba(34,211,238,0.1)",
+                        "0 0 40px rgba(34,211,238,0.2)",
                         "0 0 20px rgba(34,211,238,0.1)"
-                      ] 
+                      ]
                     }}
                     transition={{ duration: 2, repeat: Infinity }}
                   >
@@ -812,7 +815,7 @@ export default function TerminalPage() {
                     Alpha.
                   </motion.span>
                 </h1>
-                
+
                 <p className="text-zinc-500 text-sm max-w-xl mx-auto">
                   Swap assets, create payment links, or scout yields with AI assistance
                 </p>
@@ -840,7 +843,7 @@ export default function TerminalPage() {
                         >
                           <div className={`max-w-[85%]`}>
                             {msg.role === 'user' ? (
-                              <motion.div 
+                              <motion.div
                                 className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white px-5 py-3.5 rounded-2xl rounded-tr-none shadow-lg shadow-cyan-900/20 text-sm font-medium relative overflow-hidden"
                                 whileHover={{ scale: 1.02 }}
                                 transition={{ duration: 0.2 }}
@@ -856,14 +859,14 @@ export default function TerminalPage() {
                               </motion.div>
                             ) : (
                               <div className="space-y-3">
-                                <motion.div 
+                                <motion.div
                                   className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 border border-zinc-700/50 text-gray-200 px-5 py-4 rounded-2xl rounded-tl-none text-sm leading-relaxed backdrop-blur-xl relative overflow-hidden group"
                                   whileHover={{ scale: 1.01 }}
                                   transition={{ duration: 0.2 }}
                                 >
                                   {/* Subtle glow effect on hover */}
                                   <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/0 via-purple-500/0 to-pink-500/0 group-hover:from-cyan-500/5 group-hover:via-purple-500/5 group-hover:to-pink-500/5 transition-all duration-500 rounded-2xl" />
-                                  
+
                                   <div className="relative z-10">
                                     {msg.type === 'message' && <div className="whitespace-pre-line">{msg.content}</div>}
                                     {msg.type === 'yield_info' && <div className="font-mono text-xs text-cyan-300 bg-cyan-950/30 p-3 rounded-lg border border-cyan-800/30">{msg.content}</div>}
@@ -874,10 +877,10 @@ export default function TerminalPage() {
                                       <SwapConfirmation quote={msg.data.quoteData as QuoteData} confidence={msg.data.confidence} />
                                     )}
                                     {msg.type === 'checkout_link' && msg.data && 'url' in msg.data && (
-                                      <motion.a 
-                                        href={msg.data.url} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer" 
+                                      <motion.a
+                                        href={msg.data.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
                                         className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2 flex items-center gap-2 group"
                                         whileHover={{ x: 4 }}
                                       >
