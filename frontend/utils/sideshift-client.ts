@@ -27,8 +27,8 @@ export interface SideShiftCheckoutResponse {
 }
 
 export interface CoinNetwork {
-  contractAddress?: string;
-  decimals?: number;
+  network: string;
+  tokenContract?: string;
   depositAddressType?: string;
   depositOffline?: boolean;
   settleOffline?: boolean;
@@ -37,8 +37,7 @@ export interface CoinNetwork {
 export interface Coin {
   coin: string;
   name: string;
-  networks: Record<string, CoinNetwork>; // Networks is an object, not an array!
-  networksWithMemo?: string[];
+  networks: CoinNetwork[];
   chainData?: {
     chain: string;
     mainnet: boolean;
@@ -223,18 +222,13 @@ export async function getCoinPrices(): Promise<CoinPrice[]> {
       
       const pricesPromises = filteredCoins.map(async (coin): Promise<CoinPrice | null> => {
         try {
-          // Get first available network from the networks object
-          const networkNames = Object.keys(coin.networks);
-          if (networkNames.length === 0) return null;
-          
-          const networkName = networkNames[0];
-          
+          const network = coin.networks[0];
           // For stablecoins, use fixed price
           if (['usdt', 'usdc', 'dai'].includes(coin.coin.toLowerCase())) {
             return {
               coin: coin.coin,
               name: coin.name,
-              network: networkName,
+              network: network.network,
               usdPrice: '1.00',
               available: true,
             };
@@ -244,7 +238,7 @@ export async function getCoinPrices(): Promise<CoinPrice[]> {
             `${SIDESHIFT_BASE_URL}/quotes`,
             {
               depositCoin: coin.coin,
-              depositNetwork: networkName,
+              depositNetwork: network.network,
               settleCoin: 'usdt',
               settleNetwork: 'ethereum',
               depositAmount: '1',
@@ -262,7 +256,7 @@ export async function getCoinPrices(): Promise<CoinPrice[]> {
             return {
               coin: coin.coin,
               name: coin.name,
-              network: networkName,
+              network: network.network,
               usdPrice: settleAmount.toString(),
               available: true,
             };

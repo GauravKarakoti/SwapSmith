@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 import { useAccount, useDisconnect } from 'wagmi'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -30,11 +29,12 @@ import {
   EyeOff,
   History,
   ArrowUpRight,
+  ArrowDownLeft,
+  Clock,
   Calendar,
   TrendingUp,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
-import { useUserSettings, useSwapHistory } from '@/hooks/useCachedData'
 import Navbar from '@/components/Navbar'
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
@@ -200,54 +200,24 @@ export default function ProfilePage() {
   const { address, isConnected, chain } = useAccount()
   const { disconnect } = useDisconnect()
 
-  // Fetch user settings and swap history from database
-  const { data: dbSettings } = useUserSettings(user?.uid)
-  const { data: swapHistoryData } = useSwapHistory(user?.uid)
-
-  // Track if initial load is complete to prevent save loops
-  const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false)
-
-  // Preferences (persisted to database)
-  const [preferences, setPreferences] = useState<Preferences>({
-    soundEnabled: true,
-    autoConfirmSwaps: false,
-    currency: 'USD'
+  // Preferences (persisted to localStorage)
+  const [preferences, setPreferences] = useState<Preferences>(() => {
+    try {
+      const saved = localStorage.getItem('swapsmith_preferences')
+      if (saved) {
+        return { ...{
+          soundEnabled: true,
+          autoConfirmSwaps: false,
+          currency: 'USD'
+        }, ...JSON.parse(saved) }
+      }
+    } catch {}
+    return {
+      soundEnabled: true,
+      autoConfirmSwaps: false,
+      currency: 'USD'
+    }
   })
-
-  // Sync preferences with database when loaded
-  useEffect(() => {
-    if (dbSettings?.preferences) {
-      try {
-        const parsed = typeof dbSettings.preferences === 'string' 
-          ? JSON.parse(dbSettings.preferences) 
-          : dbSettings.preferences
-        setPreferences(parsed)
-        setIsInitialLoadComplete(true)
-      } catch (err) {
-        console.error('Failed to parse preferences:', err)
-        setIsInitialLoadComplete(true)
-      }
-    } else if (dbSettings !== undefined) {
-      // dbSettings exists but no preferences saved yet
-      setIsInitialLoadComplete(true)
-    }
-  }, [dbSettings])
-
-  // Sync email notification preferences from database
-  useEffect(() => {
-    if (dbSettings?.emailNotifications) {
-      try {
-        const parsed = typeof dbSettings.emailNotifications === 'string'
-          ? JSON.parse(dbSettings.emailNotifications)
-          : dbSettings.emailNotifications
-        if (parsed && typeof parsed === 'object') {
-          setEmailNotificationPrefs(prev => ({ ...prev, ...parsed }))
-        }
-      } catch (err) {
-        console.error('Failed to parse email notifications:', err)
-      }
-    }
-  }, [dbSettings])
 
   const [copied, setCopied] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
@@ -268,14 +238,30 @@ export default function ProfilePage() {
   const [uploadingImage, setUploadingImage] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Email notification preferences (loaded from database)
-  const [emailNotificationPrefs, setEmailNotificationPrefs] = useState<EmailNotificationPrefs>({
-    enabled: false,
-    walletReminders: true,
-    priceAlerts: true,
-    generalUpdates: true,
-    frequency: 'daily'
+  // Email notification preferences
+  const [emailNotificationPrefs, setEmailNotificationPrefs] = useState<EmailNotificationPrefs>(() => {
+    try {
+      const saved = localStorage.getItem('swapsmith_email_notifications')
+      if (saved) {
+        return JSON.parse(saved)
+      }
+    } catch {}
+    return {
+      enabled: false,
+      walletReminders: true,
+      priceAlerts: true,
+      generalUpdates: true,
+      frequency: 'daily'
+    }
   })
+
+  // Mock wallet history (replace with real data)
+  const [walletHistory] = useState([
+    { id: 1, type: 'swap', from: 'ETH', to: 'USDC', amount: '0.5', date: '2 hours ago', status: 'completed' },
+    { id: 2, type: 'swap', from: 'BTC', to: 'ETH', amount: '0.02', date: 'Yesterday', status: 'completed' },
+    { id: 3, type: 'payment', from: '', to: '', amount: '100 USDC', date: '2 days ago', status: 'completed' },
+    { id: 4, type: 'swap', from: 'USDT', to: 'DAI', amount: '500', date: '1 week ago', status: 'completed' },
+  ])
 
   // Protect route
   useEffect(() => {
@@ -292,96 +278,49 @@ export default function ProfilePage() {
     }
   }, [user])
 
-  // Save preferences to database on change (only after initial load)
+  // Save preferences on change
   useEffect(() => {
-    if (!isInitialLoadComplete || !user?.uid) return;
+    localStorage.setItem('swapsmith_preferences', JSON.stringify(preferences))
+  }, [preferences])
+
+  // Save email notification preferences on change
+  useEffect(() => {
+    localStorage.setItem('swapsmith_email_notifications', JSON.stringify(emailNotificationPrefs))
     
-    const currentDbPrefs = dbSettings?.preferences 
-      ? (typeof dbSettings.preferences === 'string' ? JSON.parse(dbSettings.preferences) : dbSettings.preferences)
-      : null
-    
-    if (JSON.stringify(preferences) !== JSON.stringify(currentDbPrefs)) {
-      const timeoutId = setTimeout(() => {
-        fetch('/api/user/settings', {
+    // Schedule/unschedule notifications based on preferences
+    if (emailNotificationPrefs.enabled && user?.uid && user?.email) {
+      // Schedule notifications
+      if (emailNotificationPrefs.walletReminders) {
+        fetch('/api/schedule-notification', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            action: 'schedule',
             userId: user.uid,
-            preferences: JSON.stringify(preferences),
-            emailNotifications: dbSettings?.emailNotifications || JSON.stringify(emailNotificationPrefs)
+            userEmail: user.email,
+            userName: user.email.split('@')[0],
+            type: 'wallet',
+            frequency: emailNotificationPrefs.frequency
           })
-        })
-          .catch(err => console.error('Failed to save preferences:', err))
-      }, 500) // Debounce 500ms
+        }).catch(err => console.error('Failed to schedule wallet reminder:', err))
+      }
       
-      return () => clearTimeout(timeoutId)
-    }
-  }, [preferences, user?.uid, isInitialLoadComplete, dbSettings?.preferences, dbSettings?.emailNotifications, emailNotificationPrefs])
-
-  // Save email notification preferences to database on change (only after initial load)
-  useEffect(() => {
-    if (!isInitialLoadComplete || !user?.uid) return;
-    
-    const emailPrefsStr = JSON.stringify(emailNotificationPrefs)
-    if (emailPrefsStr !== dbSettings?.emailNotifications) {
-      const timeoutId = setTimeout(() => {
-        fetch('/api/user/settings', {
+      if (emailNotificationPrefs.priceAlerts) {
+        fetch('/api/schedule-notification', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            action: 'schedule',
             userId: user.uid,
-            preferences: dbSettings?.preferences || JSON.stringify(preferences),
-            emailNotifications: emailPrefsStr
+            userEmail: user.email,
+            userName: user.email.split('@')[0],
+            type: 'price',
+            frequency: emailNotificationPrefs.frequency
           })
-        })
-          .catch(err => console.error('Failed to save email notifications:', err))
-      }, 500) // Debounce 500ms
-      
-      return () => clearTimeout(timeoutId)
+        }).catch(err => console.error('Failed to schedule price alert:', err))
+      }
     }
-  }, [emailNotificationPrefs, user?.uid, isInitialLoadComplete, dbSettings?.emailNotifications, dbSettings?.preferences, preferences])
-
-  // Schedule notifications (separate from saving settings) - only when enabled state changes
-  useEffect(() => {
-    if (!isInitialLoadComplete || !user?.uid || !user?.email) return;
-    
-    if (emailNotificationPrefs.enabled) {
-      // Schedule notifications with debounce to avoid infinite calls
-      const timeoutId = setTimeout(() => {
-        if (emailNotificationPrefs.walletReminders) {
-          fetch('/api/schedule-notification', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'schedule',
-              userId: user.uid,
-              userEmail: user.email,
-              userName: user.email?.split('@')[0] || 'User',
-              type: 'wallet',
-              frequency: emailNotificationPrefs.frequency
-            })
-          }).catch(err => console.error('Failed to schedule wallet reminder:', err))
-        }
-        
-        if (emailNotificationPrefs.priceAlerts) {
-          fetch('/api/schedule-notification', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'schedule',
-              userId: user.uid,
-              userEmail: user.email,
-              userName: user.email?.split('@')[0] || 'User',
-              type: 'price',
-              frequency: emailNotificationPrefs.frequency
-            })
-          }).catch(err => console.error('Failed to schedule price alert:', err))
-        }
-      }, 1000) // Debounce 1 second
-      
-      return () => clearTimeout(timeoutId)
-    }
-  }, [emailNotificationPrefs.enabled, emailNotificationPrefs.walletReminders, emailNotificationPrefs.priceAlerts, emailNotificationPrefs.frequency, user?.uid, user?.email, isInitialLoadComplete])
+  }, [emailNotificationPrefs, user])
 
   // Send welcome email when wallet is connected
   useEffect(() => {
@@ -394,7 +333,7 @@ export default function ProfilePage() {
         body: JSON.stringify({
           type: 'general',
           userEmail: user.email,
-          userName: user.email?.split('@')[0] || 'User',
+          userName: user.email.split('@')[0],
           title: 'Wallet Connected Successfully! 🎉',
           message: `Congratulations! Your wallet ${address.slice(0, 6)}...${address.slice(-4)} has been successfully connected to SwapSmith. You can now execute AI-powered swaps, track your portfolio, and access all premium features.`,
           ctaText: 'Start Trading',
@@ -595,7 +534,7 @@ export default function ProfilePage() {
               <div className="relative group">
                 <div className="h-20 w-20 rounded-2xl overflow-hidden shadow-lg shadow-blue-500/20 border-2 border-zinc-800 group-hover:border-blue-500 transition-colors">
                   {profileImageUrl ? (
-                    <Image src={profileImageUrl} alt="Profile" width={80} height={80} className="w-full h-full object-cover" />
+                    <img src={profileImageUrl} alt="Profile" className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
                       <User className="w-10 h-10 text-white" />
@@ -850,13 +789,54 @@ export default function ProfilePage() {
             )}
           </GlowCard>
 
-          {/* ───────── Recent Activity ───────── */}
+          {/* ───────── Wallet History ───────── */}
           <SectionHeader icon={History} label="Recent Activity" />
           <GlowCard className="" delay={0.15}>
-            <div className="p-5 text-center py-8">
-              <History className="w-12 h-12 text-zinc-700 mx-auto mb-3" />
-              <p className="text-sm font-semibold text-zinc-300 mb-2">View Swap History Below</p>
-              <p className="text-xs text-zinc-500">Your complete transaction history is available in the Swap History section</p>
+            <div className="p-5 space-y-3">
+              {walletHistory.length > 0 ? (
+                walletHistory.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/30 hover:bg-zinc-800/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-lg ${
+                        item.type === 'swap' ? 'bg-blue-500/10' : 'bg-purple-500/10'
+                      }`}>
+                        {item.type === 'swap' ? (
+                          <ArrowUpRight className="w-4 h-4 text-blue-400" />
+                        ) : (
+                          <ArrowDownLeft className="w-4 h-4 text-purple-400" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-white">
+                          {item.type === 'swap' 
+                            ? `${item.from} → ${item.to}` 
+                            : `Payment ${item.amount}`
+                          }
+                        </p>
+                        <p className="text-xs text-zinc-500 flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {item.date}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-mono text-zinc-300">{item.amount}</p>
+                      <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-bold uppercase">
+                        <Check className="w-3 h-3" />
+                        {item.status}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <History className="w-12 h-12 text-zinc-700 mx-auto mb-3" />
+                  <p className="text-sm text-zinc-500">No recent activity</p>
+                </div>
+              )}
             </div>
           </GlowCard>
             </div>
@@ -995,76 +975,6 @@ export default function ProfilePage() {
                     </div>
                   </motion.div>
                 </AnimatePresence>
-              )}
-            </div>
-          </GlowCard>
-
-          {/* ───────── Swap History ───────── */}
-          <SectionHeader icon={History} label="Swap History" />
-          <GlowCard className="overflow-hidden" delay={0.25}>
-            <div className="p-5">
-              {!swapHistoryData || !swapHistoryData.history || swapHistoryData.history.length === 0 ? (
-                <div className="text-center py-12">
-                  <History className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
-                  <h3 className="text-sm font-semibold text-zinc-400 mb-2">No Swap History</h3>
-                  <p className="text-xs text-zinc-600">
-                    Your completed swaps will appear here
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {swapHistoryData.history.slice(0, 10).map((swap, index) => (
-                    <motion.div
-                      key={swap.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      className="flex items-center justify-between p-4 rounded-xl bg-zinc-800/40 border border-zinc-700/50 hover:border-zinc-600/50 transition-colors"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center border border-blue-500/20">
-                          <ArrowUpRight className="w-5 h-5 text-blue-400" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm font-bold text-white">
-                              {swap.depositCoin?.toUpperCase() || 'N/A'}
-                            </span>
-                            <ArrowUpRight className="w-3 h-3 text-zinc-500" />
-                            <span className="text-sm font-bold text-white">
-                              {swap.settleCoin?.toUpperCase() || 'N/A'}
-                            </span>
-                          </div>
-                          <p className="text-xs text-zinc-500">
-                            {new Date(swap.createdAt).toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-mono font-bold text-white mb-1">
-                          {parseFloat(swap.depositAmount || '0').toFixed(6)}
-                        </p>
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">
-                            {swap.status || 'Completed'}
-                          </span>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                  {swapHistoryData.history.length > 10 && (
-                    <p className="text-center text-xs text-zinc-600 pt-2">
-                      Showing 10 most recent swaps
-                    </p>
-                  )}
-                </div>
               )}
             </div>
           </GlowCard>
