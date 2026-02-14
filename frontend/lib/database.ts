@@ -69,10 +69,23 @@ export const chatHistory = pgTable('chat_history', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const discussions = pgTable('discussions', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  username: text('username').notNull(),
+  content: text('content').notNull(),
+  category: text('category').default('general'), // general, crypto, help, announcement
+  likes: text('likes').default('0'),
+  replies: text('replies').default('0'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 export type CoinPriceCache = typeof coinPriceCache.$inferSelect;
 export type UserSettings = typeof userSettings.$inferSelect;
 export type SwapHistory = typeof swapHistory.$inferSelect;
 export type ChatHistory = typeof chatHistory.$inferSelect;
+export type Discussion = typeof discussions.$inferSelect;
 
 // --- COIN PRICE CACHE FUNCTIONS ---
 
@@ -326,6 +339,63 @@ export async function getChatSessions(userId: string): Promise<{ sessionId: stri
       messageCount: messages.length,
     };
   }).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+}
+
+// --- DISCUSSION FUNCTIONS ---
+
+export async function createDiscussion(
+  userId: string,
+  username: string,
+  content: string,
+  category: string = 'general'
+) {
+  const result = await db.insert(discussions).values({
+    userId,
+    username,
+    content,
+    category,
+    likes: '0',
+    replies: '0',
+    updatedAt: new Date(),
+  }).returning();
+  return result[0];
+}
+
+export async function getDiscussions(category?: string, limit: number = 50): Promise<Discussion[]> {
+  if (category) {
+    return await db.select().from(discussions)
+      .where(eq(discussions.category, category))
+      .orderBy(desc(discussions.createdAt))
+      .limit(limit);
+  }
+  
+  return await db.select().from(discussions)
+    .orderBy(desc(discussions.createdAt))
+    .limit(limit);
+}
+
+export async function deleteDiscussion(id: number, userId: string) {
+  await db.delete(discussions)
+    .where(and(
+      eq(discussions.id, id),
+      eq(discussions.userId, userId)
+    ));
+}
+
+export async function likeDiscussion(id: number) {
+  const discussion = await db.select().from(discussions)
+    .where(eq(discussions.id, id))
+    .limit(1);
+  
+  if (discussion[0]) {
+    const currentLikes = parseInt(discussion[0].likes || '0');
+    await db.update(discussions)
+      .set({ 
+        likes: String(currentLikes + 1),
+        updatedAt: new Date()
+      })
+      .where(eq(discussions.id, id));
+  }
 }
 
 export default db;
