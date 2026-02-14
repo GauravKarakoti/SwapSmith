@@ -131,6 +131,19 @@ export default function Navbar() {
             <span className="hidden sm:inline">Terminal</span>
           </Link>
 
+
+          {/* About Nav Link */}
+          <Link
+            href="/about"
+            className={`flex items-center gap-1.5 text-sm font-semibold transition-colors px-2 sm:px-3 py-2 ${
+              pathname === "/about"
+                ? "text-white"
+                : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            <span className="hidden sm:inline">About</span>
+          </Link>
+
           {/* FAQ Nav Link */}
           <a
             href={pathname === "/" ? "#faq-section" : "/#faq-section"}
