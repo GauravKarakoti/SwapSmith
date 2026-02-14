@@ -90,7 +90,6 @@ export default function ChatInterface() {
   };
 
   // Voice recording handlers (reserved for future UI integration)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _handleStartRecording = async () => {
     if (!isAudioSupported) {
       addMessage({ 
@@ -112,7 +111,6 @@ export default function ChatInterface() {
     }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _handleStopRecording = async () => {
     try {
       const audioBlob = await stopRecording();
@@ -436,7 +434,13 @@ return (
           
           <div className="relative flex items-center gap-3 bg-[#161A1E] border border-white/10 p-2 rounded-2xl group-focus-within:border-blue-500/50 transition-all">
             <button 
-              onClick={isRecording ? stopRecording : startRecording}
+              onClick={() => {
+                if (isRecording) {
+                  _handleStopRecording();
+                } else {
+                  _handleStartRecording();
+                }
+              }}
               className={`p-3 rounded-xl transition-all ${
                 isRecording ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/40' : 'bg-white/5 text-gray-400 hover:bg-white/10'
               }`}

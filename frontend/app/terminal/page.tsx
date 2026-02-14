@@ -1,18 +1,34 @@
 "use client";
 
-import { useEffect, useState, useRef } from 'react';
-import { useAuth } from '@/hooks/useAuth';
-import { useAccount } from 'wagmi';
-import { useRouter } from 'next/navigation';
-import Navbar from '@/components/Navbar';
-import ClaudeChatInput from '@/components/ClaudeChatInput';
-import SwapConfirmation from '@/components/SwapConfirmation';
-import IntentConfirmation from '@/components/IntentConfirmation';
-import { ParsedCommand } from '@/utils/groq-client';
-import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
-import { useAudioRecorder } from '@/hooks/useAudioRecorder';
-import { MessageCircle, Plus, Clock, Settings, Menu } from 'lucide-react';
-import Link from 'next/link';
+import { useEffect, useState, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
+import { useAccount } from "wagmi";
+import {
+  MessageCircle,
+  Plus,
+  Clock,
+  Settings,
+  Menu,
+  Zap,
+  Activity,
+  Trash2,
+} from "lucide-react";
+
+import Navbar from "@/components/Navbar";
+import ClaudeChatInput from "@/components/ClaudeChatInput";
+import SwapConfirmation from "@/components/SwapConfirmation";
+import IntentConfirmation from "@/components/IntentConfirmation";
+
+import { useAuth } from "@/hooks/useAuth";
+import { useChatHistory, useChatSessions } from "@/hooks/useCachedData";
+
+import { ParsedCommand } from "@/utils/groq-client";
+
+/* -------------------------------------------------------------------------- */
+/*                                    Types                                   */
+/* -------------------------------------------------------------------------- */
 
 interface QuoteData {
   depositAmount: string;
@@ -37,12 +53,12 @@ interface Message {
     | "swap_confirmation"
     | "yield_info"
     | "checkout_link";
-  data?:
-    | ParsedCommand
-    | { quoteData: unknown; confidence: number }
-    | { url: string }
-    | { parsedCommand: ParsedCommand };
+  data?: ParsedCommand | { quoteData: QuoteData; confidence: number } | { url: string } | { parsedCommand: ParsedCommand } | Record<string, unknown>;
 }
+
+/* -------------------------------------------------------------------------- */
+/*                               UI Components                                */
+/* -------------------------------------------------------------------------- */
 
 const SidebarSkeleton = () => (
   <div className="space-y-4 p-2">
@@ -55,605 +71,330 @@ const SidebarSkeleton = () => (
   </div>
 );
 
-const MessageListSkeleton = () => (
-  <div className="space-y-6 animate-in fade-in duration-500">
-    {/* Assistant Bubble 1 */}
-    <div className="flex justify-start">
-      <div className="bg-zinc-900/50 border border-zinc-800 px-5 py-4 rounded-2xl rounded-tl-none w-2/3 max-w-sm">
-        <div className="space-y-2">
-          <div className="h-2 w-full bg-white/5 rounded-full animate-pulse" />
-          <div className="h-2 w-[80%] bg-white/5 rounded-full animate-pulse delay-75" />
+const LiveStatsCard = () => {
+  const [stats, setStats] = useState({
+    gasPrice: 20,
+    volume24h: "2.4",
+    activeSwaps: 142,
+  });
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setStats({
+        gasPrice: Math.floor(Math.random() * 20) + 10,
+        volume24h: (Math.random() * 5 + 1).toFixed(1),
+        activeSwaps: Math.floor(Math.random() * 50) + 100,
+      });
+    }, 5000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Activity className="w-4 h-4 text-cyan-400" />
+        <span className="text-sm font-semibold text-zinc-200">
+          Live Network
+        </span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 text-center">
+        <div>
+          <div className="text-cyan-400 font-bold flex justify-center gap-1">
+            <Zap className="w-3 h-3" /> {stats.gasPrice}
+          </div>
+          <div className="text-[10px] text-zinc-500">Gwei</div>
+        </div>
+        <div>
+          <div className="text-purple-400 font-bold">${stats.volume24h}M</div>
+          <div className="text-[10px] text-zinc-500">24h Vol</div>
+        </div>
+        <div>
+          <div className="text-pink-400 font-bold">{stats.activeSwaps}</div>
+          <div className="text-[10px] text-zinc-500">Active</div>
         </div>
       </div>
     </div>
-    {/* User Bubble (Right side) */}
-    <div className="flex justify-end">
-      <div className="bg-blue-600/20 border border-blue-600/10 px-5 py-4 rounded-2xl rounded-tr-none w-1/3">
-        <div className="h-2 w-full bg-blue-400/20 rounded-full animate-pulse" />
-      </div>
-    </div>
-    {/* Assistant Bubble 2 (Longer) */}
-    <div className="flex justify-start">
-      <div className="bg-zinc-900/50 border border-zinc-800 px-5 py-4 rounded-2xl rounded-tl-none w-full max-w-md">
-        <div className="space-y-2">
-          <div className="h-2 w-full bg-white/5 rounded-full animate-pulse" />
-          <div className="h-2 w-full bg-white/5 rounded-full animate-pulse delay-100" />
-          <div className="h-2 w-[60%] bg-white/5 rounded-full animate-pulse delay-150" />
-        </div>
-      </div>
-    </div>
-  </div>
-);
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+/*                                Main Page                                   */
+/* -------------------------------------------------------------------------- */
 
 export default function TerminalPage() {
   const router = useRouter();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
-  
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
-  const [chatHistory, setChatHistory] = useState([
-    { id: 1, title: "Swap ETH to USDC", timestamp: "2 hours ago" },
-    { id: 2, title: "Check yield opportunities", timestamp: "Yesterday" },
-    { id: 3, title: "Create payment link", timestamp: "2 days ago" },
-    { id: 4, title: "Swap BTC to ETH", timestamp: "1 week ago" },
-  ]);
+  const { isConnected } = useAccount();
+  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
 
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
       content:
-        "Hello! I can help you swap assets, create payment links, or scout yields.\n\n💡 Tip: Try our Telegram Bot for on-the-go access!",
+        "Hello! I can help you swap assets, create payment links, or scout yields.\n\n💡 Tip: Try our Telegram Bot!",
       timestamp: new Date(),
       type: "message",
     },
   ]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(
-    null,
+
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+
+  const [currentSessionId, setCurrentSessionId] = useState(
+    crypto.randomUUID(),
   );
+  const sessionIdRef = useRef(currentSessionId);
+  const loadedSessionRef = useRef<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { address, isConnected } = useAccount();
-  const { handleError } = useErrorHandler();
 
-  const {
-    isRecording,
-    isSupported: isAudioSupported,
-    startRecording,
-    stopRecording,
-    error: audioError,
-  } = useAudioRecorder({
-    sampleRate: 16000,
-    numberOfAudioChannels: 1,
-  });
+  const { data: chatSessions, refetch: refetchSessions } = useChatSessions(
+    user?.uid,
+  );
+  const { data: dbChatHistory } = useChatHistory(
+    user?.uid,
+    currentSessionId,
+  );
 
-  // Protect route - redirect to login if not authenticated
+  /* ------------------------------------------------------------------------ */
+
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      router.push('/login');
-    }
+    if (!authLoading && !isAuthenticated) router.push("/login");
   }, [authLoading, isAuthenticated, router]);
 
   useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
+    sessionIdRef.current = currentSessionId;
+    loadedSessionRef.current = null; // Reset on session change
+  }, [currentSessionId]);
 
+  // Load chat history from database when available
   useEffect(() => {
-    const timer = setTimeout(() => setIsHistoryLoading(false), 1000);
-    return () => clearTimeout(timer);
-  }, []);
+    // Only load once per session to prevent cascading renders
+    if (loadedSessionRef.current === currentSessionId) return;
+    
+    if (dbChatHistory?.history?.length) {
+      const loadedMessages = dbChatHistory.history.map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+        timestamp: new Date(m.createdAt),
+        type: "message" as const,
+      }));
+      // Using queueMicrotask to defer state updates and prevent cascading renders
+      queueMicrotask(() => {
+        setMessages(loadedMessages);
+        setIsHistoryLoading(false);
+      });
+      loadedSessionRef.current = currentSessionId;
+    } else {
+      queueMicrotask(() => setIsHistoryLoading(false));
+    }
+  }, [dbChatHistory, currentSessionId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  useEffect(() => {
-    if (audioError) {
-      addMessage({ role: "assistant", content: audioError, type: "message" });
-    }
-  }, [audioError]);
+  /* ------------------------------------------------------------------------ */
 
-  const formatTime = (date: Date) => {
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-    const ampm = hours >= 12 ? "PM" : "AM";
-    const displayHours = hours % 12 || 12;
-    return `${displayHours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")} ${ampm}`;
-  };
+  const addMessage = useCallback(
+    (msg: Omit<Message, "timestamp">) => {
+      setMessages((prev) => [...prev, { ...msg, timestamp: new Date() }]);
+    },
+    [],
+  );
 
-  const addMessage = (message: Omit<Message, "timestamp">) => {
-    setMessages((prev) => [...prev, { ...message, timestamp: new Date() }]);
-  };
-
-  const handleStartRecording = async () => {
-    if (!isAudioSupported) {
-      addMessage({
+  const handleNewChat = () => {
+    const id = crypto.randomUUID();
+    setCurrentSessionId(id);
+    setMessages([
+      {
         role: "assistant",
-        content: `Voice input is not supported in this browser. Please use text input instead.`,
+        content:
+          "Hello! I can help you swap assets, create payment links, or scout yields.",
+        timestamp: new Date(),
         type: "message",
-      });
-      return;
-    }
-    try {
-      await startRecording();
-    } catch (err) {
-      const errorMessage = handleError(err, ErrorType.VOICE_ERROR, {
-        operation: "microphone_access",
-        retryable: true,
-      });
-      addMessage({ role: "assistant", content: errorMessage, type: "message" });
-    }
+      },
+    ]);
   };
 
-  const handleStopRecording = async () => {
-    try {
-      const audioBlob = await stopRecording();
-      if (audioBlob) {
-        await handleVoiceInput(audioBlob);
-      }
-    } catch (err) {
-      const errorMessage = handleError(err, ErrorType.VOICE_ERROR, {
-        operation: "stop_recording",
-        retryable: true,
-      });
-      addMessage({ role: "assistant", content: errorMessage, type: "message" });
-    }
+  const handleSwitchSession = (id: string) => setCurrentSessionId(id);
+
+  const handleDeleteSession = async (
+    sessionId: string,
+    e: React.MouseEvent,
+  ) => {
+    e.stopPropagation();
+    if (!user?.uid) return;
+
+    await fetch(
+      `/api/chat/history?userId=${user.uid}&sessionId=${sessionId}`,
+      { method: "DELETE" },
+    );
+
+    if (sessionId === currentSessionId) handleNewChat();
+    refetchSessions();
   };
 
-  const handleVoiceInput = async (audioBlob: Blob) => {
-    setIsLoading(true);
-    addMessage({
-      role: "user",
-      content: "🎤 [Sending Voice...]",
-      type: "message",
-    });
+  /* ------------------------------------------------------------------------ */
 
-    const formData = new FormData();
-    let fileName = "voice.webm";
-    if (audioBlob.type.includes("mp4")) fileName = "voice.mp4";
-    else if (audioBlob.type.includes("wav")) fileName = "voice.wav";
-    else if (audioBlob.type.includes("ogg")) fileName = "voice.ogg";
-
-    formData.append("file", audioBlob, fileName);
-
-    try {
-      const response = await fetch("/api/transcribe", {
-        method: "POST",
-        body: formData,
-      });
-      if (!response.ok) throw new Error("Transcription failed");
-      const data = await response.json();
-
-      if (data.text) {
-        setMessages((prev) => {
-          const newMsgs = [...prev];
-          const lastIndex = newMsgs.length - 1;
-          if (
-            lastIndex >= 0 &&
-            newMsgs[lastIndex].content === "🎤 [Sending Voice...]"
-          ) {
-            newMsgs[lastIndex] = {
-              ...newMsgs[lastIndex],
-              content: `🎤 "${data.text}"`,
-            };
-          }
-          return newMsgs;
-        });
-        await processCommand(data.text);
-      } else {
-        addMessage({
-          role: "assistant",
-          content: "I couldn't hear anything clearly.",
-          type: "message",
-        });
-        setIsLoading(false);
-      }
-    } catch (error) {
-      const errorMessage = handleError(error, ErrorType.VOICE_ERROR, {
-        operation: "voice_transcription",
-        retryable: true,
-      });
-      setMessages((prev) =>
-        prev.filter((m) => m.content !== "🎤 [Sending Voice...]"),
-      );
-      addMessage({ role: "assistant", content: errorMessage, type: "message" });
-      setIsLoading(false);
-    }
-  };
-
-  const processCommand = async (text: string) => {
-    if (!isLoading) setIsLoading(true);
-    try {
-      const response = await fetch("/api/parse-command", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
-      });
-      const command: ParsedCommand = await response.json();
-
-      if (!command.success && command.intent !== "yield_scout") {
-        addMessage({
-          role: "assistant",
-          content: `I couldn't understand. ${command.validationErrors.join(", ")}`,
-          type: "message",
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      if (command.intent === "yield_scout") {
-        const yieldRes = await fetch("/api/yields");
-        const yieldData = await yieldRes.json();
-        addMessage({
-          role: "assistant",
-          content: yieldData.message,
-          type: "yield_info",
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      if (command.intent === "checkout") {
-        let finalAddress = command.settleAddress;
-        if (!finalAddress) {
-          if (!isConnected || !address) {
-            addMessage({
-              role: "assistant",
-              content:
-                "To create a receive link for yourself, please connect your wallet first.",
-              type: "message",
-            });
-            setIsLoading(false);
-            return;
-          }
-          finalAddress = address;
-        }
-        const checkoutRes = await fetch("/api/create-checkout", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            settleAsset: command.settleAsset,
-            settleNetwork: command.settleNetwork,
-            settleAmount: command.settleAmount,
-            settleAddress: finalAddress,
-          }),
-        });
-        const checkoutData = await checkoutRes.json();
-        if (checkoutData.error) throw new Error(checkoutData.error);
-        addMessage({
-          role: "assistant",
-          content: `Payment Link Created for ${checkoutData.settleAmount} ${checkoutData.settleCoin} on ${command.settleNetwork}`,
-          type: "checkout_link",
-          data: { url: checkoutData.url },
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      if (command.intent === "portfolio" && command.portfolio) {
-        addMessage({
-          role: "assistant",
-          content: `📊 **Portfolio Strategy Detected**\nSplitting ${command.amount} ${command.fromAsset} into multiple assets. Generating orders...`,
-          type: "message",
-        });
-        for (const item of command.portfolio) {
-          const splitAmount = (command.amount! * item.percentage) / 100;
-          const subCommand: ParsedCommand = {
-            ...command,
-            intent: "swap",
-            amount: splitAmount,
-            toAsset: item.toAsset,
-            toChain: item.toChain,
-            portfolio: undefined,
-            confidence: 100,
-          };
-          await executeSwap(subCommand);
-        }
-        setIsLoading(false);
-        return;
-      }
-
-      if (command.requiresConfirmation || command.confidence < 80) {
-        setPendingCommand(command);
-        addMessage({
-          role: "assistant",
-          content: "",
-          type: "intent_confirmation",
-          data: { parsedCommand: command },
-        });
-      } else {
-        await executeSwap(command);
-      }
-    } catch (error: unknown) {
-      const errorMessage = handleError(error, ErrorType.API_FAILURE, {
-        operation: "command_processing",
-        retryable: true,
-      });
-      addMessage({ role: "assistant", content: errorMessage, type: "message" });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const executeSwap = async (command: ParsedCommand) => {
-    try {
-      const quoteResponse = await fetch("/api/create-swap", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fromAsset: command.fromAsset,
-          toAsset: command.toAsset,
-          amount: command.amount,
-          fromChain: command.fromChain,
-          toChain: command.toChain,
-        }),
-      });
-      const quote = await quoteResponse.json();
-      if (quote.error) throw new Error(quote.error);
-      addMessage({
-        role: "assistant",
-        content: `Swap Prepared: ${quote.depositAmount} ${quote.depositCoin} → ${quote.settleAmount} ${quote.settleCoin}`,
-        type: "swap_confirmation",
-        data: { quoteData: quote, confidence: command.confidence },
-      });
-    } catch (error: unknown) {
-      const errorMessage = handleError(error, ErrorType.API_FAILURE, {
-        operation: "swap_quote",
-        retryable: true,
-      });
-      addMessage({ role: "assistant", content: errorMessage, type: "message" });
-    }
-  };
-
-  const handleIntentConfirm = async (confirmed: boolean) => {
-    if (confirmed && pendingCommand) {
-      if (pendingCommand.intent === "portfolio") {
-        const confirmedCmd = {
-          ...pendingCommand,
-          requiresConfirmation: false,
-          confidence: 100,
-        };
-        addMessage({
-          role: "assistant",
-          content: "Executing Portfolio Strategy...",
-          type: "message",
-        });
-        if (confirmedCmd.portfolio) {
-          for (const item of confirmedCmd.portfolio) {
-            const splitAmount = (confirmedCmd.amount! * item.percentage) / 100;
-            await executeSwap({
-              ...confirmedCmd,
-              intent: "swap",
-              amount: splitAmount,
-              toAsset: item.toAsset,
-              toChain: item.toChain,
-            });
-          }
-        }
-      } else {
-        await executeSwap(pendingCommand);
-      }
-    } else if (!confirmed) {
-      addMessage({ role: "assistant", content: "Cancelled.", type: "message" });
-    }
-    setPendingCommand(null);
-  };
-
-  const handleSendMessage = (data: {
-    message: string;
-    files: Array<{
-      id: string;
-      file: File;
-      type: string;
-      preview: string | null;
-      uploadStatus: string;
-      content?: string;
-    }>;
-    pastedContent: Array<{
-      id: string;
-      file: File;
-      type: string;
-      preview: string | null;
-      uploadStatus: string;
-      content?: string;
-    }>;
-    model: string;
-    isThinkingEnabled: boolean;
-  }) => {
-    if (data.message.trim()) {
-      addMessage({ role: "user", content: data.message, type: "message" });
-      processCommand(data.message);
-      setChatHistory([
-        {
-          id: Date.now(),
-          title: data.message.slice(0, 50),
-          timestamp: "Just now",
-        },
-        ...chatHistory,
-      ]);
-    }
-  };
-
-  // Show loading state while checking authentication
   if (authLoading) {
     return (
-      <div className="flex h-screen bg-[#050505] items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-zinc-400">Authenticating...</p>
-        </div>
+      <div className="flex h-screen items-center justify-center bg-black">
+        <div className="animate-spin h-8 w-8 border-2 border-cyan-500 border-t-transparent rounded-full" />
       </div>
     );
   }
 
-  // Don't render if not authenticated (will redirect)
-  if (!isAuthenticated) {
-    return null;
-  }
+  if (!isAuthenticated) return null;
+
+  /* ------------------------------------------------------------------------ */
 
   return (
     <>
       <Navbar />
-      
-      <div className="flex h-screen bg-[#050505] text-white overflow-hidden pt-16">
+
+      <div className="flex h-screen pt-16 bg-[#030308] text-white overflow-hidden">
         {/* Sidebar */}
-        <aside
-          className={`${isSidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 bg-zinc-900/50 border-r border-zinc-800 flex flex-col overflow-hidden`}
-        >
+        <AnimatePresence>
           {isSidebarOpen && (
-            <>
-              <div className="p-4 border-b border-zinc-800">
-                <button className="w-full flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors text-sm font-medium">
-                  <Plus className="w-4 h-4" />
-                  New Chat
+            <motion.aside
+              initial={{ width: 0 }}
+              animate={{ width: 320 }}
+              exit={{ width: 0 }}
+              className="border-r border-zinc-800 bg-zinc-900/40 backdrop-blur-xl flex flex-col"
+            >
+              <div className="p-4">
+                <button
+                  onClick={handleNewChat}
+                  className="w-full flex gap-2 justify-center items-center bg-gradient-to-r from-cyan-600 to-blue-600 rounded-xl py-3 font-semibold"
+                >
+                  <Plus className="w-4 h-4" /> New Chat
                 </button>
               </div>
 
-              {/* Chat History */}
-              <div className="flex-1 overflow-y-auto p-2">
-                <div className="mb-4">
-                  <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                    <Clock className="w-3 h-3" />
-                    Recent
-                  </div>
-                  <div className="space-y-1">
-                    {isHistoryLoading ? (
-                      <SidebarSkeleton />
-                    ) : (
-                      chatHistory.map((chat) => (
-                        <button
-                          key={chat.id}
-                          className="w-full text-left px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors group"
-                        >
-                          <p className="text-sm text-zinc-200 truncate group-hover:text-white transition-colors">
-                            {chat.title}
-                          </p>
-                          <p className="text-xs text-zinc-600 mt-0.5">
-                            {chat.timestamp}
-                          </p>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </div>
+              <div className="px-4">
+                <LiveStatsCard />
               </div>
 
-              {/* Sidebar Footer */}
-              <div className="p-3 border-t border-zinc-800 space-y-1">
+              <div className="flex-1 overflow-y-auto p-2 mt-4">
+                <div className="text-xs uppercase text-zinc-500 px-3 mb-2 flex items-center gap-2">
+                  <Clock className="w-3 h-3" /> Recent
+                </div>
+
+                {isHistoryLoading ? (
+                  <SidebarSkeleton />
+                ) : chatSessions?.sessions?.length ? (
+                  chatSessions.sessions.map((chat) => (
+                    <div
+                      key={chat.sessionId}
+                      onClick={() => handleSwitchSession(chat.sessionId)}
+                      className="group px-3 py-2 rounded-xl hover:bg-white/5 cursor-pointer relative"
+                    >
+                      <p className="text-sm truncate">{chat.title}</p>
+                      <button
+                        onClick={(e) =>
+                          handleDeleteSession(chat.sessionId, e)
+                        }
+                        className="absolute right-2 top-2 opacity-0 group-hover:opacity-100"
+                      >
+                        <Trash2 className="w-3 h-3 text-red-400" />
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center text-sm text-zinc-500 py-6">
+                    No chats yet
+                  </div>
+                )}
+              </div>
+
+              <div className="p-3 border-t border-zinc-800">
                 <a
                   href="https://t.me/SwapSmithBot"
                   target="_blank"
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors text-sm text-zinc-400 hover:text-white"
+                  className="flex gap-2 items-center text-sm text-zinc-400 hover:text-cyan-400"
                 >
-                  <MessageCircle className="w-4 h-4" />
-                  Support
+                  <MessageCircle className="w-4 h-4" /> Support
                 </a>
+
                 <Link
                   href="/profile"
+                  className="flex gap-2 items-center text-sm text-zinc-400 hover:text-purple-400 mt-2"
                 >
-                  <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors text-sm text-zinc-400 hover:text-white">
-                    <Settings className="w-4 h-4" />
-                    Settings
-                  </button>
+                  <Settings className="w-4 h-4" /> Settings
                 </Link>
               </div>
-            </>
+            </motion.aside>
           )}
-        </aside>
+        </AnimatePresence>
 
-        {/* Main Content */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Chat Area */}
-          <main className="flex-1 overflow-y-auto flex flex-col">
-            
-            {/* Sidebar Toggle Button */}
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="fixed top-20 left-4 z-40 p-2 bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700 rounded-lg transition-colors shadow-lg"
-              title={isSidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-            >
-              <Menu className="w-5 h-5 text-zinc-300" />
-            </button>
+        {/* Main */}
+        <div className="flex-1 flex flex-col">
+          <button
+            onClick={() => setIsSidebarOpen((s) => !s)}
+            className="fixed top-20 left-4 z-40 p-2 bg-zinc-900 border border-zinc-700 rounded-xl"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
 
-            {/* Header Section */}
-            <div className="flex-shrink-0 pt-12 pb-8 px-4">
-              <div className="max-w-3xl mx-auto text-center space-y-4">
-                <h1 className="text-4xl md:text-6xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-white to-white/40">
-                  Terminal Alpha.
-                </h1>
-                <p className="text-zinc-500 text-sm">
-                  Swap assets, create payment links, or scout yields with AI
-                  assistance
-                </p>
-              </div>
+          <div className="flex-1 overflow-y-auto px-4 py-8">
+            <div className="max-w-3xl mx-auto space-y-6">
+              {messages.map((msg, i) => (
+                <div
+                  key={i}
+                  className={`flex ${
+                    msg.role === "user"
+                      ? "justify-end"
+                      : "justify-start"
+                  }`}
+                >
+                  <div className="max-w-[80%]">
+                    <div
+                      className={`px-4 py-3 rounded-2xl text-sm ${
+                        msg.role === "user"
+                          ? "bg-gradient-to-r from-cyan-600 to-blue-600"
+                          : "bg-zinc-900/70 border border-zinc-800"
+                      }`}
+                    >
+                      {msg.type === "swap_confirmation" && msg.data && 'quoteData' in msg.data ? (
+                        <SwapConfirmation
+                          quote={msg.data.quoteData as QuoteData}
+                          confidence={msg.data.confidence as number}
+                        />
+                      ) : msg.type === "intent_confirmation" && msg.data && 'parsedCommand' in msg.data ? (
+                        <IntentConfirmation
+                          command={msg.data.parsedCommand as ParsedCommand}
+                          onConfirm={() => {}}
+                        />
+                      ) : (
+                        <pre className="whitespace-pre-wrap">
+                          {msg.content}
+                        </pre>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
             </div>
+          </div>
 
-            {/* Chat Messages Container */}
-            <div className="flex-1 px-4 pb-8 overflow-y-auto">
-              <div className="max-w-3xl mx-auto space-y-6">
-                {/* SHOW SKELETON LIST IF INITIAL DATA IS LOADING */}
-                {isHistoryLoading ? (
-                  <MessageListSkeleton />
-                ) : (
-                  <>
-                    {/* Render Real Messages */}
-                    {messages.map((msg, index) => (
-                      <div
-                        key={index}
-                        className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2`}
-                      >
-                        <div className={`max-w-[85%]`}>
-                          {msg.role === 'user' ? (
-                            <div className="bg-blue-600 text-white px-5 py-3 rounded-2xl rounded-tr-none shadow-lg shadow-blue-600/20 text-sm font-medium">
-                              {msg.content}
-                            </div>
-                          ) : (
-                            <div className="space-y-3">
-                              <div className="bg-zinc-900/50 border border-zinc-800 text-gray-200 px-5 py-4 rounded-2xl rounded-tl-none text-sm leading-relaxed backdrop-blur-sm">
-                                {msg.type === 'message' && <div className="whitespace-pre-line">{msg.content}</div>}
-                                {msg.type === 'yield_info' && <div className="font-mono text-xs text-blue-300">{msg.content}</div>}
-                                {msg.type === 'intent_confirmation' && msg.data && 'parsedCommand' in msg.data && <IntentConfirmation command={msg.data.parsedCommand} onConfirm={handleIntentConfirm} />}
-                                {msg.type === 'swap_confirmation' && msg.data && 'quoteData' in msg.data && <SwapConfirmation quote={msg.data.quoteData as QuoteData} confidence={msg.data.confidence} />}
-                                {msg.type === 'checkout_link' && msg.data && 'url' in msg.data && (
-                                  <a href={msg.data.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
-                                    {msg.data.url}
-                                  </a>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                          <p
-                            className={`text-[10px] text-gray-500 mt-2 px-1 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}
-                          >
-                            {formatTime(msg.timestamp)}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </>
-                )}
-
-                {/* SHOW SINGLE SKELETON BUBBLE IF AI IS CURRENTLY PROCESSING A NEW REQUEST */}
-                {isLoading && !isHistoryLoading && <MessageListSkeleton />}
-
-                <div ref={messagesEndRef} />
-              </div>
-            </div>
-
-            {/* Input Area - Fixed at bottom */}
-            <div className="flex-shrink-0 pb-8 px-4">
-              <div className="max-w-3xl mx-auto">
-                <ClaudeChatInput
-                  onSendMessage={handleSendMessage}
-                  isRecording={isRecording}
-                  isAudioSupported={isAudioSupported}
-                  onStartRecording={handleStartRecording}
-                  onStopRecording={handleStopRecording}
-                  isConnected={isConnected}
-                />
-              </div>
-            </div>
-          </main>
+          <div className="p-4 border-t border-zinc-800">
+            <ClaudeChatInput
+              onSendMessage={({ message }) =>
+                addMessage({
+                  role: "user",
+                  content: message,
+                  type: "message",
+                })
+              }
+              isRecording={false}
+              isAudioSupported={false}
+              onStartRecording={() => {}}
+              onStopRecording={() => {}}
+              isConnected={isConnected}
+            />
+          </div>
         </div>
       </div>
     </>

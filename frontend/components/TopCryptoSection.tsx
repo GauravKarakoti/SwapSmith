@@ -54,20 +54,6 @@ export default function TopCryptoSection({ coins }: TopCryptoSectionProps) {
 
   return (
     <div className="mb-8">
-      {/* Header */}
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-6"
-      >
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-          Featured Cryptocurrencies
-        </h2>
-        <p className="text-gray-600 dark:text-gray-400">
-          Top performing assets with 100-day price history
-        </p>
-      </motion.div>
-
       {/* Two Charts Side by Side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {topTwoCoins.map((coin, index) => {

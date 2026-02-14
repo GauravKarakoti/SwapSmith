@@ -1,15 +1,18 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { pgTable, serial, text, real, timestamp, bigint } from 'drizzle-orm/pg-core';
-import { eq, desc, and } from 'drizzle-orm'; // Added 'and'
+import { pgTable, serial, text, real, timestamp, bigint, integer } from 'drizzle-orm/pg-core';
+import { eq, desc, notInArray } from 'drizzle-orm';
 import dotenv from 'dotenv';
 import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
 import type { ParsedCommand } from './groq-client';
 
 dotenv.config();
-
-const sql = neon(process.env.DATABASE_URL!);
-const db = drizzle(sql);
+const memoryAddressBook = new Map<number, Map<string, { address: string; chain: string }>>();
+const memoryState = new Map<number, any>();
+//newly added
+const connectionString = process.env.DATABASE_URL || 'postgres://mock:mock@localhost:5432/mock';
+const client = neon(connectionString);
+export const db = drizzle(client);
 
 // --- SCHEMAS ---
 export const users = pgTable('users', {
@@ -74,11 +77,116 @@ export const watchedOrders = pgTable('watched_orders', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// Caching tables
+export const coinPriceCache = pgTable('coin_price_cache', {
+  id: serial('id').primaryKey(),
+  coin: text('coin').notNull(),
+  network: text('network').notNull(),
+  name: text('name').notNull(),
+  usdPrice: text('usd_price'),
+  btcPrice: text('btc_price'),
+  available: text('available').notNull().default('true'),
+  expiresAt: timestamp('expires_at').notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const userSettings = pgTable('user_settings', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull().unique(),
+  walletAddress: text('wallet_address'),
+  theme: text('theme').default('dark'),
+  slippageTolerance: real('slippage_tolerance').default(0.5),
+  notificationsEnabled: text('notifications_enabled').default('true'),
+  defaultFromAsset: text('default_from_asset'),
+  defaultToAsset: text('default_to_asset'),
+  preferences: text('preferences'),
+  emailNotifications: text('email_notifications'),
+  telegramNotifications: text('telegram_notifications').default('false'),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const swapHistory = pgTable('swap_history', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  walletAddress: text('wallet_address'),
+  sideshiftOrderId: text('sideshift_order_id').notNull(),
+  quoteId: text('quote_id'),
+  fromAsset: text('from_asset').notNull(),
+  fromNetwork: text('from_network').notNull(),
+  fromAmount: real('from_amount').notNull(),
+  toAsset: text('to_asset').notNull(),
+  toNetwork: text('to_network').notNull(),
+  settleAmount: text('settle_amount').notNull(),
+  depositAddress: text('deposit_address'),
+  status: text('status').notNull().default('pending'),
+  txHash: text('tx_hash'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const chatHistory = pgTable('chat_history', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  walletAddress: text('wallet_address'),
+  role: text('role').notNull(),
+  content: text('content').notNull(),
+  metadata: text('metadata'),
+  sessionId: text('session_id'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// DCA (Dollar Cost Averaging) Schedules
+export const dcaSchedules = pgTable('dca_schedules', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
+  fromAsset: text('from_asset').notNull(),
+  fromChain: text('from_chain').notNull(),
+  toAsset: text('to_asset').notNull(),
+  toChain: text('to_chain').notNull(),
+  amount: real('amount').notNull(),
+  frequency: text('frequency').notNull(), // 'daily', 'weekly', 'monthly'
+  dayOfWeek: text('day_of_week'), // For weekly: 'monday', 'tuesday', etc.
+  dayOfMonth: text('day_of_month'), // For monthly: '1', '15', etc.
+  settleAddress: text('settle_address').notNull(),
+  isActive: text('is_active').notNull().default('true'),
+  lastExecuted: timestamp('last_executed'),
+  nextExecution: timestamp('next_execution').notNull(),
+  executionCount: integer('execution_count').notNull().default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const limitOrders = pgTable('limit_orders', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
+  fromAsset: text('from_asset').notNull(),
+  fromChain: text('from_chain').notNull(),
+  toAsset: text('to_asset').notNull(),
+  toChain: text('to_chain').notNull(),
+  amount: real('amount').notNull(),
+  conditionOperator: text('condition_operator').notNull(), // 'gt' or 'lt'
+  conditionValue: real('condition_value').notNull(),
+  conditionAsset: text('condition_asset').notNull(),
+  settleAddress: text('settle_address'),
+  status: text('status').notNull().default('pending'), // pending, executing, executed, cancelled, failed
+  sideShiftOrderId: text('sideshift_order_id'),
+  error: text('error'),
+  createdAt: timestamp('created_at').defaultNow(),
+  executedAt: timestamp('executed_at'),
+});
+
 export type User = typeof users.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Checkout = typeof checkouts.$inferSelect;
 export type AddressBookEntry = typeof addressBook.$inferSelect;
 export type WatchedOrder = typeof watchedOrders.$inferSelect;
+export type CoinPriceCache = typeof coinPriceCache.$inferSelect;
+export type UserSettings = typeof userSettings.$inferSelect;
+export type SwapHistory = typeof swapHistory.$inferSelect;
+export type ChatHistory = typeof chatHistory.$inferSelect;
+export type DCASchedule = typeof dcaSchedules.$inferSelect;
+export type LimitOrder = typeof limitOrders.$inferSelect;
 
 // --- FUNCTIONS ---
 
@@ -97,36 +205,48 @@ export async function setUserWalletAndSession(telegramId: number, walletAddress:
 }
 
 export async function getConversationState(telegramId: number) {
-  const result = await db.select({ state: conversations.state, lastUpdated: conversations.lastUpdated }).from(conversations).where(eq(conversations.telegramId, telegramId));
-  if (!result[0]?.state) return null;
+  try{
+    const result = await db.select({ state: conversations.state, lastUpdated: conversations.lastUpdated }).from(conversations).where(eq(conversations.telegramId, telegramId));
+    if (!result[0]?.state) return null;
 
-  const state = JSON.parse(result[0].state);
-  const lastUpdated = result[0].lastUpdated;
+    const state = JSON.parse(result[0].state);
+    const lastUpdated = result[0].lastUpdated;
 
-  if (lastUpdated && (Date.now() - new Date(lastUpdated).getTime()) > 60 * 60 * 1000) {
+    if (lastUpdated && (Date.now() - new Date(lastUpdated).getTime()) > 60 * 60 * 1000) {
     await clearConversationState(telegramId);
     return null;
+    }
+    return state;
+  }catch(err){
+    return memoryState.get(telegramId) || null;
   }
-  return state;
 }
 
 export async function setConversationState(telegramId: number, state: any) {
-  await db.insert(conversations)
+  try{
+    await db.insert(conversations)
     .values({ telegramId, state: JSON.stringify(state), lastUpdated: new Date() })
     .onConflictDoUpdate({
       target: conversations.telegramId,
       set: { state: JSON.stringify(state), lastUpdated: new Date() }
     });
+  }catch(err){
+    memoryState.set(telegramId, state);
+  }
 }
 
 export async function clearConversationState(telegramId: number) {
-  await db.delete(conversations).where(eq(conversations.telegramId, telegramId));
+  try{
+    await db.delete(conversations).where(eq(conversations.telegramId, telegramId));
+  }catch(err){
+    memoryState.delete(telegramId);
+  }
 }
 
 export async function createOrderEntry(
-  telegramId: number, 
-  parsedCommand: ParsedCommand, 
-  order: SideShiftOrder, 
+  telegramId: number,
+  parsedCommand: ParsedCommand,
+  order: SideShiftOrder,
   settleAmount: string | number,
   quoteId: string
 ) {
@@ -187,67 +307,21 @@ export async function getUserCheckouts(telegramId: number): Promise<Checkout[]> 
     .limit(10);
 }
 
-export async function addAddressBookEntry(telegramId: number, nickname: string, address: string, chain: string) {
-  await db.insert(addressBook)
-    .values({ telegramId, nickname, address, chain })
-    .onConflictDoUpdate({
-      target: [addressBook.telegramId, addressBook.nickname],
-      set: { address, chain }
-    });
+// --- ORDER MONITOR HELPERS ---
+
+/** Terminal statuses that no longer need monitoring */
+const TERMINAL_STATUSES = ['settled', 'expired', 'refunded', 'failed'];
+
+/** Returns all orders that are NOT in a terminal state (for background polling). */
+export async function getPendingOrders(): Promise<Order[]> {
+  return await db.select().from(orders)
+    .where(notInArray(orders.status, TERMINAL_STATUSES));
 }
 
-export async function getAddressBookEntries(telegramId: number): Promise<AddressBookEntry[]> {
-  return await db.select().from(addressBook)
-    .where(eq(addressBook.telegramId, telegramId))
-    .orderBy(desc(addressBook.createdAt));
-}
-
-export async function resolveNickname(telegramId: number, nickname: string): Promise<string | null> {
-  const result = await db.select({ address: addressBook.address })
-    .from(addressBook)
-    .where(
-      and(
-        eq(addressBook.telegramId, telegramId), 
-        eq(addressBook.nickname, nickname)
-      )
-    ) // Corrected multi-where syntax
+/** Looks up a single order by its SideShift order ID. */
+export async function getOrderBySideshiftId(sideshiftOrderId: string): Promise<Order | undefined> {
+  const result = await db.select().from(orders)
+    .where(eq(orders.sideshiftOrderId, sideshiftOrderId))
     .limit(1);
-  return result[0]?.address || null;
-}
-
-
-// --- WATCHED ORDERS FUNCTIONS ---
-
-export async function addWatchedOrder(telegramId: number, sideshiftOrderId: string, initialStatus: string = 'pending') {
-  await db.insert(watchedOrders)
-    .values({ 
-      telegramId, 
-      sideshiftOrderId, 
-      lastStatus: initialStatus,
-      lastChecked: new Date()
-    })
-    .onConflictDoUpdate({
-      target: watchedOrders.sideshiftOrderId,
-      set: { lastChecked: new Date() }
-    });
-}
-
-export async function removeWatchedOrder(sideshiftOrderId: string) {
-  await db.delete(watchedOrders).where(eq(watchedOrders.sideshiftOrderId, sideshiftOrderId));
-}
-
-export async function getAllWatchedOrders(): Promise<WatchedOrder[]> {
-  return await db.select().from(watchedOrders);
-}
-
-export async function getUserWatchedOrders(telegramId: number): Promise<WatchedOrder[]> {
-  return await db.select().from(watchedOrders)
-    .where(eq(watchedOrders.telegramId, telegramId))
-    .orderBy(desc(watchedOrders.createdAt));
-}
-
-export async function updateWatchedOrderStatus(sideshiftOrderId: string, newStatus: string) {
-  await db.update(watchedOrders)
-    .set({ lastStatus: newStatus, lastChecked: new Date() })
-    .where(eq(watchedOrders.sideshiftOrderId, sideshiftOrderId));
+  return result[0];
 }

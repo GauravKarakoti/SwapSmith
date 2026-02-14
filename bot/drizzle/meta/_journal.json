@@ -5,29 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1764255176507,
-      "tag": "0000_real_silvermane",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1769939919823,
-      "tag": "0001_loving_dark_beast",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1770465513115,
-      "tag": "0002_charming_blonde_phantom",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1770648892015,
-      "tag": "0003_demonic_puck",
+      "when": 1771087421022,
+      "tag": "0000_quiet_jack_power",
       "breakpoints": true
     }
   ]

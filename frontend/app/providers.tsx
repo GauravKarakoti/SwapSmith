@@ -3,7 +3,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { WagmiProvider, createConfig, http } from 'wagmi'
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
-import { injected, metaMask } from 'wagmi/connectors'
+import { injected } from 'wagmi/connectors'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,7 +27,6 @@ const supportedChains = [
 const config = createConfig({
   chains: supportedChains,
   connectors: [
-    metaMask(),
     injected(),
   ],
   transports: {
