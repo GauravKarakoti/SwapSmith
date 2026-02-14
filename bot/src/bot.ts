@@ -1,7 +1,10 @@
 import { Telegraf, Markup, Context } from 'telegraf';
 import { message } from 'telegraf/filters';
 import dotenv from 'dotenv';
-import { parseUserCommand, transcribeAudio } from './services/groq-client';
+import logger from './services/logger';
+import { executePortfolioStrategy } from './services/portfolio-service';
+import { transcribeAudio } from './services/groq-client';
+import { parseUserCommand } from './services/parseUserCommand';
 import {
   createQuote,
   createOrder,
@@ -24,6 +27,7 @@ import { tokenResolver } from './services/token-resolver';
 import { DCAScheduler } from './services/dca-scheduler';
 import { resolveAddress, isNamingService } from './services/address-resolver';
 import { ADDRESS_PATTERNS } from './config/address-patterns';
+import { limitOrderWorker } from './workers/limitOrderWorker';
 import * as os from 'os';
 
 dotenv.config();
@@ -313,6 +317,41 @@ async function handleTextMessage(
 
   // 4. Handle Specific Intents
 
+  // --- Limit Order ---
+  if (parsed.intent === 'swap' && (parsed.conditionOperator && parsed.conditionValue)) {
+      const user = await db.getUser(userId);
+
+      // Check if we need settle address
+      if (!parsed.settleAddress && !user?.walletAddress) {
+          await db.setConversationState(userId, { parsedCommand: parsed });
+          return ctx.reply('To place this limit order, I need a destination wallet address. Please provide one.');
+      }
+
+      const settleAddress = parsed.settleAddress || user?.walletAddress!;
+
+      await db.createLimitOrder(
+          userId,
+          parsed.fromAsset!,
+          parsed.fromChain || 'ethereum',
+          parsed.toAsset!,
+          parsed.toChain || 'ethereum',
+          parsed.amount!,
+          parsed.conditionOperator!,
+          parsed.conditionValue!,
+          parsed.conditionAsset || parsed.fromAsset!,
+          settleAddress
+      );
+
+      return ctx.reply(
+          `✅ *Limit Order Placed*\n\n` +
+          `Swap: ${parsed.amount} ${parsed.fromAsset} -> ${parsed.toAsset}\n` +
+          `Condition: If ${parsed.conditionAsset || parsed.fromAsset} ${parsed.conditionOperator === 'gt' ? '>' : '<'} ${parsed.conditionValue}\n` +
+          `Status: Pending\n\n` +
+          `I will monitor the price and notify you when it executes.`,
+          { parse_mode: 'Markdown' }
+      );
+  }
+
   // --- Yield Scout ---
   if (parsed.intent === 'yield_scout') {
     const yields = await getTopStablecoinYields();
@@ -592,154 +631,74 @@ bot.action('confirm_portfolio', async (ctx) => {
   const state = await db.getConversationState(userId);
   if (!state?.parsedCommand || state.parsedCommand.intent !== 'portfolio') return ctx.answerCbQuery('Session expired.');
 
+  const { fromAsset, fromChain, amount, portfolio, settleAddress } = state.parsedCommand;
+
+  // 1. Validate Input
+  if (!portfolio || portfolio.length === 0) {
+    return ctx.editMessageText('❌ No portfolio allocation found.');
+  }
+
+  const totalPercentage = portfolio.reduce((sum: number, p: any) => sum + p.percentage, 0);
+  if (Math.abs(totalPercentage - 100) > 1) { // Allow 1% tolerance
+    return ctx.editMessageText(`❌ Portfolio percentages must sum to 100% (Current: ${totalPercentage}%)`);
+  }
+
+  if (!amount || amount <= 0) {
+    return ctx.editMessageText('❌ Invalid amount.');
+  }
+
   try {
-    await ctx.answerCbQuery('Creating portfolio swaps...');
-    const { fromAsset, fromChain, amount, portfolio, settleAddress } = state.parsedCommand;
+    await ctx.answerCbQuery('Executing portfolio strategy...');
+    await ctx.editMessageText('🔄 Executing portfolio swaps... This may take a moment.');
 
-    if (!portfolio || portfolio.length === 0) {
-      return ctx.editMessageText('❌ No portfolio allocation found.');
-    }
+    // 2. Execute Strategy using Service
+    const { successfulOrders, failedSwaps } = await executePortfolioStrategy(userId, state.parsedCommand);
 
-    // Create quotes for each allocation
-    const quotes: Array<{ quote: any; allocation: any; swapAmount: number }> = [];
-    let quoteSummary = `📊 *Portfolio Swap Summary*\n\nFrom: ${amount} ${fromAsset} on ${fromChain}\n\n*Swaps:*\n`;
-
-    for (const allocation of portfolio) {
-      const swapAmount = (amount! * allocation.percentage) / 100;
-
-      try {
-        const quote = await createQuote(
-          fromAsset!,
-          fromChain!,
-          allocation.toAsset,
-          allocation.toChain,
-          swapAmount
+    // 3. Final Response Structure
+    if (successfulOrders.length === 0) {
+        return ctx.editMessageText(
+            `❌ *Portfolio Execution Failed*\n\n` +
+            failedSwaps.map(f => `• ${f.asset}: ${f.reason}`).join('\n'),
+            { parse_mode: 'Markdown' }
         );
-
-        if (quote.error) {
-          throw new Error(`${allocation.toAsset}: ${quote.error.message}`);
-        }
-
-        quotes.push({ quote, allocation, swapAmount });
-        quoteSummary += `• ${allocation.percentage}% (${swapAmount} ${fromAsset}) → ~${quote.settleAmount} ${allocation.toAsset}\n`;
-      } catch (error) {
-        return ctx.editMessageText(`❌ Failed to create quote for ${allocation.toAsset}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
     }
 
-    // Store quotes in state
+    // Store successful orders in state for signing
     await db.setConversationState(userId, {
-      ...state,
-      portfolioQuotes: quotes.map(q => ({
-        quoteId: q.quote.id,
-        allocation: q.allocation,
-        swapAmount: q.swapAmount,
-        settleAmount: q.quote.settleAmount
-      }))
+        ...state,
+        portfolioOrders: successfulOrders,
+        currentTransactionIndex: 0
     });
 
-    quoteSummary += `\nReady to place orders?`;
-
-    ctx.editMessageText(quoteSummary, {
-      parse_mode: 'Markdown',
-      ...Markup.inlineKeyboard([
-        Markup.button.callback('✅ Place Orders', 'place_portfolio_orders'),
-        Markup.button.callback('❌ Cancel', 'cancel_swap')
-      ])
+    let summary = `✅ *Portfolio Executed*\n\n`;
+    summary += `*Successful (${successfulOrders.length}):*\n`;
+    successfulOrders.forEach(o => {
+        summary += `• ${o.allocation.toAsset}: Order created\n`;
     });
+
+    if (failedSwaps.length > 0) {
+        summary += `\n⚠️ *Failed (${failedSwaps.length}):*\n`;
+        failedSwaps.forEach(f => {
+            summary += `• ${f.asset}: ${f.reason}\n`;
+        });
+    }
+
+    summary += `\n📝 *Next Step:* Sign ${successfulOrders.length} transaction(s) to fund these swaps.`;
+
+    ctx.editMessageText(summary, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+            Markup.button.callback('✍️ Sign Transactions', 'sign_portfolio_transaction'),
+            Markup.button.callback('❌ Close', 'cancel_swap')
+        ])
+    });
+
   } catch (error) {
-    ctx.editMessageText(`Error: ${error instanceof Error ? error.message : 'Unknown'}`);
+    logger.error('Critical portfolio error', { userId, error });
+    ctx.editMessageText(`⚠️ Critical Error: ${error instanceof Error ? error.message : 'Unknown'}`);
   }
 });
 
-bot.action('place_portfolio_orders', async (ctx) => {
-  const userId = ctx.from.id;
-  const state = await db.getConversationState(userId);
-  if (!state?.portfolioQuotes || !state.parsedCommand) return ctx.answerCbQuery('Session expired.');
-
-  try {
-    await ctx.answerCbQuery('Placing orders...');
-    const { settleAddress, fromAsset, fromChain, amount } = state.parsedCommand;
-    const orders: Array<{ order: any; allocation: any; quoteId: string }> = [];
-
-    // Create orders for each quote
-    for (const quoteData of state.portfolioQuotes) {
-      try {
-        const order = await createOrder(quoteData.quoteId, settleAddress!, settleAddress!);
-        if (!order.id) throw new Error(`Failed to create order for ${quoteData.allocation.toAsset}`);
-
-        // Store each order in database
-        const orderCommand = {
-          ...state.parsedCommand,
-          toAsset: quoteData.allocation.toAsset,
-          toChain: quoteData.allocation.toChain,
-          amount: quoteData.swapAmount
-        };
-        db.createOrderEntry(userId, orderCommand, order, quoteData.settleAmount, quoteData.quoteId);
-
-        // Automatically add each order to watch list
-        await db.addWatchedOrder(userId, order.id, 'pending');
-
-        orders.push({ order, allocation: quoteData.allocation, quoteId: quoteData.quoteId });
-      } catch (error) {
-        return ctx.editMessageText(`❌ Failed to create order for ${quoteData.allocation.toAsset}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-    }
-
-    // For portfolio swaps, we need to execute multiple transactions
-    // The user will need to send the full amount to the first order's deposit address
-    // Then the system will handle the splits via SideShift
-    const firstOrder = orders[0].order;
-    const rawDepositAddress = typeof firstOrder.depositAddress === 'string' ? firstOrder.depositAddress : firstOrder.depositAddress.address;
-    const depositMemo = typeof firstOrder.depositAddress === 'object' ? firstOrder.depositAddress.memo : null;
-
-    const chainKey = fromChain?.toLowerCase() || 'ethereum';
-    const assetKey = fromAsset?.toUpperCase() || 'ETH';
-    const totalAmount = amount!;
-
-    // Use dynamic token resolver
-    const tokenData = await tokenResolver.getTokenInfo(assetKey, chainKey);
-
-    let txTo = rawDepositAddress, txValueHex = '0x0', txData = '0x';
-
-    if (tokenData) {
-      // ERC20 token
-      txTo = tokenData.address;
-      const amountBigInt = ethers.parseUnits(totalAmount.toString(), tokenData.decimals);
-      const iface = new ethers.Interface(ERC20_ABI);
-      txData = iface.encodeFunctionData("transfer", [rawDepositAddress, amountBigInt]);
-    } else {
-      // Native token
-      const amountBigInt = ethers.parseUnits(totalAmount.toString(), 18);
-      txValueHex = '0x' + amountBigInt.toString(16);
-      if (depositMemo) txData = ethers.hexlify(ethers.toUtf8Bytes(depositMemo));
-    }
-
-    const params = new URLSearchParams({
-      to: txTo, value: txValueHex, data: txData,
-      chainId: chainIdMap[chainKey] || '1',
-      token: assetKey, amount: totalAmount.toString()
-    });
-
-    let orderSummary = `✅ *Portfolio Orders Created!*\n\n*Orders:*\n`;
-    orders.forEach((o, i) => {
-      orderSummary += `${i + 1}. Order ${o.order.id.substring(0, 8)}... → ${o.allocation.toAsset}\n`;
-    });
-    orderSummary += `\nSign the transaction to complete all swaps.\n\n🔔 *Auto-Watch Enabled:* I'll notify you when each swap completes!`;
-
-    ctx.editMessageText(orderSummary, {
-      parse_mode: 'Markdown',
-      ...Markup.inlineKeyboard([
-        Markup.button.webApp('📱 Sign Transaction', `${MINI_APP_URL}?${params.toString()}`),
-        Markup.button.callback('❌ Close', 'cancel_swap')
-      ])
-    });
-  } catch (error) {
-    ctx.editMessageText(`Failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  } finally {
-    db.clearConversationState(userId);
-  }
-});
 
 bot.action('confirm_migration', async (ctx) => {
   const userId = ctx.from.id;
@@ -830,32 +789,82 @@ bot.action('find_bridge_options', async (ctx) => {
 });
 
 bot.action('sign_portfolio_transaction', async (ctx) => {
-  const state = await db.getConversationState(ctx.from.id);
-  if (!state?.portfolioQuotes) return;
+  const userId = ctx.from.id;
+  const state = await db.getConversationState(userId);
+  if (!state?.portfolioOrders) return ctx.answerCbQuery('Session expired.');
 
   const i = state.currentTransactionIndex;
-  const q = state.portfolioQuotes[i];
+  const orderData = state.portfolioOrders[i];
 
-  if (!q) {
-    await db.clearConversationState(ctx.from.id);
-    return ctx.editMessageText(`🎉 Portfolio complete!`);
+  if (!orderData) {
+    await db.clearConversationState(userId);
+    return ctx.editMessageText(`🎉 *All transactions signed!* \n\nI'll notify you as the swaps complete.`);
+  }
+
+  const { order, swapAmount, allocation } = orderData;
+  const { fromAsset, fromChain } = state.parsedCommand;
+
+  // Prepare Transaction Data
+  const rawDepositAddress = typeof order.depositAddress === 'string' ? order.depositAddress : order.depositAddress.address;
+  const depositMemo = typeof order.depositAddress === 'object' ? order.depositAddress.memo : null;
+  const chainKey = fromChain?.toLowerCase() || 'ethereum';
+  const assetKey = fromAsset?.toUpperCase() || 'ETH';
+
+  let txTo = rawDepositAddress;
+  let txValueHex = '0x0';
+  let txData = '0x';
+
+  try {
+      const tokenData = await tokenResolver.getTokenInfo(assetKey, chainKey);
+
+      if (tokenData) {
+          // ERC20
+          txTo = tokenData.address;
+          const amountBigInt = ethers.parseUnits(swapAmount.toString(), tokenData.decimals);
+          const iface = new ethers.Interface(ERC20_ABI);
+          txData = iface.encodeFunctionData("transfer", [rawDepositAddress, amountBigInt]);
+      } else {
+          // Native
+          // Assuming 18 decimals for simplicity if not found, but native usually is 18 (ETH, BSC, etc)
+          // Ideally we need chain info. For now, defaulting to 18.
+          const amountBigInt = ethers.parseUnits(swapAmount.toString(), 18);
+          txValueHex = '0x' + amountBigInt.toString(16);
+          if (depositMemo) txData = ethers.hexlify(ethers.toUtf8Bytes(depositMemo));
+      }
+  } catch (err) {
+      console.error("Token resolution failed", err);
+      // Fallback or alert? Proceeding with basic params.
+  }
+
+  const params = new URLSearchParams({
+      to: txTo, value: txValueHex, data: txData,
+      chainId: chainIdMap[chainKey] || '1',
+      token: assetKey, amount: swapAmount.toString()
+  });
+
+  const isLast = i === state.portfolioOrders.length - 1;
+  const buttons: any[] = [
+      Markup.button.webApp(
+          '📱 Sign Transaction',
+          `${MINI_APP_URL}?${params.toString()}`
+      )
+  ];
+
+  if (!isLast) {
+      buttons.push(Markup.button.callback('➡️ Next Transaction', 'next_portfolio_transaction'));
+  } else {
+      buttons.push(Markup.button.callback('✅ Done', 'next_portfolio_transaction'));
   }
 
   ctx.editMessageText(
-    `📝 Transaction ${i + 1}/${state.portfolioQuotes.length}\n\n` +
-    `Send ${q.amount} ${state.parsedCommand.fromAsset}`,
+    `📝 *Transaction ${i + 1}/${state.portfolioOrders.length}*\n\n` +
+    `For: ${allocation.toAsset}\n` +
+    `Amount: ${swapAmount} ${fromAsset}\n` +
+    `Deposit Address: \`${rawDepositAddress}\`\n\n` +
+    `Please sign the transaction to fund this swap.`,
     {
       parse_mode: 'Markdown',
-      ...Markup.inlineKeyboard([
-        Markup.button.webApp(
-          '📱 Sign Transaction',
-          `${MINI_APP_URL}?amount=${q.amount}`
-        ),
-        Markup.button.callback(
-          '➡️ Next',
-          'next_portfolio_transaction'
-        ),
-      ]),
+      ...Markup.inlineKeyboard(buttons),
     }
   );
 });
@@ -884,9 +893,14 @@ bot.action('cancel_swap', async (ctx) => {
 // ------------------ START SERVICES ------------------
 
 let dcaStarted = false;
+let limitOrderStarted = false;
+
 if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('memory')) {
   dcaScheduler.start();
   dcaStarted = true;
+
+  limitOrderWorker.start(bot);
+  limitOrderStarted = true;
 }
 
 // ------------------ LAUNCH ------------------
@@ -895,10 +909,12 @@ bot.launch();
 
 process.once('SIGINT', () => {
   if (dcaStarted) dcaScheduler.stop();
+  if (limitOrderStarted) limitOrderWorker.stop();
   bot.stop('SIGINT');
 });
 
 process.once('SIGTERM', () => {
   if (dcaStarted) dcaScheduler.stop();
+  if (limitOrderStarted) limitOrderWorker.stop();
   bot.stop('SIGTERM');
 });
