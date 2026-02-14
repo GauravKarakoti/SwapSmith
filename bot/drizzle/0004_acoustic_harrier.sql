@@ -1,5 +1,4 @@
--- Add DCA (Dollar Cost Averaging) schedules table
-CREATE TABLE IF NOT EXISTS "dca_schedules" (
+CREATE TABLE "dca_schedules" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"telegram_id" bigint NOT NULL,
 	"from_asset" text NOT NULL,
