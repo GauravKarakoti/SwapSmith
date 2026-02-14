@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 import { useAccount, useDisconnect } from 'wagmi'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -30,7 +29,6 @@ import {
   EyeOff,
   History,
   ArrowUpRight,
-  ArrowDownLeft,
   Clock,
   Calendar,
   TrendingUp,
@@ -45,6 +43,24 @@ import { auth } from '@/lib/firebase'
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+interface SwapHistoryItem {
+  id: string;
+  userId: string;
+  walletAddress?: string;
+  depositCoin?: string;
+  settleCoin?: string;
+  depositAmount?: string;
+  settleAmount?: string;
+  status?: string;
+  createdAt: string;
+  fromAsset: string;
+  toAsset: string;
+  fromAmount: string;
+  fromNetwork?: string;
+  toNetwork?: string;
+  sideshiftOrderId?: string;
+}
+
 interface Preferences {
   soundEnabled: boolean
   autoConfirmSwaps: boolean
@@ -260,7 +276,7 @@ export default function ProfilePage() {
   })
 
   // Real wallet history from database
-  const [walletHistory, setWalletHistory] = useState<any[]>([])
+  const [walletHistory, setWalletHistory] = useState<SwapHistoryItem[]>([])
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [portfolioStats, setPortfolioStats] = useState({
     totalSwaps: 0,
@@ -289,7 +305,7 @@ export default function ProfilePage() {
     localStorage.setItem('swapsmith_preferences', JSON.stringify(preferences))
   }, [preferences])
 
-  const calculatePortfolioStats = (history: any[]) => {
+  const calculatePortfolioStats = (history: SwapHistoryItem[]) => {
     if (!history || history.length === 0) {
       return { totalSwaps: 0, totalVolume: 0, successRate: 100, favoriteAsset: 'N/A' }
     }
