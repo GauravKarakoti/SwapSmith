@@ -66,7 +66,6 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
   const [copiedAddress, setCopiedAddress] = useState(false)
   const [copiedMemo, setCopiedMemo] = useState(false)
   const [isSimulating, setIsSimulating] = useState(false);
-  const [simulationPassed, setSimulationPassed] = useState(false);
   const [safetyCheck, setSafetyCheck] = useState<SafetyCheckResult | null>(null);
   
   const { address, isConnected, chain: connectedChain } = useAccount()
@@ -124,7 +123,6 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
 
   const handleSimulate = async () => {
     setIsSimulating(true);
-    setSimulationPassed(false);
     setSafetyCheck(null);
 
     const checks: SafetyCheckResult['checks'] = {
@@ -161,7 +159,6 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
               overallMessage: 'Limited safety checks for non-EVM chain'
             };
             setSafetyCheck(result);
-            setSimulationPassed(true);
             return;
         }
 
@@ -213,7 +210,7 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
               estimatedGas: formatEther(estimatedGasCost).substring(0, 8)
             };
           }
-        } catch (gasError) {
+        } catch {
           checks.gas = { 
             passed: false, 
             message: 'Gas estimation failed - transaction may fail' 
@@ -249,7 +246,6 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
         };
 
         setSafetyCheck(result);
-        setSimulationPassed(allPassed);
 
     } catch (error: unknown) {
         console.error("Simulation failed:", error);
@@ -267,7 +263,6 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
         };
         
         setSafetyCheck(result);
-        setSimulationPassed(false);
     } finally {
         setIsSimulating(false);
     }

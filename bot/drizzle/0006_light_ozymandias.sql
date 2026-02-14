@@ -1,0 +1,1 @@
+ALTER TABLE "limit_orders" ADD COLUMN "settle_address" text;

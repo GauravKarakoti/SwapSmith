@@ -6,7 +6,27 @@ import { analyzeCommand, generateContextualHelp } from './contextual-help';
 
 dotenv.config();
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// Global singleton declaration to prevent multiple instances
+declare global {
+  var _groqClient: Groq | undefined;
+}
+
+/**
+ * Production-grade singleton pattern for Groq client
+ * - Prevents new instance per request
+ * - Reuses client connection pool
+ * - Avoids TCP connection exhaustion
+ */
+function getGroqClient(): Groq {
+  if (!global._groqClient) {
+    global._groqClient = new Groq({
+      apiKey: process.env.GROQ_API_KEY,
+    });
+  }
+  return global._groqClient;
+}
+
+const groq = getGroqClient();
 
 // Enhanced Interface to support Portfolio and Yield
 export interface ParsedCommand {
@@ -19,7 +39,10 @@ export interface ParsedCommand {
   toAsset: string | null;
   toChain: string | null;
   amount: number | null;
-  amountType?: "exact" | "percentage" | "all" | null; // Added back for compatibility
+  amountType?: "exact" | "percentage" | "all" | "exclude" | null; // Added back for compatibility
+
+  excludeAmount?: number;
+  excludeToken?: string;
   
   // Portfolio Fields (Array of outputs)
   portfolio?: {
@@ -43,6 +66,11 @@ export interface ParsedCommand {
   fromYield: number | null;
   toProject: string | null;
   toYield: number | null;
+
+  // Limit Order Fields
+  conditionOperator?: 'gt' | 'lt';
+  conditionValue?: number;
+  conditionAsset?: string;
 
   confidence: number;
   validationErrors: string[];
@@ -172,7 +200,7 @@ EXAMPLES:
     -> intent: "dca", fromAsset: "USDC", toAsset: "ETH", amount: 200, frequency: "monthly", dayOfMonth: "1", confidence: 95
 `;
 
-export async function parseUserCommand(
+export async function parseWithLLM(
   userInput: string,
   conversationHistory: any[] = [],
   inputType: 'text' | 'voice' = 'text'
