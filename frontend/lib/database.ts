@@ -1,85 +1,27 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { pgTable, serial, text, real, timestamp, unique } from 'drizzle-orm/pg-core';
 import { eq, desc, and } from 'drizzle-orm';
+
+// Import all table schemas from shared schema file
+import {
+  coinPriceCache,
+  userSettings,
+  swapHistory,
+  chatHistory,
+  discussions,
+} from './shared-schema';
 
 const sql = neon(process.env.DATABASE_URL!);
 const db = drizzle(sql);
 
-// --- SHARED SCHEMAS (matching bot/src/services/database.ts) ---
-
-export const coinPriceCache = pgTable('coin_price_cache', {
-  id: serial('id').primaryKey(),
-  coin: text('coin').notNull(),
-  network: text('network').notNull(),
-  name: text('name').notNull(),
-  usdPrice: text('usd_price'),
-  btcPrice: text('btc_price'),
-  available: text('available').notNull().default('true'),
-  expiresAt: timestamp('expires_at').notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-}, (table) => ({
-  coinNetworkUnique: unique().on(table.coin, table.network),
-}));
-
-export const userSettings = pgTable('user_settings', {
-  id: serial('id').primaryKey(),
-  userId: text('user_id').notNull().unique(),
-  walletAddress: text('wallet_address'),
-  theme: text('theme').default('dark'),
-  slippageTolerance: real('slippage_tolerance').default(0.5),
-  notificationsEnabled: text('notifications_enabled').default('true'),
-  defaultFromAsset: text('default_from_asset'),
-  defaultToAsset: text('default_to_asset'),
-  preferences: text('preferences'), // Additional JSON preferences
-  emailNotifications: text('email_notifications'),
-  telegramNotifications: text('telegram_notifications').default('false'),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
-export const swapHistory = pgTable('swap_history', {
-  id: serial('id').primaryKey(),
-  userId: text('user_id').notNull(),
-  walletAddress: text('wallet_address'),
-  sideshiftOrderId: text('sideshift_order_id').notNull(),
-  quoteId: text('quote_id'),
-  fromAsset: text('from_asset').notNull(),
-  fromNetwork: text('from_network').notNull(),
-  fromAmount: real('from_amount').notNull(),
-  toAsset: text('to_asset').notNull(),
-  toNetwork: text('to_network').notNull(),
-  settleAmount: text('settle_amount').notNull(),
-  depositAddress: text('deposit_address'),
-  status: text('status').notNull().default('pending'),
-  txHash: text('tx_hash'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
-export const chatHistory = pgTable('chat_history', {
-  id: serial('id').primaryKey(),
-  userId: text('user_id').notNull(),
-  walletAddress: text('wallet_address'),
-  role: text('role').notNull(),
-  content: text('content').notNull(),
-  metadata: text('metadata'),
-  sessionId: text('session_id'),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
-export const discussions = pgTable('discussions', {
-  id: serial('id').primaryKey(),
-  userId: text('user_id').notNull(),
-  username: text('username').notNull(),
-  content: text('content').notNull(),
-  category: text('category').default('general'), // general, crypto, help, announcement
-  likes: text('likes').default('0'),
-  replies: text('replies').default('0'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
+// Re-export schemas for backward compatibility
+export {
+  coinPriceCache,
+  userSettings,
+  swapHistory,
+  chatHistory,
+  discussions,
+};
 
 export type CoinPriceCache = typeof coinPriceCache.$inferSelect;
 export type UserSettings = typeof userSettings.$inferSelect;

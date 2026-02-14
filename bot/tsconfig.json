@@ -1,12 +1,13 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "commonjs",
-    "rootDir": "./src",
+    "module": "ES2020",
+    "moduleResolution": "node",
     "outDir": "./dist",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true
   },
+  "include": ["src/**/*", "shared/**/*", "../frontend/lib/shared-schema.ts"],
   "exclude": ["drizzle.config.ts"]
 }
