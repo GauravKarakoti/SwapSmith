@@ -208,7 +208,7 @@ export default function DiscussionsPage() {
                   Join our official GitHub discussions for technical topics
                 </p>
                 <a
-                  href="https://github.com/swapsmith/swapsmith/discussions"
+                  href="https://github.com/GauravKarakoti/swapsmith/discussions"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="block w-full bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-semibold py-2.5 px-3 rounded-lg transition-colors text-center"
