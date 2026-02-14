@@ -466,6 +466,11 @@ export default function ProfilePage() {
     }
 
     try {
+      if (!auth) {
+        setPasswordError('Firebase authentication is not configured')
+        return
+      }
+      
       const currentUser = auth.currentUser
       if (!currentUser || !currentUser.email) {
         setPasswordError('User not found')
