@@ -12,7 +12,7 @@ const memoryState = new Map<number, any>();
 //newly added
 const connectionString = process.env.DATABASE_URL || 'postgres://mock:mock@localhost:5432/mock';
 const client = neon(connectionString);
-const db = drizzle(client);
+export const db = drizzle(client);
 
 // --- SCHEMAS ---
 export const users = pgTable('users', {
@@ -157,6 +157,25 @@ export const dcaSchedules = pgTable('dca_schedules', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const limitOrders = pgTable('limit_orders', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
+  fromAsset: text('from_asset').notNull(),
+  fromChain: text('from_chain').notNull(),
+  toAsset: text('to_asset').notNull(),
+  toChain: text('to_chain').notNull(),
+  amount: real('amount').notNull(),
+  conditionOperator: text('condition_operator').notNull(), // 'gt' or 'lt'
+  conditionValue: real('condition_value').notNull(),
+  conditionAsset: text('condition_asset').notNull(),
+  settleAddress: text('settle_address'),
+  status: text('status').notNull().default('pending'), // pending, executing, executed, cancelled, failed
+  sideShiftOrderId: text('sideshift_order_id'),
+  error: text('error'),
+  createdAt: timestamp('created_at').defaultNow(),
+  executedAt: timestamp('executed_at'),
+});
+
 export type User = typeof users.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Checkout = typeof checkouts.$inferSelect;
@@ -167,6 +186,7 @@ export type UserSettings = typeof userSettings.$inferSelect;
 export type SwapHistory = typeof swapHistory.$inferSelect;
 export type ChatHistory = typeof chatHistory.$inferSelect;
 export type DCASchedule = typeof dcaSchedules.$inferSelect;
+export type LimitOrder = typeof limitOrders.$inferSelect;
 
 // --- FUNCTIONS ---
 
@@ -464,4 +484,56 @@ function calculateNextExecution(frequency: string, dayOfWeek?: string, dayOfMont
   }
   
   return next;
+}
+
+// --- LIMIT ORDER FUNCTIONS ---
+
+export async function createLimitOrder(
+  telegramId: number,
+  fromAsset: string,
+  fromChain: string,
+  toAsset: string,
+  toChain: string,
+  amount: number,
+  conditionOperator: string,
+  conditionValue: number,
+  conditionAsset: string,
+  settleAddress?: string
+) {
+  const result = await db.insert(limitOrders).values({
+    telegramId,
+    fromAsset,
+    fromChain,
+    toAsset,
+    toChain,
+    amount,
+    conditionOperator,
+    conditionValue,
+    conditionAsset,
+    settleAddress,
+    status: 'pending'
+  }).returning();
+  return result[0];
+}
+
+export async function getPendingLimitOrders(): Promise<LimitOrder[]> {
+  return await db.select().from(limitOrders)
+    .where(eq(limitOrders.status, 'pending'));
+}
+
+export async function updateLimitOrderStatus(id: number, status: string, sideShiftOrderId?: string, error?: string) {
+    const updates: any = { status };
+    if (sideShiftOrderId) updates.sideShiftOrderId = sideShiftOrderId;
+    if (error) updates.error = error;
+    if (status === 'executed') updates.executedAt = new Date();
+
+    await db.update(limitOrders)
+        .set(updates)
+        .where(eq(limitOrders.id, id));
+}
+
+export async function getUserLimitOrders(telegramId: number): Promise<LimitOrder[]> {
+    return await db.select().from(limitOrders)
+        .where(eq(limitOrders.telegramId, telegramId))
+        .orderBy(desc(limitOrders.createdAt));
 }

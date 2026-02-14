@@ -67,6 +67,11 @@ export interface ParsedCommand {
   toProject: string | null;
   toYield: number | null;
 
+  // Limit Order Fields
+  conditionOperator?: 'gt' | 'lt';
+  conditionValue?: number;
+  conditionAsset?: string;
+
   confidence: number;
   validationErrors: string[];
   parsedMessage: string;
