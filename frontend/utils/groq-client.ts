@@ -1,8 +1,24 @@
 import Groq from "groq-sdk";
 
-// Lazy-load Groq client to avoid build-time environment variable requirement
+// Global singleton declaration to prevent multiple instances during hot reload
+declare global {
+  var _groqClient: Groq | undefined;
+}
+
+/**
+ * Production-grade singleton pattern for Groq client
+ * - Prevents new instance per request in serverless environments
+ * - Reuses client in warm functions
+ * - Handles hot reload in development
+ * - Avoids connection flooding and TCP exhaustion
+ */
 function getGroqClient(): Groq {
-  return new Groq({ apiKey: process.env.GROQ_API_KEY });
+  if (!global._groqClient) {
+    global._groqClient = new Groq({
+      apiKey: process.env.GROQ_API_KEY,
+    });
+  }
+  return global._groqClient;
 }
 
 // Type definition for the parsed command object

@@ -12,7 +12,7 @@ const memoryState = new Map<number, any>();
 //newly added
 const connectionString = process.env.DATABASE_URL || 'postgres://mock:mock@localhost:5432/mock';
 const client = neon(connectionString);
-const db = drizzle(client);
+export const db = drizzle(client);
 
 // --- SCHEMAS ---
 export const users = pgTable('users', {
@@ -77,6 +77,66 @@ export const watchedOrders = pgTable('watched_orders', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// Caching tables
+export const coinPriceCache = pgTable('coin_price_cache', {
+  id: serial('id').primaryKey(),
+  coin: text('coin').notNull(),
+  network: text('network').notNull(),
+  name: text('name').notNull(),
+  usdPrice: text('usd_price'),
+  btcPrice: text('btc_price'),
+  available: text('available').notNull().default('true'),
+  expiresAt: timestamp('expires_at').notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const userSettings = pgTable('user_settings', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull().unique(),
+  walletAddress: text('wallet_address'),
+  theme: text('theme').default('dark'),
+  slippageTolerance: real('slippage_tolerance').default(0.5),
+  notificationsEnabled: text('notifications_enabled').default('true'),
+  defaultFromAsset: text('default_from_asset'),
+  defaultToAsset: text('default_to_asset'),
+  preferences: text('preferences'),
+  emailNotifications: text('email_notifications'),
+  telegramNotifications: text('telegram_notifications').default('false'),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const swapHistory = pgTable('swap_history', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  walletAddress: text('wallet_address'),
+  sideshiftOrderId: text('sideshift_order_id').notNull(),
+  quoteId: text('quote_id'),
+  fromAsset: text('from_asset').notNull(),
+  fromNetwork: text('from_network').notNull(),
+  fromAmount: real('from_amount').notNull(),
+  toAsset: text('to_asset').notNull(),
+  toNetwork: text('to_network').notNull(),
+  settleAmount: text('settle_amount').notNull(),
+  depositAddress: text('deposit_address'),
+  status: text('status').notNull().default('pending'),
+  txHash: text('tx_hash'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const chatHistory = pgTable('chat_history', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  walletAddress: text('wallet_address'),
+  role: text('role').notNull(),
+  content: text('content').notNull(),
+  metadata: text('metadata'),
+  sessionId: text('session_id'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 // DCA (Dollar Cost Averaging) Schedules
 export const dcaSchedules = pgTable('dca_schedules', {
   id: serial('id').primaryKey(),
@@ -97,12 +157,36 @@ export const dcaSchedules = pgTable('dca_schedules', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const limitOrders = pgTable('limit_orders', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
+  fromAsset: text('from_asset').notNull(),
+  fromChain: text('from_chain').notNull(),
+  toAsset: text('to_asset').notNull(),
+  toChain: text('to_chain').notNull(),
+  amount: real('amount').notNull(),
+  conditionOperator: text('condition_operator').notNull(), // 'gt' or 'lt'
+  conditionValue: real('condition_value').notNull(),
+  conditionAsset: text('condition_asset').notNull(),
+  settleAddress: text('settle_address'),
+  status: text('status').notNull().default('pending'), // pending, executing, executed, cancelled, failed
+  sideShiftOrderId: text('sideshift_order_id'),
+  error: text('error'),
+  createdAt: timestamp('created_at').defaultNow(),
+  executedAt: timestamp('executed_at'),
+});
+
 export type User = typeof users.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Checkout = typeof checkouts.$inferSelect;
 export type AddressBookEntry = typeof addressBook.$inferSelect;
 export type WatchedOrder = typeof watchedOrders.$inferSelect;
+export type CoinPriceCache = typeof coinPriceCache.$inferSelect;
+export type UserSettings = typeof userSettings.$inferSelect;
+export type SwapHistory = typeof swapHistory.$inferSelect;
+export type ChatHistory = typeof chatHistory.$inferSelect;
 export type DCASchedule = typeof dcaSchedules.$inferSelect;
+export type LimitOrder = typeof limitOrders.$inferSelect;
 
 // --- FUNCTIONS ---
 
@@ -400,4 +484,56 @@ function calculateNextExecution(frequency: string, dayOfWeek?: string, dayOfMont
   }
   
   return next;
+}
+
+// --- LIMIT ORDER FUNCTIONS ---
+
+export async function createLimitOrder(
+  telegramId: number,
+  fromAsset: string,
+  fromChain: string,
+  toAsset: string,
+  toChain: string,
+  amount: number,
+  conditionOperator: string,
+  conditionValue: number,
+  conditionAsset: string,
+  settleAddress?: string
+) {
+  const result = await db.insert(limitOrders).values({
+    telegramId,
+    fromAsset,
+    fromChain,
+    toAsset,
+    toChain,
+    amount,
+    conditionOperator,
+    conditionValue,
+    conditionAsset,
+    settleAddress,
+    status: 'pending'
+  }).returning();
+  return result[0];
+}
+
+export async function getPendingLimitOrders(): Promise<LimitOrder[]> {
+  return await db.select().from(limitOrders)
+    .where(eq(limitOrders.status, 'pending'));
+}
+
+export async function updateLimitOrderStatus(id: number, status: string, sideShiftOrderId?: string, error?: string) {
+    const updates: any = { status };
+    if (sideShiftOrderId) updates.sideShiftOrderId = sideShiftOrderId;
+    if (error) updates.error = error;
+    if (status === 'executed') updates.executedAt = new Date();
+
+    await db.update(limitOrders)
+        .set(updates)
+        .where(eq(limitOrders.id, id));
+}
+
+export async function getUserLimitOrders(telegramId: number): Promise<LimitOrder[]> {
+    return await db.select().from(limitOrders)
+        .where(eq(limitOrders.telegramId, telegramId))
+        .orderBy(desc(limitOrders.createdAt));
 }
