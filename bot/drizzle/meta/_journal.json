@@ -36,6 +36,20 @@
       "when": 1770983633520,
       "tag": "0004_acoustic_harrier",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1771072140103,
+      "tag": "0005_spicy_rhodey",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1771072282899,
+      "tag": "0006_light_ozymandias",
+      "breakpoints": true
     }
   ]
 }
