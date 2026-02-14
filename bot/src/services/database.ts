@@ -77,6 +77,66 @@ export const watchedOrders = pgTable('watched_orders', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// Caching tables
+export const coinPriceCache = pgTable('coin_price_cache', {
+  id: serial('id').primaryKey(),
+  coin: text('coin').notNull(),
+  network: text('network').notNull(),
+  name: text('name').notNull(),
+  usdPrice: text('usd_price'),
+  btcPrice: text('btc_price'),
+  available: text('available').notNull().default('true'),
+  expiresAt: timestamp('expires_at').notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const userSettings = pgTable('user_settings', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull().unique(),
+  walletAddress: text('wallet_address'),
+  theme: text('theme').default('dark'),
+  slippageTolerance: real('slippage_tolerance').default(0.5),
+  notificationsEnabled: text('notifications_enabled').default('true'),
+  defaultFromAsset: text('default_from_asset'),
+  defaultToAsset: text('default_to_asset'),
+  preferences: text('preferences'),
+  emailNotifications: text('email_notifications'),
+  telegramNotifications: text('telegram_notifications').default('false'),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const swapHistory = pgTable('swap_history', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  walletAddress: text('wallet_address'),
+  sideshiftOrderId: text('sideshift_order_id').notNull(),
+  quoteId: text('quote_id'),
+  fromAsset: text('from_asset').notNull(),
+  fromNetwork: text('from_network').notNull(),
+  fromAmount: real('from_amount').notNull(),
+  toAsset: text('to_asset').notNull(),
+  toNetwork: text('to_network').notNull(),
+  settleAmount: text('settle_amount').notNull(),
+  depositAddress: text('deposit_address'),
+  status: text('status').notNull().default('pending'),
+  txHash: text('tx_hash'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const chatHistory = pgTable('chat_history', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  walletAddress: text('wallet_address'),
+  role: text('role').notNull(),
+  content: text('content').notNull(),
+  metadata: text('metadata'),
+  sessionId: text('session_id'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 // DCA (Dollar Cost Averaging) Schedules
 export const dcaSchedules = pgTable('dca_schedules', {
   id: serial('id').primaryKey(),
@@ -102,6 +162,10 @@ export type Order = typeof orders.$inferSelect;
 export type Checkout = typeof checkouts.$inferSelect;
 export type AddressBookEntry = typeof addressBook.$inferSelect;
 export type WatchedOrder = typeof watchedOrders.$inferSelect;
+export type CoinPriceCache = typeof coinPriceCache.$inferSelect;
+export type UserSettings = typeof userSettings.$inferSelect;
+export type SwapHistory = typeof swapHistory.$inferSelect;
+export type ChatHistory = typeof chatHistory.$inferSelect;
 export type DCASchedule = typeof dcaSchedules.$inferSelect;
 
 // --- FUNCTIONS ---

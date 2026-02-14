@@ -422,12 +422,71 @@ async function handleTextMessage(
     return ctx.replyWithMarkdown(msg);
   }
 
-  // --- Swap / Checkout ---
+  // Swap / Checkout
   if (parsed.intent === 'swap' || parsed.intent === 'checkout') {
     await db.setConversationState(userId, { parsedCommand: parsed });
     return ctx.reply('Provide destination wallet address.');
   }
 }
+
+bot.on(message('voice'), async (ctx) => {
+    const userId = ctx.from.id;
+    await ctx.reply('👂 Listening...');
+
+    const tempDir = os.tmpdir();
+    const ogaPath = path.join(tempDir, `temp_${userId}.oga`);
+    const mp3Path = path.join(tempDir, `temp_${userId}.mp3`);
+
+    try {
+        const file_id = ctx.message.voice.file_id;
+        const fileLink = await ctx.telegram.getFileLink(file_id);
+
+        const response = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
+        fs.writeFileSync(ogaPath, Buffer.from(response.data));
+        
+        // Execute ffmpeg with timeout to prevent hanging processes
+        await new Promise<void>((resolve, reject) => {
+            const ffmpegProcess = exec(`ffmpeg -i "${ogaPath}" "${mp3Path}" -y`, (err) => {
+                if (err) reject(err);
+                else resolve();
+            });
+
+            // Set a 30-second timeout for ffmpeg execution
+            const timeout = setTimeout(() => {
+                if (ffmpegProcess.pid) {
+                    ffmpegProcess.kill('SIGTERM');
+                }
+                reject(new Error('ffmpeg execution timed out after 30 seconds'));
+            }, 30000);
+
+            // Clear timeout if process completes normally
+            ffmpegProcess.on('exit', () => {
+                clearTimeout(timeout);
+            });
+        });
+
+        const transcribedText = await transcribeAudio(mp3Path);
+        await handleTextMessage(ctx, transcribedText, 'voice');
+    } catch (error) {
+        console.error("Voice error:", error);
+        const errorMessage = error instanceof Error && error.message.includes('timed out') 
+            ? "Sorry, audio processing took too long. Please try a shorter message."
+            : "Sorry, I couldn't hear that clearly. Please try again.";
+        ctx.reply(errorMessage);
+    } finally {
+        // Always clean up temp files, regardless of success or failure
+        try {
+            if (fs.existsSync(ogaPath)) {
+                fs.unlinkSync(ogaPath);
+            }
+            if (fs.existsSync(mp3Path)) {
+                fs.unlinkSync(mp3Path);
+            }
+        } catch (cleanupError) {
+            console.error("Failed to clean up temp files:", cleanupError);
+        }
+    }
+});
 
 // ------------------ ACTIONS ------------------
 
