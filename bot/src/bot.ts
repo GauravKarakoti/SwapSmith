@@ -491,20 +491,36 @@ bot.on(message('voice'), async (ctx) => {
 
         const response = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
         fs.writeFileSync(ogaPath, Buffer.from(response.data));
-        // execSync(`ffmpeg -i ${ogaPath} ${mp3Path} -y`);
+        
+        // Execute ffmpeg with timeout to prevent hanging processes
         await new Promise<void>((resolve, reject) => {
-         exec(`ffmpeg -i "${ogaPath}" "${mp3Path}" -y`, (err) => {
-           if (err) reject(err);
-           else resolve();
-         });
-        });
+            const ffmpegProcess = exec(`ffmpeg -i "${ogaPath}" "${mp3Path}" -y`, (err) => {
+                if (err) reject(err);
+                else resolve();
+            });
 
+            // Set a 30-second timeout for ffmpeg execution
+            const timeout = setTimeout(() => {
+                if (ffmpegProcess.pid) {
+                    ffmpegProcess.kill('SIGTERM');
+                }
+                reject(new Error('ffmpeg execution timed out after 30 seconds'));
+            }, 30000);
+
+            // Clear timeout if process completes normally
+            ffmpegProcess.on('exit', () => {
+                clearTimeout(timeout);
+            });
+        });
 
         const transcribedText = await transcribeAudio(mp3Path);
         await handleTextMessage(ctx, transcribedText, 'voice');
     } catch (error) {
         console.error("Voice error:", error);
-        ctx.reply("Sorry, I couldn't hear that clearly. Please try again.");
+        const errorMessage = error instanceof Error && error.message.includes('timed out') 
+            ? "Sorry, audio processing took too long. Please try a shorter message."
+            : "Sorry, I couldn't hear that clearly. Please try again.";
+        ctx.reply(errorMessage);
     } finally {
         // Always clean up temp files, regardless of success or failure
         try {
