@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { createQuote } from '@/utils/sideshift-client';
+import { createSwapHistoryEntry } from '@/lib/database';
 
 const SIDESHIFT_CLIENT_IP = process.env.SIDESHIFT_CLIENT_IP || "127.0.0.1";
 
@@ -8,7 +9,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { fromAsset, toAsset, amount, fromChain, toChain } = req.body;
+  const { fromAsset, toAsset, amount, fromChain, toChain, userId, walletAddress } = req.body;
 
   if (!fromAsset || !toAsset || !amount) {
     return res.status(400).json({ error: 'Missing required parameters' });
@@ -45,6 +46,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       amount,
       userIP // Pass the validated IP
     );
+    
+    // Save swap to database if userId is provided
+    if (userId && quote.id) {
+      try {
+        await createSwapHistoryEntry(userId, walletAddress, {
+          sideshiftOrderId: quote.id,
+          quoteId: quote.id,
+          fromAsset: quote.depositCoin || fromAsset,
+          fromNetwork: quote.depositNetwork || fromChain,
+          fromAmount: parseFloat(quote.depositAmount || amount.toString()),
+          toAsset: quote.settleCoin || toAsset,
+          toNetwork: quote.settleNetwork || toChain,
+          settleAmount: quote.settleAmount || '0',
+          status: 'pending',
+        });
+        console.log('Swap saved to database successfully');
+      } catch (dbError) {
+        console.error('Failed to save swap to database:', dbError);
+        // Don't fail the request if database save fails
+      }
+    }
     
     res.status(200).json(quote);
   } catch (error: unknown) {
