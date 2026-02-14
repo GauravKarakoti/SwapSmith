@@ -3,7 +3,8 @@ import { message } from 'telegraf/filters';
 import dotenv from 'dotenv';
 import logger from './services/logger';
 import { executePortfolioStrategy } from './services/portfolio-service';
-import { parseUserCommand, transcribeAudio } from './services/groq-client';
+import { transcribeAudio } from './services/groq-client';
+import { parseUserCommand } from './services/parseUserCommand';
 import {
   createQuote,
   createOrder,

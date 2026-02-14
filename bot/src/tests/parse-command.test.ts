@@ -28,7 +28,7 @@ describe('parseUserCommand', () => {
     jest.resetModules();
     // Re-require the module to ensure fresh mock injection if needed,
     // though using a shared mockCreate spy is easier.
-    parseUserCommand = require('../services/groq-client').parseUserCommand;
+    parseUserCommand = require('../services/groq-client').parseWithLLM;
   });
 
   it('should parse a clear swap command', async () => {

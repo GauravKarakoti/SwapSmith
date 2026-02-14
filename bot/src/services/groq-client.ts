@@ -19,7 +19,10 @@ export interface ParsedCommand {
   toAsset: string | null;
   toChain: string | null;
   amount: number | null;
-  amountType?: "exact" | "percentage" | "all" | null; // Added back for compatibility
+  amountType?: "exact" | "percentage" | "all" | "exclude" | null; // Added back for compatibility
+
+  excludeAmount?: number;
+  excludeToken?: string;
   
   // Portfolio Fields (Array of outputs)
   portfolio?: {
@@ -172,7 +175,7 @@ EXAMPLES:
     -> intent: "dca", fromAsset: "USDC", toAsset: "ETH", amount: 200, frequency: "monthly", dayOfMonth: "1", confidence: 95
 `;
 
-export async function parseUserCommand(
+export async function parseWithLLM(
   userInput: string,
   conversationHistory: any[] = [],
   inputType: 'text' | 'voice' = 'text'
