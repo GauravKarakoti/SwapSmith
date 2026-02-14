@@ -1,7 +1,7 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { pgTable, serial, text, real, timestamp, bigint, integer } from 'drizzle-orm/pg-core';
-import { eq, desc, and, sql } from 'drizzle-orm'; // Added 'and', 'sql'
+import { pgTable, serial, text, real, timestamp, bigint } from 'drizzle-orm/pg-core';
+import { eq, desc, notInArray } from 'drizzle-orm';
 import dotenv from 'dotenv';
 import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
 import type { ParsedCommand } from './groq-client';
@@ -244,9 +244,9 @@ export async function clearConversationState(telegramId: number) {
 }
 
 export async function createOrderEntry(
-  telegramId: number, 
-  parsedCommand: ParsedCommand, 
-  order: SideShiftOrder, 
+  telegramId: number,
+  parsedCommand: ParsedCommand,
+  order: SideShiftOrder,
   settleAmount: string | number,
   quoteId: string
 ) {
@@ -307,233 +307,21 @@ export async function getUserCheckouts(telegramId: number): Promise<Checkout[]> 
     .limit(10);
 }
 
-export async function addAddressBookEntry(telegramId: number, nickname: string, address: string, chain: string) {
-  try{
-    await db.insert(addressBook)
-    .values({ telegramId, nickname, address, chain })
-    .onConflictDoUpdate({
-      target: [addressBook.telegramId, addressBook.nickname],
-      set: { address, chain }
-    });
-  }catch(err){
-    if (!memoryAddressBook.has(telegramId)) memoryAddressBook.set(telegramId, new Map());
-    memoryAddressBook.get(telegramId)!.set(nickname.toLowerCase(), { address, chain });
-  }
+// --- ORDER MONITOR HELPERS ---
+
+/** Terminal statuses that no longer need monitoring */
+const TERMINAL_STATUSES = ['settled', 'expired', 'refunded', 'failed'];
+
+/** Returns all orders that are NOT in a terminal state (for background polling). */
+export async function getPendingOrders(): Promise<Order[]> {
+  return await db.select().from(orders)
+    .where(notInArray(orders.status, TERMINAL_STATUSES));
 }
 
-export async function getAddressBookEntries(telegramId: number): Promise<AddressBookEntry[]> {
-  try {
-    return await db.select().from(addressBook)
-      .where(eq(addressBook.telegramId, telegramId))
-      .orderBy(desc(addressBook.createdAt));
-  }catch(arr){
-    const m = memoryAddressBook.get(telegramId);
-    if (!m) return [];
-    // return a compatible shape (cast is fine for dev fallback)
-    return [...m.entries()].map(([nickname, v]) => ({
-      id: 0 as any,
-      telegramId,
-      nickname,
-      address: v.address,
-      chain: v.chain,
-      createdAt: new Date() as any,
-    }));
-  }
-}
-
-export async function resolveNickname(telegramId: number, nickname: string): Promise<string | null> {
-  try{
-    const result = await db.select({ address: addressBook.address })
-    .from(addressBook)
-    .where(
-      and(
-        eq(addressBook.telegramId, telegramId), 
-        eq(addressBook.nickname, nickname)
-      )
-    ) // Corrected multi-where syntax
+/** Looks up a single order by its SideShift order ID. */
+export async function getOrderBySideshiftId(sideshiftOrderId: string): Promise<Order | undefined> {
+  const result = await db.select().from(orders)
+    .where(eq(orders.sideshiftOrderId, sideshiftOrderId))
     .limit(1);
-    return result[0]?.address || null;
-  }catch(err){
-    return null;
-  }
-}
-
-
-// --- WATCHED ORDERS FUNCTIONS ---
-
-export async function addWatchedOrder(telegramId: number, sideshiftOrderId: string, initialStatus: string = 'pending') {
-  await db.insert(watchedOrders)
-    .values({ 
-      telegramId, 
-      sideshiftOrderId, 
-      lastStatus: initialStatus,
-      lastChecked: new Date()
-    })
-    .onConflictDoUpdate({
-      target: watchedOrders.sideshiftOrderId,
-      set: { lastChecked: new Date() }
-    });
-}
-
-export async function removeWatchedOrder(sideshiftOrderId: string) {
-  await db.delete(watchedOrders).where(eq(watchedOrders.sideshiftOrderId, sideshiftOrderId));
-}
-
-export async function getAllWatchedOrders(): Promise<WatchedOrder[]> {
-  return await db.select().from(watchedOrders);
-}
-
-export async function getUserWatchedOrders(telegramId: number): Promise<WatchedOrder[]> {
-  return await db.select().from(watchedOrders)
-    .where(eq(watchedOrders.telegramId, telegramId))
-    .orderBy(desc(watchedOrders.createdAt));
-}
-
-export async function updateWatchedOrderStatus(sideshiftOrderId: string, newStatus: string) {
-  await db.update(watchedOrders)
-    .set({ lastStatus: newStatus, lastChecked: new Date() })
-    .where(eq(watchedOrders.sideshiftOrderId, sideshiftOrderId));
-}
-
-
-// --- DCA SCHEDULE FUNCTIONS ---
-
-export async function createDCASchedule(
-  telegramId: number,
-  fromAsset: string,
-  fromChain: string,
-  toAsset: string,
-  toChain: string,
-  amount: number,
-  frequency: string,
-  settleAddress: string,
-  dayOfWeek?: string,
-  dayOfMonth?: string
-) {
-  const nextExecution = calculateNextExecution(frequency, dayOfWeek, dayOfMonth);
-  
-  const result = await db.insert(dcaSchedules).values({
-    telegramId,
-    fromAsset,
-    fromChain,
-    toAsset,
-    toChain,
-    amount,
-    frequency,
-    dayOfWeek: dayOfWeek || null,
-    dayOfMonth: dayOfMonth || null,
-    settleAddress,
-    nextExecution,
-    isActive: 'true'
-  }).returning();
-  
   return result[0];
-}
-
-export async function getUserDCASchedules(telegramId: number): Promise<DCASchedule[]> {
-  return await db.select().from(dcaSchedules)
-    .where(eq(dcaSchedules.telegramId, telegramId))
-    .orderBy(desc(dcaSchedules.createdAt));
-}
-
-export async function getActiveDCASchedules(): Promise<DCASchedule[]> {
-  return await db.select().from(dcaSchedules)
-    .where(eq(dcaSchedules.isActive, 'true'));
-}
-
-export async function updateDCAScheduleStatus(id: number, isActive: boolean) {
-  await db.update(dcaSchedules)
-    .set({ isActive: isActive ? 'true' : 'false' })
-    .where(eq(dcaSchedules.id, id));
-}
-
-export async function updateDCAScheduleExecution(id: number, frequency: string, dayOfWeek?: string, dayOfMonth?: string) {
-  const nextExecution = calculateNextExecution(frequency, dayOfWeek, dayOfMonth);
-  
-  await db.update(dcaSchedules)
-    .set({ 
-      lastExecuted: new Date(),
-      nextExecution,
-      executionCount: sql`${dcaSchedules.executionCount} + 1`
-    })
-    .where(eq(dcaSchedules.id, id));
-}
-
-export async function deleteDCASchedule(id: number) {
-  await db.delete(dcaSchedules).where(eq(dcaSchedules.id, id));
-}
-
-function calculateNextExecution(frequency: string, dayOfWeek?: string, dayOfMonth?: string): Date {
-  const now = new Date();
-  const next = new Date(now);
-  
-  if (frequency === 'daily') {
-    next.setDate(next.getDate() + 1);
-    next.setHours(9, 0, 0, 0); // 9 AM next day
-  } else if (frequency === 'weekly') {
-    const targetDay = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].indexOf(dayOfWeek?.toLowerCase() || 'monday');
-    const currentDay = next.getDay();
-    const daysUntilTarget = (targetDay - currentDay + 7) % 7 || 7;
-    next.setDate(next.getDate() + daysUntilTarget);
-    next.setHours(9, 0, 0, 0);
-  } else if (frequency === 'monthly') {
-    const targetDate = parseInt(dayOfMonth || '1');
-    next.setMonth(next.getMonth() + 1);
-    next.setDate(Math.min(targetDate, new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()));
-    next.setHours(9, 0, 0, 0);
-  }
-  
-  return next;
-}
-
-// --- LIMIT ORDER FUNCTIONS ---
-
-export async function createLimitOrder(
-  telegramId: number,
-  fromAsset: string,
-  fromChain: string,
-  toAsset: string,
-  toChain: string,
-  amount: number,
-  conditionOperator: string,
-  conditionValue: number,
-  conditionAsset: string,
-  settleAddress?: string
-) {
-  const result = await db.insert(limitOrders).values({
-    telegramId,
-    fromAsset,
-    fromChain,
-    toAsset,
-    toChain,
-    amount,
-    conditionOperator,
-    conditionValue,
-    conditionAsset,
-    settleAddress,
-    status: 'pending'
-  }).returning();
-  return result[0];
-}
-
-export async function getPendingLimitOrders(): Promise<LimitOrder[]> {
-  return await db.select().from(limitOrders)
-    .where(eq(limitOrders.status, 'pending'));
-}
-
-export async function updateLimitOrderStatus(id: number, status: string, sideShiftOrderId?: string, error?: string) {
-    const updates: any = { status };
-    if (sideShiftOrderId) updates.sideShiftOrderId = sideShiftOrderId;
-    if (error) updates.error = error;
-    if (status === 'executed') updates.executedAt = new Date();
-
-    await db.update(limitOrders)
-        .set(updates)
-        .where(eq(limitOrders.id, id));
-}
-
-export async function getUserLimitOrders(telegramId: number): Promise<LimitOrder[]> {
-    return await db.select().from(limitOrders)
-        .where(eq(limitOrders.telegramId, telegramId))
-        .orderBy(desc(limitOrders.createdAt));
 }
