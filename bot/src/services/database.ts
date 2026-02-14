@@ -137,6 +137,24 @@ export const chatHistory = pgTable('chat_history', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const dcaSchedules = pgTable('dca_schedules', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
+  fromAsset: text('from_asset').notNull(),
+  fromChain: text('from_chain').notNull(),
+  toAsset: text('to_asset').notNull(),
+  toChain: text('to_chain').notNull(),
+  amount: real('amount').notNull(),
+  settleAddress: text('settle_address').notNull(),
+  frequency: text('frequency').notNull(), // 'daily', 'weekly', 'monthly'
+  dayOfWeek: real('day_of_week'), // 0-6 for weekly
+  dayOfMonth: real('day_of_month'), // 1-31 for monthly
+  nextExecution: timestamp('next_execution').notNull(),
+  isActive: text('is_active').notNull().default('true'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 export type User = typeof users.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Checkout = typeof checkouts.$inferSelect;
@@ -146,6 +164,7 @@ export type CoinPriceCache = typeof coinPriceCache.$inferSelect;
 export type UserSettings = typeof userSettings.$inferSelect;
 export type SwapHistory = typeof swapHistory.$inferSelect;
 export type ChatHistory = typeof chatHistory.$inferSelect;
+export type DCASchedule = typeof dcaSchedules.$inferSelect;
 
 // --- FUNCTIONS ---
 
@@ -542,3 +561,50 @@ export async function clearChatHistory(userId: string, sessionId?: string) {
       .where(eq(chatHistory.userId, userId));
   }
 }
+
+// --- DCA SCHEDULE FUNCTIONS ---
+
+export async function getActiveDCASchedules(): Promise<DCASchedule[]> {
+  return await db.select().from(dcaSchedules)
+    .where(eq(dcaSchedules.isActive, 'true'))
+    .orderBy(dcaSchedules.nextExecution);
+}
+
+export async function updateDCAScheduleExecution(
+  scheduleId: number,
+  frequency: string,
+  dayOfWeek?: number,
+  dayOfMonth?: number
+) {
+  // Calculate next execution time
+  const now = new Date();
+  let nextExecution = new Date(now);
+
+  switch (frequency) {
+    case 'daily':
+      nextExecution.setDate(nextExecution.getDate() + 1);
+      break;
+    case 'weekly':
+      nextExecution.setDate(nextExecution.getDate() + 7);
+      if (dayOfWeek !== undefined) {
+        const currentDay = nextExecution.getDay();
+        const daysUntilTarget = (dayOfWeek - currentDay + 7) % 7;
+        nextExecution.setDate(nextExecution.getDate() + daysUntilTarget);
+      }
+      break;
+    case 'monthly':
+      nextExecution.setMonth(nextExecution.getMonth() + 1);
+      if (dayOfMonth !== undefined) {
+        nextExecution.setDate(dayOfMonth);
+      }
+      break;
+  }
+
+  await db.update(dcaSchedules)
+    .set({ 
+      nextExecution,
+      updatedAt: new Date()
+    })
+    .where(eq(dcaSchedules.id, scheduleId));
+}
+
