@@ -38,7 +38,48 @@ function isValidAddress(address: string, chain?: string): boolean {
   if (!address) return false;
   const targetChain = chain?.toLowerCase() || 'ethereum';
   const pattern = ADDRESS_PATTERNS[targetChain] || ADDRESS_PATTERNS.ethereum;
-  return pattern.test(address.trim());
+  
+  // First check regex pattern
+  if (!pattern.test(address.trim())) {
+    return false;
+  }
+  
+  // For EVM chains, additionally verify checksum
+  const evmChains = [
+    'ethereum', 'base', 'arbitrum', 'polygon', 'bsc', 'optimism', 'avalanche',
+    'fantom', 'cronos', 'moonbeam', 'moonriver', 'celo', 'gnosis', 'harmony',
+    'metis', 'aurora', 'kava', 'evmos', 'boba', 'okc', 'heco', 'iotex',
+    'klaytn', 'conflux', 'astar', 'shiden', 'telos', 'fuse', 'velas',
+    'thundercore', 'nahmii', 'callisto', 'smartbch', 'energyweb', 'theta',
+    'flare', 'songbird', 'coston', 'coston2', 'rei', 'kekchain', 'tomochain',
+    'bitgert', 'clover', 'defichain', 'findora', 'gatechain', 'meter', 'nova',
+    'syscoin', 'zksync', 'polygonzkevm', 'linea', 'mantle', 'scroll', 'taiko', 'rsk'
+  ];
+  
+  if (evmChains.includes(targetChain)) {
+    const addr = address.trim();
+    
+    // Check if address (excluding 0x prefix) is all-lowercase or all-uppercase
+    const addrWithoutPrefix = addr.slice(2); // Remove '0x'
+    const isAllLower = addrWithoutPrefix === addrWithoutPrefix.toLowerCase();
+    const isAllUpper = addrWithoutPrefix === addrWithoutPrefix.toUpperCase();
+    
+    // Accept all-lowercase or all-uppercase (no checksum)
+    if (isAllLower || isAllUpper) {
+      return true;
+    }
+    
+    // For mixed-case, verify checksum
+    try {
+      const checksummed = ethers.getAddress(addr);
+      return checksummed === addr;
+    } catch {
+      // Invalid checksum
+      return false;
+    }
+  }
+  
+  return true;
 }
 
 // ------------------ INIT ------------------
