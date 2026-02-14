@@ -1,6 +1,6 @@
 {
-  "id": "9851864d-995f-4c36-bb6d-bf9de9bb98a4",
-  "prevId": "89e5b333-63dc-4b3c-92c8-bc3bcaf827ab",
+  "id": "bd49dc32-6716-4d5b-a6a3-74b5c6bbf0c7",
+  "prevId": "9219eeb4-f59f-4142-b42c-16452880b6ba",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -661,11 +661,17 @@
           "primaryKey": true,
           "notNull": true
         },
-        "telegram_id": {
-          "name": "telegram_id",
-          "type": "bigint",
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "wallet_address": {
+          "name": "wallet_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "sideshift_order_id": {
           "name": "sideshift_order_id",
@@ -717,12 +723,6 @@
         },
         "deposit_address": {
           "name": "deposit_address",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "deposit_memo": {
-          "name": "deposit_memo",
           "type": "text",
           "primaryKey": false,
           "notNull": false

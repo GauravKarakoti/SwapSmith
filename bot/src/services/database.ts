@@ -1,6 +1,6 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { pgTable, serial, text, real, timestamp, bigint } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, real, timestamp, bigint, integer } from 'drizzle-orm/pg-core';
 import { eq, desc, notInArray } from 'drizzle-orm';
 import dotenv from 'dotenv';
 import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
