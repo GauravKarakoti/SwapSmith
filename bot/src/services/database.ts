@@ -1,7 +1,7 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import { pgTable, serial, text, real, timestamp, bigint } from 'drizzle-orm/pg-core';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, notInArray } from 'drizzle-orm';
 import dotenv from 'dotenv';
 import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
 import type { ParsedCommand } from './groq-client';
@@ -109,9 +109,9 @@ export async function clearConversationState(telegramId: number) {
 }
 
 export async function createOrderEntry(
-  telegramId: number, 
-  parsedCommand: ParsedCommand, 
-  order: SideShiftOrder, 
+  telegramId: number,
+  parsedCommand: ParsedCommand,
+  order: SideShiftOrder,
   settleAmount: string | number,
   quoteId: string
 ) {
@@ -170,4 +170,23 @@ export async function getUserCheckouts(telegramId: number): Promise<Checkout[]> 
     .where(eq(checkouts.telegramId, telegramId))
     .orderBy(desc(checkouts.createdAt))
     .limit(10);
+}
+
+// --- ORDER MONITOR HELPERS ---
+
+/** Terminal statuses that no longer need monitoring */
+const TERMINAL_STATUSES = ['settled', 'expired', 'refunded', 'failed'];
+
+/** Returns all orders that are NOT in a terminal state (for background polling). */
+export async function getPendingOrders(): Promise<Order[]> {
+  return await db.select().from(orders)
+    .where(notInArray(orders.status, TERMINAL_STATUSES));
+}
+
+/** Looks up a single order by its SideShift order ID. */
+export async function getOrderBySideshiftId(sideshiftOrderId: string): Promise<Order | undefined> {
+  const result = await db.select().from(orders)
+    .where(eq(orders.sideshiftOrderId, sideshiftOrderId))
+    .limit(1);
+  return result[0];
 }
