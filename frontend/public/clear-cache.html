@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Cache</title>
+</head>
+<body>
+    <h1>Clearing Frontend Cache...</h1>
+    <pre id="output"></pre>
+    
+    <script>
+        const output = document.getElementById('output');
+        
+        // Clear all cache entries
+        let cleared = 0;
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('cache_')) {
+                localStorage.removeItem(key);
+                cleared++;
+            }
+        }
+        
+        output.textContent = `✅ Cleared ${cleared} cache entries\n\nNow refreshing data...\n`;
+        
+        // Fetch fresh data
+        fetch('/api/prices')
+            .then(res => res.json())
+            .then(data => {
+                output.textContent += `\n✅ API returned ${data.count} coins with prices\n\n`;
+                output.textContent += `Sample coins:\n`;
+                data.prices.slice(0, 5).forEach(coin => {
+                    output.textContent += `  ${coin.coin.toUpperCase()} (${coin.name}): $${coin.usdPrice}\n`;
+                });
+                output.textContent += `\n✅ Cache cleared! Redirecting to prices page...\n`;
+                
+                setTimeout(() => {
+                    window.location.href = '/prices';
+                }, 2000);
+            })
+            .catch(err => {
+                output.textContent += `\n❌ Error: ${err.message}\n`;
+            });
+    </script>
+</body>
+</html>

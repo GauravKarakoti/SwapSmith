@@ -7,7 +7,6 @@ dotenv.config();
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 const bot = new Telegraf(process.env.BOT_TOKEN!);
 
-// Define log levels
 const levels = {
   error: 0,
   warn: 1,
@@ -16,7 +15,6 @@ const levels = {
   debug: 4,
 };
 
-// Define colors for each level
 const colors = {
   error: 'red',
   warn: 'yellow',
@@ -25,10 +23,8 @@ const colors = {
   debug: 'white',
 };
 
-// Add colors to winston
 winston.addColors(colors);
 
-// Define the format for logs
 const format = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }),
   winston.format.colorize({ all: true }),
@@ -37,44 +33,34 @@ const format = winston.format.combine(
   ),
 );
 
-// Define transports
-const transports = [
-  new winston.transports.Console({
-    format: winston.format.combine(
-      winston.format.colorize(),
-      winston.format.simple(),
-    ),
-  }),
-  new winston.transports.File({
-    filename: 'logs/error.log',
-    level: 'error',
-  }),
-  new winston.transports.File({ filename: 'logs/all.log' }),
-];
-
-// Create the logger
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'debug',
   levels,
   format,
-  transports,
+  transports: [
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple(),
+      ),
+    }),
+    new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'logs/all.log' }),
+  ],
 });
 
-// Unified error handling function
 export async function handleError(
   errorType: string,
   details: any,
-  ctx?: any, // Optional Telegraf context for user info
+  ctx?: any,
   sendAlert: boolean = true
 ) {
-  // Log the error using Winston
   logger.error(`[${errorType}]`, {
     details,
     userId: ctx?.from?.id || 'unknown',
     timestamp: new Date().toISOString(),
   });
 
-  // Optionally send Telegram alert
   if (sendAlert && ADMIN_CHAT_ID) {
     try {
       const msg = `⚠️ *Error Alert*\n\n*Type:* ${errorType}\n*User:* ${ctx?.from?.id || 'unknown'}\n*Details:* ${JSON.stringify(details, null, 2)}`;
