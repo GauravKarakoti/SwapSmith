@@ -1,0 +1,19 @@
+{
+  "name": "@swapsmith/shared",
+  "version": "1.0.0",
+  "description": "Shared database schemas and Drizzle configuration for SwapSmith",
+  "main": "schema.ts",
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "db:push": "drizzle-kit push"
+  },
+  "keywords": ["drizzle", "schema", "database"],
+  "author": "",
+  "license": "ISC",
+  "peerDependencies": {
+    "drizzle-orm": "^0.44.7",
+    "drizzle-kit": "^0.31.7"
+  }
+}

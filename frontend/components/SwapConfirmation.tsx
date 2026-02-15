@@ -3,6 +3,7 @@ import { CheckCircle, AlertCircle, ExternalLink, Copy, Check, ShieldCheck, Shiel
 import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi' // Added usePublicClient
 import { parseEther, formatEther, type Chain } from 'viem'
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
+import { getExplorerUrl as getBlockchainExplorerUrl, getNetworkDisplayName } from '@/utils/blockchain-explorer'
 
 // --- Interface and Constants ---
 interface QuoteData {
@@ -21,18 +22,6 @@ interface QuoteData {
 interface SwapConfirmationProps {
   quote: QuoteData;
   confidence?: number;
-}
-
-const EXPLORER_URLS: { [key: string]: string } = {
-  ethereum: 'https://etherscan.io',
-  bitcoin: 'https://blockchain.com/explorer',
-  polygon: 'https://polygonscan.com',
-  arbitrum: 'https://arbiscan.io',
-  avalanche: 'https://snowtrace.io',
-  optimism: 'https://optimistic.etherscan.io',
-  bsc: 'https://bscscan.com',
-  base: 'https://basescan.org',
-  solana: 'https://solscan.io',
 }
 
 const SIDESHIFT_TRACKING_URL = 'https://sideshift.ai/transactions'
@@ -285,25 +274,26 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
 
   const getExplorerUrl = () => {
     const networkKey = quote.depositNetwork.toLowerCase();
-    const baseUrl = EXPLORER_URLS[networkKey];
 
-    if (hash && baseUrl) {
-        return `${baseUrl}/tx/${hash}`;
+    if (hash) {
+      const txUrl = getBlockchainExplorerUrl(networkKey, 'transaction', hash);
+      if (txUrl) return txUrl;
     }
+    
     if (quote.id) {
       return `${SIDESHIFT_TRACKING_URL}/${address}`
     }
-    if (baseUrl) {
-      if (networkKey === 'bitcoin') {
-        return `${baseUrl}/addresses/${address}`
-      }
-      return `${baseUrl}/address/${address}`
+    
+    if (address) {
+      const addressUrl = getBlockchainExplorerUrl(networkKey, 'address', address);
+      if (addressUrl) return addressUrl;
     }
+    
     return null
   }
   
   const getNetworkName = (network: string) => {
-    return CHAIN_MAP[network.toLowerCase()]?.name || network;
+    return getNetworkDisplayName(network) || CHAIN_MAP[network.toLowerCase()]?.name || network;
   }
 
   const explorerUrl = getExplorerUrl()

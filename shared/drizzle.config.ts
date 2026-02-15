@@ -1,11 +1,10 @@
 import { defineConfig } from "drizzle-kit";
 import dotenv from "dotenv";
 
-dotenv.config();
+dotenv.config({ path: "../bot/.env" }); // Load from bot's .env
 
 export default defineConfig({
-  // Point to the shared schema file
-  schema: "../../shared/schema.ts",
+  schema: "./schema.ts",
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {
