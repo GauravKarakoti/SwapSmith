@@ -23,6 +23,7 @@ export interface ParsedCommand {
 
   excludeAmount?: number;
   excludeToken?: string;
+  quoteAmount?: number;
   
   // Portfolio Fields (Array of outputs)
   portfolio?: {
@@ -310,6 +311,9 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     toChain: parsed.toChain || null,
     amount: parsed.amount || null,
     amountType: parsed.amountType || null,
+    excludeAmount: parsed.excludeAmount,
+    excludeToken: parsed.excludeToken,
+    quoteAmount: parsed.quoteAmount,
     portfolio: parsed.portfolio, // Pass through portfolio
     frequency: parsed.frequency || null,
     dayOfWeek: parsed.dayOfWeek || null,
