@@ -11,21 +11,37 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import express from 'express';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+import axios from 'axios';
+import { exec } from 'child_process';
+import { ethers } from 'ethers';
+
+// Services
+import { transcribeAudio } from './services/groq-client';
+import {
+    createQuote,
+    createOrder,
+    createCheckout,
+    getOrderStatus
+} from './services/sideshift-client';
+import {
+    getTopStablecoinYields,
+    getTopYieldPools
+} from './services/yield-client';
+import { executePortfolioStrategy } from './services/portfolio-service';
+import * as db from './services/database';
+import { OrderMonitor } from './services/order-monitor';
+import { tokenResolver } from './services/token-resolver';
 import { chainIdMap } from './config/chains';
 import { isValidAddress } from './config/address-patterns';
 
-dotenv.config();
-const MINI_APP_URL = process.env.MINI_APP_URL!;
-const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 const bot = new Telegraf(process.env.BOT_TOKEN!);
+const MINI_APP_URL = process.env.MINI_APP_URL!;
+const ERC20_ABI = ['function transfer(address to, uint256 amount) returns (bool)'];
 
-// --- FFMPEG CHECK ---
-try {
-    execSync('ffmpeg -version');
-    console.log('✅ ffmpeg is installed. Voice messages enabled.');
-} catch (error) {
-    console.warn('⚠️ ffmpeg not found. Voice messages will fail. Please install ffmpeg.');
-}
+const DEFAULT_EVM_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 
 // --- ERC20 CONFIGURATION ---
 const ERC20_ABI = [
@@ -66,7 +82,9 @@ async function logAnalytics(ctx: any, errorType: string, details: any) {
     }
 }
 
-// --- COMMANDS ---
+function isValidAddress(address: string, chain?: string): boolean {
+    if (!address || typeof address !== 'string') return false;
+    const trimmed = address.trim();
 
 bot.start((ctx) => {
     ctx.reply(
@@ -90,72 +108,65 @@ bot.start((ctx) => {
     );
 });
 
-bot.command('history', async (ctx) => {
-    const userId = ctx.from.id;
-    const orders = await db.getUserHistory(userId);
+    const normalized = chain.toLowerCase().replace(/[^a-z]/g, '');
+    const pattern = ADDRESS_PATTERNS[normalized as keyof typeof ADDRESS_PATTERNS];
+    return pattern ? pattern.test(trimmed) : DEFAULT_EVM_PATTERN.test(trimmed);
+}
 
-    if (orders.length === 0) return ctx.reply("You have no order history yet.");
+// --------------------------------------------------
+// ORDER MONITOR
+// --------------------------------------------------
 
-    let message = "Your last 10 orders:\n\n";
-    orders.forEach((order) => {
-        message += `*Order ${order.sideshiftOrderId}* (${order.status})\n`;
-        message += `  *Send:* ${order.fromAmount} ${order.fromAsset} (${order.fromNetwork})\n`;
-        message += `  *Rcv:* ~${order.settleAmount} ${order.toAsset} (${order.toNetwork})\n`;
-        message += `  *To:* \`${order.depositAddress}\`\n`;
-        if (order.txHash) message += `  *TxHash:* \`${order.txHash.substring(0, 10)}...\`\n`;
-        message += `  *Date:* ${new Date(order.createdAt as Date).toLocaleString()}\n\n`;
-    });
-    ctx.replyWithMarkdown(message);
-});
+const orderMonitor = new OrderMonitor({
+    getOrderStatus,
+    updateOrderStatus: db.updateOrderStatus,
+    getPendingOrders: db.getPendingOrders,
+    onStatusChange: async (telegramId, orderId, oldStatus, newStatus, details) => {
+        const emojiMap: Record<string, string> = {
+            waiting: '⏳',
+            pending: '⏳',
+            processing: '⚙️',
+            settling: '📤',
+            settled: '✅',
+            refunded: '↩️',
+            expired: '⏰',
+            failed: '❌',
+        };
 
-bot.command('status', async (ctx) => {
-    const userId = ctx.from.id;
-    const args = ctx.message.text.split(' ');
-    let orderIdToCheck: string | null = args[1];
+        const msg =
+            `${emojiMap[newStatus] || '🔔'} *Order Update*\n\n` +
+            `*Order:* \`${orderId}\`\n` +
+            `*Status:* ${oldStatus} → *${newStatus.toUpperCase()}*\n` +
+            (details.depositAmount ? `*Sent:* ${details.depositAmount} ${details.depositCoin}\n` : '') +
+            (details.settleAmount ? `*Received:* ${details.settleAmount} ${details.settleCoin}\n` : '') +
+            (details.settleHash ? `*Tx:* \`${details.settleHash.slice(0, 16)}...\`\n` : '');
 
-    try {
-        if (!orderIdToCheck) {
-            const lastOrder = await db.getLatestUserOrder(userId);
-            if (!lastOrder) return ctx.reply("You have no order history to check. Send a swap first.");
-            orderIdToCheck = lastOrder.sideshiftOrderId;
-            await ctx.reply(`Checking status of your latest order: \`${orderIdToCheck}\``);
+        try {
+            await bot.telegram.sendMessage(telegramId, msg, { parse_mode: 'Markdown' });
+        } catch (e) {
+            console.error('Order update notify failed:', e);
         }
-
-        await ctx.reply(`⏳ Checking status...`);
-        const status = await getOrderStatus(orderIdToCheck);
-        db.updateOrderStatus(orderIdToCheck, status.status);
-
-        let message = `*Order Status: ${status.id}*\n\n`;
-        message += `  *Status:* \`${status.status.toUpperCase()}\`\n`;
-        message += `  *Send:* ${status.depositAmount || '?'} ${status.depositCoin} (${status.depositNetwork})\n`;
-        message += `  *Receive:* ${status.settleAmount || '?'} ${status.settleCoin} (${status.settleNetwork})\n`;
-        message += `  *Created:* ${new Date(status.createdAt).toLocaleString()}\n`;
-
-        ctx.replyWithMarkdown(message);
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-        ctx.reply(`Sorry, couldn't get status. Error: ${errorMessage}`);
     }
 });
 
-bot.command('checkouts', async (ctx) => {
-    const userId = ctx.from.id;
-    const checkouts = await db.getUserCheckouts(userId);
-    if (checkouts.length === 0) return ctx.reply("You have no checkout history yet.");
+// --------------------------------------------------
+// COMMANDS
+// --------------------------------------------------
 
-    let message = "Your last 10 checkouts (payment links):\n\n";
-    checkouts.forEach((checkout) => {
-        const paymentUrl = `https://pay.sideshift.ai/checkout/${checkout.checkoutId}`;
-        message += `*Checkout ${checkout.id}* (${checkout.status})\n`;
-        message += `  *Receive:* ${checkout.settleAmount} ${checkout.settleAsset} (${checkout.settleNetwork})\n`;
-        message += `  *Link:* [Pay Here](${paymentUrl})\n`;
-    });
-    ctx.replyWithMarkdown(message, { link_preview_options: { is_disabled: true } });
-});
-
-bot.command('clear', (ctx) => {
-    db.clearConversationState(ctx.from.id);
-    ctx.reply('✅ Conversation history cleared.');
+bot.start((ctx) => {
+    ctx.reply(
+        "🤖 *Welcome to SwapSmith!*\n\n" +
+        "Voice-Activated Crypto Trading Assistant.\n\n" +
+        "/website – Web App\n" +
+        "/yield – Top yield pools\n" +
+        "/clear – Reset conversation",
+        {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+                Markup.button.url('🌐 Website', 'https://swap-smith.vercel.app/')
+            ])
+        }
+    );
 });
 
 bot.command('website', (ctx) => {
@@ -176,7 +187,9 @@ bot.command('yield', async (ctx) => {
     ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields:*\n\n${yields}`);
 });
 
-// --- MESSAGE HANDLERS ---
+// --------------------------------------------------
+// MESSAGE HANDLERS (ONLY ONE EACH)
+// --------------------------------------------------
 
 bot.on(message('text'), async (ctx) => {
     if (ctx.message.text.startsWith('/')) return;
@@ -341,46 +354,44 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
     if (inputType === 'voice' && parsed.success) await ctx.reply(`🗣️ ${parsed.parsedMessage}`);
 }
 
-// --- ACTION HANDLERS ---
-
-bot.action('confirm_portfolio', async (ctx) => {
-    ctx.reply("Portfolio execution not fully implemented in this snippet.");
-});
-
-bot.action('confirm_swap', async (ctx) => {
-    const userId = ctx.from.id;
-    const state = await db.getConversationState(userId);
-    if (!state?.parsedCommand || state.parsedCommand.intent !== 'swap') return ctx.answerCbQuery('Session expired.');
+    const timestamp = Date.now();
+    const tempDir = os.tmpdir();
+    const oga = path.join(tempDir, `voice_${userId}_${timestamp}.oga`);
+    const mp3 = path.join(tempDir, `voice_${userId}_${timestamp}.mp3`);
 
     try {
-        await ctx.answerCbQuery('Fetching quote...');
-        const quote = await createQuote(
-            state.parsedCommand.fromAsset!, state.parsedCommand.fromChain!,
-            state.parsedCommand.toAsset!, state.parsedCommand.toChain!,
-            state.parsedCommand.amount!, '1.1.1.1'
-        );
+        const link = await ctx.telegram.getFileLink(ctx.message.voice.file_id);
+        const res = await axios.get(link.href, { responseType: 'arraybuffer' });
+        fs.writeFileSync(oga, Buffer.from(res.data));
 
-        if (quote.error) return ctx.editMessageText(`Error: ${quote.error.message}`);
-
-        db.setConversationState(userId, { ...state, quoteId: quote.id, settleAmount: quote.settleAmount });
-        const quoteMessage = `Here's your quote:\n\n➡️ *Send:* \`${quote.depositAmount} ${quote.depositCoin}\`\n⬅️ *Receive:* \`${quote.settleAmount} ${quote.settleCoin}\`\n\nReady?`;
-
-        ctx.editMessageText(quoteMessage, {
-            parse_mode: 'Markdown',
-            ...Markup.inlineKeyboard([
-                Markup.button.callback('✅ Place Order', 'place_order'),
-                Markup.button.callback('❌ Cancel', 'cancel_swap'),
-            ])
+        await new Promise<void>((resolve, reject) => {
+            const p = exec(`ffmpeg -i "${oga}" "${mp3}" -y`, err => err ? reject(err) : resolve());
+            const t = setTimeout(() => {
+                if (p.pid) p.kill('SIGTERM');
+                reject(new Error('ffmpeg timeout'));
+            }, 30000);
+            p.on('exit', () => clearTimeout(t));
         });
-    } catch (error) {
-        ctx.editMessageText(`Error: ${error instanceof Error ? error.message : 'Unknown'}`);
+
+        const text = await transcribeAudio(mp3);
+        await handleTextMessage(ctx, text, 'voice');
+
+    } catch (e) {
+        console.error('Voice error:', e);
+        ctx.reply('❌ Could not process audio.');
+    } finally {
+        if (fs.existsSync(oga)) fs.unlinkSync(oga);
+        if (fs.existsSync(mp3)) fs.unlinkSync(mp3);
     }
 });
 
-bot.action('place_order', async (ctx) => {
+// --------------------------------------------------
+// CORE LOGIC
+// --------------------------------------------------
+
+async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'voice') {
     const userId = ctx.from.id;
     const state = await db.getConversationState(userId);
-    if (!state?.quoteId || !state.parsedCommand) return ctx.answerCbQuery('Session expired.');
 
     try {
         await ctx.answerCbQuery('Setting up order...');
@@ -396,32 +407,20 @@ bot.action('place_order', async (ctx) => {
         const rawDepositAddress = typeof order.depositAddress === 'string' ? order.depositAddress : order.depositAddress.address;
         const depositMemo = typeof order.depositAddress === 'object' ? order.depositAddress.memo : null;
 
-        const chainKey = fromChain?.toLowerCase() || 'ethereum';
-        const assetKey = fromAsset?.toUpperCase() || 'ETH';
-        const tokenData = TOKEN_MAP[chainKey]?.[assetKey];
+        const updated = { ...state.parsedCommand, settleAddress: text.trim() };
+        await db.setConversationState(userId, { parsedCommand: updated });
 
-        let txTo = rawDepositAddress;
-        let txValueHex = '0x0';
-        let txData = '0x';
+        return ctx.reply(
+            'Confirm?',
+            Markup.inlineKeyboard([
+                Markup.button.callback('✅ Yes', updated.intent === 'checkout' ? 'confirm_checkout' : 'confirm_swap'),
+                Markup.button.callback('❌ No', 'cancel_swap')
+            ])
+        );
+    }
 
-        try {
-            if (tokenData) {
-                // ERC20 Token
-                txTo = tokenData.address;
-                txValueHex = '0x0'; // Value is 0 for tokens
-                const amountBigInt = ethers.parseUnits(amount!.toString(), tokenData.decimals);
-                const iface = new ethers.Interface(ERC20_ABI);
-                txData = iface.encodeFunctionData("transfer", [rawDepositAddress, amountBigInt]);
-            } else {
-                // Native Asset
-                txTo = rawDepositAddress;
-                const amountBigInt = ethers.parseUnits(amount!.toString(), 18);
-                txValueHex = '0x' + amountBigInt.toString(16);
-                if (depositMemo) txData = ethers.hexlify(ethers.toUtf8Bytes(depositMemo));
-            }
-        } catch (err) {
-            return ctx.editMessageText(`Tx construction error: ${err instanceof Error ? err.message : 'Unknown'}`);
-        }
+    const history = state?.messages || [];
+    const parsed = await parseUserCommand(text, history, inputType);
 
         const params = new URLSearchParams({
             to: txTo,
@@ -433,7 +432,12 @@ bot.action('place_order', async (ctx) => {
             amount: amount!.toString()
         });
 
-        const webAppUrl = `${MINI_APP_URL}?${params.toString()}`;
+    await db.setConversationState(userId, { parsedCommand: parsed });
+    ctx.reply('Confirm?', Markup.inlineKeyboard([
+        Markup.button.callback('✅ Yes', parsed.intent === 'checkout' ? 'confirm_checkout' : 'confirm_swap'),
+        Markup.button.callback('❌ No', 'cancel_swap')
+    ]));
+}
 
         const QV =
             `✅ *Order Created!* (ID: \`${order.id}\`)\n\n` +
@@ -443,23 +447,36 @@ bot.action('place_order', async (ctx) => {
             `3. Confirm the transaction.\n\n` +
             `_Destination: ${destinationAddress}_`;
 
-        ctx.editMessageText(QV, {
+bot.action('confirm_swap', async (ctx) => {
+    const state = await db.getConversationState(ctx.from.id);
+    if (!state?.parsedCommand) return;
+
+    const q = await createQuote(
+        state.parsedCommand.fromAsset!,
+        state.parsedCommand.fromChain!,
+        state.parsedCommand.toAsset!,
+        state.parsedCommand.toChain!,
+        state.parsedCommand.amount!
+    );
+
+    await db.setConversationState(ctx.from.id, { ...state, quoteId: q.id });
+
+    ctx.editMessageText(
+        `➡️ Send ${q.depositAmount} ${q.depositCoin}\n⬅️ Receive ${q.settleAmount} ${q.settleCoin}`,
+        {
             parse_mode: 'Markdown',
             ...Markup.inlineKeyboard([
-                Markup.button.webApp('📱 Sign Transaction', webAppUrl),
-                Markup.button.callback('❌ Close', 'cancel_swap')
+                Markup.button.callback('✅ Place Order', 'place_order'),
+                Markup.button.callback('❌ Cancel', 'cancel_swap')
             ])
-        });
-
-    } catch (error) {
-        ctx.editMessageText(`Failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+        }
+    );
 });
 
-// --- Button Handler for Checkouts ---
-bot.action('confirm_checkout', async (ctx) => {
+bot.action('place_order', async (ctx) => {
     const userId = ctx.from.id;
     const state = await db.getConversationState(userId);
+    if (!state?.quoteId || !state.parsedCommand?.settleAddress) return;
 
     if (!state || !state.parsedCommand || state.parsedCommand.intent !== 'checkout') {
         return ctx.answerCbQuery('Start over.');
@@ -500,14 +517,25 @@ bot.action('confirm_checkout', async (ctx) => {
     }
 });
 
-
-bot.action('cancel_swap', (ctx) => {
-    db.clearConversationState(ctx.from.id);
+bot.action('cancel_swap', async (ctx) => {
+    await db.clearConversationState(ctx.from.id);
     ctx.editMessageText('❌ Cancelled.');
 });
 
+// --------------------------------------------------
+// SERVER + STARTUP
+// --------------------------------------------------
+
 const app = express();
-app.get('/', (req, res) => res.send('SwapSmith Alive'));
-app.listen(process.env.PORT || 3000, () => console.log(`Express server live`));
-bot.launch();
-console.log('🤖 Bot is running...');
+app.get('/', (_, res) => res.send('SwapSmith Alive'));
+app.listen(process.env.PORT || 3000);
+
+(async () => {
+    await orderMonitor.loadPendingOrders();
+    orderMonitor.start();
+    bot.launch();
+    console.log('🤖 Bot running');
+})();
+
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
