@@ -1,16 +1,19 @@
 import axios from 'axios';
+import { yieldConfig } from '@/config/yield.config';
 
 export async function getTopStablecoinYields(): Promise<string> {
   try {
     const response = await axios.get('https://yields.llama.fi/pools');
     const data = response.data.data;
+    const allowedAssets = new Set<string>(yieldConfig.assets);
+    const allowedChains = new Set<string>(yieldConfig.chains);
 
     // Filter for stablecoins, high APY, major chains, and sufficient TVL
     const topPools = data
       .filter((p: { symbol: string; tvlUsd: number; chain: string }) => 
-        ['USDC', 'USDT', 'DAI'].includes(p.symbol) && 
+        allowedAssets.has(p.symbol) && 
         p.tvlUsd > 1000000 && 
-        ['Ethereum', 'Polygon', 'Arbitrum', 'Optimism', 'Base', 'Avalanche'].includes(p.chain)
+        allowedChains.has(p.chain)
       )
       .sort((a: { apy: number }, b: { apy: number }) => b.apy - a.apy)
       .slice(0, 5);
