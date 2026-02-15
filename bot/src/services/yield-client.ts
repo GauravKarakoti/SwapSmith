@@ -1,4 +1,12 @@
 import axios from 'axios';
+import { getStakingAbi, getStakingSelector, STAKING_FUNCTION_SELECTORS } from '../config/staking-abis';
+import { getOrderStatus } from './sideshift-client';
+import { 
+  getPendingStakeOrders, 
+  updateStakeOrderSwapStatus, 
+  updateStakeOrderStakeStatus,
+  type StakeOrder 
+} from './database';
 
 export interface YieldPool {
   chain: string;
@@ -9,17 +17,17 @@ export interface YieldPool {
   poolId?: string; // DefiLlama pool ID
 }
 
-export async function getTopYieldPools(): Promise<YieldPool[]> {
-  try {
-    // Attempt to fetch from DefiLlama (Open API)
-    const response = await axios.get('https://yields.llama.fi/pools');
-    const data = response.data.data;
-
-    // Filter for stablecoins, high APY, major chains, and sufficient TVL
-    const topPools = data
-      .filter((p: any) => 
+<<<<<<< HEAD
+export interface StakingQuote {
+  pool: StakingPool;
+  stakeAmount: string;
+  estimatedReward: string;
+  lockPeriod?: string;
+  transactionData?: {
+    to: string;
+    value: string;
+    data: string;
         ['USDC', 'USDT', 'DAI'].includes(p.symbol) && 
-        p.tvlUsd > 1000000 && 
         ['Ethereum', 'Polygon', 'Arbitrum', 'Optimism', 'Base', 'Avalanche'].includes(p.chain)
       )
       .sort((a: any, b: any) => b.apy - a.apy)

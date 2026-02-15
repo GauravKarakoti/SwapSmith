@@ -135,9 +135,16 @@ bot.start((ctx) => {
                 Markup.button.url('🌐 Visit Website', MINI_APP_URL)
             ])
         }
-    );
+        message += `  *Created:* ${new Date(stakeOrder.createdAt as Date).toLocaleString()}\n`;
+
+        ctx.replyWithMarkdown(message);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+        ctx.reply(`Sorry, couldn't get status. Error: ${errorMessage}`);
+    }
 });
 
+bot.command('website', (ctx) =>
 bot.command('website', (ctx) => {
     ctx.reply(
         "🌐 *SwapSmith Web Interface*\n\nClick the button below to access the full graphical interface.",
