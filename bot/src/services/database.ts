@@ -1,6 +1,6 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { pgTable, serial, text, real, timestamp, bigint, integer } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, real, timestamp, bigint, integer, uuid, boolean, numeric, jsonb, pgEnum, unique } from 'drizzle-orm/pg-core';
 import { eq, desc, notInArray, and, sql } from 'drizzle-orm';
 import dotenv from 'dotenv';
 import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
@@ -15,12 +15,33 @@ const connectionString = process.env.DATABASE_URL || 'postgres://mock:mock@local
 const client = neon(connectionString);
 export const db = drizzle(client);
 
+// --- ENUMS ---
+export const rewardActionType = pgEnum('reward_action_type', [
+  'course_complete',
+  'module_complete',
+  'daily_login',
+  'swap_complete',
+  'referral'
+]);
+
+export const mintStatusType = pgEnum('mint_status_type', [
+  'pending',
+  'processing',
+  'minted',
+  'failed'
+]);
+
 // --- SCHEMAS ---
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
-  telegramId: bigint('telegram_id', { mode: 'number' }).notNull().unique(),
-  walletAddress: text('wallet_address'),
+  telegramId: bigint('telegram_id', { mode: 'number' }).unique(),
+  firebaseUid: text('firebase_uid').unique(),
+  walletAddress: text('wallet_address').unique(),
   sessionTopic: text('session_topic'),
+  totalPoints: integer('total_points').notNull().default(0),
+  totalTokensClaimed: numeric('total_tokens_claimed', { precision: 20, scale: 8 }).notNull().default('0'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
 export const conversations = pgTable('conversations', {
@@ -177,6 +198,38 @@ export const limitOrders = pgTable('limit_orders', {
   executedAt: timestamp('executed_at'),
 });
 
+export const courseProgress = pgTable('course_progress', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  courseId: text('course_id').notNull(),
+  courseTitle: text('course_title').notNull(),
+  completedModules: text('completed_modules').array().notNull().default(sql`ARRAY[]::text[]`),
+  totalModules: integer('total_modules').notNull(),
+  isCompleted: boolean('is_completed').notNull().default(false),
+  completionDate: timestamp('completion_date'),
+  lastAccessed: timestamp('last_accessed').notNull().defaultNow(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (table) => ({
+  userCourseUnique: unique('course_progress_user_course_unique').on(table.userId, table.courseId),
+}));
+
+export const rewardsLog = pgTable('rewards_log', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  actionType: rewardActionType('action_type').notNull(),
+  actionMetadata: jsonb('action_metadata'),
+  pointsEarned: integer('points_earned').notNull().default(0),
+  tokensPending: numeric('tokens_pending', { precision: 20, scale: 8 }).notNull().default('0'),
+  mintStatus: mintStatusType('mint_status').notNull().default('pending'),
+  txHash: text('tx_hash'),
+  blockchainNetwork: text('blockchain_network'),
+  errorMessage: text('error_message'),
+  claimedAt: timestamp('claimed_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type Order = typeof orders.$inferSelect;
@@ -189,6 +242,8 @@ export type SwapHistory = typeof swapHistory.$inferSelect;
 export type ChatHistory = typeof chatHistory.$inferSelect;
 export type DCASchedule = typeof dcaSchedules.$inferSelect;
 export type LimitOrder = typeof limitOrders.$inferSelect;
+export type CourseProgress = typeof courseProgress.$inferSelect;
+export type RewardsLog = typeof rewardsLog.$inferSelect;
 
 // --- FUNCTIONS ---
 

@@ -8,5 +8,6 @@
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "exclude": ["drizzle.config.ts"]
+  "include": ["src/**/*"],
+  "exclude": ["drizzle.config.ts", "drizzle/**/*", "scripts/**/*"]
 }
