@@ -329,10 +329,10 @@ export default function TerminalPage() {
         </AnimatePresence>
 
         {/* Main */}
-        <div className="flex-1 flex flex-col">
+        <div className="relative flex-1 flex flex-col">
           <button
             onClick={() => setIsSidebarOpen((s) => !s)}
-            className="fixed top-20 left-4 z-40 p-2 bg-zinc-900 border border-zinc-700 rounded-xl"
+            className="absolute top-4 left-4 z-40 p-2 bg-zinc-900 border border-zinc-700 rounded-xl"
           >
             <Menu className="w-5 h-5" />
           </button>

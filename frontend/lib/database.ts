@@ -32,6 +32,11 @@ export type Discussion = typeof discussions.$inferSelect;
 // --- COIN PRICE CACHE FUNCTIONS ---
 
 export async function getCachedPrice(coin: string, network: string): Promise<CoinPriceCache | undefined> {
+  if (!db) {
+    console.warn('Database not configured');
+    return undefined;
+  }
+  
   const result = await db.select().from(coinPriceCache)
     .where(and(
       eq(coinPriceCache.coin, coin),
@@ -59,6 +64,11 @@ export async function setCachedPrice(
   available: boolean,
   ttlMinutes: number = 5
 ) {
+  if (!db) {
+    console.warn('Database not configured');
+    return;
+  }
+  
   // Validate required fields
   if (!coin || typeof coin !== 'string' || coin.trim() === '') {
     throw new Error('Invalid coin: must be a non-empty string');
@@ -97,11 +107,21 @@ export async function setCachedPrice(
 }
 
 export async function getAllCachedPrices(): Promise<CoinPriceCache[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
   return await db.select().from(coinPriceCache)
     .where(eq(coinPriceCache.available, 'true'));
 }
 
 export async function clearAllCachedPrices() {
+  if (!db) {
+    console.warn('Database not configured');
+    return;
+  }
+  
   await db.delete(coinPriceCache);
   console.log('[Database] Cleared all cached prices');
 }
@@ -109,6 +129,11 @@ export async function clearAllCachedPrices() {
 // --- USER SETTINGS FUNCTIONS ---
 
 export async function getUserSettings(userId: string): Promise<UserSettings | undefined> {
+  if (!db) {
+    console.warn('Database not configured');
+    return undefined;
+  }
+  
   const result = await db.select().from(userSettings)
     .where(eq(userSettings.userId, userId))
     .limit(1);
@@ -121,6 +146,11 @@ export async function createOrUpdateUserSettings(
   preferences?: string,
   emailNotifications?: string
 ) {
+  if (!db) {
+    console.warn('Database not configured');
+    return;
+  }
+  
   await db.insert(userSettings)
     .values({
       userId,
@@ -159,6 +189,11 @@ export async function createSwapHistoryEntry(
     txHash?: string;
   }
 ) {
+  if (!db) {
+    console.warn('Database not configured');
+    return;
+  }
+  
   await db.insert(swapHistory).values({
     userId,
     walletAddress,
@@ -169,6 +204,11 @@ export async function createSwapHistoryEntry(
 }
 
 export async function getSwapHistory(userId: string, limit: number = 50): Promise<SwapHistory[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
   return await db.select().from(swapHistory)
     .where(eq(swapHistory.userId, userId))
     .orderBy(desc(swapHistory.createdAt))
@@ -176,6 +216,11 @@ export async function getSwapHistory(userId: string, limit: number = 50): Promis
 }
 
 export async function getSwapHistoryByWallet(walletAddress: string, limit: number = 50): Promise<SwapHistory[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
   return await db.select().from(swapHistory)
     .where(eq(swapHistory.walletAddress, walletAddress))
     .orderBy(desc(swapHistory.createdAt))
@@ -183,6 +228,11 @@ export async function getSwapHistoryByWallet(walletAddress: string, limit: numbe
 }
 
 export async function updateSwapHistoryStatus(sideshiftOrderId: string, status: string, txHash?: string) {
+  if (!db) {
+    console.warn('Database not configured');
+    return;
+  }
+  
   await db.update(swapHistory)
     .set({ status, txHash, updatedAt: new Date() })
     .where(eq(swapHistory.sideshiftOrderId, sideshiftOrderId));
@@ -198,6 +248,11 @@ export async function addChatMessage(
   sessionId?: string,
   metadata?: Record<string, unknown>
 ) {
+  if (!db) {
+    console.warn('Database not configured');
+    return;
+  }
+  
   await db.insert(chatHistory).values({
     userId,
     walletAddress,
@@ -209,6 +264,11 @@ export async function addChatMessage(
 }
 
 export async function getChatHistory(userId: string, sessionId?: string, limit: number = 50): Promise<ChatHistory[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
   if (sessionId) {
     return await db.select().from(chatHistory)
       .where(and(
@@ -226,6 +286,11 @@ export async function getChatHistory(userId: string, sessionId?: string, limit: 
 }
 
 export async function clearChatHistory(userId: string, sessionId?: string) {
+  if (!db) {
+    console.warn('Database not configured');
+    return;
+  }
+  
   if (sessionId) {
     await db.delete(chatHistory)
       .where(and(
@@ -239,6 +304,11 @@ export async function clearChatHistory(userId: string, sessionId?: string) {
 }
 
 export async function getChatSessions(userId: string): Promise<{ sessionId: string; title: string; lastMessage: string; timestamp: Date; messageCount: number }[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
   const sessions = await db
     .select({
       sessionId: chatHistory.sessionId,
@@ -291,6 +361,11 @@ export async function createDiscussion(
   content: string,
   category: string = 'general'
 ) {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
   const result = await db.insert(discussions).values({
     userId,
     username,
@@ -304,6 +379,11 @@ export async function createDiscussion(
 }
 
 export async function getDiscussions(category?: string, limit: number = 50): Promise<Discussion[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
   if (category) {
     return await db.select().from(discussions)
       .where(eq(discussions.category, category))
@@ -317,6 +397,11 @@ export async function getDiscussions(category?: string, limit: number = 50): Pro
 }
 
 export async function deleteDiscussion(id: number, userId: string) {
+  if (!db) {
+    console.warn('Database not configured');
+    return;
+  }
+  
   await db.delete(discussions)
     .where(and(
       eq(discussions.id, id),
@@ -325,6 +410,11 @@ export async function deleteDiscussion(id: number, userId: string) {
 }
 
 export async function likeDiscussion(id: number) {
+  if (!db) {
+    console.warn('Database not configured');
+    return;
+  }
+  
   const discussion = await db.select().from(discussions)
     .where(eq(discussions.id, id))
     .limit(1);

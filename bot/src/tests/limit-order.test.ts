@@ -1,8 +1,4 @@
 import { parseUserCommand } from '../services/parseUserCommand';
-import { limitOrderWorker } from '../workers/limitOrderWorker';
-import { db, updateLimitOrderStatus } from '../services/database';
-import axios from 'axios';
-import { createQuote, createOrder } from '../services/sideshift-client';
 
 // Mock Groq SDK to avoid API key requirement
 jest.mock('groq-sdk', () => {

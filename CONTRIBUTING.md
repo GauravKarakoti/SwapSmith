@@ -43,15 +43,17 @@ To get started with local development, follow these steps:
 We use `eslint` to maintain code quality. Before submitting a PR, please ensure your code is linted:
 
 ```bash
+cd frontend
 npm run lint
 ```
 
 ## 🚀 Submitting a Pull Request
 1. **Get Assigned**: Before working on any issue, make sure to get assigned to it first.
 2. **Create a Branch:** Create a new branch for your feature or bugfix: `git checkout -b feature/amazing-feature`
-3. **Commit Changes:** Make sure your commit messages are clear and descriptive.
-4. **Push to GitHub:** Push your branch to your fork.
-5.**Open a PR:** Go to the original SwapSmith repository and open a Pull Request.
+3. **Run lint:** After making the changes run `npm run lint` on the `frontend` directory.
+4. **Commit Changes:** Make sure your commit messages are clear and descriptive.
+5. **Push to GitHub:** Push your branch to your fork.
+6.**Open a PR:** Go to the original SwapSmith repository and open a Pull Request.
     - Describe your changes in detail.
     - Link to any relevant issues.
     - Attach screenshots if your changes impact the UI.

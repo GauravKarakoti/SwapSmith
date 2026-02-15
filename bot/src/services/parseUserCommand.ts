@@ -3,10 +3,10 @@ import { parseWithLLM, ParsedCommand } from './groq-client';
 export { ParsedCommand };
 
 // Regex Patterns
-const REGEX_EXCLUSION = /(?:everything|all|entire)\s*(?:[A-Z]+\s+)?except\s+(\d+(\.\d+)?)\s*([A-Z]+)?/i;
-const REGEX_PERCENTAGE = /(\d+(\.\d+)?)\s*(?:%|percent)\s*([A-Z]+)?/i;
-const REGEX_HALF = /\b(half)\b\s*([A-Z]+)?/i;
-const REGEX_QUARTER = /\b(quarter)\b\s*([A-Z]+)?/i;
+const REGEX_EXCLUSION = /(?:everything|all|entire|max)\s*(?:[A-Z]+\s+)?(?:except|but\s+keep)\s+(\d+(\.\d+)?)\s*([A-Z]+)?/i;
+const REGEX_PERCENTAGE = /(\d+(\.\d+)?)\s*(?:%|percent)\s*(?:of\s+(?:my\s+)?)?([A-Z]+)?/i;
+const REGEX_HALF = /\b(half)\b\s*(?:of\s+(?:my\s+)?)?([A-Z]+)?/i;
+const REGEX_QUARTER = /\b(quarter)\b\s*(?:of\s+(?:my\s+)?)?([A-Z]+)?/i;
 const REGEX_MAX_ALL = /\b(max|all|everything|entire)\b/i;
 const REGEX_ALL_TOKEN = /(max|all|everything|entire)\s+([A-Z]+)/i; // "all ETH"
 
@@ -17,20 +17,29 @@ const REGEX_AMOUNT_TOKEN = /\b(\d+(\.\d+)?)\s+(?!to|into|for|from|with|using\b)(
 // New Regex for Conditions
 const REGEX_CONDITION = /(?:if|when)\s+(?:the\s+)?(?:price|rate|market|value)?\s*(?:of\s+)?([A-Z]+)?\s*(?:is|goes|drops|rises|falls)?\s*(above|below|greater|less|more|under|>|<)\s*(?:than)?\s*(\$?[\d,]+(\.\d+)?)/i;
 
+// New Regex for Quote Amount ("Worth")
+// Capture optional preceding token (group 1), amount (group 3), optional following token (group 5)
+const REGEX_QUOTE = /(?:([A-Z]+)\s+)?(?:worth|value|valued\s+at)\s*(?:of)?\s*(\$)?(\d+(\.\d+)?)\s*([A-Z]+)?/i;
+
+// New Regex for Multiple Source Assets
+const REGEX_MULTI_SOURCE = /([A-Z]+)\s+(?:and|&)\s+([A-Z]+)\s+(?:to|into|for)/i;
+
 export async function parseUserCommand(
   userInput: string,
   conversationHistory: any[] = [],
   inputType: 'text' | 'voice' = 'text'
 ): Promise<ParsedCommand> {
-  const input = userInput.trim();
+  let input = userInput.trim();
+
+  // Pre-processing: Remove fillers
+  input = input.replace(/^(hey|hi|hello|please|kindly|can you)\s+/i, '')
+               .replace(/\s+(please|kindly|immediately|now|right now)$/i, '')
+               .replace(/\b(like)\b/gi, '') // "swap like 100" -> "swap 100"
+               .trim();
 
   // 1. Check for Swap Intent Keywords
   // Expanded list to catch more variations
   const isSwapRelated = /\b(swap|convert|send|transfer|buy|sell|move|exchange)\b/i.test(input);
-
-  // If not obviously a swap, fallback immediately?
-  // Or check if regexes match anyway (e.g. "10 ETH to BTC" without verb).
-  // Let's rely on fallback for non-swap intents like "portfolio", "yield".
 
   if (isSwapRelated) {
     let intent: ParsedCommand['intent'] = 'swap';
@@ -38,14 +47,37 @@ export async function parseUserCommand(
     let amount: number | null = null;
     let excludeAmount: number | undefined;
     let excludeToken: string | undefined;
+    let quoteAmount: number | undefined;
     let fromAsset: string | null = null;
     let toAsset: string | null = null;
     let confidence = 0;
+    let validationErrors: string[] = [];
+
+    // Boost confidence slightly for explicit swap keywords
+    confidence += 10;
 
     // Limit Order fields
     let conditionOperator: 'gt' | 'lt' | undefined;
     let conditionValue: number | undefined;
     let conditionAsset: string | undefined;
+
+    // Check Multi-source
+    if (REGEX_MULTI_SOURCE.test(input)) {
+        validationErrors.push('Multiple source assets not supported');
+        // We can stop here or continue parsing. If we stop, we return failure.
+        return {
+             success: false,
+             intent: 'swap',
+             fromAsset: null, fromChain: null, toAsset: null, toChain: null, amount: null,
+             settleAsset: null, settleNetwork: null, settleAmount: null, settleAddress: null,
+             fromProject: null, fromYield: null, toProject: null, toYield: null,
+             validationErrors,
+             confidence: 0,
+             parsedMessage: 'Multiple source assets detected',
+             requiresConfirmation: false,
+             originalInput: userInput
+        };
+    }
 
     // A. Detect Exclusion
     const exclusionMatch = input.match(REGEX_EXCLUSION);
@@ -106,7 +138,29 @@ export async function parseUserCommand(
       }
     }
 
-    // C. Detect Tokens (Source and Dest)
+    // C. Detect Quote Amount ("Worth")
+    // Needs to be checked before tokens to capture implied intent
+    const quoteMatch = input.match(REGEX_QUOTE);
+    if (quoteMatch) {
+        // Group 1: Preceding token
+        if (quoteMatch[1]) {
+             const candidate = quoteMatch[1].toUpperCase();
+             if (!/^(swap|convert|send|transfer|buy|sell|move|exchange)$/i.test(candidate)) {
+                 if (!fromAsset) fromAsset = candidate;
+             }
+        }
+
+        // Group 3: Amount
+        quoteAmount = parseFloat(quoteMatch[3]);
+
+        // Group 5: Following token (quote currency / toAsset)
+        if (quoteMatch[5]) {
+            if (!toAsset) toAsset = quoteMatch[5].toUpperCase();
+        }
+        confidence += 30;
+    }
+
+    // D. Detect Tokens (Source and Dest)
     // Priority: "from X to Y" > "X to Y"
 
     if (!fromAsset || !toAsset) {
@@ -137,9 +191,9 @@ export async function parseUserCommand(
         }
     }
 
-    // D. Detect Numeric Amount (if not percentage/exclude/all)
+    // E. Detect Numeric Amount (if not percentage/exclude/all/quote)
     // If amountType is null, we assume it might be exact if we find a number
-    if (!amount && amountType === null) {
+    if (!amount && amountType === null && !quoteAmount) {
        const amtTokenMatch = input.match(REGEX_AMOUNT_TOKEN);
        if (amtTokenMatch) {
            amount = parseFloat(amtTokenMatch[1]);
@@ -160,7 +214,7 @@ export async function parseUserCommand(
        }
     }
 
-    // E. Detect Limit Order Condition
+    // F. Detect Limit Order Condition
     const conditionMatch = input.match(REGEX_CONDITION);
     if (conditionMatch) {
         const assetStr = conditionMatch[1];
@@ -191,9 +245,7 @@ export async function parseUserCommand(
 
     // Construct Result if confidence is high enough
     // We need at least an intent and some token info.
-    // If only "Swap 10", it's ambiguous.
-    // If "Swap ETH", ambiguous.
-    // If "Swap 10 ETH", incomplete but valid parsing (missing dest).
+    // If quoteAmount is present, allow null 'amount'.
 
     if (confidence >= 30) {
         // If amountType is 'all' or 'percentage', amount is optional/derived.
@@ -204,7 +256,7 @@ export async function parseUserCommand(
             conditionAsset = fromAsset;
         }
 
-        let parsedMessage = `Parsed: ${amountType || amount} ${fromAsset || '?'} -> ${toAsset || '?'}`;
+        let parsedMessage = `Parsed: ${amountType || amount || (quoteAmount ? 'Value ' + quoteAmount : '?')} ${fromAsset || '?'} -> ${toAsset || '?'}`;
         if (conditionOperator && conditionValue) {
             parsedMessage += ` if ${conditionAsset || fromAsset} ${conditionOperator === 'gt' ? '>' : '<'} ${conditionValue}`;
         }
@@ -220,6 +272,7 @@ export async function parseUserCommand(
             amountType: amountType || 'exact',
             excludeAmount,
             excludeToken,
+            quoteAmount,
             portfolio: undefined,
             frequency: null, dayOfWeek: null, dayOfMonth: null,
             settleAsset: null, settleNetwork: null, settleAmount: null, settleAddress: null,
@@ -248,6 +301,7 @@ export async function parseUserCommand(
       amountType: result.amountType || null,
       excludeAmount: result.excludeAmount || undefined,
       excludeToken: result.excludeToken || undefined,
+      quoteAmount: result.quoteAmount || undefined,
       originalInput: userInput
     };
   } catch (error) {
