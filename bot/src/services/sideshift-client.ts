@@ -1,6 +1,7 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
 dotenv.config();
+
 const SIDESHIFT_BASE_URL = "https://sideshift.ai/api/v2";
 const AFFILIATE_ID = process.env.SIDESHIFT_AFFILIATE_ID || process.env.NEXT_PUBLIC_AFFILIATE_ID || '';
 const API_KEY = process.env.SIDESHIFT_API_KEY || process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
@@ -18,7 +19,7 @@ export interface SideShiftPair {
 }
 
 export interface SideShiftQuote {
-  id?: string;
+  id: string;
   depositCoin: string;
   depositNetwork: string;
   settleCoin: string;
@@ -32,12 +33,24 @@ export interface SideShiftQuote {
   expiry?: string;
 }
 
+// FIXED: Expanded definition to include fields returned by /shifts/fixed
 export interface SideShiftOrder {
     id: string;
+    createdAt: string;
+    depositCoin: string;
+    depositNetwork: string;
     depositAddress: string | {
         address: string;
         memo: string;
     };
+    depositAmount: string;
+    settleCoin: string;
+    settleNetwork: string;
+    settleAddress: string;
+    settleAmount: string;
+    rate: string;
+    expiresAt?: string;
+    status?: string;
 }
 
 export interface SideShiftOrderStatus {
@@ -76,7 +89,7 @@ export interface SideShiftCheckoutRequest {
 
 export interface SideShiftCheckoutResponse {
   id: string;
-  url: string; // Added to fix TypeScript error
+  url: string;
   settleCoin: string;
   settleNetwork: string;
   settleAddress: string;
@@ -185,7 +198,7 @@ export async function createQuote(
 
     return {
       ...response.data,
-      id: response.data.id
+      id: response.data.id || '' // Ensure ID is present
     };
   } catch (error) {
     if (axios.isAxiosError(error)) {
@@ -286,7 +299,6 @@ export async function createCheckout(
       throw new Error(response.data.error.message);
     }
 
-    // Ensure URL exists for the bot
     return {
         ...response.data,
         url: response.data.url || `https://sideshift.ai/checkout/${response.data.id}`
