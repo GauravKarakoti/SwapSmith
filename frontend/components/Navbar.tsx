@@ -13,6 +13,7 @@ import {
   MessageSquare,
   BookOpen,
   Trophy,
+  Info,
 } from "lucide-react";
 import Image from "next/image";
 import { useAuth } from "@/hooks/useAuth";
@@ -135,17 +136,6 @@ export default function Navbar() {
           </Link>
 
           <Link
-            href="/learn"
-            className={`flex items-center gap-1.5 text-sm font-semibold transition-colors px-2 sm:px-3 py-2 rounded-lg ${
-              pathname === "/learn"
-                ? "text-white bg-blue-600"
-                : "text-zinc-400 hover:text-white hover:bg-zinc-800"
-            }`}
-          >
-            <span className="hidden sm:inline">Learn</span>
-          </Link>
-
-          <Link
             href="/terminal"
             className={`flex items-center gap-1.5 text-sm font-semibold transition-colors px-2 sm:px-3 py-2 ${
               pathname === "/terminal"
@@ -155,19 +145,6 @@ export default function Navbar() {
           >
             <TerminalIcon className="w-4 h-4" />
             <span className="hidden sm:inline">Terminal</span>
-          </Link>
-
-
-          {/* About Nav Link */}
-          <Link
-            href="/about"
-            className={`flex items-center gap-1.5 text-sm font-semibold transition-colors px-2 sm:px-3 py-2 ${
-              pathname === "/about"
-                ? "text-white"
-                : "text-zinc-400 hover:text-white"
-            }`}
-          >
-            <span className="hidden sm:inline">About</span>
           </Link>
 
           <div className="flex items-center gap-3">
@@ -228,6 +205,14 @@ export default function Navbar() {
                     >
                       <BookOpen className="w-4 h-4" />
                       <span>Learning Center</span>
+                    </Link>
+                    <Link
+                      href="/about"
+                      onClick={() => setShowProfileMenu(false)}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 transition-colors text-sm text-zinc-200"
+                    >
+                      <Info className="w-4 h-4" />
+                      <span>About</span>
                     </Link>
                     <div className="h-px bg-zinc-800" />
                     <button
