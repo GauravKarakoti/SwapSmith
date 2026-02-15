@@ -1,6 +1,25 @@
 import Groq from "groq-sdk";
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// Global singleton declaration to prevent multiple instances during hot reload
+declare global {
+  var _groqClient: Groq | undefined;
+}
+
+/**
+ * Production-grade singleton pattern for Groq client
+ * - Prevents new instance per request in serverless environments
+ * - Reuses client in warm functions
+ * - Handles hot reload in development
+ * - Avoids connection flooding and TCP exhaustion
+ */
+function getGroqClient(): Groq {
+  if (!global._groqClient) {
+    global._groqClient = new Groq({
+      apiKey: process.env.GROQ_API_KEY,
+    });
+  }
+  return global._groqClient;
+}
 
 // Type definition for the parsed command object
 export interface ParsedCommand {
@@ -86,6 +105,7 @@ RESPONSE FORMAT:
 
 export async function parseUserCommand(userInput: string): Promise<ParsedCommand> {
   try {
+    const groq = getGroqClient();
     const completion = await groq.chat.completions.create({
       messages: [
         { role: "system", content: systemPrompt },
@@ -115,6 +135,7 @@ export async function parseUserCommand(userInput: string): Promise<ParsedCommand
 
 export async function transcribeAudio(audioFile: File): Promise<string> {
   try {
+    const groq = getGroqClient();
     const transcription = await groq.audio.transcriptions.create({
       file: audioFile,
       model: "whisper-large-v3",
