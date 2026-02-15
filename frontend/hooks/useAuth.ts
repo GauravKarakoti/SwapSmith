@@ -24,8 +24,26 @@ export function useAuth() {
     }
 
     // Listen for real-time auth state changes
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      
+      // Save Firebase UID and ensure user exists in database
+      if (currentUser) {
+        localStorage.setItem('firebase-uid', currentUser.uid);
+        
+        // Ensure user exists in database for rewards system
+        try {
+          const { ensureUser } = await import('@/lib/api-client');
+          await ensureUser(currentUser.uid);
+        } catch (error) {
+          console.error('Error initializing user in database:', error);
+        }
+      } else {
+        // Clear on logout
+        const { clearUserId } = await import('@/lib/api-client');
+        clearUserId();
+      }
+      
       setIsLoading(false);
     });
     return () => unsubscribe();

@@ -9,5 +9,5 @@
     "skipLibCheck": true
   },
   "include": ["src/**/*", "../shared/schema.ts"],
-  "exclude": ["drizzle.config.ts"]
+  "exclude": ["drizzle.config.ts", "src/workers/limitOrderWorker.ts"]
 }

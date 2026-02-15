@@ -951,6 +951,11 @@ export default function LearnPage() {
   useEffect(() => {
     if (user?.uid && !hasLoadedProgress.current) {
       hasLoadedProgress.current = true
+      
+      // Save Firebase UID for API calls
+      localStorage.setItem('firebase-uid', user.uid)
+      
+      // Load from localStorage first (instant feedback)
       const saved = localStorage.getItem(`learn-progress-${user.uid}`)
       if (saved) {
         try {
@@ -960,6 +965,35 @@ export default function LearnPage() {
           console.error('Failed to load learning progress:', error)
         }
       }
+      
+      // Then load from database (source of truth)
+      async function loadDatabaseProgress() {
+        try {
+          const { authenticatedFetch } = await import('@/lib/api-client')
+          const response = await authenticatedFetch('/api/rewards/courses')
+          
+          if (response.ok) {
+            const courses = await response.json()
+            // Merge all completed modules from all courses
+            const allCompleted = new Set<string>()
+            courses.forEach((course: { completedModules?: string[] }) => {
+              course.completedModules?.forEach((moduleId: string) => {
+                allCompleted.add(moduleId)
+              })
+            })
+            
+            setCompletedTopics(allCompleted)
+            // Update localStorage with database data
+            if (user?.uid) {
+              localStorage.setItem(`learn-progress-${user.uid}`, JSON.stringify([...allCompleted]))
+            }
+          }
+        } catch (error) {
+          console.error('Error loading progress from database:', error)
+        }
+      }
+      
+      loadDatabaseProgress()
     } else if (!user?.uid) {
       hasLoadedProgress.current = false
       queueMicrotask(() => setCompletedTopics(new Set()))
