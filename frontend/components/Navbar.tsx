@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { useState, useEffect } from "react";
 import {
   Zap,
@@ -168,8 +169,14 @@ export default function Navbar() {
                 title="Profile Menu"
               >
                 {profileImageUrl ? (
-                  <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-blue-500">
-                    <img src={profileImageUrl} alt="Profile" className="w-full h-full object-cover" />
+                  <div className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-blue-500">
+                    <Image
+                      src={profileImageUrl}
+                      alt="Profile"
+                      fill
+                      className="object-cover"
+                      unoptimized
+                    />
                   </div>
                 ) : (
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
