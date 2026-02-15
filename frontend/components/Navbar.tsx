@@ -12,6 +12,7 @@ import {
   Terminal as TerminalIcon,
   MessageSquare,
   BookOpen,
+  Trophy,
 } from "lucide-react";
 import Image from "next/image";
 import { useAuth } from "@/hooks/useAuth";
@@ -200,6 +201,14 @@ export default function Navbar() {
                     >
                       <User className="w-4 h-4" />
                       <span>Profile</span>
+                    </Link>
+                    <Link
+                      href="/rewards"
+                      onClick={() => setShowProfileMenu(false)}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 transition-colors text-sm text-zinc-200"
+                    >
+                      <Trophy className="w-4 h-4" />
+                      <span>Rewards</span>
                     </Link>
                     <Link
                       href="/learn"
