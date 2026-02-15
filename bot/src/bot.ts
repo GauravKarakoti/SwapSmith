@@ -3,7 +3,14 @@ import { message } from 'telegraf/filters';
 import dotenv from 'dotenv';
 import { parseUserCommand, transcribeAudio } from './services/groq-client';
 import { createQuote, createOrder, createCheckout, getOrderStatus } from './services/sideshift-client';
-import { getTopStablecoinYields, getStakingPoolByAsset, getStakingInfo, getStakingQuote } from './services/yield-client';
+import { 
+  getTopStablecoinYields, 
+  getStakingPoolByAsset, 
+  getStakingInfo, 
+  getStakingQuote,
+  formatStakingTransactionForDisplay
+} from './services/yield-client';
+
 import * as db from './services/database';
 import { resolveAddress } from './services/address-resolver';
 import { ethers } from 'ethers';
@@ -183,8 +190,10 @@ bot.start((ctx) => {
     "/history - See past orders\n" +
     "/checkouts - See payment links\n" +
     "/status [id] - Check order status\n" +
+    "/stake_status [id] - Check swap-and-stake status\n" +
     "/clear - Reset conversation\n\n" +
     "💡 *Tip:* Check out our web interface for a graphical experience!",
+
     { 
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
@@ -241,6 +250,56 @@ bot.command('status', async (ctx) => {
         ctx.reply(`Sorry, couldn't get status. Error: ${errorMessage}`);
     }
 });
+
+bot.command('stake_status', async (ctx) => {
+    const userId = ctx.from.id;
+    const args = ctx.message.text.split(' ');
+    let orderIdToCheck: string | null = args[1];
+
+    try {
+        if (!orderIdToCheck) {
+            const stakeHistory = await db.getUserStakeHistory(userId);
+            if (stakeHistory.length === 0) return ctx.reply("You have no swap-and-stake history. Try a command like 'Swap half my ETH to LDO and stake it'.");
+            orderIdToCheck = stakeHistory[0].sideshiftOrderId;
+            await ctx.reply(`Checking status of your latest swap-and-stake: \`${orderIdToCheck}\``);
+        }
+
+        await ctx.reply(`⏳ Checking swap-and-stake status...`);
+        
+        // Get the stake order from database
+        const stakeOrder = await db.getStakeOrderById(orderIdToCheck);
+        if (!stakeOrder) {
+            return ctx.reply("Swap-and-stake order not found.");
+        }
+
+        // Check swap status from SideShift
+        const swapStatus = await getOrderStatus(orderIdToCheck);
+        
+        // Update our records
+        await db.updateStakeOrderSwapStatus(orderIdToCheck, swapStatus.status, swapStatus.settleAmount || undefined);
+
+        let message = `*Swap & Stake Status: ${orderIdToCheck}*\n\n`;
+        message += `*Swap Phase:*\n`;
+        message += `  *Status:* \`${swapStatus.status.toUpperCase()}\`\n`;
+        message += `  *Send:* ${stakeOrder.fromAmount} ${stakeOrder.fromAsset} (${stakeOrder.fromNetwork})\n`;
+        message += `  *Receive:* ${swapStatus.settleAmount || stakeOrder.settleAmount || '?'} ${stakeOrder.swapToAsset}\n\n`;
+        
+        message += `*Staking Phase:*\n`;
+        message += `  *Status:* \`${stakeOrder.stakeStatus.toUpperCase()}\`\n`;
+        message += `  *Asset:* ${stakeOrder.stakeAsset}\n`;
+        message += `  *Protocol:* ${stakeOrder.stakeProtocol}\n`;
+        if (stakeOrder.stakeTxHash) {
+            message += `  *Stake Tx:* \`${stakeOrder.stakeTxHash.slice(0, 10)}...\`\n`;
+        }
+        message += `  *Created:* ${new Date(stakeOrder.createdAt as Date).toLocaleString()}\n`;
+
+        ctx.replyWithMarkdown(message);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+        ctx.reply(`Sorry, couldn't get status. Error: ${errorMessage}`);
+    }
+});
+
 
 bot.command('checkouts', async (ctx) => {
     const userId = ctx.from.id;
@@ -467,7 +526,43 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
       ]));
   }
 
+  if (parsed.intent === 'swap_and_stake') {
+      // Handle missing address
+      if (!parsed.settleAddress) {
+          await db.setConversationState(userId, { parsedCommand: parsed });
+          return ctx.reply(
+              `🔄 *Swap & Stake Detected*\n\n` +
+              `• Swap: ${parsed.amount} ${parsed.fromAsset} → ${parsed.toAsset}\n` +
+              `• Stake: ${parsed.stakeAsset} via ${parsed.stakeProtocol}\n\n` +
+              `Please provide your wallet address on ${parsed.stakeChain} to receive the staked tokens.`
+          );
+      }
+
+      await db.setConversationState(userId, { parsedCommand: parsed });
+      
+      // Show confirmation with staking details
+      const pool = getStakingPoolByAsset(parsed.stakeAsset!);
+      const stakingApy = pool ? `${pool.apy}% APY` : 'APY data unavailable';
+      
+      let msg = `🔄 *Swap & Stake Confirmation*\n\n`;
+      msg += `*Phase 1 - Swap:*\n`;
+      msg += `• Send: ${parsed.amount} ${parsed.fromAsset} (${parsed.fromChain})\n`;
+      msg += `• Receive: ${parsed.toAsset} on ${parsed.toChain}\n\n`;
+      msg += `*Phase 2 - Stake:*\n`;
+      msg += `• Asset: ${parsed.stakeAsset}\n`;
+      msg += `• Protocol: ${parsed.stakeProtocol}\n`;
+      msg += `• Expected APY: ${stakingApy}\n`;
+      msg += `• Destination: \`${parsed.settleAddress}\`\n\n`;
+      msg += `Ready to proceed?`;
+
+      return ctx.replyWithMarkdown(msg, Markup.inlineKeyboard([
+          Markup.button.callback('✅ Confirm Swap & Stake', 'confirm_swap_and_stake'),
+          Markup.button.callback('❌ Cancel', 'cancel_swap')
+      ]));
+  }
+
   if (parsed.intent === 'swap' || parsed.intent === 'checkout') {
+
       // 2. Handle missing address
       if (!parsed.settleAddress) {
           // Store partial state
@@ -493,6 +588,177 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
 bot.action('confirm_portfolio', async (ctx) => {
     ctx.reply("Portfolio execution not fully implemented in this snippet.");
 });
+
+bot.action('confirm_swap_and_stake', async (ctx) => {
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+    
+    if (!state?.parsedCommand || state.parsedCommand.intent !== 'swap_and_stake') {
+        return ctx.answerCbQuery('Session expired.');
+    }
+
+    try {
+        await ctx.answerCbQuery('Fetching swap quote...');
+        
+        const { 
+            fromAsset, fromChain, toAsset, toChain, 
+            amount, settleAddress, stakeAsset, stakeProtocol 
+        } = state.parsedCommand;
+
+        // Step 1: Create the swap quote
+        const quote = await createQuote(
+            fromAsset!, fromChain!,
+            toAsset!, toChain!,
+            amount!, '1.1.1.1'
+        );
+
+        if (quote.error) {
+            return ctx.editMessageText(`Error creating quote: ${quote.error.message}`);
+        }
+
+        // Store quote in state
+        db.setConversationState(userId, { 
+            ...state, 
+            quoteId: quote.id, 
+            settleAmount: quote.settleAmount 
+        });
+
+        // Show quote and ask for final confirmation
+        const pool = getStakingPoolByAsset(stakeAsset!);
+        let msg = `✅ *Quote Ready - Swap & Stake*\n\n`;
+        msg += `*Swap Details:*\n`;
+        msg += `• Send: ${quote.depositAmount} ${quote.depositCoin}\n`;
+        msg += `• Receive: ~${quote.settleAmount} ${quote.settleCoin}\n`;
+        msg += `• Rate: 1 ${quote.depositCoin} ≈ ${(parseFloat(quote.settleAmount) / parseFloat(quote.depositAmount)).toFixed(6)} ${quote.settleCoin}\n\n`;
+        msg += `*Staking Details:*\n`;
+        msg += `• Protocol: ${stakeProtocol}\n`;
+        msg += `• Expected APY: ${pool ? `${pool.apy}%` : 'N/A'}\n`;
+        msg += `• Auto-stake after swap settles\n\n`;
+        msg += `Place order?`;
+
+        ctx.editMessageText(msg, {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+                Markup.button.callback('🚀 Place Order', 'place_swap_and_stake_order'),
+                Markup.button.callback('❌ Cancel', 'cancel_swap'),
+            ])
+        });
+    } catch (error) {
+        ctx.editMessageText(`Error: ${error instanceof Error ? error.message : 'Unknown'}`);
+    }
+});
+
+bot.action('place_swap_and_stake_order', async (ctx) => {
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+    
+    if (!state?.quoteId || !state.parsedCommand) {
+        return ctx.answerCbQuery('Session expired.');
+    }
+
+    try {
+        await ctx.answerCbQuery('Creating swap order...');
+        
+        const destinationAddress = state.parsedCommand.settleAddress!;
+        const order = await createOrder(state.quoteId, destinationAddress, destinationAddress);
+        
+        if (!order.id) {
+            throw new Error("Failed to create order");
+        }
+
+        // Create stake order entry in database
+        await db.createStakeOrderEntry(
+            userId,
+            state.parsedCommand,
+            order,
+            state.settleAmount,
+            state.quoteId
+        );
+
+        // Also create regular order entry for tracking
+        db.createOrderEntry(userId, state.parsedCommand, order, state.settleAmount, state.quoteId);
+
+        const { amount, fromChain, fromAsset } = state.parsedCommand;
+        
+        // Prepare transaction data
+        const rawDepositAddress = typeof order.depositAddress === 'string' 
+            ? order.depositAddress 
+            : order.depositAddress.address;
+        const depositMemo = typeof order.depositAddress === 'object' 
+            ? order.depositAddress.memo 
+            : null;
+
+        const chainKey = fromChain?.toLowerCase() || 'ethereum';
+        const assetKey = fromAsset?.toUpperCase() || 'ETH';
+        const tokenData = TOKEN_MAP[chainKey]?.[assetKey];
+
+        let txTo = rawDepositAddress;
+        let txValueHex = '0x0';
+        let txData = '0x';
+
+        try {
+            if (tokenData) {
+                // ERC20 Token
+                txTo = tokenData.address;
+                txValueHex = '0x0';
+                const amountBigInt = ethers.parseUnits(amount!.toString(), tokenData.decimals);
+                const iface = new ethers.Interface(ERC20_ABI);
+                txData = iface.encodeFunctionData("transfer", [rawDepositAddress, amountBigInt]);
+            } else {
+                // Native Asset
+                txTo = rawDepositAddress;
+                const amountBigInt = ethers.parseUnits(amount!.toString(), 18);
+                txValueHex = '0x' + amountBigInt.toString(16);
+                if (depositMemo) txData = ethers.hexlify(ethers.toUtf8Bytes(depositMemo));
+            }
+        } catch (err) {
+            return ctx.editMessageText(`Tx construction error: ${err instanceof Error ? err.message : 'Unknown'}`);
+        }
+
+        const params = new URLSearchParams({
+            to: txTo,
+            value: txValueHex,
+            data: txData,
+            chainId: chainIdMap[fromChain?.toLowerCase() || 'ethereum'] || '1',
+            token: assetKey,
+            chain: fromChain || 'Ethereum',
+            amount: amount!.toString(),
+            stakeOrderId: order.id
+        });
+
+        const webAppUrl = `${MINI_APP_URL}?${params.toString()}`;
+
+        const { stakeAsset, stakeProtocol } = state.parsedCommand;
+        
+        const QV = 
+        `✅ *Swap & Stake Order Created!*\n\n` +
+        `*Order ID:* \`${order.id}\`\n\n` +
+        `*Phase 1 - Swap:*\n` +
+        `• Send: ${amount} ${fromAsset} on ${fromChain}\n` +
+        `• To: SideShift deposit address\n\n` +
+        `*Phase 2 - Stake (Auto):*\n` +
+        `• Asset: ${stakeAsset}\n` +
+        `• Protocol: ${stakeProtocol}\n` +
+        `• Will execute after swap settles\n\n` +
+        `*Next Steps:*\n` +
+        `1. Click below to sign the swap transaction\n` +
+        `2. Once swap settles, staking will be prepared\n` +
+        `3. You'll receive a notification to sign the stake transaction\n\n` +
+        `_Monitor with /stake_status ${order.id}_`;
+
+        ctx.editMessageText(QV, {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+                Markup.button.webApp('📱 Sign Swap Transaction', webAppUrl),
+                Markup.button.callback('❌ Close', 'cancel_swap')
+            ])
+        });
+
+    } catch (error) {
+        ctx.editMessageText(`Failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+});
+
 
 bot.action('confirm_swap', async (ctx) => {
     const userId = ctx.from.id;

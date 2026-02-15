@@ -56,6 +56,32 @@ export const checkouts = pgTable('checkouts', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const stakeOrders = pgTable('stake_orders', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
+  sideshiftOrderId: text('sideshift_order_id').notNull().unique(),
+  quoteId: text('quote_id').notNull(),
+  fromAsset: text('from_asset').notNull(),
+  fromNetwork: text('from_network').notNull(),
+  fromAmount: real('from_amount').notNull(),
+  swapToAsset: text('swap_to_asset').notNull(),
+  swapToNetwork: text('swap_to_network').notNull(),
+  stakeAsset: text('stake_asset').notNull(),
+  stakeProtocol: text('stake_protocol').notNull(),
+  stakeNetwork: text('stake_network').notNull(),
+  settleAmount: text('settle_amount'),
+  depositAddress: text('deposit_address').notNull(),
+  depositMemo: text('deposit_memo'),
+  stakeAddress: text('stake_address'),
+  stakeTxHash: text('stake_tx_hash'),
+  swapStatus: text('swap_status').notNull().default('pending'),
+  stakeStatus: text('stake_status').notNull().default('pending'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  completedAt: timestamp('completed_at'),
+});
+
+
 export const addressBook = pgTable('address_book', {
   id: serial('id').primaryKey(),
   telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
@@ -70,6 +96,8 @@ export type User = typeof users.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Checkout = typeof checkouts.$inferSelect;
 export type AddressBookEntry = typeof addressBook.$inferSelect;
+export type StakeOrder = typeof stakeOrders.$inferSelect;
+
 
 // --- FUNCTIONS ---
 
@@ -193,4 +221,89 @@ export async function resolveNickname(telegramId: number, nickname: string): Pro
     .where(eq(addressBook.nickname, nickname))
     .limit(1);
   return result[0]?.address || null;
+}
+
+// --- STAKE ORDERS FUNCTIONS ---
+
+export async function createStakeOrderEntry(
+  telegramId: number,
+  parsedCommand: ParsedCommand,
+  order: SideShiftOrder,
+  settleAmount: string | number,
+  quoteId: string
+) {
+  const depositAddr = typeof order.depositAddress === 'string' ? order.depositAddress : order.depositAddress?.address;
+  const depositMemo = typeof order.depositAddress === 'object' ? order.depositAddress?.memo : null;
+
+  await db.insert(stakeOrders).values({
+    telegramId,
+    sideshiftOrderId: order.id,
+    quoteId,
+    fromAsset: parsedCommand.fromAsset!,
+    fromNetwork: parsedCommand.fromChain!,
+    fromAmount: parsedCommand.amount!,
+    swapToAsset: parsedCommand.toAsset!,
+    swapToNetwork: parsedCommand.toChain!,
+    stakeAsset: parsedCommand.stakeAsset!,
+    stakeProtocol: parsedCommand.stakeProtocol!,
+    stakeNetwork: parsedCommand.stakeChain!,
+    settleAmount: settleAmount.toString(),
+    depositAddress: depositAddr!,
+    depositMemo: depositMemo || null,
+    swapStatus: 'pending',
+    stakeStatus: 'pending',
+  });
+}
+
+export async function getPendingStakeOrders(): Promise<StakeOrder[]> {
+  return await db.select().from(stakeOrders)
+    .where(eq(stakeOrders.swapStatus, 'settled'))
+    .where(eq(stakeOrders.stakeStatus, 'pending'))
+    .orderBy(desc(stakeOrders.createdAt));
+}
+
+export async function updateStakeOrderSwapStatus(sideshiftOrderId: string, newStatus: string, settleAmount?: string) {
+  const updateData: Partial<StakeOrder> = { 
+    swapStatus: newStatus,
+    updatedAt: new Date()
+  };
+  if (settleAmount) {
+    updateData.settleAmount = settleAmount;
+  }
+  await db.update(stakeOrders)
+    .set(updateData)
+    .where(eq(stakeOrders.sideshiftOrderId, sideshiftOrderId));
+}
+
+export async function updateStakeOrderStakeStatus(
+  sideshiftOrderId: string, 
+  newStatus: string, 
+  stakeAddress?: string,
+  stakeTxHash?: string
+) {
+  const updateData: Partial<StakeOrder> = { 
+    stakeStatus: newStatus,
+    updatedAt: new Date()
+  };
+  if (stakeAddress) updateData.stakeAddress = stakeAddress;
+  if (stakeTxHash) updateData.stakeTxHash = stakeTxHash;
+  if (newStatus === 'completed') updateData.completedAt = new Date();
+  
+  await db.update(stakeOrders)
+    .set(updateData)
+    .where(eq(stakeOrders.sideshiftOrderId, sideshiftOrderId));
+}
+
+export async function getUserStakeHistory(telegramId: number): Promise<StakeOrder[]> {
+  return await db.select().from(stakeOrders)
+    .where(eq(stakeOrders.telegramId, telegramId))
+    .orderBy(desc(stakeOrders.createdAt))
+    .limit(10);
+}
+
+export async function getStakeOrderById(sideshiftOrderId: string): Promise<StakeOrder | undefined> {
+  const result = await db.select().from(stakeOrders)
+    .where(eq(stakeOrders.sideshiftOrderId, sideshiftOrderId))
+    .limit(1);
+  return result[0];
 }

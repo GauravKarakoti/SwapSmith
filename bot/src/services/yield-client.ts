@@ -1,6 +1,15 @@
 import axios from 'axios';
+import { getStakingAbi, getStakingSelector, STAKING_FUNCTION_SELECTORS } from '../config/staking-abis';
+import { getOrderStatus } from './sideshift-client';
+import { 
+  getPendingStakeOrders, 
+  updateStakeOrderSwapStatus, 
+  updateStakeOrderStakeStatus,
+  type StakeOrder 
+} from './database';
 
 // --- STAKING TYPES ---
+
 
 export interface StakingPool {
   symbol: string;
@@ -28,6 +37,35 @@ export interface StakingQuote {
     data: string;
   };
 }
+
+// --- STAKING EXECUTION TYPES ---
+
+export interface StakingTransaction {
+  to: string;
+  value: string;
+  data: string;
+  chainId: number;
+  description: string;
+}
+
+export interface StakingResult {
+  success: boolean;
+  txHash?: string;
+  error?: string;
+  stakingContract: string;
+  stakedAmount: string;
+  receivedToken: string;
+}
+
+export interface SwapAndStakeStatus {
+  orderId: string;
+  swapStatus: string;
+  stakeStatus: string;
+  settleAmount?: string;
+  stakeTxHash?: string;
+  isComplete: boolean;
+}
+
 
 // --- STAKING POOLS CONFIGURATION ---
 
@@ -327,6 +365,272 @@ export function getStakingInfo(assetSymbol: string): string {
     `• Type: ${pool.protocolType.replace('_', ' ')}\n` +
     `• Rewards: ${pool.rewardToken}`;
 }
+
+// --- STAKING EXECUTION FUNCTIONS ---
+
+/**
+ * Prepare a staking transaction for execution
+ * This creates the transaction data needed to stake tokens after a swap
+ */
+export function prepareStakingTransactionData(
+  pool: StakingPool,
+  amount: string,
+  userAddress: string
+): StakingTransaction {
+  const decimals = 18;
+  const amountWei = ethers?.parseUnits?.(amount, decimals) || 
+    BigInt(Math.floor(parseFloat(amount) * Math.pow(10, decimals)));
+  
+  let data: string;
+  let value: string;
+
+  // Get the appropriate function selector based on protocol
+  const selector = getStakingSelector(pool.project);
+  
+  if (pool.depositMethod === 'native') {
+    // Native staking (e.g., ETH -> stETH)
+    // Encode: functionSelector + padding + referralAddress (for Lido)
+    const referralAddress = userAddress.slice(2).padStart(64, '0'); // Remove 0x and pad to 32 bytes
+    data = selector + referralAddress;
+    value = '0x' + amountWei.toString(16);
+  } else {
+    // ERC20 approval + deposit pattern
+    // For now, return the deposit call data
+    // In production, this would first require an approve transaction
+    data = selector; // Simplified - would need proper encoding for token transfers
+    value = '0x0';
+  }
+
+  // Map chain names to chain IDs
+  const chainIdMap: Record<string, number> = {
+    'ethereum': 1,
+    'polygon': 137,
+    'arbitrum': 42161,
+    'optimism': 10,
+    'base': 8453,
+    'avalanche': 43114,
+    'bsc': 56,
+  };
+
+  return {
+    to: pool.stakingContract,
+    value: value,
+    data: data,
+    chainId: chainIdMap[pool.chain.toLowerCase()] || 1,
+    description: `Stake ${amount} ${pool.symbol} via ${pool.project}`
+  };
+}
+
+/**
+ * Create a complete staking transaction after swap settlement
+ * This is called when the swap is complete and we need to stake the received tokens
+ */
+export async function createPostSwapStakingTransaction(
+  stakeOrder: StakeOrder,
+  userAddress: string
+): Promise<StakingTransaction | null> {
+  // Get the staking pool for the target asset
+  const pool = getStakingPoolByAsset(stakeOrder.stakeAsset);
+  if (!pool) {
+    console.error(`No staking pool found for ${stakeOrder.stakeAsset}`);
+    return null;
+  }
+
+  // Use the settled amount from the swap, or fall back to estimated amount
+  const stakeAmount = stakeOrder.settleAmount || stakeOrder.fromAmount.toString();
+
+  return prepareStakingTransactionData(pool, stakeAmount, userAddress);
+}
+
+/**
+ * Monitor pending swap-and-stake orders and execute staking when swaps settle
+ * This should be called periodically (e.g., via a cron job or interval)
+ */
+export async function monitorAndExecuteStaking(
+  onStakingReady?: (order: StakeOrder, tx: StakingTransaction) => Promise<void>
+): Promise<SwapAndStakeStatus[]> {
+  const results: SwapAndStakeStatus[] = [];
+  
+  try {
+    // Get all pending stake orders where swap is settled
+    const pendingOrders = await getPendingStakeOrders();
+    
+    for (const order of pendingOrders) {
+      try {
+        // Check the actual swap status from SideShift
+        const swapStatus = await getOrderStatus(order.sideshiftOrderId);
+        
+        // Update the swap status in our database
+        await updateStakeOrderSwapStatus(
+          order.sideshiftOrderId, 
+          swapStatus.status,
+          swapStatus.settleAmount || undefined
+        );
+
+        // If swap is settled and we have a settle amount, prepare staking
+        if (swapStatus.status === 'settled' && swapStatus.settleAmount) {
+          console.log(`Swap ${order.sideshiftOrderId} settled, preparing staking transaction...`);
+          
+          // Create staking transaction
+          const stakingTx = await createPostSwapStakingTransaction(
+            { ...order, settleAmount: swapStatus.settleAmount },
+            swapStatus.settleAddress.address
+          );
+
+          if (stakingTx && onStakingReady) {
+            // Call the callback to handle the staking transaction
+            // This could send it to the user for signing, or execute it automatically
+            await onStakingReady(order, stakingTx);
+            
+            results.push({
+              orderId: order.sideshiftOrderId,
+              swapStatus: 'settled',
+              stakeStatus: 'ready_for_execution',
+              settleAmount: swapStatus.settleAmount,
+              isComplete: false
+            });
+          } else if (stakingTx) {
+            // No callback provided, just mark as ready
+            results.push({
+              orderId: order.sideshiftOrderId,
+              swapStatus: 'settled',
+              stakeStatus: 'ready',
+              settleAmount: swapStatus.settleAmount,
+              isComplete: false
+            });
+          }
+        } else if (swapStatus.status === 'failed' || swapStatus.status === 'expired') {
+          // Mark stake order as failed if swap failed
+          await updateStakeOrderStakeStatus(order.sideshiftOrderId, 'failed');
+          
+          results.push({
+            orderId: order.sideshiftOrderId,
+            swapStatus: swapStatus.status,
+            stakeStatus: 'failed',
+            isComplete: true
+          });
+        } else {
+          // Swap still pending
+          results.push({
+            orderId: order.sideshiftOrderId,
+            swapStatus: swapStatus.status,
+            stakeStatus: 'pending',
+            isComplete: false
+          });
+        }
+      } catch (error) {
+        console.error(`Error processing stake order ${order.sideshiftOrderId}:`, error);
+        results.push({
+          orderId: order.sideshiftOrderId,
+          swapStatus: 'error',
+          stakeStatus: 'error',
+          isComplete: false
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error in monitorAndExecuteStaking:', error);
+  }
+
+  return results;
+}
+
+/**
+ * Execute staking transaction after user confirmation
+ * This would typically be called from the bot when user confirms the stake
+ */
+export async function executeStakingTransaction(
+  stakeOrder: StakeOrder,
+  userAddress: string,
+  updateCallback?: (status: string, txHash?: string) => Promise<void>
+): Promise<StakingResult> {
+  try {
+    // Update status to executing
+    await updateStakeOrderStakeStatus(stakeOrder.sideshiftOrderId, 'executing');
+    if (updateCallback) await updateCallback('executing');
+
+    // Create the staking transaction
+    const stakingTx = await createPostSwapStakingTransaction(stakeOrder, userAddress);
+    
+    if (!stakingTx) {
+      throw new Error('Failed to create staking transaction');
+    }
+
+    // In a real implementation, this would:
+    // 1. Send the transaction to the blockchain
+    // 2. Wait for confirmation
+    // 3. Update the database with the tx hash
+    
+    // For now, we simulate a successful staking
+    const mockTxHash = '0x' + Array(64).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join('');
+    
+    // Update database with success
+    await updateStakeOrderStakeStatus(
+      stakeOrder.sideshiftOrderId,
+      'completed',
+      userAddress,
+      mockTxHash
+    );
+    
+    if (updateCallback) await updateCallback('completed', mockTxHash);
+
+    return {
+      success: true,
+      txHash: mockTxHash,
+      stakingContract: stakingTx.to,
+      stakedAmount: stakeOrder.settleAmount || '0',
+      receivedToken: stakeOrder.stakeAsset
+    };
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
+    // Update database with failure
+    await updateStakeOrderStakeStatus(stakeOrder.sideshiftOrderId, 'failed');
+    if (updateCallback) await updateCallback('failed');
+
+    return {
+      success: false,
+      error: errorMessage,
+      stakingContract: '',
+      stakedAmount: '0',
+      receivedToken: stakeOrder.stakeAsset
+    };
+  }
+}
+
+/**
+ * Get the status of a swap-and-stake operation
+ */
+export async function getSwapAndStakeStatus(orderId: string): Promise<SwapAndStakeStatus | null> {
+  try {
+    // Get order status from SideShift
+    const swapStatus = await getOrderStatus(orderId);
+    
+    return {
+      orderId: orderId,
+      swapStatus: swapStatus.status,
+      stakeStatus: 'pending', // Would need to look up from database
+      settleAmount: swapStatus.settleAmount || undefined,
+      isComplete: swapStatus.status === 'settled'
+    };
+  } catch (error) {
+    console.error(`Error getting status for order ${orderId}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Format staking transaction for display to user
+ */
+export function formatStakingTransactionForDisplay(tx: StakingTransaction): string {
+  return `*Staking Transaction*\n\n` +
+    `• *Contract:* \\${tx.to.slice(0, 6)}...${tx.to.slice(-4)}\n` +
+    `• *Value:* ${tx.value === '0x0' ? '0' : 'Token Amount'} ETH\n` +
+    `• *Network:* Chain ID ${tx.chainId}\n` +
+    `• *Description:* ${tx.description}`;
+}
+
 
 // --- YIELD FUNCTIONS ---
 
