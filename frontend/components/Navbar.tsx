@@ -11,6 +11,7 @@ import {
   TrendingUp,
   Terminal as TerminalIcon,
   MessageSquare,
+  BookOpen,
 } from "lucide-react";
 import Image from "next/image";
 import { useAuth } from "@/hooks/useAuth";
@@ -199,6 +200,14 @@ export default function Navbar() {
                     >
                       <User className="w-4 h-4" />
                       <span>Profile</span>
+                    </Link>
+                    <Link
+                      href="/learn"
+                      onClick={() => setShowProfileMenu(false)}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 transition-colors text-sm text-zinc-200"
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      <span>Learning Center</span>
                     </Link>
                     <div className="h-px bg-zinc-800" />
                     <button
