@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     // Mark current user if authenticated
     const enrichedLeaderboard = leaderboard.map(entry => ({
       ...entry,
-      userName: entry.walletAddress 
+      userName: (entry.walletAddress && typeof entry.walletAddress === 'string')
         ? `${entry.walletAddress.slice(0, 6)}...${entry.walletAddress.slice(-4)}` 
         : `User ${entry.userId}`,
       isCurrentUser: userId ? entry.userId === parseInt(userId) : false,

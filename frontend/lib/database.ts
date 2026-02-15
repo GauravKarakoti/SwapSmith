@@ -28,90 +28,10 @@ export {
   courseProgress,
   rewardsLog,
 };
-  errorMessage: text('error_message'),
-  claimedAt: timestamp('claimed_at'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
-});
-
-export const coinPriceCache = pgTable('coin_price_cache', {
-  id: serial('id').primaryKey(),
-  coin: text('coin').notNull(),
-  network: text('network').notNull(),
-  name: text('name').notNull(),
-  usdPrice: text('usd_price'),
-  btcPrice: text('btc_price'),
-  available: text('available').notNull().default('true'),
-  expiresAt: timestamp('expires_at').notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-}, (table) => ({
-  coinNetworkUnique: unique().on(table.coin, table.network),
-}));
-
-export const userSettings = pgTable('user_settings', {
-  id: serial('id').primaryKey(),
-  userId: text('user_id').notNull().unique(),
-  walletAddress: text('wallet_address'),
-  theme: text('theme').default('dark'),
-  slippageTolerance: real('slippage_tolerance').default(0.5),
-  notificationsEnabled: text('notifications_enabled').default('true'),
-  defaultFromAsset: text('default_from_asset'),
-  defaultToAsset: text('default_to_asset'),
-  preferences: text('preferences'), // Additional JSON preferences
-  emailNotifications: text('email_notifications'),
-  telegramNotifications: text('telegram_notifications').default('false'),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
-export const swapHistory = pgTable('swap_history', {
-  id: serial('id').primaryKey(),
-  userId: text('user_id').notNull(),
-  walletAddress: text('wallet_address'),
-  sideshiftOrderId: text('sideshift_order_id').notNull(),
-  quoteId: text('quote_id'),
-  fromAsset: text('from_asset').notNull(),
-  fromNetwork: text('from_network').notNull(),
-  fromAmount: real('from_amount').notNull(),
-  toAsset: text('to_asset').notNull(),
-  toNetwork: text('to_network').notNull(),
-  settleAmount: text('settle_amount').notNull(),
-  depositAddress: text('deposit_address'),
-  status: text('status').notNull().default('pending'),
-  txHash: text('tx_hash'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
-export const chatHistory = pgTable('chat_history', {
-  id: serial('id').primaryKey(),
-  userId: text('user_id').notNull(),
-  walletAddress: text('wallet_address'),
-  role: text('role').notNull(),
-  content: text('content').notNull(),
-  metadata: text('metadata'),
-  sessionId: text('session_id'),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
-export const discussions = pgTable('discussions', {
-  id: serial('id').primaryKey(),
-  userId: text('user_id').notNull(),
-  username: text('username').notNull(),
-  content: text('content').notNull(),
-  category: text('category').default('general'), // general, crypto, help, announcement
-  likes: text('likes').default('0'),
-  replies: text('replies').default('0'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
 
 export type User = typeof users.$inferSelect;
 export type CourseProgress = typeof courseProgress.$inferSelect;
 export type RewardsLog = typeof rewardsLog.$inferSelect;
-=======
->>>>>>> 6da3150cce7928f788b79cc94ed991b8b2a12873
 export type CoinPriceCache = typeof coinPriceCache.$inferSelect;
 export type UserSettings = typeof userSettings.$inferSelect;
 export type SwapHistory = typeof swapHistory.$inferSelect;
@@ -601,7 +521,7 @@ export async function updateCourseProgress(
   courseTitle: string,
   moduleId: string,
   totalModules: number
-) {
+): Promise<CourseProgress | null> {
   if (!db) {
     console.warn('Database not configured');
     return null;
@@ -802,7 +722,13 @@ export async function claimPendingTokens(userId: number) {
   }
 }
 
-export async function getLeaderboard(limit: number = 100) {
+export async function getLeaderboard(limit: number = 100): Promise<Array<{
+  rank: number;
+  userId: number;
+  walletAddress: string | null;
+  totalPoints: number;
+  totalTokensClaimed: string;
+}>> {
   if (!db) {
     console.warn('Database not configured');
     return [];
@@ -820,7 +746,10 @@ export async function getLeaderboard(limit: number = 100) {
   
   return leaderboard.map((entry, index) => ({
     rank: index + 1,
-    ...entry,
+    userId: entry.userId,
+    walletAddress: entry.walletAddress,
+    totalPoints: entry.totalPoints,
+    totalTokensClaimed: entry.totalTokensClaimed,
   }));
 }
 
