@@ -74,7 +74,7 @@ export async function resolveNickname(telegramId: number, nickname: string): Pro
       .from(addressBook)
       .where(and(
         eq(addressBook.telegramId, telegramId),
-        eq(addressBook.nickname, nickname.toLowerCase())
+        eq(addressBook.label, nickname.toLowerCase())
       ))
       .limit(1);
       
@@ -158,7 +158,7 @@ export async function createOrderEntry(
     quoteId,
     fromAsset: parsedCommand.fromAsset!,
     fromNetwork: parsedCommand.fromChain!,
-    fromAmount: parsedCommand.amount!,
+    fromAmount: parsedCommand.amount!.toString(),
     toAsset: parsedCommand.toAsset!,
     toNetwork: parsedCommand.toChain!,
     settleAmount: settleAmount.toString(),
@@ -235,7 +235,6 @@ export async function addWatchedOrder(telegramId: number, sideshiftOrderId: stri
     telegramId,
     sideshiftOrderId,
     lastStatus: initialStatus,
-    lastChecked: new Date(),
   }).onConflictDoNothing();
 }
 
@@ -244,7 +243,7 @@ export async function addWatchedOrder(telegramId: number, sideshiftOrderId: stri
  */
 export async function getActiveDCASchedules(): Promise<DCASchedule[]> {
     try {
-        return await db.select().from(dcaSchedules).where(eq(dcaSchedules.isActive, 'true'));
+        return await db.select().from(dcaSchedules).where(eq(dcaSchedules.isActive, 1));
     } catch (error) {
         console.error("Failed to get active DCA schedules", error);
         return [];
@@ -278,9 +277,8 @@ export async function updateDCAScheduleExecution(
 
   await db.update(dcaSchedules)
     .set({
-      lastExecuted: now,
-      nextExecution: nextExecution,
-      executionCount: sql`execution_count + 1`,
+      nextExecutionAt: nextExecution,
+      ordersExecuted: sql`orders_executed + 1`,
     })
     .where(eq(dcaSchedules.id, id));
 }
@@ -288,15 +286,13 @@ export async function updateDCAScheduleExecution(
 // --- NEW: Limit Order Update ---
 export async function updateLimitOrderStatus(
   orderId: number, 
-  status: string, 
-  sideShiftOrderId?: string,
-  error?: string
+  isActive: number,
+  currentPrice?: string
 ) {
   const updateData: Partial<LimitOrder> = {
-    status,
-    ...(sideShiftOrderId && { sideShiftOrderId }),
-    ...(error && { error }),
-    ...(status === 'executed' && { executedAt: new Date() }),
+    isActive,
+    ...(currentPrice && { currentPrice }),
+    lastCheckedAt: new Date(),
   };
 
   await db.update(limitOrders)
