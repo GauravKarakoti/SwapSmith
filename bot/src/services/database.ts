@@ -19,7 +19,7 @@ import {
   chatHistory,
   dcaSchedules,
   limitOrders,
-} from '../../frontend/lib/shared-schema';
+} from '../../../shared/schema';
 
 dotenv.config();
 const memoryAddressBook = new Map<number, Map<string, { address: string; chain: string }>>();

@@ -5,7 +5,7 @@ dotenv.config();
 
 export default defineConfig({
   // Point to the shared schema file
-  schema: "./lib/shared-schema.ts",
+  schema: "../shared/schema.ts",
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {

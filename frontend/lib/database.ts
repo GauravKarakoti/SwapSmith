@@ -9,7 +9,7 @@ import {
   swapHistory,
   chatHistory,
   discussions,
-} from './shared-schema';
+} from '../../shared/schema';
 
 const sql = neon(process.env.DATABASE_URL!);
 const db = drizzle(sql);
