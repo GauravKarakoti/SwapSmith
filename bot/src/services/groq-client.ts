@@ -7,10 +7,10 @@ dotenv.config();
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// Enhanced Interface to support Portfolio and Yield
+// Enhanced Interface to support Portfolio, Yield, Limit Orders, and DCA
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "unknown";
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "limit_order" | "dca" | "unknown";
   
   // Single Swap Fields
   fromAsset: string | null;
@@ -33,6 +33,17 @@ export interface ParsedCommand {
   settleAmount: number | null;
   settleAddress: string | null;
 
+  // Limit Order Fields
+  targetPrice?: number | null;      // Target price to trigger the order
+  condition?: "above" | "below" | null;  // Price condition (above or below target)
+  expiryDate?: string | null;       // ISO date string for order expiration
+
+  // DCA Fields
+  frequency?: "daily" | "weekly" | "monthly" | null;  // DCA frequency
+  totalAmount?: number | null;      // Total amount to invest via DCA
+  numPurchases?: number | null;     // Number of DCA purchases
+  startDate?: string | null;        // ISO date string for DCA start
+
   confidence: number;
   validationErrors: string[];
   parsedMessage: string;
@@ -40,16 +51,19 @@ export interface ParsedCommand {
   originalInput?: string;         // Added back for compatibility
 }
 
+
 const systemPrompt = `
 You are SwapSmith, an advanced DeFi AI agent.
 Your job is to parse natural language into specific JSON commands.
 
 MODES:
-1. "swap": 1 Input -> 1 Output.
+1. "swap": 1 Input -> 1 Output (immediate market swap).
 2. "portfolio": 1 Input -> Multiple Outputs (Split allocation).
 3. "checkout": Payment link creation.
 4. "yield_scout": User asking for high APY/Yield info.
 5. "yield_deposit": Deposit assets into yield platforms, possibly bridging if needed.
+6. "limit_order": Execute swap when price condition is met (e.g., "Buy ETH if price drops below $2500").
+7. "dca": Dollar Cost Averaging - spread purchases over time (e.g., "DCA $50 into Bitcoin every week").
 
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
 
@@ -67,7 +81,7 @@ AMBIGUITY HANDLING:
 RESPONSE FORMAT:
 {
   "success": boolean,
-  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit",
+  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "limit_order" | "dca",
   "fromAsset": string | null,
   "fromChain": string | null,
   "amount": number | null,
@@ -80,7 +94,7 @@ RESPONSE FORMAT:
   // Fill for 'portfolio'
   "portfolio": [
     { "toAsset": "BTC", "toChain": "bitcoin", "percentage": 50 },
-    { "toAsset": "SOL", "toChain": "solana", "percentage": 50 }
+    { "toAsset": "SOL", "toChain: "solana", "percentage": 50 }
   ],
 
   // Fill for 'checkout'
@@ -88,6 +102,17 @@ RESPONSE FORMAT:
   "settleNetwork": string | null,
   "settleAmount": number | null,
   "settleAddress": string | null,
+
+  // Fill for 'limit_order'
+  "targetPrice": number | null,      // Target price in USD
+  "condition": "above" | "below" | null,  // Trigger when price goes above or below target
+  "expiryDate": string | null,       // ISO date string (e.g., "2024-12-31T23:59:59Z")
+
+  // Fill for 'dca'
+  "frequency": "daily" | "weekly" | "monthly" | null,
+  "totalAmount": number | null,      // Total investment amount
+  "numPurchases": number | null,     // Number of purchases (e.g., 4 for weekly over a month)
+  "startDate": string | null,        // ISO date string for first purchase
 
   "confidence": number,  // 0-100, lower for ambiguous
   "validationErrors": string[],
@@ -116,7 +141,17 @@ EXAMPLES:
 
 7. "Send 5 USDC to vitalik.eth"
    -> intent: "checkout", settleAsset: "USDC", settleNetwork: "ethereum", settleAmount: 5, settleAddress: "vitalik.eth", confidence: 95
+
+8. "Buy 1 ETH with USDC if the price drops below $2500"
+   -> intent: "limit_order", fromAsset: "USDC", toAsset: "ETH", amount: 1, targetPrice: 2500, condition: "below", confidence: 95
+
+9. "DCA $50 into Bitcoin every week for a month"
+   -> intent: "dca", toAsset: "BTC", toChain: "bitcoin", totalAmount: 200, frequency: "weekly", numPurchases: 4, amount: 50, confidence: 95
+
+10. "Set a limit order to sell my ETH when it hits $4000"
+    -> intent: "limit_order", fromAsset: "ETH", toAsset: "USDC", targetPrice: 4000, condition: "above", confidence: 95
 `;
+
 
 export async function parseUserCommand(
   userInput: string,
@@ -209,7 +244,30 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
        // If AI marked as failed but didn't give a reason, we might still accept it if intent is clear
        // But usually, we trust the AI's success flag here.
     }
+  } else if (parsed.intent === "limit_order") {
+    if (!parsed.fromAsset) errors.push("Source asset not specified");
+    if (!parsed.toAsset) errors.push("Destination asset not specified");
+    if (!parsed.amount || parsed.amount <= 0) errors.push("Invalid amount specified");
+    if (!parsed.targetPrice || parsed.targetPrice <= 0) errors.push("Target price not specified");
+    if (!parsed.condition || !["above", "below"].includes(parsed.condition)) {
+      errors.push("Price condition must be 'above' or 'below'");
+    }
+    
+  } else if (parsed.intent === "dca") {
+    if (!parsed.toAsset) errors.push("Destination asset not specified");
+    if (!parsed.totalAmount || parsed.totalAmount <= 0) errors.push("Total investment amount not specified");
+    if (!parsed.frequency || !["daily", "weekly", "monthly"].includes(parsed.frequency)) {
+      errors.push("DCA frequency must be 'daily', 'weekly', or 'monthly'");
+    }
+    if (!parsed.numPurchases || parsed.numPurchases <= 0) {
+      errors.push("Number of purchases not specified");
+    }
+    if (!parsed.amount || parsed.amount <= 0) {
+      errors.push("Per-purchase amount not specified");
+    }
+    
   } else if (!parsed.intent || parsed.intent === "unknown") {
+
       if (parsed.success === false && parsed.validationErrors && parsed.validationErrors.length > 0) {
          // Keep prompt-level validation errors
       } else {
@@ -242,8 +300,16 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     settleAsset: parsed.settleAsset || null,
     settleNetwork: parsed.settleNetwork || null,
     settleAmount: parsed.settleAmount || null,
-    settleAddress: parsed.settleAddress || null, 
+    settleAddress: parsed.settleAddress || null,
+    targetPrice: parsed.targetPrice || null,
+    condition: parsed.condition || null,
+    expiryDate: parsed.expiryDate || null,
+    frequency: parsed.frequency || null,
+    totalAmount: parsed.totalAmount || null,
+    numPurchases: parsed.numPurchases || null,
+    startDate: parsed.startDate || null,
     confidence: confidence || 0,
+
     validationErrors: allErrors,
     parsedMessage: parsed.parsedMessage || '',
     requiresConfirmation: parsed.requiresConfirmation || false,

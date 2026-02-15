@@ -15,6 +15,8 @@ import { execSync } from 'child_process';
 import express from 'express';
 import { chainIdMap } from './config/chains';
 import { handleError } from './services/logger';
+import * as orderWorker from './services/order-worker';
+
 
 dotenv.config();
 const MINI_APP_URL = process.env.MINI_APP_URL!;
@@ -314,6 +316,77 @@ bot.command('list_addresses', async (ctx) => {
   ctx.replyWithMarkdown(message);
 });
 
+// --- DELAYED ORDERS COMMANDS ---
+
+bot.command('pending_orders', async (ctx) => {
+  const userId = ctx.from.id;
+  const orders = await db.getUserDelayedOrders(userId);
+
+  if (orders.length === 0) {
+    return ctx.reply("You have no pending limit orders or DCA schedules.");
+  }
+
+  let message = "⏳ *Your Pending Orders:*\n\n";
+  orders.forEach((order) => {
+    const type = order.orderType === 'limit_order' ? 'Limit Order' : 'DCA';
+    message += `*${type} #${order.id}* (${order.status})\n`;
+    message += `  Asset: ${order.toAsset}\n`;
+    if (order.orderType === 'limit_order') {
+      message += `  Target: $${order.targetPrice} (${order.condition})\n`;
+    } else {
+      message += `  Frequency: ${order.frequency} (${order.executionCount}/${order.maxExecutions})\n`;
+    }
+    message += `  Amount: ${order.amount}\n`;
+    message += `  Next: ${order.nextExecutionAt ? new Date(order.nextExecutionAt).toLocaleDateString() : 'N/A'}\n\n`;
+  });
+
+  ctx.replyWithMarkdown(message);
+});
+
+bot.command('cancel_order', async (ctx) => {
+  const userId = ctx.from.id;
+  const args = ctx.message.text.split(' ').slice(1);
+
+  if (args.length === 0) {
+    return ctx.reply("Usage: /cancel_order <order_id>\nUse /pending_orders to see your order IDs.");
+  }
+
+  const orderId = parseInt(args[0]);
+  if (isNaN(orderId)) {
+    return ctx.reply("Please provide a valid order ID number.");
+  }
+
+  const success = await db.cancelDelayedOrder(orderId, userId);
+  if (success) {
+    ctx.reply(`✅ Order #${orderId} has been cancelled.`);
+  } else {
+    ctx.reply(`❌ Could not cancel order #${orderId}. Make sure it belongs to you and is still pending.`);
+  }
+});
+
+bot.command('dca_status', async (ctx) => {
+  const userId = ctx.from.id;
+  const orders = await db.getUserDelayedOrders(userId);
+  const dcaOrders = orders.filter(o => o.orderType === 'dca');
+
+  if (dcaOrders.length === 0) {
+    return ctx.reply("You have no active DCA schedules.");
+  }
+
+  let message = "📊 *Your DCA Status:*\n\n";
+  dcaOrders.forEach((order) => {
+    const progress = ((order.executionCount || 0) / (order.maxExecutions || 1)) * 100;
+    message += `*DCA #${order.id}* - ${order.toAsset}\n`;
+    message += `  Progress: ${order.executionCount}/${order.maxExecutions} (${progress.toFixed(1)}%)\n`;
+    message += `  Amount: $${order.amount} ${order.frequency}\n`;
+    message += `  Status: ${order.status}\n`;
+    message += `  Next: ${order.nextExecutionAt ? new Date(order.nextExecutionAt).toLocaleDateString() : 'N/A'}\n\n`;
+  });
+
+  ctx.replyWithMarkdown(message);
+});
+
+
 // --- MESSAGE HANDLERS ---
 
 bot.on(message('text'), async (ctx) => {
@@ -445,6 +518,39 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
       }
   }
 
+  if (parsed.intent === 'limit_order') {
+      await db.setConversationState(userId, { parsedCommand: parsed });
+      
+      let msg = `🎯 *Limit Order Detected*\n\n`;
+      msg += `*Action:* Buy ${parsed.amount} ${parsed.toAsset}\n`;
+      msg += `*With:* ${parsed.fromAsset} on ${parsed.fromChain}\n`;
+      msg += `*Condition:* When price goes ${parsed.condition} $${parsed.targetPrice}\n`;
+      if (parsed.expiryDate) {
+          msg += `*Expires:* ${new Date(parsed.expiryDate).toLocaleDateString()}\n`;
+      }
+      msg += `\nPlease provide the destination wallet address for this order.`;
+
+      return ctx.replyWithMarkdown(msg);
+  }
+
+  if (parsed.intent === 'dca') {
+      await db.setConversationState(userId, { parsedCommand: parsed });
+      
+      let msg = `📈 *DCA Schedule Detected*\n\n`;
+      msg += `*Asset:* ${parsed.toAsset}\n`;
+      msg += `*Amount:* $${parsed.amount} per purchase\n`;
+      msg += `*Frequency:* ${parsed.frequency}\n`;
+      msg += `*Total Purchases:* ${parsed.numPurchases}\n`;
+      msg += `*Total Investment:* $${parsed.totalAmount}\n`;
+      if (parsed.startDate) {
+          msg += `*Starts:* ${new Date(parsed.startDate).toLocaleDateString()}\n`;
+      }
+      msg += `\nPlease provide the destination wallet address for DCA purchases.`;
+
+      return ctx.replyWithMarkdown(msg);
+  }
+
+
   if (parsed.intent === 'portfolio') {
       await db.setConversationState(userId, { parsedCommand: parsed });
       
@@ -484,6 +590,43 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
           Markup.button.callback('❌ No', 'cancel_swap')
       ]));
   }
+
+  if (parsed.intent === 'limit_order' || parsed.intent === 'dca') {
+      // Handle missing address for delayed orders
+      if (!parsed.settleAddress) {
+          await db.setConversationState(userId, { parsedCommand: parsed });
+          return ctx.reply(`Please provide the destination wallet address for your ${parsed.intent === 'limit_order' ? 'limit order' : 'DCA schedule'}.`);
+      }
+
+      // Create the delayed order
+      const settleAddress = await resolveAddress(userId, parsed.settleAddress!);
+      
+      try {
+          const delayedOrder = await db.createDelayedOrder(
+              userId,
+              parsed.intent,
+              parsed,
+              settleAddress
+          );
+
+          // Clear conversation state
+          await db.clearConversationState(userId);
+
+          let confirmationMsg = parsed.intent === 'limit_order' 
+              ? `✅ *Limit Order Created!*\n\nOrder #${delayedOrder.id}\n` +
+                `Will buy ${parsed.amount} ${parsed.toAsset} when price goes ${parsed.condition} $${parsed.targetPrice}.\n` +
+                `You'll be notified when it's executed.`
+              : `✅ *DCA Schedule Created!*\n\nOrder #${delayedOrder.id}\n` +
+                `Will buy $${parsed.amount} of ${parsed.toAsset} ${parsed.frequency} for ${parsed.numPurchases} purchases.\n` +
+                `First purchase: ${delayedOrder.nextExecutionAt ? new Date(delayedOrder.nextExecutionAt).toLocaleDateString() : 'soon'}.`;
+
+          ctx.replyWithMarkdown(confirmationMsg);
+      } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          ctx.reply(`❌ Failed to create ${parsed.intent}. Error: ${errorMessage}`);
+      }
+  }
+
 
   if (inputType === 'voice' && parsed.success) await ctx.reply(`🗣️ ${parsed.parsedMessage}`); 
 }
@@ -656,5 +799,10 @@ bot.action('cancel_swap', (ctx) => {
 const app = express();
 app.get('/', (req, res) => res.send('SwapSmith Alive'));
 app.listen(process.env.PORT || 3000, () => console.log(`Express server live`));
+
+// Initialize order worker for limit orders and DCA
+orderWorker.initializeWorker(bot);
+console.log('⏰ Order worker initialized for limit orders and DCA');
+
 bot.launch();
 console.log('🤖 Bot is running...');

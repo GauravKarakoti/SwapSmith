@@ -65,11 +65,64 @@ export const addressBook = pgTable('address_book', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// --- DELAYED ORDERS TABLE (Limit Orders & DCA) ---
+export const delayedOrders = pgTable('delayed_orders', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
+  orderType: text('order_type').notNull(), // 'limit_order' or 'dca'
+  intentData: text('intent_data').notNull(), // JSON string of ParsedCommand
+  
+  // Common fields
+  fromAsset: text('from_asset'),
+  fromChain: text('from_chain'),
+  toAsset: text('to_asset').notNull(),
+  toChain: text('to_chain'),
+  amount: real('amount').notNull(),
+  settleAddress: text('settle_address').notNull(),
+  
+  // Limit Order specific
+  targetPrice: real('target_price'),
+  condition: text('condition'), // 'above' or 'below'
+  expiryDate: timestamp('expiry_date'),
+  
+  // DCA specific
+  frequency: text('frequency'), // 'daily', 'weekly', 'monthly'
+  totalAmount: real('total_amount'),
+  numPurchases: serial('num_purchases'),
+  startDate: timestamp('start_date'),
+  
+  // Execution tracking
+  status: text('status').notNull().default('pending'), // 'pending', 'active', 'completed', 'cancelled', 'expired'
+  executionCount: serial('execution_count').default(0),
+  maxExecutions: serial('max_executions').default(1),
+  nextExecutionAt: timestamp('next_execution_at'),
+  lastExecutedAt: timestamp('last_executed_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// --- PRICE ALERTS TABLE ---
+export const priceAlerts = pgTable('price_alerts', {
+  id: serial('id').primaryKey(),
+  asset: text('asset').notNull(),
+  chain: text('chain'),
+  targetPrice: real('target_price').notNull(),
+  condition: text('condition').notNull(), // 'above' or 'below'
+  currentPrice: real('current_price'),
+  triggered: text('triggered').default('false'),
+  delayedOrderId: serial('delayed_order_id'),
+  createdAt: timestamp('created_at').defaultNow(),
+  triggeredAt: timestamp('triggered_at'),
+});
+
 // --- TYPE DEFINITIONS ---
 export type User = typeof users.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Checkout = typeof checkouts.$inferSelect;
 export type AddressBookEntry = typeof addressBook.$inferSelect;
+export type DelayedOrder = typeof delayedOrders.$inferSelect;
+export type PriceAlert = typeof priceAlerts.$inferSelect;
+
 
 // --- FUNCTIONS ---
 
@@ -193,4 +246,133 @@ export async function resolveNickname(telegramId: number, nickname: string): Pro
     .where(eq(addressBook.nickname, nickname))
     .limit(1);
   return result[0]?.address || null;
+}
+
+// --- DELAYED ORDERS FUNCTIONS ---
+
+export async function createDelayedOrder(
+  telegramId: number,
+  orderType: 'limit_order' | 'dca',
+  intentData: any,
+  settleAddress: string
+): Promise<DelayedOrder> {
+  const data = {
+    telegramId,
+    orderType,
+    intentData: JSON.stringify(intentData),
+    fromAsset: intentData.fromAsset,
+    fromChain: intentData.fromChain,
+    toAsset: intentData.toAsset,
+    toChain: intentData.toChain,
+    amount: intentData.amount,
+    settleAddress,
+    targetPrice: intentData.targetPrice,
+    condition: intentData.condition,
+    expiryDate: intentData.expiryDate ? new Date(intentData.expiryDate) : null,
+    frequency: intentData.frequency,
+    totalAmount: intentData.totalAmount,
+    numPurchases: intentData.numPurchases,
+    startDate: intentData.startDate ? new Date(intentData.startDate) : null,
+    status: 'pending',
+    executionCount: 0,
+    maxExecutions: orderType === 'dca' ? intentData.numPurchases || 1 : 1,
+    nextExecutionAt: orderType === 'dca' ? (intentData.startDate ? new Date(intentData.startDate) : new Date()) : null,
+  };
+
+  const result = await db.insert(delayedOrders).values(data).returning();
+  return result[0];
+}
+
+export async function getPendingDelayedOrders(): Promise<DelayedOrder[]> {
+  return await db.select().from(delayedOrders)
+    .where(eq(delayedOrders.status, 'pending'))
+    .orWhere(eq(delayedOrders.status, 'active'));
+}
+
+export async function getUserDelayedOrders(telegramId: number): Promise<DelayedOrder[]> {
+  return await db.select().from(delayedOrders)
+    .where(eq(delayedOrders.telegramId, telegramId))
+    .orderBy(desc(delayedOrders.createdAt));
+}
+
+export async function updateDelayedOrderStatus(
+  orderId: number,
+  status: string,
+  executionCount?: number,
+  nextExecutionAt?: Date
+) {
+  const updateData: any = { status, updatedAt: new Date() };
+  if (executionCount !== undefined) updateData.executionCount = executionCount;
+  if (nextExecutionAt !== undefined) updateData.nextExecutionAt = nextExecutionAt;
+  if (status === 'completed' || status === 'cancelled' || status === 'expired') {
+    updateData.lastExecutedAt = new Date();
+  }
+
+  await db.update(delayedOrders)
+    .set(updateData)
+    .where(eq(delayedOrders.id, orderId));
+}
+
+export async function cancelDelayedOrder(orderId: number, telegramId: number): Promise<boolean> {
+  const result = await db.select().from(delayedOrders)
+    .where(eq(delayedOrders.id, orderId))
+    .where(eq(delayedOrders.telegramId, telegramId))
+    .limit(1);
+
+  if (!result[0]) return false;
+
+  await db.update(delayedOrders)
+    .set({ status: 'cancelled', updatedAt: new Date() })
+    .where(eq(delayedOrders.id, orderId));
+
+  return true;
+}
+
+export async function getDelayedOrderById(orderId: number): Promise<DelayedOrder | undefined> {
+  const result = await db.select().from(delayedOrders)
+    .where(eq(delayedOrders.id, orderId))
+    .limit(1);
+  return result[0];
+}
+
+// --- PRICE ALERTS FUNCTIONS ---
+
+export async function createPriceAlert(
+  asset: string,
+  targetPrice: number,
+  condition: 'above' | 'below',
+  delayedOrderId?: number,
+  chain?: string
+): Promise<PriceAlert> {
+  const result = await db.insert(priceAlerts).values({
+    asset,
+    chain,
+    targetPrice,
+    condition,
+    delayedOrderId,
+    triggered: 'false',
+  }).returning();
+  return result[0];
+}
+
+export async function getActivePriceAlerts(): Promise<PriceAlert[]> {
+  return await db.select().from(priceAlerts)
+    .where(eq(priceAlerts.triggered, 'false'));
+}
+
+export async function updatePriceAlertCurrentPrice(alertId: number, currentPrice: number) {
+  await db.update(priceAlerts)
+    .set({ currentPrice })
+    .where(eq(priceAlerts.id, alertId));
+}
+
+export async function markPriceAlertTriggered(alertId: number) {
+  await db.update(priceAlerts)
+    .set({ triggered: 'true', triggeredAt: new Date() })
+    .where(eq(priceAlerts.id, alertId));
+}
+
+export async function getPriceAlertsForOrder(delayedOrderId: number): Promise<PriceAlert[]> {
+  return await db.select().from(priceAlerts)
+    .where(eq(priceAlerts.delayedOrderId, delayedOrderId));
 }
