@@ -59,6 +59,16 @@ function isValidAddress(address: string, chain?: string): boolean {
     return pattern ? pattern.test(trimmed) : DEFAULT_EVM_PATTERN.test(trimmed);
 }
 
+function checkFFmpeg(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    exec('ffmpeg -version', (error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+}
+
+
 // --------------------------------------------------
 // ORDER MONITOR
 // --------------------------------------------------
@@ -316,11 +326,21 @@ app.get('/', (_, res) => res.send('SwapSmith Alive'));
 app.listen(process.env.PORT || 3000);
 
 (async () => {
-    await orderMonitor.loadPendingOrders();
-    orderMonitor.start();
-    bot.launch();
-    console.log('🤖 Bot running');
+  try {
+    await checkFFmpeg();
+    console.log('✅ ffmpeg is installed. Voice messages enabled.');
+  } catch {
+    console.error('❌ ffmpeg not found. Install ffmpeg to enable voice message support.');
+    process.exit(1); 
+  }
+
+  await orderMonitor.loadPendingOrders();
+  orderMonitor.start();
+
+  await bot.launch();
+  console.log('🤖 Bot running');
 })();
+
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
