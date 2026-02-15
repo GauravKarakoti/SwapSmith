@@ -1,10 +1,27 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { pgTable, serial, text, real, timestamp, bigint, integer, uuid, boolean, numeric, jsonb, pgEnum, unique } from 'drizzle-orm/pg-core';
 import { eq, desc, notInArray, and, sql } from 'drizzle-orm';
 import dotenv from 'dotenv';
 import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
 import type { ParsedCommand } from './groq-client';
+
+// Import all table schemas from shared schema file
+import {
+  users,
+  conversations,
+  orders,
+  checkouts,
+  addressBook,
+  watchedOrders,
+  coinPriceCache,
+  userSettings,
+  swapHistory,
+  chatHistory,
+  dcaSchedules,
+  limitOrders,
+  courseProgress,
+  rewardsLog,
+} from '../../../shared/schema';
 
 dotenv.config();
 
@@ -15,222 +32,25 @@ const connectionString = process.env.DATABASE_URL || 'postgres://mock:mock@local
 const client = neon(connectionString);
 export const db = drizzle(client);
 
-// --- ENUMS ---
-export const rewardActionType = pgEnum('reward_action_type', [
-  'course_complete',
-  'module_complete',
-  'daily_login',
-  'swap_complete',
-  'referral'
-]);
+// Re-export schemas for backward compatibility
+export {
+  users,
+  conversations,
+  orders,
+  checkouts,
+  addressBook,
+  watchedOrders,
+  coinPriceCache,
+  userSettings,
+  swapHistory,
+  chatHistory,
+  dcaSchedules,
+  limitOrders,
+  courseProgress,
+  rewardsLog,
+};
 
-export const mintStatusType = pgEnum('mint_status_type', [
-  'pending',
-  'processing',
-  'minted',
-  'failed'
-]);
-
-// --- SCHEMAS ---
-export const users = pgTable('users', {
-  id: serial('id').primaryKey(),
-  telegramId: bigint('telegram_id', { mode: 'number' }).unique(),
-  firebaseUid: text('firebase_uid').unique(),
-  walletAddress: text('wallet_address').unique(),
-  sessionTopic: text('session_topic'),
-  totalPoints: integer('total_points').notNull().default(0),
-  totalTokensClaimed: numeric('total_tokens_claimed', { precision: 20, scale: 8 }).notNull().default('0'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
-export const conversations = pgTable('conversations', {
-  id: serial('id').primaryKey(),
-  telegramId: bigint('telegram_id', { mode: 'number' }).notNull().unique(),
-  state: text('state'),
-  lastUpdated: timestamp('last_updated').defaultNow(),
-});
-
-export const orders = pgTable('orders', {
-  id: serial('id').primaryKey(),
-  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
-  sideshiftOrderId: text('sideshift_order_id').notNull().unique(),
-  quoteId: text('quote_id').notNull(),
-  fromAsset: text('from_asset').notNull(),
-  fromNetwork: text('from_network').notNull(),
-  fromAmount: real('from_amount').notNull(),
-  toAsset: text('to_asset').notNull(),
-  toNetwork: text('to_network').notNull(),
-  settleAmount: text('settle_amount').notNull(),
-  depositAddress: text('deposit_address').notNull(),
-  depositMemo: text('deposit_memo'),
-  status: text('status').notNull().default('pending'),
-  txHash: text('tx_hash'),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
-export const checkouts = pgTable('checkouts', {
-  id: serial('id').primaryKey(),
-  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
-  checkoutId: text('checkout_id').notNull().unique(),
-  settleAsset: text('settle_asset').notNull(),
-  settleNetwork: text('settle_network').notNull(),
-  settleAmount: real('settle_amount').notNull(),
-  settleAddress: text('settle_address').notNull(),
-  status: text('status').notNull().default('pending'),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
-export const addressBook = pgTable('address_book', {
-  id: serial('id').primaryKey(),
-  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
-  nickname: text('nickname').notNull(),
-  address: text('address').notNull(),
-  chain: text('chain').notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
-export const watchedOrders = pgTable('watched_orders', {
-  id: serial('id').primaryKey(),
-  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
-  sideshiftOrderId: text('sideshift_order_id').notNull().unique(),
-  lastStatus: text('last_status').notNull().default('pending'),
-  lastChecked: timestamp('last_checked').defaultNow(),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
-// Caching tables
-export const coinPriceCache = pgTable('coin_price_cache', {
-  id: serial('id').primaryKey(),
-  coin: text('coin').notNull(),
-  network: text('network').notNull(),
-  name: text('name').notNull(),
-  usdPrice: text('usd_price'),
-  btcPrice: text('btc_price'),
-  available: text('available').notNull().default('true'),
-  expiresAt: timestamp('expires_at').notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
-export const userSettings = pgTable('user_settings', {
-  id: serial('id').primaryKey(),
-  userId: text('user_id').notNull().unique(),
-  walletAddress: text('wallet_address'),
-  theme: text('theme').default('dark'),
-  slippageTolerance: real('slippage_tolerance').default(0.5),
-  notificationsEnabled: text('notifications_enabled').default('true'),
-  defaultFromAsset: text('default_from_asset'),
-  defaultToAsset: text('default_to_asset'),
-  preferences: text('preferences'),
-  emailNotifications: text('email_notifications'),
-  telegramNotifications: text('telegram_notifications').default('false'),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
-export const swapHistory = pgTable('swap_history', {
-  id: serial('id').primaryKey(),
-  userId: text('user_id').notNull(),
-  walletAddress: text('wallet_address'),
-  sideshiftOrderId: text('sideshift_order_id').notNull(),
-  quoteId: text('quote_id'),
-  fromAsset: text('from_asset').notNull(),
-  fromNetwork: text('from_network').notNull(),
-  fromAmount: real('from_amount').notNull(),
-  toAsset: text('to_asset').notNull(),
-  toNetwork: text('to_network').notNull(),
-  settleAmount: text('settle_amount').notNull(),
-  depositAddress: text('deposit_address'),
-  status: text('status').notNull().default('pending'),
-  txHash: text('tx_hash'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
-export const chatHistory = pgTable('chat_history', {
-  id: serial('id').primaryKey(),
-  userId: text('user_id').notNull(),
-  walletAddress: text('wallet_address'),
-  role: text('role').notNull(),
-  content: text('content').notNull(),
-  metadata: text('metadata'),
-  sessionId: text('session_id'),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
-// DCA (Dollar Cost Averaging) Schedules
-export const dcaSchedules = pgTable('dca_schedules', {
-  id: serial('id').primaryKey(),
-  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
-  fromAsset: text('from_asset').notNull(),
-  fromChain: text('from_chain').notNull(),
-  toAsset: text('to_asset').notNull(),
-  toChain: text('to_chain').notNull(),
-  amount: real('amount').notNull(),
-  frequency: text('frequency').notNull(), // 'daily', 'weekly', 'monthly'
-  dayOfWeek: text('day_of_week'), // For weekly: 'monday', 'tuesday', etc.
-  dayOfMonth: text('day_of_month'), // For monthly: '1', '15', etc.
-  settleAddress: text('settle_address').notNull(),
-  isActive: text('is_active').notNull().default('true'),
-  lastExecuted: timestamp('last_executed'),
-  nextExecution: timestamp('next_execution').notNull(),
-  executionCount: integer('execution_count').notNull().default(0),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
-export const limitOrders = pgTable('limit_orders', {
-  id: serial('id').primaryKey(),
-  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
-  fromAsset: text('from_asset').notNull(),
-  fromChain: text('from_chain').notNull(),
-  toAsset: text('to_asset').notNull(),
-  toChain: text('to_chain').notNull(),
-  amount: real('amount').notNull(),
-  conditionOperator: text('condition_operator').notNull(), // 'gt' or 'lt'
-  conditionValue: real('condition_value').notNull(),
-  conditionAsset: text('condition_asset').notNull(),
-  settleAddress: text('settle_address'),
-  status: text('status').notNull().default('pending'), // pending, executing, executed, cancelled, failed
-  sideShiftOrderId: text('sideshift_order_id'),
-  error: text('error'),
-  createdAt: timestamp('created_at').defaultNow(),
-  executedAt: timestamp('executed_at'),
-});
-
-export const courseProgress = pgTable('course_progress', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  courseId: text('course_id').notNull(),
-  courseTitle: text('course_title').notNull(),
-  completedModules: text('completed_modules').array().notNull().default(sql`ARRAY[]::text[]`),
-  totalModules: integer('total_modules').notNull(),
-  isCompleted: boolean('is_completed').notNull().default(false),
-  completionDate: timestamp('completion_date'),
-  lastAccessed: timestamp('last_accessed').notNull().defaultNow(),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
-}, (table) => ({
-  userCourseUnique: unique('course_progress_user_course_unique').on(table.userId, table.courseId),
-}));
-
-export const rewardsLog = pgTable('rewards_log', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  actionType: rewardActionType('action_type').notNull(),
-  actionMetadata: jsonb('action_metadata'),
-  pointsEarned: integer('points_earned').notNull().default(0),
-  tokensPending: numeric('tokens_pending', { precision: 20, scale: 8 }).notNull().default('0'),
-  mintStatus: mintStatusType('mint_status').notNull().default('pending'),
-  txHash: text('tx_hash'),
-  blockchainNetwork: text('blockchain_network'),
-  errorMessage: text('error_message'),
-  claimedAt: timestamp('claimed_at'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
-});
-
-// Types
+// Type exports for backward compatibility
 export type User = typeof users.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Checkout = typeof checkouts.$inferSelect;

@@ -1,82 +1,33 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { pgTable, serial, text, real, timestamp, unique, uuid, boolean, numeric, jsonb, pgEnum, integer, bigint } from 'drizzle-orm/pg-core';
 import { eq, desc, and, sql as drizzleSql } from 'drizzle-orm';
 
-// Check if database is configured
-const isDatabaseConfigured = () => {
-  return !!(process.env.DATABASE_URL && process.env.DATABASE_URL.trim() !== '');
+// Import all table schemas from shared schema file
+import {
+  coinPriceCache,
+  userSettings,
+  swapHistory,
+  chatHistory,
+  discussions,
+  users,
+  courseProgress,
+  rewardsLog,
+} from '../../shared/schema';
+
+const sql = neon(process.env.DATABASE_URL!);
+const db = drizzle(sql);
+
+// Re-export schemas for backward compatibility
+export {
+  coinPriceCache,
+  userSettings,
+  swapHistory,
+  chatHistory,
+  discussions,
+  users,
+  courseProgress,
+  rewardsLog,
 };
-
-// Only initialize database if configured
-let sql: ReturnType<typeof neon> | null = null;
-let db: ReturnType<typeof drizzle> | null = null;
-
-if (isDatabaseConfigured()) {
-  try {
-    sql = neon(process.env.DATABASE_URL!);
-    db = drizzle(sql);
-  } catch (error) {
-    console.error('Database initialization error:', error);
-  }
-} else {
-  console.warn('Database is not configured. DATABASE_URL environment variable is missing.');
-}
-
-// --- SHARED SCHEMAS (matching bot/src/services/database.ts) ---
-
-// Enums for rewards system
-export const rewardActionType = pgEnum('reward_action_type', [
-  'course_complete',
-  'module_complete',
-  'daily_login',
-  'swap_complete',
-  'referral'
-]);
-
-export const mintStatusType = pgEnum('mint_status_type', [
-  'pending',
-  'processing',
-  'minted',
-  'failed'
-]);
-
-export const users = pgTable('users', {
-  id: serial('id').primaryKey(),
-  telegramId: bigint('telegram_id', { mode: 'number' }).unique(),
-  firebaseUid: text('firebase_uid').unique(),
-  walletAddress: text('wallet_address').unique(),
-  sessionTopic: text('session_topic'),
-  totalPoints: integer('total_points').notNull().default(0),
-  totalTokensClaimed: numeric('total_tokens_claimed', { precision: 20, scale: 8 }).notNull().default('0'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
-export const courseProgress = pgTable('course_progress', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  userId: integer('user_id').notNull(),
-  courseId: text('course_id').notNull(),
-  courseTitle: text('course_title').notNull(),
-  completedModules: text('completed_modules').array().notNull().default(drizzleSql`ARRAY[]::text[]`),
-  totalModules: integer('total_modules').notNull(),
-  isCompleted: boolean('is_completed').notNull().default(false),
-  completionDate: timestamp('completion_date'),
-  lastAccessed: timestamp('last_accessed').notNull().defaultNow(),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
-});
-
-export const rewardsLog = pgTable('rewards_log', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  userId: integer('user_id').notNull(),
-  actionType: rewardActionType('action_type').notNull(),
-  actionMetadata: jsonb('action_metadata'),
-  pointsEarned: integer('points_earned').notNull().default(0),
-  tokensPending: numeric('tokens_pending', { precision: 20, scale: 8 }).notNull().default('0'),
-  mintStatus: mintStatusType('mint_status').notNull().default('pending'),
-  txHash: text('tx_hash'),
-  blockchainNetwork: text('blockchain_network'),
   errorMessage: text('error_message'),
   claimedAt: timestamp('claimed_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -159,6 +110,8 @@ export const discussions = pgTable('discussions', {
 export type User = typeof users.$inferSelect;
 export type CourseProgress = typeof courseProgress.$inferSelect;
 export type RewardsLog = typeof rewardsLog.$inferSelect;
+=======
+>>>>>>> 6da3150cce7928f788b79cc94ed991b8b2a12873
 export type CoinPriceCache = typeof coinPriceCache.$inferSelect;
 export type UserSettings = typeof userSettings.$inferSelect;
 export type SwapHistory = typeof swapHistory.$inferSelect;
