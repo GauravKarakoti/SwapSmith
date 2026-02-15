@@ -30,6 +30,7 @@ export const orders = pgTable('orders', {
   depositAddress: text('deposit_address').notNull(),
   depositMemo: text('deposit_memo'),
   status: text('status').notNull().default('pending'),
+  tx_hash: text('tx_hash'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -41,6 +42,7 @@ export const checkouts = pgTable('checkouts', {
   settleNetwork: text('settle_network').notNull(),
   settleAmount: real('settle_amount').notNull(),
   settleAddress: text('settle_address').notNull(),
+  status: text('status').notNull().default('pending'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 

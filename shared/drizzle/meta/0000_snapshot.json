@@ -1,5 +1,5 @@
 {
-  "id": "f71c77e4-c69c-4e5f-a01b-e39e2ac18633",
+  "id": "dea564f0-e908-4824-a223-dcd59c00386e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -20,8 +20,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "nickname": {
-          "name": "nickname",
+        "label": {
+          "name": "label",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -37,13 +37,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "now()"
         }
       },
       "indexes": {},
@@ -264,7 +257,16 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "coin_price_cache_coin_network_unique": {
+          "name": "coin_price_cache_coin_network_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "coin",
+            "network"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -295,8 +297,7 @@
           "name": "last_updated",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "default": "now()"
+          "notNull": false
         }
       },
       "indexes": {},
@@ -337,8 +338,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "from_chain": {
-          "name": "from_chain",
+        "from_network": {
+          "name": "from_network",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -349,67 +350,49 @@
           "primaryKey": false,
           "notNull": true
         },
-        "to_chain": {
-          "name": "to_chain",
+        "to_network": {
+          "name": "to_network",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "amount": {
-          "name": "amount",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "frequency": {
-          "name": "frequency",
+        "amount_per_order": {
+          "name": "amount_per_order",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "day_of_week": {
-          "name": "day_of_week",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "day_of_month": {
-          "name": "day_of_month",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "settle_address": {
-          "name": "settle_address",
-          "type": "text",
+        "interval_hours": {
+          "name": "interval_hours",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true
         },
-        "is_active": {
-          "name": "is_active",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'true'"
-        },
-        "last_executed": {
-          "name": "last_executed",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "next_execution": {
-          "name": "next_execution",
-          "type": "timestamp",
+        "total_orders": {
+          "name": "total_orders",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true
         },
-        "execution_count": {
-          "name": "execution_count",
+        "orders_executed": {
+          "name": "orders_executed",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "default": 0
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "next_execution_at": {
+          "name": "next_execution_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
         },
         "created_at": {
           "name": "created_at",
@@ -417,6 +400,77 @@
           "primaryKey": false,
           "notNull": false,
           "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.discussions": {
+      "name": "discussions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'general'"
+        },
+        "likes": {
+          "name": "likes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'0'"
+        },
+        "replies": {
+          "name": "replies",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'0'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
@@ -449,8 +503,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "from_chain": {
-          "name": "from_chain",
+        "from_network": {
+          "name": "from_network",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -461,60 +515,36 @@
           "primaryKey": false,
           "notNull": true
         },
-        "to_chain": {
-          "name": "to_chain",
+        "to_network": {
+          "name": "to_network",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "amount": {
-          "name": "amount",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "condition_operator": {
-          "name": "condition_operator",
+        "from_amount": {
+          "name": "from_amount",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "condition_value": {
-          "name": "condition_value",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "condition_asset": {
-          "name": "condition_asset",
+        "target_price": {
+          "name": "target_price",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "settle_address": {
-          "name": "settle_address",
+        "current_price": {
+          "name": "current_price",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "status": {
-          "name": "status",
-          "type": "text",
+        "is_active": {
+          "name": "is_active",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "default": "'pending'"
-        },
-        "sideshift_order_id": {
-          "name": "sideshift_order_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "error": {
-          "name": "error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
+          "default": 1
         },
         "created_at": {
           "name": "created_at",
@@ -523,8 +553,8 @@
           "notNull": false,
           "default": "now()"
         },
-        "executed_at": {
-          "name": "executed_at",
+        "last_checked_at": {
+          "name": "last_checked_at",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false
@@ -564,7 +594,7 @@
           "name": "quote_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "from_asset": {
           "name": "from_asset",
@@ -580,7 +610,7 @@
         },
         "from_amount": {
           "name": "from_amount",
-          "type": "real",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -751,14 +781,21 @@
           "name": "updated_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "default": "now()"
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "swap_history_sideshift_order_id_unique": {
+          "name": "swap_history_sideshift_order_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "sideshift_order_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -789,31 +826,16 @@
           "name": "theme",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "default": "'dark'"
+          "notNull": false
         },
         "slippage_tolerance": {
           "name": "slippage_tolerance",
           "type": "real",
           "primaryKey": false,
-          "notNull": false,
-          "default": 0.5
+          "notNull": false
         },
         "notifications_enabled": {
           "name": "notifications_enabled",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "'true'"
-        },
-        "default_from_asset": {
-          "name": "default_from_asset",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "default_to_asset": {
-          "name": "default_to_asset",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -834,8 +856,7 @@
           "name": "telegram_notifications",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "default": "'false'"
+          "notNull": false
         },
         "updated_at": {
           "name": "updated_at",
@@ -939,15 +960,7 @@
           "name": "last_status",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'pending'"
-        },
-        "last_checked": {
-          "name": "last_checked",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "now()"
+          "notNull": true
         },
         "created_at": {
           "name": "created_at",

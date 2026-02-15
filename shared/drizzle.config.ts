@@ -1,7 +1,7 @@
 import { defineConfig } from "drizzle-kit";
 import dotenv from "dotenv";
 
-dotenv.config({ path: "../bot/.env" }); // Load from bot's .env
+dotenv.config();
 
 export default defineConfig({
   schema: "./schema.ts",
