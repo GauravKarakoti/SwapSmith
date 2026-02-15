@@ -10,7 +10,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 // Enhanced Interface to support Portfolio and Yield
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "unknown";
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "swap_and_stake" | "unknown";
   
   // Single Swap Fields
   fromAsset: string | null;
@@ -33,6 +33,11 @@ export interface ParsedCommand {
   settleAmount: number | null;
   settleAddress: string | null;
 
+  // Swap & Stake Fields (Compound action: swap then stake)
+  stakeAsset: string | null;
+  stakeProtocol: string | null;
+  stakeChain: string | null;
+
   confidence: number;
   validationErrors: string[];
   parsedMessage: string;
@@ -50,8 +55,18 @@ MODES:
 3. "checkout": Payment link creation.
 4. "yield_scout": User asking for high APY/Yield info.
 5. "yield_deposit": Deposit assets into yield platforms, possibly bridging if needed.
+6. "swap_and_stake": Compound action - swap first, then stake the received tokens.
 
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
+
+SUPPORTED STAKING ASSETS:
+- ETH -> stETH (Lido), rETH (Rocket Pool), cbETH (Coinbase), ETHx (Stader), sfrxETH (Frax)
+- LDO -> Lido staking
+- RPL -> Rocket Pool
+- POL -> Polygon staking
+- ARB -> Arbitrum governance staking
+- OP -> Optimism governance staking
+- DEGEN -> Base community staking
 
 ADDRESS RESOLUTION:
 - Users can specify addresses as raw wallet addresses, ENS names (ending in .eth), Lens handles (ending in .lens), or nicknames from their address book.
@@ -92,7 +107,12 @@ RESPONSE FORMAT:
   "confidence": number,  // 0-100, lower for ambiguous
   "validationErrors": string[],
   "parsedMessage": "Human readable summary",
-  "requiresConfirmation": boolean
+  "requiresConfirmation": boolean,
+
+  // Fill for 'swap_and_stake'
+  "stakeAsset": string | null,
+  "stakeProtocol": string | null,
+  "stakeChain": string | null
 }
 
 EXAMPLES:
@@ -116,6 +136,15 @@ EXAMPLES:
 
 7. "Send 5 USDC to vitalik.eth"
    -> intent: "checkout", settleAsset: "USDC", settleNetwork: "ethereum", settleAmount: 5, settleAddress: "vitalik.eth", confidence: 95
+
+8. "Swap half my ETH to LDO and stake it"
+   -> intent: "swap_and_stake", fromAsset: "ETH", fromChain: "ethereum", amount: 0.5, amountType: "percentage", toAsset: "LDO", toChain: "ethereum", stakeAsset: "LDO", stakeProtocol: "Lido", stakeChain: "ethereum", confidence: 95
+
+9. "Swap 1 ETH to stETH and stake"
+   -> intent: "swap_and_stake", fromAsset: "ETH", fromChain: "ethereum", amount: 1, toAsset: "stETH", toChain: "ethereum", stakeAsset: "stETH", stakeProtocol: "Lido", stakeChain: "ethereum", confidence: 95
+
+10. "Swap my ETH to ARB and stake for rewards"
+    -> intent: "swap_and_stake", fromAsset: "ETH", fromChain: "ethereum", amount: null, amountType: "all", toAsset: "ARB", toChain: "arbitrum", stakeAsset: "ARB", stakeProtocol: "Arbitrum", stakeChain: "arbitrum", confidence: 90
 `;
 
 export async function parseUserCommand(
@@ -209,6 +238,12 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
        // If AI marked as failed but didn't give a reason, we might still accept it if intent is clear
        // But usually, we trust the AI's success flag here.
     }
+  } else if (parsed.intent === "swap_and_stake") {
+    // Validate swap_and_stake compound action
+    if (!parsed.fromAsset) errors.push("Source asset not specified");
+    if (!parsed.toAsset) errors.push("Destination asset for swap not specified");
+    if (!parsed.amount || parsed.amount <= 0) errors.push("Invalid amount specified");
+    if (!parsed.stakeAsset) errors.push("Staking asset not specified");
   } else if (!parsed.intent || parsed.intent === "unknown") {
       if (parsed.success === false && parsed.validationErrors && parsed.validationErrors.length > 0) {
          // Keep prompt-level validation errors
@@ -243,6 +278,9 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     settleNetwork: parsed.settleNetwork || null,
     settleAmount: parsed.settleAmount || null,
     settleAddress: parsed.settleAddress || null, 
+    stakeAsset: parsed.stakeAsset || null,
+    stakeProtocol: parsed.stakeProtocol || null,
+    stakeChain: parsed.stakeChain || null,
     confidence: confidence || 0,
     validationErrors: allErrors,
     parsedMessage: parsed.parsedMessage || '',
