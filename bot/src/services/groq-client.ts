@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import { handleError } from './logger';
 import { analyzeCommand, generateContextualHelp } from './contextual-help';
+import { safeParseLLMJson } from "../utils/safe-json";
 
 dotenv.config();
 
@@ -211,7 +212,14 @@ export async function parseWithLLM(
       max_tokens: 2048, 
     });
 
-    const parsed = JSON.parse(completion.choices[0].message.content || '{}');
+    let parsed;
+    try {
+      parsed = safeParseLLMJson(completion.choices[0].message.content || '{}');
+    } catch (parseError) {
+      console.error("LLM JSON parse failed:", parseError);
+      throw new Error("Invalid LLM JSON response");
+    }
+
     console.log("Parsed:", parsed);
     return validateParsedCommand(parsed, userInput, inputType);
   } catch (error) {
