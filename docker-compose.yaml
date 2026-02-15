@@ -11,6 +11,8 @@ services:
     env_file:
       - ./frontend/.env
     restart: unless-stopped
+    networks:
+      - swapsmith-net
   
   bot:
     build:
@@ -26,6 +28,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - swapsmith-net
 
   db:
     image: postgres:15
@@ -43,7 +47,13 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - swapsmith-net
 
 
 volumes:
   postgres_data:
+
+networks:
+  swapsmith-net:
+    driver: bridge
