@@ -39,6 +39,7 @@ import { useAuth } from '@/hooks/useAuth'
 import Navbar from '@/components/Navbar'
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
+import type { EmailNotificationPrefs } from '@/types/profile';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -47,22 +48,6 @@ interface Preferences {
   soundEnabled: boolean
   autoConfirmSwaps: boolean
   currency: string
-}
-
-interface EmailNotificationPrefs {
-  enabled: boolean
-  walletReminders: boolean
-  priceAlerts: boolean
-  generalUpdates: boolean
-  frequency: 'daily' | 'weekly'
-}
-
-interface EmailNotificationPrefs {
-  enabled: boolean
-  walletReminders: boolean
-  priceAlerts: boolean
-  generalUpdates: boolean
-  frequency: 'daily' | 'weekly'
 }
 
 // ---------------------------------------------------------------------------
