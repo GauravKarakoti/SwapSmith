@@ -110,7 +110,12 @@ RESPONSE FORMAT:
   "confidence": number,
   "validationErrors": string[],
   "parsedMessage": "Human readable summary",
-  "requiresConfirmation": boolean
+  "requiresConfirmation": boolean,
+
+  // Fill for 'swap_and_stake'
+  "stakeAsset": string | null,
+  "stakeProtocol": string | null,
+  "stakeChain": string | null
 }
 `;
 
