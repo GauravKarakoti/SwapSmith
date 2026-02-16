@@ -262,7 +262,7 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
         // Simplified: assume user wants to deposit to the top yield pool for their fromAsset
         const { getTopYieldPools } = await import('./services/yield-client');
         const pools = await getTopYieldPools();
-        const matchingPool = pools.find(p => p.symbol === parsed.fromAsset?.toUpperCase());
+        const matchingPool = pools.find((p: any) => p.symbol === parsed.fromAsset?.toUpperCase());
 
         if (!matchingPool) {
             return ctx.reply(`Sorry, no suitable yield pool found for ${parsed.fromAsset}. Try /yield to see options.`);
