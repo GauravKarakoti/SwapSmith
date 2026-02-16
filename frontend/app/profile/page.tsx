@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 import { useAccount, useDisconnect } from 'wagmi'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -30,11 +29,12 @@ import {
   EyeOff,
   History,
   ArrowUpRight,
-  ArrowDownLeft,
   Clock,
   Calendar,
   TrendingUp,
+  Download,
 } from 'lucide-react'
+import Image  from 'next/image'
 import { useAuth } from '@/hooks/useAuth'
 import Navbar from '@/components/Navbar'
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth'
@@ -44,6 +44,24 @@ import type { EmailNotificationPrefs } from '@/types/profile';
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+interface SwapHistoryItem {
+  id: string;
+  userId: string;
+  walletAddress?: string;
+  depositCoin?: string;
+  settleCoin?: string;
+  depositAmount?: string;
+  settleAmount?: string;
+  status?: string;
+  createdAt: string;
+  fromAsset: string;
+  toAsset: string;
+  fromAmount: string;
+  fromNetwork?: string;
+  toNetwork?: string;
+  sideshiftOrderId?: string;
+}
+
 interface Preferences {
   soundEnabled: boolean
   autoConfirmSwaps: boolean
@@ -205,7 +223,8 @@ export default function ProfilePage() {
     }
   })
 
-  const [copied, setCopied] = useState(false)
+  const [copiedEmail, setCopiedEmail] = useState(false)
+  const [copiedAddress, setCopiedAddress] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [showPasswordChange, setShowPasswordChange] = useState(false)
   const [passwordData, setPasswordData] = useState({
@@ -241,13 +260,15 @@ export default function ProfilePage() {
     }
   })
 
-  // Mock wallet history (replace with real data)
-  const [walletHistory] = useState([
-    { id: 1, type: 'swap', from: 'ETH', to: 'USDC', amount: '0.5', date: '2 hours ago', status: 'completed' },
-    { id: 2, type: 'swap', from: 'BTC', to: 'ETH', amount: '0.02', date: 'Yesterday', status: 'completed' },
-    { id: 3, type: 'payment', from: '', to: '', amount: '100 USDC', date: '2 days ago', status: 'completed' },
-    { id: 4, type: 'swap', from: 'USDT', to: 'DAI', amount: '500', date: '1 week ago', status: 'completed' },
-  ])
+  // Real wallet history from database
+  const [walletHistory, setWalletHistory] = useState<SwapHistoryItem[]>([])
+  const [loadingHistory, setLoadingHistory] = useState(true)
+  const [portfolioStats, setPortfolioStats] = useState({
+    totalSwaps: 0,
+    totalVolume: 0,
+    successRate: 100,
+    favoriteAsset: 'N/A'
+  })
 
   // Protect route
   useEffect(() => {
@@ -269,44 +290,147 @@ export default function ProfilePage() {
     localStorage.setItem('swapsmith_preferences', JSON.stringify(preferences))
   }, [preferences])
 
-  // Save email notification preferences on change
+  const calculatePortfolioStats = (history: SwapHistoryItem[]) => {
+    if (!history || history.length === 0) {
+      return { totalSwaps: 0, totalVolume: 0, successRate: 100, favoriteAsset: 'N/A' }
+    }
+
+    const totalSwaps = history.length
+    const completedSwaps = history.filter(h => h.status === 'settled' || h.status === 'completed').length
+    const successRate = totalSwaps > 0 ? Math.round((completedSwaps / totalSwaps) * 100) : 100
+
+    // Calculate total volume in USD (simplified)
+    const totalVolume = history.reduce((sum, h) => sum + (parseFloat(h.fromAmount) || 0), 0)
+
+    // Find most used asset
+    const assetCount: Record<string, number> = {}
+    history.forEach(h => {
+      assetCount[h.fromAsset] = (assetCount[h.fromAsset] || 0) + 1
+      assetCount[h.toAsset] = (assetCount[h.toAsset] || 0) + 1
+    })
+    const favoriteAsset = Object.keys(assetCount).length > 0
+      ? Object.entries(assetCount).sort((a, b) => b[1] - a[1])[0][0]
+      : 'N/A'
+
+    return { totalSwaps, totalVolume, successRate, favoriteAsset }
+  }
+
+  const formatDate = (dateString: string | Date) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+
+    if (diffMins < 60) return `${diffMins} min${diffMins !== 1 ? 's' : ''} ago`
+    if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`
+    if (diffDays === 1) return 'Yesterday'
+    if (diffDays < 7) return `${diffDays} days ago`
+    return date.toLocaleDateString()
+  }
+
+  const exportTransactionHistory = () => {
+    if (walletHistory.length === 0) {
+      alert('No transaction history to export')
+      return
+    }
+
+    const csvContent = [
+      ['Date', 'From Asset', 'From Network', 'From Amount', 'To Asset', 'To Network', 'Settle Amount', 'Status', 'Order ID'].join(','),
+      ...walletHistory.map(h => [
+        new Date(h.createdAt).toISOString(),
+        h.fromAsset,
+        h.fromNetwork,
+        h.fromAmount,
+        h.toAsset,
+        h.toNetwork,
+        h.settleAmount,
+        h.status,
+        h.sideshiftOrderId
+      ].join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `swapsmith-history-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    window.URL.revokeObjectURL(url)
+  }
+
+  // Load swap history from database
   useEffect(() => {
-    localStorage.setItem('swapsmith_email_notifications', JSON.stringify(emailNotificationPrefs))
-    
-    // Schedule/unschedule notifications based on preferences
-    if (emailNotificationPrefs.enabled && user?.uid && user?.email) {
-      // Schedule notifications
-      if (emailNotificationPrefs.walletReminders) {
-        fetch('/api/schedule-notification', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'schedule',
-            userId: user.uid,
-            userEmail: user.email,
-            userName: user.email.split('@')[0],
-            type: 'wallet',
-            frequency: emailNotificationPrefs.frequency
-          })
-        }).catch(err => console.error('Failed to schedule wallet reminder:', err))
-      }
+    if (user?.uid) {
+      setLoadingHistory(true)
+      fetch(`/api/swap-history?userId=${user.uid}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.history) {
+            setWalletHistory(data.history)
+            // Calculate portfolio stats
+            const stats = calculatePortfolioStats(data.history)
+            setPortfolioStats(stats)
+          }
+        })
+        .catch(err => console.error('Failed to load swap history:', err))
+        .finally(() => setLoadingHistory(false))
+    }
+  }, [user])
+
+  // Save preferences and email notifications to database
+  useEffect(() => {
+    if (user?.uid) {
+      localStorage.setItem('swapsmith_preferences', JSON.stringify(preferences))
+      localStorage.setItem('swapsmith_email_notifications', JSON.stringify(emailNotificationPrefs))
       
-      if (emailNotificationPrefs.priceAlerts) {
-        fetch('/api/schedule-notification', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'schedule',
-            userId: user.uid,
-            userEmail: user.email,
-            userName: user.email.split('@')[0],
-            type: 'price',
-            frequency: emailNotificationPrefs.frequency
-          })
-        }).catch(err => console.error('Failed to schedule price alert:', err))
+      // Sync to database
+      fetch('/api/user/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.uid,
+          walletAddress: address,
+          preferences: JSON.stringify(preferences),
+          emailNotifications: JSON.stringify(emailNotificationPrefs)
+        })
+      }).catch(err => console.error('Failed to sync settings:', err))
+      
+      // Schedule/unschedule notifications based on preferences
+      if (emailNotificationPrefs.enabled && user?.email) {
+        if (emailNotificationPrefs.walletReminders) {
+          fetch('/api/schedule-notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'schedule',
+              userId: user.uid,
+              userEmail: user.email,
+              userName: user.email.split('@')[0],
+              type: 'wallet',
+              frequency: emailNotificationPrefs.frequency
+            })
+          }).catch(err => console.error('Failed to schedule wallet reminder:', err))
+        }
+        
+        if (emailNotificationPrefs.priceAlerts) {
+          fetch('/api/schedule-notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'schedule',
+              userId: user.uid,
+              userEmail: user.email,
+              userName: user.email.split('@')[0],
+              type: 'price',
+              frequency: emailNotificationPrefs.frequency
+            })
+          }).catch(err => console.error('Failed to schedule price alert:', err))
+        }
       }
     }
-  }, [emailNotificationPrefs, user])
+  }, [preferences, emailNotificationPrefs, user, address])
 
   // Send welcome email when wallet is connected
   useEffect(() => {
@@ -351,16 +475,16 @@ export default function ProfilePage() {
   const copyAddress = () => {
     if (address) {
       navigator.clipboard.writeText(address)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      setCopiedAddress(true)
+      setTimeout(() => setCopiedAddress(false), 2000)
     }
   }
 
   const copyEmail = () => {
     if (user?.email) {
       navigator.clipboard.writeText(user.email)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      setCopiedEmail(true)
+      setTimeout(() => setCopiedEmail(false), 2000)
     }
   }
 
@@ -451,6 +575,11 @@ export default function ProfilePage() {
     }
 
     try {
+      if (!auth) {
+        setPasswordError('Firebase authentication is not configured')
+        return
+      }
+      
       const currentUser = auth.currentUser
       if (!currentUser || !currentUser.email) {
         setPasswordError('User not found')
@@ -476,7 +605,7 @@ export default function ProfilePage() {
     } catch (error) {
       console.error('Password change error:', error)
       const err = error as { code?: string }
-      if (err.code === 'auth/wrong-password') {
+      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
         setPasswordError('Current password is incorrect')
       } else if (err.code === 'auth/weak-password') {
         setPasswordError('New password is too weak')
@@ -585,7 +714,7 @@ export default function ProfilePage() {
                   onClick={copyEmail}
                   className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-blue-400 transition-colors"
                 >
-                  {copied ? (
+                  {copiedEmail ? (
                     <>
                       <Check className="w-3.5 h-3.5 text-emerald-400" />
                       <span className="text-emerald-400">Copied</span>
@@ -737,7 +866,7 @@ export default function ProfilePage() {
                       onClick={copyAddress}
                       className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-blue-400 transition-colors"
                     >
-                      {copied ? (
+                      {copiedAddress ? (
                         <>
                           <Check className="w-3.5 h-3.5 text-emerald-400" />
                           <span className="text-emerald-400">Copied</span>
@@ -784,49 +913,75 @@ export default function ProfilePage() {
           {/* ───────── Wallet History ───────── */}
           <SectionHeader icon={History} label="Recent Activity" />
           <GlowCard className="" delay={0.15}>
-            <div className="p-5 space-y-3">
-              {walletHistory.length > 0 ? (
-                walletHistory.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/30 hover:bg-zinc-800/50 transition-colors"
+            <div className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-white">Transaction History</h3>
+                {walletHistory.length > 0 && (
+                  <button
+                    onClick={exportTransactionHistory}
+                    className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg ${
-                        item.type === 'swap' ? 'bg-blue-500/10' : 'bg-purple-500/10'
-                      }`}>
-                        {item.type === 'swap' ? (
+                    <Download className="w-3 h-3" />
+                    Export CSV
+                  </button>
+                )}
+              </div>
+              
+              {loadingHistory ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-3"></div>
+                  <p className="text-sm text-zinc-500">Loading history...</p>
+                </div>
+              ) : walletHistory.length > 0 ? (
+                <div className="space-y-3">
+                  {walletHistory.slice(0, 5).map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/30 hover:bg-zinc-800/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-blue-500/10">
                           <ArrowUpRight className="w-4 h-4 text-blue-400" />
-                        ) : (
-                          <ArrowDownLeft className="w-4 h-4 text-purple-400" />
-                        )}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-white">
+                            {item.fromAsset} → {item.toAsset}
+                          </p>
+                          <p className="text-xs text-zinc-500 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {formatDate(item.createdAt)}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold text-white">
-                          {item.type === 'swap' 
-                            ? `${item.from} → ${item.to}` 
-                            : `Payment ${item.amount}`
-                          }
-                        </p>
-                        <p className="text-xs text-zinc-500 flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {item.date}
-                        </p>
+                      <div className="text-right">
+                        <p className="text-sm font-mono text-zinc-300">{parseFloat(item.fromAmount).toFixed(4)}</p>
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase ${
+                          item.status === 'settled' || item.status === 'completed' 
+                            ? 'text-emerald-400' 
+                            : item.status === 'pending' 
+                            ? 'text-amber-400' 
+                            : 'text-red-400'
+                        }`}>
+                          <Check className="w-3 h-3" />
+                          {item.status}
+                        </span>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-mono text-zinc-300">{item.amount}</p>
-                      <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-bold uppercase">
-                        <Check className="w-3 h-3" />
-                        {item.status}
-                      </span>
-                    </div>
-                  </div>
-                ))
+                  ))}
+                  {walletHistory.length > 5 && (
+                    <button
+                      onClick={() => router.push('/terminal')}
+                      className="w-full py-2 text-xs text-zinc-400 hover:text-blue-400 transition-colors"
+                    >
+                      View all {walletHistory.length} transactions →
+                    </button>
+                  )}
+                </div>
               ) : (
                 <div className="text-center py-8">
                   <History className="w-12 h-12 text-zinc-700 mx-auto mb-3" />
                   <p className="text-sm text-zinc-500">No recent activity</p>
+                  <p className="text-xs text-zinc-600 mt-1">Your swap history will appear here</p>
                 </div>
               )}
             </div>
@@ -835,6 +990,29 @@ export default function ProfilePage() {
 
             {/* Right Column */}
             <div className="space-y-6">
+          {/* ───────── Portfolio Stats ───────── */}
+          <SectionHeader icon={TrendingUp} label="Portfolio Stats" />
+          <GlowCard className="p-5" delay={0.18}>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-3 rounded-xl bg-zinc-800/30">
+                <p className="text-xs text-zinc-500 mb-1">Total Swaps</p>
+                <p className="text-2xl font-bold text-white">{portfolioStats.totalSwaps}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-zinc-800/30">
+                <p className="text-xs text-zinc-500 mb-1">Success Rate</p>
+                <p className="text-2xl font-bold text-emerald-400">{portfolioStats.successRate}%</p>
+              </div>
+              <div className="p-3 rounded-xl bg-zinc-800/30">
+                <p className="text-xs text-zinc-500 mb-1">Total Volume</p>
+                <p className="text-lg font-bold text-white">${portfolioStats.totalVolume.toFixed(2)}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-zinc-800/30">
+                <p className="text-xs text-zinc-500 mb-1">Top Asset</p>
+                <p className="text-lg font-bold text-blue-400">{portfolioStats.favoriteAsset}</p>
+              </div>
+            </div>
+          </GlowCard>
+
           {/* ───────── Preferences Section ───────── */}
           <SectionHeader icon={Palette} label="Preferences" />
           <GlowCard className="divide-y divide-zinc-800/60" delay={0.2}>
@@ -974,6 +1152,7 @@ export default function ProfilePage() {
           </div>
 
           {/* ───────── Full Width Sections ───────── */}
+          <div className="space-y-6 mt-6">
           {/* ───────── About Section ───────── */}
           <SectionHeader icon={Info} label="About" />
           <GlowCard className="divide-y divide-zinc-800/60" delay={0.25}>
@@ -1085,7 +1264,9 @@ export default function ProfilePage() {
                 </motion.div>
               )}
             </AnimatePresence>
-          </GlowCard>          </div>        </div>
+          </GlowCard>
+          </div>
+          </div>        </div>
       </div>
     </>
   )
