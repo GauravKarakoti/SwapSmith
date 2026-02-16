@@ -3480,12 +3480,43 @@ export default function CourseDetailPage() {
   }, [user?.uid, course])
 
   // Mark topic as complete
-  const markTopicComplete = (topicId: string) => {
+  const markTopicComplete = async (topicId: string) => {
     const updated = new Set(completedTopics)
     updated.add(topicId)
     setCompletedTopics(updated)
-    if (user?.uid) {
+    if (user?.uid && course) {
+      // Save to localStorage
       localStorage.setItem(`learn-progress-${user.uid}`, JSON.stringify([...updated]))
+      
+      // Save to database with Firebase UID
+      localStorage.setItem('firebase-uid', user.uid)
+      
+      try {
+        const { authenticatedFetch } = await import('@/lib/api-client')
+        
+        const response = await authenticatedFetch('/api/rewards/progress', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            courseId: course.id,
+            courseTitle: course.title,
+            moduleId: topicId,
+            totalModules: course.topics.length,
+          }),
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          console.log('Progress saved! Rewards data:', data)
+          
+          // Show a toast notification if you have one
+          if (data.progress) {
+            console.log(`🎉 Module completed! Check /rewards to see your points.`)
+          }
+        }
+      } catch (error) {
+        console.error('Error saving progress to database:', error)
+      }
     }
   }
 
