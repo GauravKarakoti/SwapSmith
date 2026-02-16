@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import { handleError } from './logger';
 import { analyzeCommand, generateContextualHelp } from './contextual-help';
+import { safeParseLLMJson } from "../utils/safe-json";
 
 dotenv.config();
 
