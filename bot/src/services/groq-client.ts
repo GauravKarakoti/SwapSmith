@@ -75,12 +75,13 @@ export interface ParsedCommand {
   originalInput?: string;        
 }
 
+
 const systemPrompt = `
 You are SwapSmith, an advanced DeFi AI agent.
 Your job is to parse natural language into specific JSON commands.
 
 MODES:
-1. "swap": 1 Input -> 1 Output.
+1. "swap": 1 Input -> 1 Output (immediate market swap).
 2. "portfolio": 1 Input -> Multiple Outputs (Split allocation).
 3. "checkout": Payment link creation.
 4. "yield_scout": User asking for high APY/Yield info.
@@ -213,6 +214,7 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     toProject: parsed.toProject || null,
     toYield: parsed.toYield || null,
     confidence: confidence || 0,
+
     validationErrors: allErrors,
     parsedMessage: parsed.parsedMessage || '',
     requiresConfirmation: parsed.requiresConfirmation || false,
