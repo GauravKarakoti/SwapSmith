@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/neon-http';
 import { pgTable, serial, text, real, timestamp, bigint, integer } from 'drizzle-orm/pg-core';
 import { eq, desc, and, sql } from 'drizzle-orm'; // Added 'and', 'sql'
 import dotenv from 'dotenv';
+import { safeParseJSON } from '../utils/safeParse';
 import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
 import type { ParsedCommand } from './groq-client';
 
@@ -145,7 +146,7 @@ export async function getConversationState(telegramId: number) {
     const result = await db.select({ state: conversations.state, lastUpdated: conversations.lastUpdated }).from(conversations).where(eq(conversations.telegramId, telegramId));
     if (!result[0]?.state) return null;
 
-    const state = JSON.parse(result[0].state);
+    const state = safeParseJSON(result[0].state);
     const lastUpdated = result[0].lastUpdated;
 
     if (lastUpdated && (Date.now() - new Date(lastUpdated).getTime()) > 60 * 60 * 1000) {
@@ -395,8 +396,13 @@ export async function updateDCAScheduleExecution(id: number, frequency: string, 
     .where(eq(dcaSchedules.id, id));
 }
 
-export async function deleteDCASchedule(id: number) {
-  await db.delete(dcaSchedules).where(eq(dcaSchedules.id, id));
+export async function deleteDCASchedule(id: number, telegramId: number) {
+  await db.delete(dcaSchedules).where(
+    and(
+      eq(dcaSchedules.id, id),
+      eq(dcaSchedules.telegramId, telegramId)
+    )
+  );
 }
 
 function calculateNextExecution(frequency: string, dayOfWeek?: string, dayOfMonth?: string): Date {
