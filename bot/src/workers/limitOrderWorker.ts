@@ -3,6 +3,8 @@ import axios from 'axios';
 import { eq, and } from 'drizzle-orm';
 import { db, limitOrders, LimitOrder, updateLimitOrderStatus, getUser } from '../services/database';
 import { getCoins, createQuote, createOrder } from '../services/sideshift-client';
+import logger, { handleError } from '../services/logger';
+
 
 const CHECK_INTERVAL_MS = 60 * 1000; // 60 seconds
 
@@ -251,10 +253,17 @@ export class LimitOrderWorker {
          if (this.bot) {
             try {
                 await this.bot.telegram.sendMessage(Number(order.telegramId), `⚠️ Limit Order #${order.id} failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            } catch (e) {}
+            } catch (e) {
+                await handleError('LimitOrderNotificationError', {
+                    error: e instanceof Error ? e.message : 'Unknown error',
+                    stack: e instanceof Error ? e.stack : undefined,
+                    orderId: order.id,
+                    telegramId: order.telegramId,
+                    message: `Failed to send failure notification for order #${order.id}`
+                }, null, true);
+            }
         }
     }
-  }
 }
 
 export const limitOrderWorker = new LimitOrderWorker();
