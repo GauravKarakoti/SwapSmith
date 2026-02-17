@@ -303,3 +303,85 @@ export async function updateLimitOrderStatus(
     .set(updateData)
     .where(eq(limitOrders.id, orderId));
 }
+
+// --- Create DCA Schedule ---
+export async function createDCASchedule(
+  telegramId: number | null,
+  fromAsset: string,
+  fromChain: string,
+  toAsset: string,
+  toChain: string,
+  amount: number,
+  frequency: 'daily' | 'weekly' | 'monthly',
+  settleAddress: string,
+  dayOfWeek?: string,
+  dayOfMonth?: string
+): Promise<DCASchedule> {
+  const now = new Date();
+  let nextExecution = new Date(now);
+
+  // Calculate next execution time
+  if (frequency === 'daily') {
+    nextExecution.setDate(nextExecution.getDate() + 1);
+  } else if (frequency === 'weekly' && dayOfWeek) {
+    const dayMap: { [key: string]: number } = {
+      'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4,
+      'friday': 5, 'saturday': 6, 'sunday': 0
+    };
+    const targetDay = dayMap[dayOfWeek.toLowerCase()];
+    const currentDay = nextExecution.getDay();
+    let daysToAdd = (targetDay - currentDay + 7) % 7;
+    if (daysToAdd === 0) daysToAdd = 7; // If today is the day, schedule for next week
+    nextExecution.setDate(nextExecution.getDate() + daysToAdd);
+  } else if (frequency === 'monthly' && dayOfMonth) {
+    const targetDay = parseInt(dayOfMonth, 10);
+    nextExecution.setMonth(nextExecution.getMonth() + 1);
+    nextExecution.setDate(targetDay);
+  }
+
+  const result = await db.insert(dcaSchedules).values({
+    telegramId: telegramId || 0,
+    fromAsset,
+    fromChain,
+    toAsset,
+    toChain,
+    amount,
+    frequency,
+    dayOfWeek: dayOfWeek || undefined,
+    dayOfMonth: dayOfMonth || undefined,
+    settleAddress,
+    nextExecution,
+  }).returning();
+
+  return result[0] as DCASchedule;
+}
+
+// --- Create Limit Order ---
+export async function createLimitOrder(
+  telegramId: number | null,
+  fromAsset: string,
+  fromChain: string,
+  toAsset: string,
+  toChain: string,
+  amount: number,
+  conditionOperator: 'gt' | 'lt',
+  conditionValue: number,
+  conditionAsset: string,
+  settleAddress?: string
+): Promise<LimitOrder> {
+  const result = await db.insert(limitOrders).values({
+    telegramId: telegramId || 0,
+    fromAsset,
+    fromChain,
+    toAsset,
+    toChain,
+    amount,
+    conditionOperator,
+    conditionValue,
+    conditionAsset,
+    settleAddress: settleAddress || undefined,
+    status: 'pending',
+  }).returning();
+
+  return result[0] as LimitOrder;
+}
