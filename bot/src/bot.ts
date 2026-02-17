@@ -342,6 +342,15 @@ async function handleTextMessage(
 
   // 4. Handle Specific Intents
 
+  // --- Safety Check for Conditional Swaps ---
+  if (parsed.conditions) {
+    return ctx.reply(
+      `⚠️ Conditional swap detected.\n\n` +
+      `Swap will execute when ${parsed.toAsset || 'target asset'} price is ${parsed.conditions.type === "price_above" ? "above" : "below"} ${parsed.conditions.value}.\n\n` +
+      `This conditional execution is not automated yet.`
+    );
+  }
+
   // --- Limit Order ---
   if (parsed.intent === 'swap' && (parsed.conditionOperator && parsed.conditionValue)) {
       const user = await db.getUser(userId);
