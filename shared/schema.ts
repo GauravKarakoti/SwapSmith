@@ -1,5 +1,5 @@
-import { pgTable, serial, text, bigint, timestamp, integer, real, unique, pgEnum, uuid, boolean, numeric, jsonb } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
+import { pgTable, serial, text, bigint, timestamp, integer, real, unique, pgEnum, uuid, boolean, numeric, jsonb, index } from 'drizzle-orm/pg-core';
+import { relations, sql } from 'drizzle-orm';
 
 // --- ENUMS ---
 export const rewardActionType = pgEnum('reward_action_type', [
@@ -188,7 +188,11 @@ export const discussions = pgTable('discussions', {
   replies: text('replies').default('0'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at'),
-});
+}, (table) => [
+	index("idx_discussions_category").on(table.category),
+	index("idx_discussions_created_at").on(table.createdAt),
+	index("idx_discussions_user_id").on(table.userId),
+]);
 
 // --- REWARDS SCHEMAS ---
 
@@ -223,3 +227,24 @@ export const rewardsLog = pgTable('rewards_log', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
+
+// --- RELATIONS ---
+
+export const courseProgressRelations = relations(courseProgress, ({one}) => ({
+	user: one(users, {
+		fields: [courseProgress.userId],
+		references: [users.id]
+	}),
+}));
+
+export const usersRelations = relations(users, ({many}) => ({
+	courseProgresses: many(courseProgress),
+	rewardsLogs: many(rewardsLog),
+}));
+
+export const rewardsLogRelations = relations(rewardsLog, ({one}) => ({
+	user: one(users, {
+		fields: [rewardsLog.userId],
+		references: [users.id]
+	}),
+}));

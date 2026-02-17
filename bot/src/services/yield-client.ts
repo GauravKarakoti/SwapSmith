@@ -7,6 +7,8 @@ import {
   updateStakeOrderStakeStatus,
   type StakeOrder 
 } from './database';
+import logger from './logger';
+
 
 export async function getTopStablecoinYields(): Promise<string> {
   try {
@@ -20,7 +22,7 @@ export async function getTopStablecoinYields(): Promise<string> {
         ['USDC', 'USDT', 'DAI'].includes(p.symbol) &&
         p.tvlUsd > 1000000 &&
 export interface StakingQuote {
-  pool: StakingPool;
+  pool: YieldPool;
   stakeAmount: string;
   estimatedReward: string;
   lockPeriod?: string;
@@ -28,6 +30,16 @@ export interface StakingQuote {
     to: string;
     value: string;
     data: string;
+  }
+}
+
+export async function getTopYieldPools(): Promise<YieldPool[]> {
+  try {
+    // Fetch data from yield aggregator (likely DefiLlama based on variable names)
+    const response = await axios.get('https://yields.llama.fi/pools');
+    const data = response.data.data;
+
+    const topPools = data.filter((p: any) => 
         ['USDC', 'USDT', 'DAI'].includes(p.symbol) && 
         ['Ethereum', 'Polygon', 'Arbitrum', 'Optimism', 'Base', 'Avalanche'].includes(p.chain)
       )
@@ -41,7 +53,7 @@ export interface StakingQuote {
     ).join('\n');
 
   } catch (error) {
-    console.error("Yield fetch error, using fallback data:", error);
+    logger.error("Yield fetch error, using fallback data:", error);
     // Fallback Mock Data for demo reliability
     return `• *USDC on Base* via Aave: *12.4% APY*\n` +
       `• *USDT on Arbitrum* via Radiant: *8.2% APY*\n` +

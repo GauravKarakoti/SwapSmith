@@ -1,12 +1,266 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { eq, desc, notInArray, and, sql } from 'drizzle-orm';
+import { eq, desc, notInArray, and, sql, relations } from 'drizzle-orm';
+import { pgTable, serial, text, bigint, timestamp, integer, real, unique, pgEnum, uuid, boolean, numeric, jsonb, index } from 'drizzle-orm/pg-core';
 import dotenv from 'dotenv';
+import { safeParseJSON } from '../utils/safeParse';
 import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
-import type { ParsedCommand } from './groq-client';
+import type { ParsedCommand } from './parseUserCommand';
+import logger from './logger';
 
-// Import all table schemas from shared schema file
-import {
+dotenv.config();
+
+// --- SCHEMA DEFINITIONS (Inlined from shared/schema to fix type incompatibility) ---
+
+// --- ENUMS ---
+export const rewardActionType = pgEnum('reward_action_type', [
+  'course_complete',
+  'module_complete',
+  'daily_login',
+  'swap_complete',
+  'referral'
+]);
+
+export const mintStatusType = pgEnum('mint_status_type', [
+  'pending',
+  'processing',
+  'minted',
+  'failed'
+]);
+
+// --- BOT SCHEMAS ---
+
+export const users = pgTable('users', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).unique(),
+  firebaseUid: text('firebase_uid').unique(),
+  walletAddress: text('wallet_address').unique(),
+  sessionTopic: text('session_topic'),
+  totalPoints: integer('total_points').notNull().default(0),
+  totalTokensClaimed: numeric('total_tokens_claimed', { precision: 20, scale: 8 }).notNull().default('0'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const conversations = pgTable('conversations', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull().unique(),
+  state: text('state'),
+  lastUpdated: timestamp('last_updated'),
+});
+
+export const orders = pgTable('orders', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
+  sideshiftOrderId: text('sideshift_order_id').notNull().unique(),
+  quoteId: text('quote_id'),
+  fromAsset: text('from_asset').notNull(),
+  fromNetwork: text('from_network').notNull(),
+  fromAmount: text('from_amount').notNull(),
+  toAsset: text('to_asset').notNull(),
+  toNetwork: text('to_network').notNull(),
+  settleAmount: text('settle_amount').notNull(),
+  depositAddress: text('deposit_address').notNull(),
+  depositMemo: text('deposit_memo'),
+  status: text('status').notNull().default('pending'),
+  tx_hash: text('tx_hash'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const checkouts = pgTable('checkouts', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
+  checkoutId: text('checkout_id').notNull().unique(),
+  settleAsset: text('settle_asset').notNull(),
+  settleNetwork: text('settle_network').notNull(),
+  settleAmount: real('settle_amount').notNull(),
+  settleAddress: text('settle_address').notNull(),
+  status: text('status').notNull().default('pending'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const addressBook = pgTable('address_book', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
+  label: text('label').notNull(),
+  address: text('address').notNull(),
+  chain: text('chain').notNull(),
+});
+
+export const watchedOrders = pgTable('watched_orders', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
+  sideshiftOrderId: text('sideshift_order_id').notNull().unique(),
+  lastStatus: text('last_status').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const dcaSchedules = pgTable('dca_schedules', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
+  fromAsset: text('from_asset').notNull(),
+  fromNetwork: text('from_network').notNull(),
+  toAsset: text('to_asset').notNull(),
+  toNetwork: text('to_network').notNull(),
+  amountPerOrder: text('amount_per_order').notNull(),
+  intervalHours: integer('interval_hours').notNull(),
+  totalOrders: integer('total_orders').notNull(),
+  ordersExecuted: integer('orders_executed').notNull().default(0),
+  isActive: integer('is_active').notNull().default(1),
+  nextExecutionAt: timestamp('next_execution_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const limitOrders = pgTable('limit_orders', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
+  fromAsset: text('from_asset').notNull(),
+  fromNetwork: text('from_network').notNull(),
+  toAsset: text('to_asset').notNull(),
+  toNetwork: text('to_network').notNull(),
+  fromAmount: text('from_amount').notNull(),
+  targetPrice: text('target_price').notNull(),
+  currentPrice: text('current_price'),
+  isActive: integer('is_active').notNull().default(1),
+  createdAt: timestamp('created_at').defaultNow(),
+  lastCheckedAt: timestamp('last_checked_at'),
+});
+
+// --- SHARED SCHEMAS (used by both bot and frontend) ---
+
+export const coinPriceCache = pgTable('coin_price_cache', {
+  id: serial('id').primaryKey(),
+  coin: text('coin').notNull(),
+  network: text('network').notNull(),
+  name: text('name').notNull(),
+  usdPrice: text('usd_price'),
+  btcPrice: text('btc_price'),
+  available: text('available').notNull().default('true'),
+  expiresAt: timestamp('expires_at').notNull(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => [
+  unique().on(table.coin, table.network),
+]);
+
+export const userSettings = pgTable('user_settings', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull().unique(),
+  walletAddress: text('wallet_address'),
+  theme: text('theme'),
+  slippageTolerance: real('slippage_tolerance'),
+  notificationsEnabled: text('notifications_enabled'),
+  preferences: text('preferences'),
+  emailNotifications: text('email_notifications'),
+  telegramNotifications: text('telegram_notifications'),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// --- FRONTEND SCHEMAS ---
+
+export const swapHistory = pgTable('swap_history', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  walletAddress: text('wallet_address'),
+  sideshiftOrderId: text('sideshift_order_id').notNull().unique(),
+  quoteId: text('quote_id'),
+  fromAsset: text('from_asset').notNull(),
+  fromNetwork: text('from_network').notNull(),
+  fromAmount: real('from_amount').notNull(),
+  toAsset: text('to_asset').notNull(),
+  toNetwork: text('to_network').notNull(),
+  settleAmount: text('settle_amount').notNull(),
+  depositAddress: text('deposit_address'),
+  status: text('status').notNull().default('pending'),
+  txHash: text('tx_hash'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at'),
+});
+
+export const chatHistory = pgTable('chat_history', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  walletAddress: text('wallet_address'),
+  role: text('role').notNull(),
+  content: text('content').notNull(),
+  metadata: text('metadata'),
+  sessionId: text('session_id'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const discussions = pgTable('discussions', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  username: text('username').notNull(),
+  content: text('content').notNull(),
+  category: text('category').default('general'),
+  likes: text('likes').default('0'),
+  replies: text('replies').default('0'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at'),
+}, (table) => [
+	index("idx_discussions_category").on(table.category),
+	index("idx_discussions_created_at").on(table.createdAt),
+	index("idx_discussions_user_id").on(table.userId),
+]);
+
+// --- REWARDS SCHEMAS ---
+
+export const courseProgress = pgTable('course_progress', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  courseId: text('course_id').notNull(),
+  courseTitle: text('course_title').notNull(),
+  completedModules: text('completed_modules').array().notNull().default(sql`ARRAY[]::text[]`),
+  totalModules: integer('total_modules').notNull(),
+  isCompleted: boolean('is_completed').notNull().default(false),
+  completionDate: timestamp('completion_date'),
+  lastAccessed: timestamp('last_accessed').notNull().defaultNow(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (table) => ({
+  userCourseUnique: unique('course_progress_user_course_unique').on(table.userId, table.courseId),
+}));
+
+export const rewardsLog = pgTable('rewards_log', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  actionType: rewardActionType('action_type').notNull(),
+  actionMetadata: jsonb('action_metadata'),
+  pointsEarned: integer('points_earned').notNull().default(0),
+  tokensPending: numeric('tokens_pending', { precision: 20, scale: 8 }).notNull().default('0'),
+  mintStatus: mintStatusType('mint_status').notNull().default('pending'),
+  txHash: text('tx_hash'),
+  blockchainNetwork: text('blockchain_network'),
+  errorMessage: text('error_message'),
+  claimedAt: timestamp('claimed_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+// --- RELATIONS ---
+
+export const courseProgressRelations = relations(courseProgress, ({one}) => ({
+	user: one(users, {
+		fields: [courseProgress.userId],
+		references: [users.id]
+	}),
+}));
+
+export const usersRelations = relations(users, ({many}) => ({
+	courseProgresses: many(courseProgress),
+	rewardsLogs: many(rewardsLog),
+}));
+
+export const rewardsLogRelations = relations(rewardsLog, ({one}) => ({
+	user: one(users, {
+		fields: [rewardsLog.userId],
+		references: [users.id]
+	}),
+}));
+
+const schema = {
   users,
   conversations,
   orders,
@@ -21,34 +275,20 @@ import {
   limitOrders,
   courseProgress,
   rewardsLog,
-} from '../../../shared/schema';
+  courseProgressRelations,
+  usersRelations,
+  rewardsLogRelations
+};
 
-dotenv.config();
+// --- END INLINED SCHEMA ---
 
 // In-memory fallback for development or connection issues
 const memoryState = new Map<number, any>();
 
 const connectionString = process.env.DATABASE_URL || 'postgres://mock:mock@localhost:5432/mock';
 const client = neon(connectionString);
-export const db = drizzle(client);
-
-// Re-export schemas for backward compatibility
-export {
-  users,
-  conversations,
-  orders,
-  checkouts,
-  addressBook,
-  watchedOrders,
-  coinPriceCache,
-  userSettings,
-  swapHistory,
-  chatHistory,
-  dcaSchedules,
-  limitOrders,
-  courseProgress,
-  rewardsLog,
-};
+// Initialize drizzle with schema to fix type inference issues
+export const db = drizzle(client, { schema });
 
 // Type exports for backward compatibility
 export type User = typeof users.$inferSelect;
@@ -65,6 +305,29 @@ export type LimitOrder = typeof limitOrders.$inferSelect;
 export type CourseProgress = typeof courseProgress.$inferSelect;
 export type RewardsLog = typeof rewardsLog.$inferSelect;
 
+// --- UNIFIED ORDER TYPES ---
+
+export interface DelayedOrder {
+  id: number;
+  telegramId: number;
+  orderType: 'limit_order' | 'dca';
+  fromAsset: string;
+  fromChain: string;
+  toAsset: string;
+  toChain: string;
+  amount: number;
+  settleAddress: string | null;
+  // Limit specific
+  targetPrice?: number;
+  condition?: 'above' | 'below';
+  expiryDate?: Date;
+  // DCA specific
+  frequency?: string;
+  maxExecutions?: number;
+  executionCount?: number;
+  nextExecutionAt?: Date;
+}
+
 // --- FUNCTIONS ---
 
 // NEW: Address Book Resolution
@@ -80,9 +343,10 @@ export async function resolveNickname(telegramId: number, nickname: string): Pro
       
     return result[0]?.address || null;
   } catch (error) {
-    console.error('Error resolving nickname:', error);
+    logger.error('Error resolving nickname:', error);
     return null;
   }
+
 }
 
 export async function getUser(telegramId: number): Promise<User | undefined> {
@@ -107,7 +371,7 @@ export async function getConversationState(telegramId: number) {
     
     if (!result[0]?.state) return null;
 
-    const state = JSON.parse(result[0].state);
+    const state = safeParseJSON(result[0].state);
     const lastUpdated = result[0].lastUpdated;
 
     // Expire state after 1 hour
@@ -163,7 +427,8 @@ export async function createOrderEntry(
     toNetwork: parsedCommand.toChain!,
     settleAmount: settleAmount.toString(),
     depositAddress: depositAddr!,
-    depositMemo: depositMemo || null
+    depositMemo: depositMemo || null,
+    status: 'pending'
   });
 }
 
@@ -199,6 +464,7 @@ export async function createCheckoutEntry(telegramId: number, checkout: SideShif
     settleNetwork: checkout.settleNetwork,
     settleAmount: amount,
     settleAddress: checkout.settleAddress,
+    status: 'pending'
   });
 }
 
@@ -245,9 +511,10 @@ export async function getActiveDCASchedules(): Promise<DCASchedule[]> {
     try {
         return await db.select().from(dcaSchedules).where(eq(dcaSchedules.isActive, 1));
     } catch (error) {
-        console.error("Failed to get active DCA schedules", error);
+        logger.error("Failed to get active DCA schedules", error);
         return [];
     }
+
 }
 
 /**
@@ -268,11 +535,8 @@ export async function updateDCAScheduleExecution(
     nextExecution.setDate(nextExecution.getDate() + 1);
   } else if (frequency === 'weekly') {
     nextExecution.setDate(nextExecution.getDate() + 7);
-    // Logic to align with dayOfWeek could be more robust here, 
-    // but assuming simple +7 days for now if already aligned.
   } else if (frequency === 'monthly') {
     nextExecution.setMonth(nextExecution.getMonth() + 1);
-    // Logic to align with dayOfMonth
   }
 
   await db.update(dcaSchedules)
@@ -283,19 +547,157 @@ export async function updateDCAScheduleExecution(
     .where(eq(dcaSchedules.id, id));
 }
 
-// --- NEW: Limit Order Update ---
-export async function updateLimitOrderStatus(
-  orderId: number, 
-  isActive: number,
-  currentPrice?: string
-) {
-  const updateData: Partial<LimitOrder> = {
-    isActive,
-    ...(currentPrice && { currentPrice }),
-    lastCheckedAt: new Date(),
-  };
+// --- NEW: Limit Order & Delayed Order Management ---
 
-  await db.update(limitOrders)
-    .set(updateData)
-    .where(eq(limitOrders.id, orderId));
+export async function createDelayedOrder(data: Partial<DelayedOrder>) {
+    if (data.orderType === 'limit_order') {
+        await db.insert(limitOrders).values({
+            telegramId: data.telegramId!,
+            fromAsset: data.fromAsset!,
+            fromNetwork: data.fromChain!,
+            toAsset: data.toAsset!,
+            toNetwork: data.toChain!,
+            fromAmount: data.amount!.toString(),
+            targetPrice: data.targetPrice!.toString(),
+            currentPrice: null,
+            isActive: 1,
+            lastCheckedAt: new Date(),
+        });
+    } else if (data.orderType === 'dca') {
+        // Approximate interval hours from frequency string
+        let intervalHours = 24;
+        if(data.frequency === 'weekly') intervalHours = 168;
+        if(data.frequency === 'monthly') intervalHours = 720;
+        
+        await db.insert(dcaSchedules).values({
+            telegramId: data.telegramId!,
+            fromAsset: data.fromAsset!,
+            fromNetwork: data.fromChain!,
+            toAsset: data.toAsset!,
+            toNetwork: data.toChain!,
+            amountPerOrder: data.amount!.toString(),
+            intervalHours: intervalHours,
+            totalOrders: data.maxExecutions || 10,
+            ordersExecuted: 0,
+            isActive: 1,
+            nextExecutionAt: data.nextExecutionAt || new Date()
+        });
+    }
+}
+
+export async function getPendingDelayedOrders(): Promise<DelayedOrder[]> {
+  const allOrders: DelayedOrder[] = [];
+
+  // Fetch Limit Orders
+  const pendingLimits = await db.select({
+      id: limitOrders.id,
+      telegramId: limitOrders.telegramId,
+      fromAsset: limitOrders.fromAsset,
+      fromChain: limitOrders.fromNetwork,
+      toAsset: limitOrders.toAsset,
+      toChain: limitOrders.toNetwork,
+      amount: limitOrders.fromAmount,
+      targetPrice: limitOrders.targetPrice,
+      walletAddress: users.walletAddress
+  })
+  .from(limitOrders)
+  .leftJoin(users, eq(limitOrders.telegramId, users.telegramId))
+  .where(eq(limitOrders.isActive, 1));
+
+  pendingLimits.forEach(o => {
+      allOrders.push({
+          id: o.id,
+          telegramId: o.telegramId,
+          orderType: 'limit_order',
+          fromAsset: o.fromAsset,
+          fromChain: o.fromChain,
+          toAsset: o.toAsset,
+          toChain: o.toChain,
+          amount: parseFloat(o.amount),
+          settleAddress: o.walletAddress,
+          targetPrice: parseFloat(o.targetPrice),
+          condition: 'below', // Defaulting as schema is missing this field
+      });
+  });
+
+  // Fetch DCA Orders
+  const pendingDCA = await db.select({
+      id: dcaSchedules.id,
+      telegramId: dcaSchedules.telegramId,
+      fromAsset: dcaSchedules.fromAsset,
+      fromChain: dcaSchedules.fromNetwork,
+      toAsset: dcaSchedules.toAsset,
+      toChain: dcaSchedules.toNetwork,
+      amountPerOrder: dcaSchedules.amountPerOrder,
+      intervalHours: dcaSchedules.intervalHours,
+      totalOrders: dcaSchedules.totalOrders,
+      ordersExecuted: dcaSchedules.ordersExecuted,
+      nextExecutionAt: dcaSchedules.nextExecutionAt,
+      walletAddress: users.walletAddress
+  })
+  .from(dcaSchedules)
+  .leftJoin(users, eq(dcaSchedules.telegramId, users.telegramId))
+  .where(eq(dcaSchedules.isActive, 1));
+
+  pendingDCA.forEach(o => {
+    // Map interval back to string frequency for compatibility
+    let frequency = 'daily';
+    if (o.intervalHours >= 168) frequency = 'weekly';
+    if (o.intervalHours >= 720) frequency = 'monthly';
+
+    allOrders.push({
+        id: o.id,
+        telegramId: o.telegramId,
+        orderType: 'dca',
+        fromAsset: o.fromAsset,
+        fromChain: o.fromChain,
+        toAsset: o.toAsset,
+        toChain: o.toChain,
+        amount: parseFloat(o.amountPerOrder),
+        settleAddress: o.walletAddress,
+        frequency,
+        maxExecutions: o.totalOrders,
+        executionCount: o.ordersExecuted,
+        nextExecutionAt: o.nextExecutionAt
+    });
+  });
+
+  return allOrders;
+}
+
+export async function updateDelayedOrderStatus(
+  orderId: number, 
+  status: 'active' | 'completed' | 'pending' | 'expired',
+  executionCount?: number,
+  nextExecutionAt?: Date
+) {
+  // Try updating Limit Orders
+  if (status === 'completed' || status === 'expired') {
+      await db.update(limitOrders)
+        .set({ isActive: 0 })
+        .where(eq(limitOrders.id, orderId));
+  }
+
+  // Try updating DCA Schedules
+  if (status === 'completed') {
+    await db.update(dcaSchedules)
+        .set({ isActive: 0 })
+        .where(eq(dcaSchedules.id, orderId));
+  } else if (executionCount !== undefined && nextExecutionAt) {
+      // Update execution progress
+      await db.update(dcaSchedules)
+        .set({ 
+            ordersExecuted: executionCount,
+            nextExecutionAt: nextExecutionAt
+        })
+        .where(eq(dcaSchedules.id, orderId));
+  }
+}
+
+export async function cancelDelayedOrder(id: number, type: 'limit_order' | 'dca') {
+    if (type === 'limit_order') {
+        await db.update(limitOrders).set({ isActive: 0 }).where(eq(limitOrders.id, id));
+    } else {
+        await db.update(dcaSchedules).set({ isActive: 0 }).where(eq(dcaSchedules.id, id));
+    }
 }

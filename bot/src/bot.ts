@@ -5,11 +5,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import axios from 'axios';
-import { exec, execSync } from 'child_process';
+import { exec } from 'child_process';
 import express from 'express';
 
 // Services
 import { transcribeAudio } from './services/groq-client';
+import logger from './services/logger';
+
 import {
     createQuote,
     createOrder,
@@ -22,15 +24,13 @@ import {
 } from './services/yield-client';
 import * as db from './services/database';
 import { OrderMonitor } from './services/order-monitor';
-import { tokenResolver } from './services/token-resolver'; // Kept if needed by other logic, though not explicitly used below
-import { chainIdMap } from './config/chains';
 import { parseUserCommand } from './services/parseUserCommand';
 
 dotenv.config();
 
 // --- Configuration ---
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const MINI_APP_URL = process.env.MINI_APP_URL || 'https://swap-smith.vercel.app/';
+const MINI_APP_URL = process.env.MINI_APP_URL || 'https://swapsmithminiapp.netlify.app/';
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 
 if (!BOT_TOKEN) {
@@ -109,8 +109,9 @@ const orderMonitor = new OrderMonitor({
         try {
             await bot.telegram.sendMessage(telegramId, msg, { parse_mode: 'Markdown' });
         } catch (e) {
-            console.error('Order update notify failed:', e);
+            logger.error('Order update notify failed:', e);
         }
+
     }
 });
 
@@ -135,16 +136,9 @@ bot.start((ctx) => {
                 Markup.button.url('🌐 Visit Website', MINI_APP_URL)
             ])
         }
-        message += `  *Created:* ${new Date(stakeOrder.createdAt as Date).toLocaleString()}\n`;
-
-        ctx.replyWithMarkdown(message);
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-        ctx.reply(`Sorry, couldn't get status. Error: ${errorMessage}`);
-    }
+    );
 });
 
-bot.command('website', (ctx) =>
 bot.command('website', (ctx) => {
     ctx.reply(
         "🌐 *SwapSmith Web Interface*\n\nClick the button below to access the full graphical interface.",
@@ -466,12 +460,12 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🌍 Server running on port ${PORT}`));
 
 (async () => {
-    try {
-        await checkFFmpeg();
-        console.log('✅ ffmpeg is installed. Voice messages enabled.');
-    } catch {
-        console.error('❌ ffmpeg not found. Voice messages may fail.');
-    }
+<<<<<<< HEAD
+    await orderMonitor.loadPendingOrders();
+    orderMonitor.start();
+    bot.launch();
+    logger.info('🤖 Bot running');
+})();
 
     try {
         await orderMonitor.loadPendingOrders();
@@ -486,5 +480,6 @@ app.listen(PORT, () => console.log(`🌍 Server running on port ${PORT}`));
 })();
 
 // Enable graceful stop
+>>>>>>> a749ce1b103c9e60d0c27197a77e87f67d905a9c
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
