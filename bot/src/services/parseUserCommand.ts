@@ -15,7 +15,7 @@ const REGEX_FROM_TO = /from\s+([A-Z]+)\s+to\s+([A-Z]+)/i; // "from ETH to BTC"
 const REGEX_AMOUNT_TOKEN = /\b(\d+(\.\d+)?)\s+(?!to|into|for|from|with|using\b)([A-Z]+)\b/i; // "10 ETH" (exclude prepositions)
 
 // New Regex for Conditions
-const REGEX_CONDITION = /(?:if|when)\s+(?:the\s+)?(?:price|rate|market|value)?\s*(?:of\s+)?([A-Z]+)?\s*(?:is|goes|drops|rises|falls)?\s*(above|below|greater|less|more|under|>|<)\s*(?:than)?\s*(\$?[\d,]+(\.\d+)?)/i;
+const REGEX_CONDITION = /(?:if|when)\s+(?:the\s+)?(?:price|rate|market|value)?\s*(?:of\s+)?([A-Z]+)?\s*(?:is|goes|drops|rises|falls)?\s*(above|below|greater|less|more|under|>|<)\s*(?:than)?\s*(\$?[\d,]+(\.\d+)?\s*[kKmM]?)/i;
 
 // New Regex for Quote Amount ("Worth")
 // Capture optional preceding token (group 1), amount (group 3), optional following token (group 5)
@@ -23,6 +23,18 @@ const REGEX_QUOTE = /(?:([A-Z]+)\s+)?(?:worth|value|valued\s+at)\s*(?:of)?\s*(\$
 
 // New Regex for Multiple Source Assets
 const REGEX_MULTI_SOURCE = /([A-Z]+)\s+(?:and|&)\s+([A-Z]+)\s+(?:to|into|for)/i;
+
+function normalizeNumber(val: string): number {
+  val = val.toLowerCase().replace(/[\$,]/g, '');
+
+  if (val.endsWith("k")) {
+    return parseFloat(val) * 1000;
+  }
+  if (val.endsWith("m")) {
+    return parseFloat(val) * 1000000;
+  }
+  return parseFloat(val);
+}
 
 export async function parseUserCommand(
   userInput: string,
@@ -60,6 +72,7 @@ export async function parseUserCommand(
     let conditionOperator: 'gt' | 'lt' | undefined;
     let conditionValue: number | undefined;
     let conditionAsset: string | undefined;
+    let conditions: ParsedCommand['conditions'];
 
     // Check Multi-source
     if (REGEX_MULTI_SOURCE.test(input)) {
@@ -219,9 +232,9 @@ export async function parseUserCommand(
     if (conditionMatch) {
         const assetStr = conditionMatch[1];
         const operatorStr = conditionMatch[2].toLowerCase();
-        const valueStr = conditionMatch[3].replace(/[$,]/g, '');
+        const valueStr = conditionMatch[3];
 
-        conditionValue = parseFloat(valueStr);
+        conditionValue = normalizeNumber(valueStr);
 
         if (assetStr) {
             const candidate = assetStr.toUpperCase();
@@ -240,6 +253,15 @@ export async function parseUserCommand(
             conditionOperator = 'lt';
         }
 
+        // Populate new conditions object
+        if (conditionValue) {
+            conditions = {
+                type: conditionOperator === 'gt' ? "price_above" : "price_below",
+                asset: conditionAsset || fromAsset || 'ETH', // fallback will be refined below
+                value: conditionValue
+            };
+        }
+
         confidence += 30;
     }
 
@@ -254,6 +276,11 @@ export async function parseUserCommand(
         // Default conditionAsset to fromAsset if not specified but condition exists
         if ((conditionOperator || conditionValue) && !conditionAsset && fromAsset) {
             conditionAsset = fromAsset;
+        }
+
+        // Update conditions asset if it was missing and we defaulted it
+        if (conditions && !conditions.asset && conditionAsset) {
+            conditions.asset = conditionAsset;
         }
 
         let parsedMessage = `Parsed: ${amountType || amount || (quoteAmount ? 'Value ' + quoteAmount : '?')} ${fromAsset || '?'} -> ${toAsset || '?'}`;
@@ -273,6 +300,7 @@ export async function parseUserCommand(
             excludeAmount,
             excludeToken,
             quoteAmount,
+            conditions, // Return new conditions object
             portfolio: undefined,
             frequency: null, dayOfWeek: null, dayOfMonth: null,
             settleAsset: null, settleNetwork: null, settleAmount: null, settleAddress: null,
@@ -296,12 +324,41 @@ export async function parseUserCommand(
   console.log("Fallback to LLM for:", userInput);
   try {
     const result = await parseWithLLM(userInput, conversationHistory, inputType);
+
+    // REGEX FALLBACK FOR CONDITIONS
+    if (!result.conditions) {
+        const text = userInput.toLowerCase();
+        // Simple fallback regexes
+        const aboveMatch = text.match(/above\s+(\d+(?:k|m)?)/i);
+        const belowMatch = text.match(/below\s+(\d+(?:k|m)?)/i);
+
+        if (aboveMatch) {
+            result.conditions = {
+                type: "price_above",
+                asset: result.toAsset || result.fromAsset || 'ETH',
+                value: normalizeNumber(aboveMatch[1])
+            };
+        } else if (belowMatch) {
+             result.conditions = {
+                type: "price_below",
+                asset: result.toAsset || result.fromAsset || 'ETH',
+                value: normalizeNumber(belowMatch[1])
+            };
+        }
+    }
+
+    // Handle Percentage Amounts Properly
+    if (userInput.includes("%")) {
+       result.amountType = "percentage";
+    }
+
     return {
       ...result,
       amountType: result.amountType || null,
       excludeAmount: result.excludeAmount || undefined,
       excludeToken: result.excludeToken || undefined,
       quoteAmount: result.quoteAmount || undefined,
+      conditions: result.conditions || undefined,
       originalInput: userInput
     };
   } catch (error) {

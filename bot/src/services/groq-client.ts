@@ -20,11 +20,18 @@ export interface ParsedCommand {
   toAsset: string | null;
   toChain: string | null;
   amount: number | null;
-  amountType?: "exact" | "percentage" | "all" | "exclude" | null; // Added back for compatibility
+  amountType?: "exact" | "absolute" | "percentage" | "all" | "exclude" | null; // Extended with 'absolute'
 
   excludeAmount?: number;
   excludeToken?: string;
   quoteAmount?: number;
+
+  // Conditional Fields
+  conditions?: {
+    type: "price_above" | "price_below";
+    asset: string;
+    value: number;
+  };
   
   // Portfolio Fields (Array of outputs)
   portfolio?: {
@@ -49,7 +56,7 @@ export interface ParsedCommand {
   toProject: string | null;
   toYield: number | null;
 
-  // Limit Order Fields
+  // Limit Order Fields (Legacy - kept for compatibility, prefer 'conditions')
   conditionOperator?: 'gt' | 'lt';
   conditionValue?: number;
   conditionAsset?: string;
@@ -97,7 +104,7 @@ AMBIGUITY HANDLING:
 - If the command is ambiguous (e.g., "swap all my ETH to BTC or USDC"), set confidence low (0-30) and add validation error "Command is ambiguous. Please specify clearly."
 - For complex commands, prefer explicit allocations over assumptions.
 - If multiple interpretations possible, choose the most straightforward and set requiresConfirmation: true.
-- Handle conditional swaps by treating them as portfolio with conditional logic in parsedMessage.
+- If the user includes conditions such as "only if", "when price is", "above", "below", extract them into a "conditions" object.
 
 RESPONSE FORMAT:
 {
@@ -106,7 +113,14 @@ RESPONSE FORMAT:
   "fromAsset": string | null,
   "fromChain": string | null,
   "amount": number | null,
-  "amountType": "exact" | "percentage" | "all" | null,
+  "amountType": "exact" | "absolute" | "percentage" | "all" | null,
+
+  // Optional: Conditions
+  "conditions": {
+    "type": "price_above" | "price_below",
+    "asset": "BTC",
+    "value": 60000
+  },
 
   // Fill for 'swap'
   "toAsset": string | null,
@@ -145,40 +159,43 @@ EXAMPLES:
 1. "Split 1 ETH on Base into 50% USDC on Arb and 50% SOL"
    -> intent: "portfolio", fromAsset: "ETH", fromChain: "base", amount: 1, portfolio: [{toAsset: "USDC", toChain: "arbitrum", percentage: 50}, {toAsset: "SOL", toChain: "solana", percentage: 50}], confidence: 95
 
-2. "Where can I get good yield on stables?"
+2. "Swap 50% of my ETH for BTC only if BTC price is above 60k"
+   -> intent: "swap", amount: 50, amountType: "percentage", fromAsset: "ETH", toAsset: "BTC", conditions: { type: "price_above", asset: "BTC", value: 60000 }, confidence: 95
+
+3. "Where can I get good yield on stables?"
    -> intent: "yield_scout", confidence: 100
 
-3. "Swap 1 ETH to BTC or USDC" (ambiguous)
+4. "Swap 1 ETH to BTC or USDC" (ambiguous)
    -> intent: "swap", fromAsset: "ETH", toAsset: null, confidence: 20, validationErrors: ["Command is ambiguous. Please specify clearly."], requiresConfirmation: true
 
-4. "If ETH > $3000, swap to BTC, else to USDC" (conditional)
+5. "If ETH > $3000, swap to BTC, else to USDC" (conditional)
    -> intent: "portfolio", fromAsset: "ETH", portfolio: [{toAsset: "BTC", toChain: "bitcoin", percentage: 100}], confidence: 70, parsedMessage: "Conditional swap: If ETH > $3000, swap to BTC", requiresConfirmation: true
 
-5. "Deposit 1 ETH to yield"
+6. "Deposit 1 ETH to yield"
    -> intent: "yield_deposit", fromAsset: "ETH", amount: 1, confidence: 95
 
-6. "Swap 1 ETH to mywallet"
+7. "Swap 1 ETH to mywallet"
    -> intent: "swap", fromAsset: "ETH", toAsset: "ETH", toChain: "ethereum", amount: 1, settleAddress: "mywallet", confidence: 95
 
-7. "Send 5 USDC to vitalik.eth"
+8. "Send 5 USDC to vitalik.eth"
    -> intent: "checkout", settleAsset: "USDC", settleNetwork: "ethereum", settleAmount: 5, settleAddress: "vitalik.eth", confidence: 95
 
-8. "Move my USDC from Aave on Base to a higher yield pool"
+9. "Move my USDC from Aave on Base to a higher yield pool"
    -> intent: "yield_migrate", fromAsset: "USDC", fromChain: "base", fromProject: "Aave", confidence: 95
 
-9. "Switch my ETH yield from 5% to something better"
+10. "Switch my ETH yield from 5% to something better"
    -> intent: "yield_migrate", fromAsset: "ETH", fromYield: 5, confidence: 90
 
-10. "Migrate my stables to the best APY pool"
+11. "Migrate my stables to the best APY pool"
     -> intent: "yield_migrate", fromAsset: "USDC", confidence: 85
 
-11. "Swap $50 of USDC for ETH every Monday"
+12. "Swap $50 of USDC for ETH every Monday"
     -> intent: "dca", fromAsset: "USDC", toAsset: "ETH", amount: 50, frequency: "weekly", dayOfWeek: "monday", confidence: 95
 
-12. "Buy 100 USDC of BTC daily"
+13. "Buy 100 USDC of BTC daily"
     -> intent: "dca", fromAsset: "USDC", toAsset: "BTC", amount: 100, frequency: "daily", confidence: 95
 
-13. "DCA 200 USDC into ETH every month on the 1st"
+14. "DCA 200 USDC into ETH every month on the 1st"
     -> intent: "dca", fromAsset: "USDC", toAsset: "ETH", amount: 200, frequency: "monthly", dayOfMonth: "1", confidence: 95
 `;
 
@@ -322,6 +339,7 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     excludeAmount: parsed.excludeAmount,
     excludeToken: parsed.excludeToken,
     quoteAmount: parsed.quoteAmount,
+    conditions: parsed.conditions, // Pass through conditions
     portfolio: parsed.portfolio, // Pass through portfolio
     frequency: parsed.frequency || null,
     dayOfWeek: parsed.dayOfWeek || null,
