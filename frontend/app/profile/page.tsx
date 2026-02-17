@@ -37,6 +37,7 @@ import {
 import Image  from 'next/image'
 import { useAuth } from '@/hooks/useAuth'
 import Navbar from '@/components/Navbar'
+import { ReputationCard } from '@/components/ReputationCard'
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 
@@ -1005,6 +1006,10 @@ export default function ProfilePage() {
 
             {/* Right Column */}
             <div className="space-y-6">
+          {/* ───────── Agent Reputation ───────── */}
+          <SectionHeader icon={Shield} label="Agent Reputation" />
+          <ReputationCard userId={user?.uid} showDetails={true} />
+
           {/* ───────── Portfolio Stats ───────── */}
           <SectionHeader icon={TrendingUp} label="Portfolio Stats" />
           <GlowCard className="p-5" delay={0.18}>
