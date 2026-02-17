@@ -1,5 +1,7 @@
 import { ethers } from 'ethers';
 import { resolveNickname } from './database';
+import logger from './logger';
+
 
 // Initialize Ethereum provider for ENS resolution
 const provider = new ethers.JsonRpcProvider('https://eth.llamarpc.com'); // Public RPC for ENS
@@ -19,52 +21,42 @@ export async function resolveENS(ensName: string): Promise<string | null> {
     const address = await provider.resolveName(ensName);
     return address;
   } catch (error) {
-    console.error('ENS resolution error:', error);
+    logger.error('ENS resolution error:', error);
     return null;
   }
+
 }
 
 export async function resolveLens(lensHandle: string): Promise<string | null> {
   try {
-    // Lens Protocol uses Polygon network
-    // Lens handles are stored on-chain in the Lens Protocol contracts
-    // Note: Full Lens resolution requires the Lens SDK
-    // This is a placeholder for future implementation
-    console.log(`Lens resolution requested for: ${lensHandle}`);
-    
-    // TODO: Implement full Lens Protocol resolution
-    // Would require:
-    // 1. Lens SDK integration
-    // 2. Query Lens Profile NFT contract on Polygon
-    // 3. Get wallet address from profile
-    
+    // Placeholder for Lens Protocol resolution
+    // In production, integration with Lens API/SDK is required
+    logger.info(`Lens resolution requested for: ${lensHandle}`);
     return null;
   } catch (error) {
-    console.error('Lens resolution error:', error);
+    logger.error('Lens resolution error:', error);
     return null;
   }
+
 }
 
 export async function resolveUnstoppableDomain(domain: string): Promise<string | null> {
   try {
-    // Unstoppable Domains resolution via their API
-    // Note: In production, you should use their official SDK or API with authentication
-    // For now, we'll use ethers provider to resolve via their smart contracts
-    
     // Unstoppable Domains are stored on Polygon
     const polygonProvider = new ethers.JsonRpcProvider('https://polygon-rpc.com');
     
-    // Try to resolve using the provider's built-in resolution
-    // This works for some Unstoppable Domains that follow ENS standards
+    // Try to resolve using the provider's built-in resolution (standard EIP-137)
     const address = await polygonProvider.resolveName(domain);
     return address;
   } catch (error) {
-    console.error('Unstoppable Domain resolution error:', error);
+    logger.error('Unstoppable Domain resolution error:', error);
     return null;
   }
+
 }
 
 export function isNamingService(input: string): boolean {
+  if (!input) return false;
   const lowerInput = input.toLowerCase();
   
   // Check ENS
@@ -100,7 +92,6 @@ export async function resolveAddress(telegramId: number, input: string): Promise
     if (ensAddress) {
       return { address: ensAddress, type: 'ens', originalInput: trimmedInput };
     }
-    // If ENS resolution failed, return null to indicate invalid domain
     return { address: null, type: 'ens', originalInput: trimmedInput };
   }
 
@@ -110,7 +101,6 @@ export async function resolveAddress(telegramId: number, input: string): Promise
     if (lensAddress) {
       return { address: lensAddress, type: 'lens', originalInput: trimmedInput };
     }
-    // Lens resolution not fully implemented yet
     return { address: null, type: 'lens', originalInput: trimmedInput };
   }
 
@@ -120,7 +110,6 @@ export async function resolveAddress(telegramId: number, input: string): Promise
     if (unstoppableAddress) {
       return { address: unstoppableAddress, type: 'unstoppable', originalInput: trimmedInput };
     }
-    // If Unstoppable Domain resolution failed, return null
     return { address: null, type: 'unstoppable', originalInput: trimmedInput };
   }
 
