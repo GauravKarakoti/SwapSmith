@@ -13,7 +13,7 @@ import SwapConfirmation from '@/components/SwapConfirmation';
 import IntentConfirmation from '@/components/IntentConfirmation';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
-import { useAudioRecorder } from '@/hooks/useAudioRecorder';
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { MessageCircle, Plus, Clock, Settings, Menu, Sparkles, Zap, Activity } from 'lucide-react';
 import Link from 'next/link';
 
@@ -250,15 +250,27 @@ export default function TerminalPage() {
   const { handleError } = useErrorHandler();
 
   const {
-    isRecording,
+    isListening: isRecording,
+    transcript,
     isSupported: isAudioSupported,
     startRecording,
     stopRecording,
     error: audioError,
-  } = useAudioRecorder({
-    sampleRate: 16000,
-    numberOfAudioChannels: 1,
-  });
+  } = useSpeechRecognition();
+
+  // Handle voice result processing
+  useEffect(() => {
+    if (!isRecording && transcript) {
+      handleSendMessage({
+        message: transcript,
+        files: [],
+        pastedContent: [],
+        model: 'sonnet-4.5',
+        isThinkingEnabled: false
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRecording, transcript]);
 
   // Protect route - redirect to login if not authenticated
   useEffect(() => {
@@ -298,7 +310,7 @@ export default function TerminalPage() {
     setMessages((prev) => [...prev, { ...message, timestamp: new Date() }]);
   };
 
-  const handleStartRecording = async () => {
+  const handleStartRecording = () => {
     if (!isAudioSupported) {
       addMessage({
         role: "assistant",
@@ -307,91 +319,11 @@ export default function TerminalPage() {
       });
       return;
     }
-    try {
-      await startRecording();
-    } catch (err) {
-      const errorMessage = handleError(err, ErrorType.VOICE_ERROR, {
-        operation: "microphone_access",
-        retryable: true,
-      });
-      addMessage({ role: "assistant", content: errorMessage, type: "message" });
-    }
+    startRecording();
   };
 
-  const handleStopRecording = async () => {
-    try {
-      const audioBlob = await stopRecording();
-      if (audioBlob) {
-        await handleVoiceInput(audioBlob);
-      }
-    } catch (err) {
-      const errorMessage = handleError(err, ErrorType.VOICE_ERROR, {
-        operation: "stop_recording",
-        retryable: true,
-      });
-      addMessage({ role: "assistant", content: errorMessage, type: "message" });
-    }
-  };
-
-  const handleVoiceInput = async (audioBlob: Blob) => {
-    setIsLoading(true);
-    addMessage({
-      role: "user",
-      content: "🎤 [Sending Voice...]",
-      type: "message",
-    });
-
-    const formData = new FormData();
-    let fileName = "voice.webm";
-    if (audioBlob.type.includes("mp4")) fileName = "voice.mp4";
-    else if (audioBlob.type.includes("wav")) fileName = "voice.wav";
-    else if (audioBlob.type.includes("ogg")) fileName = "voice.ogg";
-
-    formData.append("file", audioBlob, fileName);
-
-    try {
-      const response = await fetch("/api/transcribe", {
-        method: "POST",
-        body: formData,
-      });
-      if (!response.ok) throw new Error("Transcription failed");
-      const data = await response.json();
-
-      if (data.text) {
-        setMessages((prev) => {
-          const newMsgs = [...prev];
-          const lastIndex = newMsgs.length - 1;
-          if (
-            lastIndex >= 0 &&
-            newMsgs[lastIndex].content === "🎤 [Sending Voice...]"
-          ) {
-            newMsgs[lastIndex] = {
-              ...newMsgs[lastIndex],
-              content: `🎤 "${data.text}"`,
-            };
-          }
-          return newMsgs;
-        });
-        await processCommand(data.text);
-      } else {
-        addMessage({
-          role: "assistant",
-          content: "I couldn't hear anything clearly.",
-          type: "message",
-        });
-        setIsLoading(false);
-      }
-    } catch (error) {
-      const errorMessage = handleError(error, ErrorType.VOICE_ERROR, {
-        operation: "voice_transcription",
-        retryable: true,
-      });
-      setMessages((prev) =>
-        prev.filter((m) => m.content !== "🎤 [Sending Voice...]"),
-      );
-      addMessage({ role: "assistant", content: errorMessage, type: "message" });
-      setIsLoading(false);
-    }
+  const handleStopRecording = () => {
+    stopRecording();
   };
 
   const processCommand = async (text: string) => {
