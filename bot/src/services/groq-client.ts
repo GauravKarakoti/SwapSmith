@@ -26,7 +26,7 @@ const groq = getGroqClient();
 
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "unknown";
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "swap_and_stake" | "unknown";
   
   // Single Swap Fields
   fromAsset: string | null;
@@ -63,6 +63,10 @@ export interface ParsedCommand {
   fromYield: number | null;
   toProject: string | null;
   toYield: number | null;
+
+  // Staking Fields (for swap_and_stake intent)
+  stakingProtocol?: string | null;
+  estimatedApy?: number | null;
 
   // Limit Order Fields
   conditionOperator?: 'gt' | 'lt';
@@ -117,7 +121,28 @@ MODES:
    - "Swap 50 USDT to BTC every week on Monday" → intent: "dca", fromAsset: "USDT", toAsset: "BTC", amount: 50, frequency: "weekly", dayOfWeek: "monday"
    - "Every month on the 15th, convert 500 USDC to SOL" → intent: "dca", fromAsset: "USDC", toAsset: "SOL", amount: 500, frequency: "monthly", dayOfMonth: "15"
 
-8. ADVANCED: Limit Orders with Conditions (special use of "swap" intent).
+8. "swap_and_stake": Swap an asset and automatically stake it for yield.
+   DESCRIPTION: User wants to swap one token for another and immediately stake the received token in a DeFi protocol.
+   DETECTION KEYWORDS: swap and stake, stake it, immediately stake, after swap, then stake, stake for yield, earn yield, auto-stake, direct stake, deposit and stake, swap into staking
+   FIELDS NEEDED:
+   - fromAsset: Asset being swapped (e.g., "USDC", "ETH")
+   - fromChain: Blockchain for source asset
+   - toAsset: Asset being staked (e.g., "ETH", "SOL")
+   - toChain: Blockchain for staking
+   - amount: Amount to swap (e.g., "100" = 100 USDC)
+   - stakingProtocol: Protocol for staking (e.g., "Lido", "RocketPool", "Frax", "Stader", "Coinbase")
+   STAKING PROTOCOLS BY ASSET & CHAIN:
+   - ETH on Ethereum: Lido (stETH), RocketPool (rETH), Frax (sfrxETH), Coinbase (cbETH), Stader (ETHx)
+   - SOL on Solana: Marinade (mSOL), Lido (stSOL)
+   - MATIC on Polygon: Polygon (xMATIC)
+   - ARB on Arbitrum: Arbitrum governance staking
+   - OP on Optimism: Optimism governance staking
+   EXAMPLES:
+   - "Swap 100 USDC for ETH and stake it" → intent: "swap_and_stake", fromAsset: "USDC", toAsset: "ETH", amount: 100, stakingProtocol: "Lido"
+   - "Convert all my USDC to ETH on Ethereum and stake with Rocket Pool" → intent: "swap_and_stake", fromAsset: "USDC", toAsset: "ETH", amountType: "all", stakingProtocol: "RocketPool"
+   - "Buy 50 SOL and stake it immediately" → intent: "swap_and_stake", fromAsset: "USDC", toAsset: "SOL", amount: 50, stakingProtocol: "Marinade"
+
+9. ADVANCED: Limit Orders with Conditions (special use of "swap" intent).
    DESCRIPTION: Execute a swap only when a price condition is met.
    DETECTION KEYWORDS: "if", "when", "only if", "once", "trigger at", "at price", "when price", "condition", etc.
    FIELDS (in addition to swap fields):
@@ -134,7 +159,7 @@ STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, 
 RESPONSE FORMAT:
 {
   "success": boolean,
-  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca",
+  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "swap_and_stake",
   "fromAsset": string | null,
   "fromChain": string | null,
   "amount": number | null,
@@ -149,6 +174,8 @@ RESPONSE FORMAT:
   "settleNetwork": null,
   "settleAmount": null,
   "settleAddress": null,
+  "stakingProtocol": string | null,
+  "estimatedApy": number | null,
   "conditionOperator": "gt" | "lt" | null,
   "conditionValue": number | null,
   "conditionAsset": string | null,
@@ -252,6 +279,8 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     fromYield: parsed.fromYield || null,
     toProject: parsed.toProject || null,
     toYield: parsed.toYield || null,
+    stakingProtocol: parsed.stakingProtocol || null,
+    estimatedApy: parsed.estimatedApy || null,
     confidence: confidence || 0,
 
     validationErrors: allErrors,

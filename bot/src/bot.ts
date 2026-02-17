@@ -22,6 +22,10 @@ import {
     getTopStablecoinYields,
     getTopYieldPools
 } from './services/yield-client';
+import {
+    createSwapAndStakeOrder,
+    getEstimatedAPY
+} from './services/staking-service';
 import * as db from './services/database';
 import { OrderMonitor } from './services/order-monitor';
 import { tokenResolver } from './services/token-resolver'; // Kept if needed by other logic, though not explicitly used below
@@ -138,16 +142,9 @@ bot.start((ctx) => {
                 Markup.button.url('🌐 Visit Website', MINI_APP_URL)
             ])
         }
-        message += `  *Created:* ${new Date(stakeOrder.createdAt as Date).toLocaleString()}\n`;
-
-        ctx.replyWithMarkdown(message);
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-        ctx.reply(`Sorry, couldn't get status. Error: ${errorMessage}`);
-    }
+    );
 });
 
-bot.command('website', (ctx) =>
 bot.command('website', (ctx) => {
     ctx.reply(
         "🌐 *SwapSmith Web Interface*\n\nClick the button below to access the full graphical interface.",
@@ -230,7 +227,7 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
     const state = await db.getConversationState(userId);
 
     // 1. Check for pending address input
-    if (state?.parsedCommand && (state.parsedCommand.intent === 'swap' || state.parsedCommand.intent === 'checkout') && !state.parsedCommand.settleAddress) {
+    if (state?.parsedCommand && (state.parsedCommand.intent === 'swap' || state.parsedCommand.intent === 'checkout' || state.parsedCommand.intent === 'swap_and_stake') && !state.parsedCommand.settleAddress) {
         const potentialAddress = text.trim();
         // Get the target chain for validation (use toChain for swaps, settleNetwork for checkouts)
         const targetChain = state.parsedCommand.toChain || state.parsedCommand.settleNetwork;
@@ -241,7 +238,10 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
 
             await ctx.reply(`Address received: \`${potentialAddress}\``, { parse_mode: 'Markdown' });
 
-            const confirmAction = updatedCommand.intent === 'checkout' ? 'confirm_checkout' : 'confirm_swap';
+            let confirmAction = 'confirm_swap';
+            if (updatedCommand.intent === 'checkout') confirmAction = 'confirm_checkout';
+            if (updatedCommand.intent === 'swap_and_stake') confirmAction = 'confirm_swap_and_stake';
+
             return ctx.reply("Ready to proceed?", Markup.inlineKeyboard([
                 Markup.button.callback('✅ Yes', confirmAction),
                 Markup.button.callback('❌ No', 'cancel_swap')
@@ -336,14 +336,19 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
         ]));
     }
 
-    if (parsed.intent === 'swap' || parsed.intent === 'checkout') {
+    if (parsed.intent === 'swap' || parsed.intent === 'checkout' || parsed.intent === 'swap_and_stake') {
         if (!parsed.settleAddress) {
             await db.setConversationState(userId, { parsedCommand: parsed });
-            return ctx.reply(`Okay, I see you want to ${parsed.intent}. Please provide the destination/wallet address.`);
+            const intentMsg = parsed.intent === 'swap_and_stake' 
+                ? `swap and stake with ${parsed.stakingProtocol || 'a staking protocol'}`
+                : parsed.intent;
+            return ctx.reply(`Okay, I see you want to ${intentMsg}. Please provide the destination/wallet address.`);
         }
 
         await db.setConversationState(userId, { parsedCommand: parsed });
-        const confirmAction = parsed.intent === 'checkout' ? 'confirm_checkout' : 'confirm_swap';
+        let confirmAction = 'confirm_swap';
+        if (parsed.intent === 'checkout') confirmAction = 'confirm_checkout';
+        if (parsed.intent === 'swap_and_stake') confirmAction = 'confirm_swap_and_stake';
 
         ctx.reply("Confirm parameters?", Markup.inlineKeyboard([
             Markup.button.callback('✅ Yes', confirmAction),
@@ -385,6 +390,56 @@ bot.action(['confirm_swap', 'confirm_checkout'], async (ctx) => {
                 parse_mode: 'Markdown',
                 ...Markup.inlineKeyboard([
                     Markup.button.callback('✅ Place Order', 'place_order'),
+                    Markup.button.callback('❌ Cancel', 'cancel_swap')
+                ])
+            }
+        );
+    } catch (e) {
+        console.error(e);
+        ctx.reply('❌ Failed to get a quote. Please try again.');
+    }
+});
+
+bot.action('confirm_swap_and_stake', async (ctx) => {
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+    if (!state?.parsedCommand) return ctx.answerCbQuery('Session expired.');
+
+    const { fromAsset, fromChain, toAsset, toChain, amount, stakingProtocol } = state.parsedCommand;
+
+    try {
+        await ctx.answerCbQuery('Fetching quote...');
+        
+        // Get swap quote
+        const q = await createQuote(
+            fromAsset!,
+            fromChain!,
+            toAsset!,
+            toChain!,
+            amount!
+        );
+
+        // Get estimated APY for staking
+        const estimatedApy = await getEstimatedAPY(stakingProtocol || 'Lido', toAsset);
+
+        await db.setConversationState(userId, { ...state, quoteId: q.id, estimatedApy });
+
+        const confirmText = 
+            `💰 *Swap Quote*\n` +
+            `➡️ Send: ${q.depositAmount} ${q.depositCoin}\n` +
+            `⬅️ Receive: ~${q.settleAmount} ${q.settleCoin}\n` +
+            `⏱️ Rate: 1 ${q.depositCoin} ≈ ${q.rate} ${q.settleCoin}\n\n` +
+            `🎯 *Staking Details*\n` +
+            `Protocol: ${stakingProtocol || 'Auto-select'}\n` +
+            `Estimated APY: ${estimatedApy.toFixed(2)}%\n` +
+            `Asset: ${toAsset}`;
+
+        ctx.editMessageText(
+            confirmText,
+            {
+                parse_mode: 'Markdown',
+                ...Markup.inlineKeyboard([
+                    Markup.button.callback('✅ Place Order', 'place_swap_and_stake_order'),
                     Markup.button.callback('❌ Cancel', 'cancel_swap')
                 ])
             }
@@ -451,6 +506,61 @@ bot.action('place_order', async (ctx) => {
     } catch (error) {
         console.error(error);
         ctx.editMessageText(`❌ Error creating order.`);
+    } finally {
+        db.clearConversationState(userId);
+    }
+});
+
+bot.action('place_swap_and_stake_order', async (ctx) => {
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+    
+    if (!state?.quoteId || !state.parsedCommand?.settleAddress) {
+        return ctx.answerCbQuery('Session missing required data. Start over.');
+    }
+
+    const { fromAsset, fromChain, toAsset, toChain, amount, settleAddress, stakingProtocol, estimatedApy } = state.parsedCommand;
+
+    try {
+        await ctx.answerCbQuery('Creating swap and stake order...');
+
+        // Create the standard swap order
+        const order = await createOrder(state.quoteId, settleAddress, settleAddress);
+        if (!order.id) throw new Error("Failed to create swap order");
+
+        // Create the stake order record
+        const stakeOrder = await createSwapAndStakeOrder(
+            userId,
+            order.id,
+            fromAsset!,
+            fromChain!,
+            amount!.toString(),
+            toAsset!,
+            toChain!,
+            stakingProtocol || 'Lido',
+            settleAddress,
+            estimatedApy
+        );
+
+        // Save to database
+        db.createOrderEntry(userId, state.parsedCommand, order, order.settleAmount, state.quoteId);
+
+        const msg =
+            `✅ *Swap & Stake Order Created!*\n\n` +
+            `📋 *Order ID:* \`${order.id}\`\n` +
+            `💱 *Swap:* ${order.depositAmount} ${order.depositCoin} → ${order.settleAmount} ${order.settleCoin}\n` +
+            `🎯 *Staking:* ${stakingProtocol || 'Auto'} (${estimatedApy?.toFixed(2) || '~'}% APY)\n\n` +
+            `To complete, please send funds to:\n\n` +
+            `🏦 *Deposit:* \`${(order.depositAddress as {address: string;memo: string;}).address || order.depositAddress}\`\n` +
+            `💰 *Amount:* ${order.depositAmount} ${order.depositCoin}\n` +
+            ((order.depositAddress as {address: string;memo: string;}).memo ? `📝 *Memo:* \`${(order.depositAddress as {address: string;memo: string;}).memo || ''}\`\n` : '') +
+            `\n_Once settled, your ${toAsset} will be automatically staked._`;
+
+        ctx.editMessageText(msg, { parse_mode: 'Markdown' });
+
+    } catch (error) {
+        console.error(error);
+        ctx.editMessageText(`❌ Error creating swap and stake order.`);
     } finally {
         db.clearConversationState(userId);
     }
@@ -574,6 +684,86 @@ app.post('/api/limit-order/create', async (req, res) => {
     }
 });
 
+// --- Swap and Stake API Endpoints ---
+app.post('/api/swap-and-stake/create', async (req, res) => {
+    try {
+        const {
+            fromAsset,
+            fromChain,
+            toAsset,
+            toChain,
+            amount,
+            stakingProtocol,
+            stakerAddress,
+        } = req.body;
+
+        // Validate parameters
+        if (!fromAsset || !toAsset || !amount || !stakingProtocol || !stakerAddress) {
+            return res.status(400).json({
+                error: 'Missing required parameters: fromAsset, toAsset, amount, stakingProtocol, stakerAddress',
+            });
+        }
+
+        // Create swap quote first
+        const quote = await createQuote(
+            fromAsset,
+            fromChain || 'ethereum',
+            toAsset,
+            toChain || 'ethereum',
+            amount
+        );
+
+        if (!quote || !quote.id) {
+            return res.status(400).json({
+                error: 'Failed to create swap quote',
+            });
+        }
+
+        // Create swap order
+        const order = await createOrder(quote.id, stakerAddress, stakerAddress);
+        if (!order || !order.id) {
+            return res.status(400).json({
+                error: 'Failed to create swap order',
+            });
+        }
+
+        // Create stake order record
+        const estimatedApy = await getEstimatedAPY(stakingProtocol, toAsset);
+        const stakeOrder = await createSwapAndStakeOrder(
+            0, // No telegram ID for API users
+            order.id,
+            fromAsset,
+            fromChain || 'ethereum',
+            amount.toString(),
+            toAsset,
+            toChain || 'ethereum',
+            stakingProtocol,
+            stakerAddress,
+            estimatedApy
+        );
+
+        res.status(201).json({
+            success: true,
+            orderId: order.id,
+            stakeOrderId: stakeOrder.id,
+            message: `Swap and Stake order created: ${amount} ${fromAsset} → ${toAsset} with ${stakingProtocol}`,
+            data: stakeOrder,
+            estimatedApy,
+            quote: {
+                depositAmount: quote.depositAmount,
+                depositCoin: quote.depositCoin,
+                settleAmount: quote.settleAmount,
+                settleCoin: quote.settleCoin,
+                rate: quote.rate,
+            },
+        });
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+        console.error('Error creating swap and stake order:', errorMessage);
+        res.status(500).json({ error: errorMessage });
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🌍 Server running on port ${PORT}`));
 
@@ -582,9 +772,9 @@ app.listen(PORT, () => console.log(`🌍 Server running on port ${PORT}`));
     await orderMonitor.loadPendingOrders();
     orderMonitor.start();
     bot.launch();
-    logger.info('🤖 Bot running');
-})();
+app.listen(PORT, () => console.log(`🌍 Server running on port ${PORT}`));
 
+(async () => {
     try {
         await orderMonitor.loadPendingOrders();
         orderMonitor.start();
@@ -598,6 +788,5 @@ app.listen(PORT, () => console.log(`🌍 Server running on port ${PORT}`));
 })();
 
 // Enable graceful stop
->>>>>>> a749ce1b103c9e60d0c27197a77e87f67d905a9c
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));

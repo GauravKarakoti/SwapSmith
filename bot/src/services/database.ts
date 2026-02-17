@@ -1,6 +1,6 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { eq, desc, notInArray, and, sql } from 'drizzle-orm';
+import { eq, desc, notInArray, and, or, sql } from 'drizzle-orm';
 import dotenv from 'dotenv';
 import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
 import type { ParsedCommand } from './groq-client';
@@ -21,6 +21,7 @@ import {
   chatHistory,
   dcaSchedules,
   limitOrders,
+  stakeOrders,
   courseProgress,
   rewardsLog,
 } from '../../../shared/schema';
@@ -48,6 +49,7 @@ export {
   chatHistory,
   dcaSchedules,
   limitOrders,
+  stakeOrders,
   courseProgress,
   rewardsLog,
 };
@@ -64,6 +66,7 @@ export type SwapHistory = typeof swapHistory.$inferSelect;
 export type ChatHistory = typeof chatHistory.$inferSelect;
 export type DCASchedule = typeof dcaSchedules.$inferSelect;
 export type LimitOrder = typeof limitOrders.$inferSelect;
+export type StakeOrder = typeof stakeOrders.$inferSelect;
 export type CourseProgress = typeof courseProgress.$inferSelect;
 export type RewardsLog = typeof rewardsLog.$inferSelect;
 
@@ -384,4 +387,102 @@ export async function createLimitOrder(
   }).returning();
 
   return result[0] as LimitOrder;
+}
+
+// --- Stake Orders (Swap + Stake) ---
+
+export async function createStakeOrder(
+  telegramId: number,
+  sideshiftOrderId: string,
+  swapFromAsset: string,
+  swapFromNetwork: string,
+  swapFromAmount: string,
+  swapToAsset: string,
+  swapToNetwork: string,
+  stakingProtocol: string,
+  stakerAddress: string,
+  estimatedApy?: number
+): Promise<StakeOrder> {
+  const result = await db
+    .insert(stakeOrders)
+    .values({
+      telegramId,
+      sideshiftOrderId,
+      swapFromAsset,
+      swapFromNetwork,
+      swapFromAmount,
+      swapToAsset,
+      swapToNetwork,
+      stakingProtocol,
+      stakingAsset: swapToAsset,
+      stakingNetwork: swapToNetwork,
+      stakerAddress,
+      estimatedApy,
+      swapStatus: 'pending',
+      stakeStatus: 'pending',
+    })
+    .returning();
+
+  return result[0] as StakeOrder;
+}
+
+export async function getPendingStakeOrders(): Promise<StakeOrder[]> {
+  const result = await db
+    .select()
+    .from(stakeOrders)
+    .where(
+      or(
+        eq(stakeOrders.swapStatus, 'pending'),
+        eq(stakeOrders.stakeStatus, 'pending')
+      )
+    );
+  return result;
+}
+
+export async function updateStakeOrderSwapStatus(
+  sideshiftOrderId: string,
+  status: string,
+  txHash?: string,
+  settleAmount?: string
+): Promise<StakeOrder | null> {
+  const result = await db
+    .update(stakeOrders)
+    .set({
+      swapStatus: status,
+      swapTxHash: txHash,
+      swapSettleAmount: settleAmount,
+      updatedAt: new Date(),
+    })
+    .where(eq(stakeOrders.sideshiftOrderId, sideshiftOrderId))
+    .returning();
+
+  return result[0] || null;
+}
+
+export async function updateStakeOrderStakeStatus(
+  sideshiftOrderId: string,
+  status: string,
+  txHash?: string
+): Promise<StakeOrder | null> {
+  const result = await db
+    .update(stakeOrders)
+    .set({
+      stakeStatus: status,
+      stakeTxHash: txHash,
+      updatedAt: new Date(),
+    })
+    .where(eq(stakeOrders.sideshiftOrderId, sideshiftOrderId))
+    .returning();
+
+  return result[0] || null;
+}
+
+export async function getStakeOrder(sideshiftOrderId: string): Promise<StakeOrder | null> {
+  const result = await db
+    .select()
+    .from(stakeOrders)
+    .where(eq(stakeOrders.sideshiftOrderId, sideshiftOrderId))
+    .limit(1);
+
+  return result[0] || null;
 }

@@ -26,6 +26,40 @@ const REGEX_QUOTE = /(?:([A-Z]+)\s+)?(?:worth|value|valued\s+at)\s*(?:of)?\s*(\$
 // New Regex for Multiple Source Assets
 const REGEX_MULTI_SOURCE = /([A-Z]+)\s+(?:and|&)\s+([A-Z]+)\s+(?:to|into|for)/i;
 
+// New Regex for Staking Keywords
+const REGEX_STAKE = /\b(stake|staking|stake it|immediately stake|then stake|stake for|auto-stake|deposit.*stake|stake.*immediately)\b/i;
+
+// Staking protocols mapping
+const STAKING_PROTOCOLS: Record<string, string[]> = {
+  'Lido': ['lido', 'lidoeth', 'steth'],
+  'RocketPool': ['rocket', 'rocketpool', 'reth'],
+  'Frax': ['frax', 'sfrx', 'sfrxeth'],
+  'Coinbase': ['coinbase', 'cbeth'],
+  'Stader': ['stader', 'ethx'],
+  'Marinade': ['marinade', 'msol'],
+};
+
+function detectStakingProtocol(input: string, toAsset: string = ''): string | null {
+  const lowerInput = input.toLowerCase();
+  const lowerAsset = toAsset.toLowerCase();
+
+  // Check explicit protocol mentions
+  for (const [protocol, keywords] of Object.entries(STAKING_PROTOCOLS)) {
+    for (const keyword of keywords) {
+      if (lowerInput.includes(keyword)) {
+        return protocol;
+      }
+    }
+  }
+
+  // Default protocols by asset
+  if (lowerAsset.includes('eth')) return 'Lido'; // Default Lido for ETH
+  if (lowerAsset.includes('sol')) return 'Marinade'; // Default Marinade for SOL
+  if (lowerAsset.includes('matic') || lowerAsset.includes('pol')) return 'Polygon';
+
+  return null;
+}
+
 export async function parseUserCommand(
   userInput: string,
   conversationHistory: any[] = [],
@@ -58,10 +92,23 @@ export async function parseUserCommand(
     // Boost confidence slightly for explicit swap keywords
     confidence += 10;
 
+    // Staking fields
+    let stakingProtocol: string | null = null;
+    let estimatedApy: number | undefined;
+
     // Limit Order fields
     let conditionOperator: 'gt' | 'lt' | undefined;
     let conditionValue: number | undefined;
     let conditionAsset: string | undefined;
+
+    // Check for Stake Intent
+    const isStakeRelated = REGEX_STAKE.test(input);
+    if (isStakeRelated) {
+      intent = 'swap_and_stake';
+      confidence += 20;
+      // Detect staking protocol from input
+      stakingProtocol = detectStakingProtocol(input, toAsset || '');
+    }
 
     // Check Multi-source
     if (REGEX_MULTI_SOURCE.test(input)) {
@@ -265,7 +312,7 @@ export async function parseUserCommand(
 
         return {
             success: true, // Mark as success parsing, even if validation fails later
-            intent: 'swap',
+            intent: intent,
             fromAsset: fromAsset || null,
             fromChain: null,
             toAsset: toAsset || null,
@@ -279,6 +326,8 @@ export async function parseUserCommand(
             frequency: null, dayOfWeek: null, dayOfMonth: null,
             settleAsset: null, settleNetwork: null, settleAmount: null, settleAddress: null,
             fromProject: null, fromYield: null, toProject: null, toYield: null,
+            stakingProtocol: stakingProtocol || null,
+            estimatedApy: estimatedApy,
 
             // Limit Order fields
             conditionOperator,
