@@ -1,5 +1,7 @@
 import { ethers } from 'ethers';
 import { resolveNickname } from './database';
+import logger from './logger';
+
 
 // Initialize Ethereum provider for ENS resolution
 const provider = new ethers.JsonRpcProvider('https://eth.llamarpc.com'); // Public RPC for ENS
@@ -19,21 +21,23 @@ export async function resolveENS(ensName: string): Promise<string | null> {
     const address = await provider.resolveName(ensName);
     return address;
   } catch (error) {
-    console.error('ENS resolution error:', error);
+    logger.error('ENS resolution error:', error);
     return null;
   }
+
 }
 
 export async function resolveLens(lensHandle: string): Promise<string | null> {
   try {
     // Placeholder for Lens Protocol resolution
     // In production, integration with Lens API/SDK is required
-    console.log(`Lens resolution requested for: ${lensHandle}`);
+    logger.info(`Lens resolution requested for: ${lensHandle}`);
     return null;
   } catch (error) {
-    console.error('Lens resolution error:', error);
+    logger.error('Lens resolution error:', error);
     return null;
   }
+
 }
 
 export async function resolveUnstoppableDomain(domain: string): Promise<string | null> {
@@ -45,9 +49,10 @@ export async function resolveUnstoppableDomain(domain: string): Promise<string |
     const address = await polygonProvider.resolveName(domain);
     return address;
   } catch (error) {
-    console.error('Unstoppable Domain resolution error:', error);
+    logger.error('Unstoppable Domain resolution error:', error);
     return null;
   }
+
 }
 
 export function isNamingService(input: string): boolean {

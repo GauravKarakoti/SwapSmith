@@ -10,6 +10,8 @@ import express from 'express';
 
 // Services
 import { transcribeAudio } from './services/groq-client';
+import logger from './services/logger';
+
 import {
     createQuote,
     createOrder,
@@ -107,8 +109,9 @@ const orderMonitor = new OrderMonitor({
         try {
             await bot.telegram.sendMessage(telegramId, msg, { parse_mode: 'Markdown' });
         } catch (e) {
-            console.error('Order update notify failed:', e);
+            logger.error('Order update notify failed:', e);
         }
+
     }
 });
 
@@ -457,12 +460,12 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🌍 Server running on port ${PORT}`));
 
 (async () => {
-    try {
-        await checkFFmpeg();
-        console.log('✅ ffmpeg is installed. Voice messages enabled.');
-    } catch {
-        console.error('❌ ffmpeg not found. Voice messages may fail.');
-    }
+<<<<<<< HEAD
+    await orderMonitor.loadPendingOrders();
+    orderMonitor.start();
+    bot.launch();
+    logger.info('🤖 Bot running');
+})();
 
     try {
         await orderMonitor.loadPendingOrders();
@@ -477,5 +480,6 @@ app.listen(PORT, () => console.log(`🌍 Server running on port ${PORT}`));
 })();
 
 // Enable graceful stop
+>>>>>>> a749ce1b103c9e60d0c27197a77e87f67d905a9c
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));

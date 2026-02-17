@@ -5,7 +5,8 @@ import { pgTable, serial, text, bigint, timestamp, integer, real, unique, pgEnum
 import dotenv from 'dotenv';
 import { safeParseJSON } from '../utils/safeParse';
 import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
-import type { ParsedCommand } from './parseUserCommand'; // Fixed import path from groq-client
+import type { ParsedCommand } from './parseUserCommand';
+import logger from './logger';
 
 dotenv.config();
 
@@ -342,9 +343,10 @@ export async function resolveNickname(telegramId: number, nickname: string): Pro
       
     return result[0]?.address || null;
   } catch (error) {
-    console.error('Error resolving nickname:', error);
+    logger.error('Error resolving nickname:', error);
     return null;
   }
+
 }
 
 export async function getUser(telegramId: number): Promise<User | undefined> {
@@ -509,9 +511,10 @@ export async function getActiveDCASchedules(): Promise<DCASchedule[]> {
     try {
         return await db.select().from(dcaSchedules).where(eq(dcaSchedules.isActive, 1));
     } catch (error) {
-        console.error("Failed to get active DCA schedules", error);
+        logger.error("Failed to get active DCA schedules", error);
         return [];
     }
+
 }
 
 /**

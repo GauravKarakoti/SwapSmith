@@ -166,10 +166,11 @@ export async function parseWithLLM(
     });
 
     const parsed = JSON.parse(completion.choices[0].message.content || '{}');
-    console.log("LLM Parsed:", parsed);
+    logger.info("LLM Parsed:", parsed);
     return validateParsedCommand(parsed, userInput, inputType);
   } catch (error) {
-    console.error("Groq Error:", error);
+    logger.error("Groq Error:", error);
+
     return {
       success: false, intent: "unknown", confidence: 0,
       validationErrors: ["AI parsing failed"], parsedMessage: "",

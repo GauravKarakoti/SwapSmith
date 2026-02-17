@@ -1,17 +1,20 @@
 import { neon } from '@neondatabase/serverless';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
+import logger from '../services/logger';
 
 // Load .env from bot directory
 dotenv.config({ path: path.join(__dirname, '../../.env') });
+
 
 const sql = neon(process.env.DATABASE_URL!);
 
 async function runMigration() {
   try {
-    console.log('Starting migration to fix discussions table schema...');
+    logger.info('Starting migration to fix discussions table schema...');
     
-    console.log('Executing SQL...');
+    logger.info('Executing SQL...');
+
     
     // Drop table if exists
     await sql`DROP TABLE IF EXISTS discussions CASCADE`;
@@ -36,11 +39,12 @@ async function runMigration() {
     await sql`CREATE INDEX IF NOT EXISTS idx_discussions_category ON discussions(category)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_discussions_created_at ON discussions(created_at DESC)`;
     
-    console.log('✅ Migration completed successfully!');
-    console.log('The discussions table has been recreated with correct schema.');
+    logger.info('✅ Migration completed successfully!');
+    logger.info('The discussions table has been recreated with correct schema.');
     
   } catch (error) {
-    console.error('❌ Migration failed:', error);
+    logger.error('❌ Migration failed:', error);
+
     process.exit(1);
   }
 }

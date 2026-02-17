@@ -1,6 +1,8 @@
 import { parseWithLLM, ParsedCommand } from './groq-client';
+import logger from './logger';
 
 export { ParsedCommand };
+
 
 // Regex Patterns
 const REGEX_EXCLUSION = /(?:everything|all|entire|max)\\s*(?:[A-Z]+\\s+)?(?:except|but\\s+keep)\\s+(\\d+(\\.\\d+)?)\\s*([A-Z]+)?/i;
@@ -294,9 +296,10 @@ export async function parseUserCommand(
   }
 
   // 2. Fallback to LLM
-  console.log("Fallback to LLM for:", userInput);
+  logger.info("Fallback to LLM for:", userInput);
   try {
     const result = await parseWithLLM(userInput, conversationHistory, inputType);
+
     return {
       ...result,
       amountType: result.amountType || null,
@@ -306,8 +309,9 @@ export async function parseUserCommand(
       originalInput: userInput
     };
   } catch (error) {
-     console.error("LLM Error", error);
+     logger.error("LLM Error", error);
      return {
+
         success: false,
         intent: 'unknown',
         confidence: 0,
