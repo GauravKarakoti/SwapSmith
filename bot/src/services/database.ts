@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/neon-http';
 import { eq, desc, notInArray, and, sql, relations } from 'drizzle-orm';
 import { pgTable, serial, text, bigint, timestamp, integer, real, unique, pgEnum, uuid, boolean, numeric, jsonb, index } from 'drizzle-orm/pg-core';
 import dotenv from 'dotenv';
+import { safeParseJSON } from '../utils/safeParse';
 import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
 import type { ParsedCommand } from './parseUserCommand'; // Fixed import path from groq-client
 
@@ -368,7 +369,7 @@ export async function getConversationState(telegramId: number) {
     
     if (!result[0]?.state) return null;
 
-    const state = JSON.parse(result[0].state);
+    const state = safeParseJSON(result[0].state);
     const lastUpdated = result[0].lastUpdated;
 
     // Expire state after 1 hour

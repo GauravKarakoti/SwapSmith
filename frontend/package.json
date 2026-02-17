@@ -17,6 +17,7 @@
     "drizzle-kit": "^0.31.9",
     "drizzle-orm": "^0.45.1",
     "firebase": "^12.9.0",
+    "firebase-admin": "^13.6.1",
     "framer-motion": "^12.30.1",
     "groq-sdk": "^0.32.0",
     "gsap": "^3.14.2",

@@ -40,6 +40,7 @@ import { useAuth } from '@/hooks/useAuth'
 import Navbar from '@/components/Navbar'
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
+import type { EmailNotificationPrefs } from '@/types/profile';
 
 // Types
 interface SwapHistoryItem {
