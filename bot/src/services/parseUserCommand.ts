@@ -5,26 +5,24 @@ export { ParsedCommand };
 
 
 // Regex Patterns
-const REGEX_EXCLUSION = /(?:everything|all|entire|max)\s*(?:[A-Z]+\s+)?(?:except|but\s+keep)\s+(\d+(\.\d+)?)\s*([A-Z]+)?/i;
-const REGEX_PERCENTAGE = /(\d+(\.\d+)?)\s*(?:%|percent)\s*(?:of\s+(?:my\s+)?)?([A-Z]+)?/i;
-const REGEX_HALF = /\b(half)\b\s*(?:of\s+(?:my\s+)?)?([A-Z]+)?/i;
-const REGEX_QUARTER = /\b(quarter)\b\s*(?:of\s+(?:my\s+)?)?([A-Z]+)?/i;
-const REGEX_MAX_ALL = /\b(max|all|everything|entire)\b/i;
-const REGEX_ALL_TOKEN = /(max|all|everything|entire)\s+([A-Z]+)/i; // "all ETH"
+const REGEX_EXCLUSION = /(?:everything|all|entire|max)\\s*(?:[A-Z]+\\s+)?(?:except|but\\s+keep)\\s+(\\d+(\\.\\d+)?)\\s*([A-Z]+)?/i;
+const REGEX_PERCENTAGE = /(\\d+(\\.\\d+)?)\\s*(?:%|percent)\\s*(?:of\\s+(?:my\\s+)?)?([A-Z]+)?/i;
+const REGEX_HALF = /\\b(half)\\b\\s*(?:of\\s+(?:my\\s+)?)?([A-Z]+)?/i;
+const REGEX_QUARTER = /\\b(quarter)\\b\\s*(?:of\\s+(?:my\\s+)?)?([A-Z]+)?/i;
+const REGEX_MAX_ALL = /\\b(max|all|everything|entire)\\b/i;
+const REGEX_ALL_TOKEN = /(max|all|everything|entire)\\s+([A-Z]+)/i; // "all ETH"
 
-const REGEX_TOKENS = /([A-Z]+)\s+(to|into|for)\s+([A-Z]+)/i; // "ETH to BTC"
-const REGEX_FROM_TO = /from\s+([A-Z]+)\s+to\s+([A-Z]+)/i; // "from ETH to BTC"
-const REGEX_AMOUNT_TOKEN = /\b(\d+(\.\d+)?)\s+(?!to|into|for|from|with|using\b)([A-Z]+)\b/i; // "10 ETH" (exclude prepositions)
-
-// New Regex for Conditions
+const REGEX_TOKENS = /([A-Z]+)\\s+(to|into|for)\\s+([A-Z]+)/i; // "ETH to BTC"
+const REGEX_FROM_TO = /from\\s+([A-Z]+)\\s+to\\s+([A-Z]+)/i; // "from ETH to BTC"
+const REGEX_AMOUNT_TOKEN = /\\b(\\d+(\\.\\d+)?)\\s+(?!to|into|for|from|with|using\\b)([A-Z]+)\\b/i; // "10 ETH" (exclude prepositions)
 const REGEX_CONDITION = /(?:if|when)\s+(?:the\s+)?(?:price|rate|market|value)?\s*(?:of\s+)?([A-Z]+)?\s*(?:is|goes|drops|rises|falls)?\s*(above|below|greater|less|more|under|>|<)\s*(?:than)?\s*(\$?[\d,]+(\.\d+)?)/i;
 
 // New Regex for Quote Amount ("Worth")
 // Capture optional preceding token (group 1), amount (group 3), optional following token (group 5)
-const REGEX_QUOTE = /(?:([A-Z]+)\s+)?(?:worth|value|valued\s+at)\s*(?:of)?\s*(\$)?(\d+(\.\d+)?)\s*([A-Z]+)?/i;
+const REGEX_QUOTE = /(?:([A-Z]+)\\s+)?(?:worth|value|valued\\s+at)\\s*(?:of)?\\s*(\\$)?(\\d+(\\.\\d+)?)\\s*([A-Z]+)?/i;
 
 // New Regex for Multiple Source Assets
-const REGEX_MULTI_SOURCE = /([A-Z]+)\s+(?:and|&)\s+([A-Z]+)\s+(?:to|into|for)/i;
+const REGEX_MULTI_SOURCE = /([A-Z]+)\\s+(?:and|&)\\s+([A-Z]+)\\s+(?:to|into|for)/i;
 
 // New Regex for Staking Keywords
 const REGEX_STAKE = /\b(stake|staking|stake it|immediately stake|then stake|stake for|auto-stake|deposit.*stake|stake.*immediately)\b/i;
@@ -68,14 +66,14 @@ export async function parseUserCommand(
   let input = userInput.trim();
 
   // Pre-processing: Remove fillers
-  input = input.replace(/^(hey|hi|hello|please|kindly|can you)\s+/i, '')
-               .replace(/\s+(please|kindly|immediately|now|right now)$/i, '')
-               .replace(/\b(like)\b/gi, '') // "swap like 100" -> "swap 100"
+  input = input.replace(/^(hey|hi|hello|please|kindly|can you)\\s+/i, '')
+               .replace(/\\s+(please|kindly|immediately|now|right now)$/i, '')
+               .replace(/\\b(like)\\b/gi, '') // "swap like 100" -> "swap 100"
                .trim();
 
   // 1. Check for Swap Intent Keywords
   // Expanded list to catch more variations
-  const isSwapRelated = /\b(swap|convert|send|transfer|buy|sell|move|exchange)\b/i.test(input);
+  const isSwapRelated = /\\b(swap|convert|send|transfer|buy|sell|move|exchange)\\b/i.test(input);
 
   if (isSwapRelated) {
     let intent: ParsedCommand['intent'] = 'swap';
@@ -251,7 +249,7 @@ export async function parseUserCommand(
            confidence += 20;
        } else {
            // Standalone number?
-           const numMatch = input.match(/\b(\d+(\.\d+)?)\b/);
+           const numMatch = input.match(/\\b(\\d+(\\.\\d+)?)\\b/);
            if (numMatch) {
                // Check if this number was part of exclusion?
                if (amountType !== 'all') { // If exclusion, we ignore other numbers unless relevant
@@ -289,6 +287,7 @@ export async function parseUserCommand(
             conditionOperator = 'lt';
         }
 
+        intent = 'limit_order'; // Change intent if condition is found
         confidence += 30;
     }
 
@@ -305,14 +304,14 @@ export async function parseUserCommand(
             conditionAsset = fromAsset;
         }
 
-        let parsedMessage = `Parsed: ${amountType || amount || (quoteAmount ? 'Value ' + quoteAmount : '?')} ${fromAsset || '?'} -> ${toAsset || '?'}`;
+        let parsedMessage = `Parsed: \${amountType || amount || (quoteAmount ? 'Value ' + quoteAmount : '?')} \${fromAsset || '?'} -> \${toAsset || '?'}`;
         if (conditionOperator && conditionValue) {
-            parsedMessage += ` if ${conditionAsset || fromAsset} ${conditionOperator === 'gt' ? '>' : '<'} ${conditionValue}`;
+            parsedMessage += ` if \${conditionAsset || fromAsset} \${conditionOperator === 'gt' ? '>' : '<'} \${conditionValue}`;
         }
 
         return {
             success: true, // Mark as success parsing, even if validation fails later
-            intent: intent,
+            intent: intent, // Use the detected intent (swap or limit_order)
             fromAsset: fromAsset || null,
             fromChain: null,
             toAsset: toAsset || null,
@@ -333,6 +332,8 @@ export async function parseUserCommand(
             conditionOperator,
             conditionValue,
             conditionAsset,
+            targetPrice: conditionValue,
+            condition: conditionOperator === 'gt' ? 'above' : 'below',
 
             confidence: Math.min(100, confidence + 30),
             validationErrors: [],

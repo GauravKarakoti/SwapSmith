@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import axios from 'axios';
-import { exec, execSync } from 'child_process';
+import { exec } from 'child_process';
 import express from 'express';
 
 // Services
@@ -28,15 +28,13 @@ import {
 } from './services/staking-service';
 import * as db from './services/database';
 import { OrderMonitor } from './services/order-monitor';
-import { tokenResolver } from './services/token-resolver'; // Kept if needed by other logic, though not explicitly used below
-import { chainIdMap } from './config/chains';
 import { parseUserCommand } from './services/parseUserCommand';
 
 dotenv.config();
 
 // --- Configuration ---
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const MINI_APP_URL = process.env.MINI_APP_URL || 'https://swap-smith.vercel.app/';
+const MINI_APP_URL = process.env.MINI_APP_URL || 'https://swapsmithminiapp.netlify.app/';
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 
 if (!BOT_TOKEN) {
@@ -279,7 +277,7 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
     if (parsed.intent === 'yield_deposit') {
         // Logic to bridge/swap into a yield pool
         const pools = await getTopYieldPools();
-        const matchingPool = pools.find(p => p.symbol === parsed.fromAsset?.toUpperCase());
+        const matchingPool = pools.find((p: any) => p.symbol === parsed.fromAsset?.toUpperCase());
 
         if (!matchingPool) {
             return ctx.reply(`Sorry, no suitable yield pool found for ${parsed.fromAsset}. Try /yield to see options.`);
