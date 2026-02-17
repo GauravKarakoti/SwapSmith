@@ -12,6 +12,7 @@ import {
   Terminal as TerminalIcon,
   MessageSquare,
   BookOpen,
+  Trophy,
   Menu,
   X,
   Info,
@@ -99,7 +100,69 @@ export default function Navbar() {
           <div className="flex items-center gap-4 min-w-0">
             <Link
               href="/"
-              className="flex items-center gap-2 hover:opacity-80 transition"
+              className={`flex items-center gap-1.5 text-sm font-semibold transition-colors px-2 sm:px-3 py-2 rounded-lg ${
+                pathname === "/" ? "text-white" : "text-zinc-400 hover:text-white hover:bg-zinc-800"
+              }`}
+            >
+              <Home className="w-4 h-4" />
+              <span className="hidden sm:inline">Home</span>
+            </Link>
+
+            <Link
+              href="/prices"
+              className={`flex items-center gap-1.5 text-sm font-semibold transition-colors px-2 sm:px-3 py-2 rounded-lg ${
+                pathname === "/prices"
+                  ? "text-white bg-blue-600"
+                  : "text-zinc-400 hover:text-white hover:bg-zinc-800"
+              }`}
+            >
+              <TrendingUp className="w-4 h-4" />
+              <span className="hidden sm:inline">Live Prices</span>
+            </Link>
+
+            <Link
+              href="/discussions"
+              className={`flex items-center gap-1.5 text-sm font-semibold transition-colors px-2 sm:px-3 py-2 rounded-lg ${
+                pathname === "/discussions"
+                  ? "text-white bg-blue-600"
+                  : "text-zinc-400 hover:text-white hover:bg-zinc-800"
+              }`}
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span className="hidden sm:inline">Discussions</span>
+            </Link>
+
+            <Link
+              href="/learn"
+              className={`flex items-center gap-1.5 text-sm font-semibold transition-colors px-2 sm:px-3 py-2 rounded-lg ${
+                pathname === "/learn"
+                  ? "text-white bg-blue-600"
+                  : "text-zinc-400 hover:text-white hover:bg-zinc-800"
+              }`}
+            >
+              <BookOpen className="w-4 h-4" />
+              <span className="hidden sm:inline">Learn</span>
+            </Link>
+
+            <Link
+              href="/rewards"
+              className={`flex items-center gap-1.5 text-sm font-semibold transition-colors px-2 sm:px-3 py-2 rounded-lg ${
+                pathname === "/rewards"
+                  ? "text-white bg-blue-600"
+                  : "text-zinc-400 hover:text-white hover:bg-zinc-800"
+              }`}
+            >
+              <BookOpen className="w-4 h-4" />
+              <span className="hidden sm:inline">Rewards</span>
+            </Link>
+
+            <Link
+              href="/terminal"
+              className={`flex items-center gap-1.5 text-sm font-semibold transition-colors px-2 sm:px-3 py-2 rounded-lg ${
+                pathname === "/terminal"
+                  ? "text-white"
+                  : "text-zinc-400 hover:text-white hover:bg-zinc-800"
+              }`}
             >
               <div className="bg-blue-600 p-1.5 rounded-lg">
                 <Zap className="w-4 h-4 text-white" fill="white" />
@@ -199,6 +262,14 @@ export default function Navbar() {
                     </Link>
 
                     <Link
+                      href="/rewards"
+                      onClick={() => setShowProfileMenu(false)}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 transition-colors text-sm text-zinc-200"
+                    >
+                      <Trophy className="w-4 h-4" />
+                      <span>Rewards</span>
+                    </Link>
+                    <Link
                       href="/learn"
                       className="flex items-center gap-3 px-4 py-3 text-sm text-zinc-200 hover:bg-zinc-800"
                       onClick={() => setShowProfileMenu(false)}
@@ -206,7 +277,14 @@ export default function Navbar() {
                       <BookOpen className="w-4 h-4" />
                       Learning Center
                     </Link>
-
+                    <Link
+                      href="/about"
+                      onClick={() => setShowProfileMenu(false)}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 transition-colors text-sm text-zinc-200"
+                    >
+                      <Info className="w-4 h-4" />
+                      <span>About</span>
+                    </Link>
                     <div className="h-px bg-zinc-800" />
 
                     <button

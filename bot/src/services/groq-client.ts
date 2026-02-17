@@ -3,7 +3,6 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import { handleError } from './logger';
 import { analyzeCommand, generateContextualHelp } from './contextual-help';
-import { safeParseLLMJson } from "../utils/safe-json";
 
 dotenv.config();
 
@@ -25,7 +24,7 @@ const groq = getGroqClient();
 
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "unknown";
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "unknown";
   
   // Single Swap Fields
   fromAsset: string | null;
@@ -47,9 +46,11 @@ export interface ParsedCommand {
   }[];
 
   // DCA Fields
-  frequency?: "daily" | "weekly" | "monthly" | null;
+  frequency?: "daily" | "weekly" | "monthly" | string | null;
   dayOfWeek?: string | null;
   dayOfMonth?: string | null;
+  totalAmount?: number;
+  numPurchases?: number;
 
   // Checkout Fields
   settleAsset: string | null;
@@ -67,6 +68,8 @@ export interface ParsedCommand {
   conditionOperator?: 'gt' | 'lt';
   conditionValue?: number;
   conditionAsset?: string;
+  targetPrice?: number;
+  condition?: 'above' | 'below';
 
   confidence: number;
   validationErrors: string[];
@@ -88,13 +91,14 @@ MODES:
 5. "yield_deposit": Deposit assets into yield platforms.
 6. "yield_migrate": Move funds between pools.
 7. "dca": Dollar Cost Averaging.
+8. "limit_order": Buy/Sell at specific price.
 
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
 
 RESPONSE FORMAT:
 {
   "success": boolean,
-  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca",
+  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order",
   "fromAsset": string | null,
   "fromChain": string | null,
   "amount": number | null,
@@ -114,6 +118,14 @@ RESPONSE FORMAT:
   "parsedMessage": "Human readable summary",
   "requiresConfirmation": boolean,
 
+  // Limit Order
+  "targetPrice": number | null,
+  "condition": "above" | "below" | null,
+  
+  // DCA
+  "totalAmount": number | null,
+  "numPurchases": number | null,
+
   // Fill for 'swap_and_stake'
   "stakeAsset": string | null,
   "stakeProtocol": string | null,
@@ -131,7 +143,7 @@ export async function parseWithLLM(
 
   if (inputType === 'voice') {
     currentSystemPrompt += `
-    \n\nVOICE MODE ACTIVE: 
+    \\n\\nVOICE MODE ACTIVE: 
     1. The user is speaking. Be more lenient with phonetic typos.
     2. In 'parsedMessage', write as if spoken aloud.
     `;
@@ -213,6 +225,16 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     fromYield: parsed.fromYield || null,
     toProject: parsed.toProject || null,
     toYield: parsed.toYield || null,
+    
+    // New fields
+    targetPrice: parsed.targetPrice,
+    condition: parsed.condition,
+    totalAmount: parsed.totalAmount,
+    numPurchases: parsed.numPurchases,
+    conditionOperator: parsed.conditionOperator,
+    conditionValue: parsed.conditionValue,
+    conditionAsset: parsed.conditionAsset,
+
     confidence: confidence || 0,
 
     validationErrors: allErrors,
