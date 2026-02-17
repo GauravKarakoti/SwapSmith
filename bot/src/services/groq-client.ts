@@ -4,7 +4,6 @@ import fs from 'fs';
 import logger, { handleError } from './logger';
 
 import { analyzeCommand, generateContextualHelp } from './contextual-help';
-import { safeParseLLMJson } from "../utils/safe-json";
 
 dotenv.config();
 
@@ -26,7 +25,7 @@ const groq = getGroqClient();
 
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "unknown";
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "unknown";
   
   // Single Swap Fields
   fromAsset: string | null;
@@ -48,9 +47,11 @@ export interface ParsedCommand {
   }[];
 
   // DCA Fields
-  frequency?: "daily" | "weekly" | "monthly" | null;
+  frequency?: "daily" | "weekly" | "monthly" | string | null;
   dayOfWeek?: string | null;
   dayOfMonth?: string | null;
+  totalAmount?: number;
+  numPurchases?: number;
 
   // Checkout Fields
   settleAsset: string | null;
@@ -68,6 +69,8 @@ export interface ParsedCommand {
   conditionOperator?: 'gt' | 'lt';
   conditionValue?: number;
   conditionAsset?: string;
+  targetPrice?: number;
+  condition?: 'above' | 'below';
 
   confidence: number;
   validationErrors: string[];
@@ -95,46 +98,16 @@ MODES:
    Example: "What are the best yields right now?"
 
 5. "yield_deposit": Deposit assets into yield platforms.
-   Example: "Deposit 1000 USDC into Aave"
-   
-6. "yield_migrate": Move funds between yield pools.
-   Example: "Move my ETH from Lido to Rocket Pool"
-   
-7. "dca": Dollar Cost Averaging - recurring swaps on a schedule.
-   DESCRIPTION: User wants to buy an asset repeatedly at regular intervals.
-   DETECTION KEYWORDS: daily, weekly, every day, every week, every month, recurring, schedule, automate, periodic, each week, every Friday, on the 15th, every Monday, etc.
-   FIELDS NEEDED:
-   - fromAsset: Asset being sold (e.g., "USDC", "ETH")
-   - fromChain: Blockchain for source asset
-   - toAsset: Asset being bought (e.g., "BTC", "SOL")
-   - toChain: Blockchain for destination asset
-   - amount: Amount per transaction (e.g., "100" = 100 USDC per swap)
-   - frequency: "daily" | "weekly" | "monthly"
-   - dayOfWeek: For weekly - "monday", "tuesday", etc. (only if weekly)
-   - dayOfMonth: For monthly - "1", "15", etc. (only if monthly)
-   EXAMPLES:
-   - "Buy 100 USDC worth of ETH every day" → intent: "dca", fromAsset: "USDC", toAsset: "ETH", amount: 100, frequency: "daily"
-   - "Swap 50 USDT to BTC every week on Monday" → intent: "dca", fromAsset: "USDT", toAsset: "BTC", amount: 50, frequency: "weekly", dayOfWeek: "monday"
-   - "Every month on the 15th, convert 500 USDC to SOL" → intent: "dca", fromAsset: "USDC", toAsset: "SOL", amount: 500, frequency: "monthly", dayOfMonth: "15"
-
-8. ADVANCED: Limit Orders with Conditions (special use of "swap" intent).
-   DESCRIPTION: Execute a swap only when a price condition is met.
-   DETECTION KEYWORDS: "if", "when", "only if", "once", "trigger at", "at price", "when price", "condition", etc.
-   FIELDS (in addition to swap fields):
-   - conditionAsset: Asset whose price is being monitored (e.g., "BTC")
-   - conditionOperator: "gt" (greater than/above) | "lt" (less than/below)
-   - conditionValue: Price threshold (e.g., 50000)
-   USE "swap" INTENT WITH THESE FIELDS.
-   EXAMPLES:
-   - "Swap 100 ETH to BTC if ETH price goes above 5000" → intent: "swap", fromAsset: "ETH", toAsset: "BTC", amount: 100, conditionAsset: "ETH", conditionOperator: "gt", conditionValue: 5000
-   - "Convert 1000 USDC to SOL only when SOL drops below 200" → intent: "swap", fromAsset: "USDC", toAsset: "SOL", amount: 1000, conditionAsset: "SOL", conditionOperator: "lt", conditionValue: 200
+6. "yield_migrate": Move funds between pools.
+7. "dca": Dollar Cost Averaging.
+8. "limit_order": Buy/Sell at specific price.
 
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
 
 RESPONSE FORMAT:
 {
   "success": boolean,
-  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca",
+  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order",
   "fromAsset": string | null,
   "fromChain": string | null,
   "amount": number | null,
@@ -155,7 +128,20 @@ RESPONSE FORMAT:
   "confidence": number,
   "validationErrors": string[],
   "parsedMessage": "Human readable summary",
-  "requiresConfirmation": boolean
+  "requiresConfirmation": boolean,
+
+  // Limit Order
+  "targetPrice": number | null,
+  "condition": "above" | "below" | null,
+  
+  // DCA
+  "totalAmount": number | null,
+  "numPurchases": number | null,
+
+  // Fill for 'swap_and_stake'
+  "stakeAsset": string | null,
+  "stakeProtocol": string | null,
+  "stakeChain": string | null
 }
 `;
 
@@ -169,7 +155,7 @@ export async function parseWithLLM(
 
   if (inputType === 'voice') {
     currentSystemPrompt += `
-    \n\nVOICE MODE ACTIVE: 
+    \\n\\nVOICE MODE ACTIVE: 
     1. The user is speaking. Be more lenient with phonetic typos.
     2. In 'parsedMessage', write as if spoken aloud.
     `;
@@ -252,6 +238,16 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     fromYield: parsed.fromYield || null,
     toProject: parsed.toProject || null,
     toYield: parsed.toYield || null,
+    
+    // New fields
+    targetPrice: parsed.targetPrice,
+    condition: parsed.condition,
+    totalAmount: parsed.totalAmount,
+    numPurchases: parsed.numPurchases,
+    conditionOperator: parsed.conditionOperator,
+    conditionValue: parsed.conditionValue,
+    conditionAsset: parsed.conditionAsset,
+
     confidence: confidence || 0,
 
     validationErrors: allErrors,

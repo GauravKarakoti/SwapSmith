@@ -19,9 +19,8 @@ export interface YieldPool {
   poolId?: string; // DefiLlama pool ID
 }
 
-<<<<<<< HEAD
 export interface StakingQuote {
-  pool: StakingPool;
+  pool: YieldPool;
   stakeAmount: string;
   estimatedReward: string;
   lockPeriod?: string;
@@ -29,6 +28,16 @@ export interface StakingQuote {
     to: string;
     value: string;
     data: string;
+  }
+}
+
+export async function getTopYieldPools(): Promise<YieldPool[]> {
+  try {
+    // Fetch data from yield aggregator (likely DefiLlama based on variable names)
+    const response = await axios.get('https://yields.llama.fi/pools');
+    const data = response.data.data;
+
+    const topPools = data.filter((p: any) => 
         ['USDC', 'USDT', 'DAI'].includes(p.symbol) && 
         ['Ethereum', 'Polygon', 'Arbitrum', 'Optimism', 'Base', 'Avalanche'].includes(p.chain)
       )
