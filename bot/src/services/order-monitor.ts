@@ -1,5 +1,7 @@
 import type { SideShiftOrderStatus } from './sideshift-client';
 import type { Order } from './database';
+import logger from './logger';
+
 
 // --- Types ---
 
@@ -75,8 +77,9 @@ export class OrderMonitor {
     /** Start the background polling loop. */
     start(): void {
         if (this.tickTimer) return; // already running
-        console.log(`[OrderMonitor] Started — tracking ${this.tracked.size} order(s)`);
+        logger.info(`[OrderMonitor] Started — tracking ${this.tracked.size} order(s)`);
         this.tickTimer = setInterval(() => this.tick(), TICK_INTERVAL);
+
     }
 
     /** Stop the polling loop. Safe to call multiple times. */
@@ -84,8 +87,9 @@ export class OrderMonitor {
         if (this.tickTimer) {
             clearInterval(this.tickTimer);
             this.tickTimer = null;
-            console.log('[OrderMonitor] Stopped');
+            logger.info('[OrderMonitor] Stopped');
         }
+
     }
 
     /** Add a new order to the tracking map. */
@@ -98,8 +102,9 @@ export class OrderMonitor {
             lastChecked: 0,
             lastStatus: 'pending',
         });
-        console.log(`[OrderMonitor] Now tracking order ${orderId} (total: ${this.tracked.size})`);
+        logger.info(`[OrderMonitor] Now tracking order ${orderId} (total: ${this.tracked.size})`);
     }
+
 
     /** Remove an order from the tracking map. */
     untrackOrder(orderId: string): void {
@@ -120,10 +125,11 @@ export class OrderMonitor {
                 const tracked = this.tracked.get(order.sideshiftOrderId);
                 if (tracked) tracked.lastStatus = order.status;
             }
-            console.log(`[OrderMonitor] Loaded ${pendingOrders.length} pending order(s) from DB`);
+            logger.info(`[OrderMonitor] Loaded ${pendingOrders.length} pending order(s) from DB`);
         } catch (error) {
-            console.error('[OrderMonitor] Failed to load pending orders:', error);
+            logger.error('[OrderMonitor] Failed to load pending orders:', error);
         }
+
     }
 
     /** Returns the number of orders currently being tracked. */
@@ -181,11 +187,12 @@ export class OrderMonitor {
                 // If terminal, stop tracking
                 if (TERMINAL_STATUSES.has(newStatus)) {
                     this.untrackOrder(order.orderId);
-                    console.log(`[OrderMonitor] Order ${order.orderId} reached terminal state: ${newStatus}`);
+                    logger.info(`[OrderMonitor] Order ${order.orderId} reached terminal state: ${newStatus}`);
                 }
             }
         } catch (error) {
-            console.error(`[OrderMonitor] Error polling order ${order.orderId}:`, error);
+            logger.error(`[OrderMonitor] Error polling order ${order.orderId}:`, error);
+
             // Don't remove — will retry on next tick
         } finally {
             this.activePollCount--;

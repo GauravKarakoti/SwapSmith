@@ -5,6 +5,8 @@ import { eq, desc, notInArray, and, sql } from 'drizzle-orm';
 import dotenv from 'dotenv';
 import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
 import type { ParsedCommand } from './groq-client';
+import logger from './logger';
+
 
 dotenv.config();
 
@@ -231,9 +233,10 @@ export async function resolveNickname(telegramId: number, nickname: string): Pro
       
     return result[0]?.address || null;
   } catch (error) {
-    console.error('Error resolving nickname:', error);
+    logger.error('Error resolving nickname:', error);
     return null;
   }
+
 }
 
 export async function getUser(telegramId: number): Promise<User | undefined> {
@@ -397,9 +400,10 @@ export async function getActiveDCASchedules(): Promise<DCASchedule[]> {
     try {
         return await db.select().from(dcaSchedules).where(eq(dcaSchedules.isActive, 'true'));
     } catch (error) {
-        console.error("Failed to get active DCA schedules", error);
+        logger.error("Failed to get active DCA schedules", error);
         return [];
     }
+
 }
 
 /**

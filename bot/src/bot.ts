@@ -11,6 +11,8 @@ import { ethers } from 'ethers';
 
 // Services
 import { transcribeAudio } from './services/groq-client';
+import logger from './services/logger';
+
 import {
     createQuote,
     createOrder,
@@ -90,8 +92,9 @@ const orderMonitor = new OrderMonitor({
         try {
             await bot.telegram.sendMessage(telegramId, msg, { parse_mode: 'Markdown' });
         } catch (e) {
-            console.error('Order update notify failed:', e);
+            logger.error('Order update notify failed:', e);
         }
+
     }
 });
 
@@ -220,8 +223,9 @@ bot.on(message('voice'), async (ctx) => {
         await handleTextMessage(ctx, text, 'voice');
 
     } catch (e) {
-        console.error('Voice error:', e);
+        logger.error('Voice error:', e);
         ctx.reply('❌ Could not process audio.');
+
     } finally {
         if (fs.existsSync(oga)) fs.unlinkSync(oga);
         if (fs.existsSync(mp3)) fs.unlinkSync(mp3);
@@ -348,8 +352,9 @@ app.listen(process.env.PORT || 3000);
     await orderMonitor.loadPendingOrders();
     orderMonitor.start();
     bot.launch();
-    console.log('🤖 Bot running');
+    logger.info('🤖 Bot running');
 })();
+
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));

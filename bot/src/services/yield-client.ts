@@ -7,6 +7,8 @@ import {
   updateStakeOrderStakeStatus,
   type StakeOrder 
 } from './database';
+import logger from './logger';
+
 
 export interface YieldPool {
   chain: string;
@@ -45,8 +47,9 @@ export interface StakingQuote {
     }));
 
   } catch (error) {
-    console.error("Yield fetch error, using fallback data:", error);
+    logger.error("Yield fetch error, using fallback data:", error);
     // Fallback Mock Data for demo reliability
+
     return [
       { chain: 'Base', project: 'Aave', symbol: 'USDC', tvlUsd: 5000000, apy: 12.4, poolId: 'base-aave-usdc' },
       { chain: 'Base', project: 'merkl', symbol: 'USDC', tvlUsd: 8000000, apy: 22.79, poolId: 'base-merkl-usdc' },
