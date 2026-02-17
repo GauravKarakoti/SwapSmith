@@ -31,6 +31,16 @@ export default function Navbar() {
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const NAV_ITEMS = [
+    { href: "/", label: "Home", Icon: Home },
+    { href: "/prices", label: "Live Prices", Icon: TrendingUp },
+    { href: "/discussions", label: "Discussions", Icon: MessageSquare },
+    { href: "/learn", label: "Learn", Icon: BookOpen },
+    { href: "/rewards", label: "Rewards", Icon: Trophy },
+    { href: "/terminal", label: "Terminal", Icon: TerminalIcon },
+    { href: "/about", label: "About", Icon: Info },
+  ];
+
   // Close mobile menu on route change
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -184,16 +194,8 @@ export default function Navbar() {
 
           {/* RIGHT */}
           <div className="flex items-center gap-2 sm:gap-4">
-            {/* Desktop Links */}
             <div className="hidden md:flex items-center gap-1">
-              {[
-                ["/", "Home", Home],
-                ["/prices", "Live Prices", TrendingUp],
-                ["/discussions", "Discussions", MessageSquare],
-                ["/learn", "Learn", BookOpen],
-                ["/terminal", "Terminal", TerminalIcon],
-                ["/about", "About", Info],
-              ].map(([href, label, Icon]) => (
+              {NAV_ITEMS.map(({ href, label, Icon }) => (
                 <Link
                   key={href}
                   href={href}
