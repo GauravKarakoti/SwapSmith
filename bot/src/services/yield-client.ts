@@ -1,4 +1,14 @@
 import axios from 'axios';
+import { getStakingAbi, getStakingSelector, STAKING_FUNCTION_SELECTORS } from '../config/staking-abis';
+import { getOrderStatus } from './sideshift-client';
+import { 
+  getPendingStakeOrders, 
+  updateStakeOrderSwapStatus, 
+  updateStakeOrderStakeStatus,
+  type StakeOrder 
+} from './database';
+import logger from './logger';
+
 
 export interface YieldPool {
   chain: string;
@@ -9,17 +19,26 @@ export interface YieldPool {
   poolId?: string; // DefiLlama pool ID
 }
 
+export interface StakingQuote {
+  pool: YieldPool;
+  stakeAmount: string;
+  estimatedReward: string;
+  lockPeriod?: string;
+  transactionData?: {
+    to: string;
+    value: string;
+    data: string;
+  }
+}
+
 export async function getTopYieldPools(): Promise<YieldPool[]> {
   try {
-    // Attempt to fetch from DefiLlama (Open API)
+    // Fetch data from yield aggregator (likely DefiLlama based on variable names)
     const response = await axios.get('https://yields.llama.fi/pools');
     const data = response.data.data;
 
-    // Filter for stablecoins, high APY, major chains, and sufficient TVL
-    const topPools = data
-      .filter((p: any) => 
+    const topPools = data.filter((p: any) => 
         ['USDC', 'USDT', 'DAI'].includes(p.symbol) && 
-        p.tvlUsd > 1000000 && 
         ['Ethereum', 'Polygon', 'Arbitrum', 'Optimism', 'Base', 'Avalanche'].includes(p.chain)
       )
       .sort((a: any, b: any) => b.apy - a.apy)
@@ -37,8 +56,9 @@ export async function getTopYieldPools(): Promise<YieldPool[]> {
     }));
 
   } catch (error) {
-    console.error("Yield fetch error, using fallback data:", error);
+    logger.error("Yield fetch error, using fallback data:", error);
     // Fallback Mock Data for demo reliability
+
     return [
       { chain: 'Base', project: 'Aave', symbol: 'USDC', tvlUsd: 5000000, apy: 12.4, poolId: 'base-aave-usdc' },
       { chain: 'Base', project: 'merkl', symbol: 'USDC', tvlUsd: 8000000, apy: 22.79, poolId: 'base-merkl-usdc' },
