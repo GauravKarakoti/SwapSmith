@@ -1,7 +1,8 @@
 import Groq from "groq-sdk";
 import dotenv from 'dotenv';
 import fs from 'fs';
-import { handleError } from './logger';
+import logger, { handleError } from './logger';
+
 import { analyzeCommand, generateContextualHelp } from './contextual-help';
 
 dotenv.config();
@@ -249,7 +250,15 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
           const analysis = analyzeCommand(result);
           const help = generateContextualHelp(analysis, userInput, inputType);
           result.validationErrors.push(help);
-      } catch (e) { console.error("Help Gen Failed", e); }
+      } catch (e) { 
+          logger.error('ContextualHelpGenerationError', {
+              error: e instanceof Error ? e.message : 'Unknown error',
+              stack: e instanceof Error ? e.stack : undefined,
+              operation: 'generateContextualHelp',
+              parsedCommand: result
+          });
+      }
+
   }
 
   return result;
