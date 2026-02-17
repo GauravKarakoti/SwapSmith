@@ -66,8 +66,8 @@ async function executeLimitOrder(order: DelayedOrder): Promise<void> {
     // Store in const to satisfy TypeScript
     const settleAddress: string = order.settleAddress;
 
-    // Update status to active
-    await db.updateDelayedOrderStatus(order.id, 'active');
+    // Update status to active (though for limits active is default, this might lock it)
+    // For now we just proceed
 
     // Ensure required fields are present
     const fromAsset = order.fromAsset || 'USDC';
@@ -95,8 +95,8 @@ async function executeLimitOrder(order: DelayedOrder): Promise<void> {
       throw new Error('Failed to create SideShift order');
     }
 
-    // Update order status
-    await db.updateDelayedOrderStatus(order.id, 'completed', 1);
+    // Update order status to completed
+    await db.updateDelayedOrderStatus(order.id, 'completed');
 
     // Notify user
     await notifyUser(order.telegramId, 
@@ -115,9 +115,6 @@ async function executeLimitOrder(order: DelayedOrder): Promise<void> {
       orderId: order.id,
       telegramId: order.telegramId
     }, null, false);
-
-    // Update status to failed but keep it pending for retry
-    await db.updateDelayedOrderStatus(order.id, 'pending');
 
     // Notify user of failure
     await notifyUser(order.telegramId,
@@ -146,7 +143,7 @@ export async function checkAndExecuteDCA(): Promise<void> {
       }
 
       // Check if DCA is complete
-      if (order.executionCount >= order.maxExecutions) {
+      if (order.executionCount !== undefined && order.maxExecutions !== undefined && order.executionCount >= order.maxExecutions) {
         await db.updateDelayedOrderStatus(order.id, 'completed');
         await notifyUser(order.telegramId,
           `✅ *DCA Complete!*\n\n` +
@@ -169,7 +166,9 @@ export async function checkAndExecuteDCA(): Promise<void> {
  */
 async function executeDCAPurchase(order: DelayedOrder): Promise<void> {
   try {
-    console.log(`[OrderWorker] Executing DCA purchase ${order.executionCount + 1}/${order.maxExecutions} for order ${order.id}`);
+    const currentCount = order.executionCount || 0;
+    const maxCount = order.maxExecutions || 10;
+    console.log(`[OrderWorker] Executing DCA purchase ${currentCount + 1}/${maxCount} for order ${order.id}`);
 
     // Validate settle address
     if (!order.settleAddress) {
@@ -178,9 +177,6 @@ async function executeDCAPurchase(order: DelayedOrder): Promise<void> {
 
     // Store in const to satisfy TypeScript
     const settleAddress: string = order.settleAddress;
-
-    // Update status to active
-    await db.updateDelayedOrderStatus(order.id, 'active');
 
     // Ensure required fields are present
     const fromAsset = order.fromAsset || 'USDC';
@@ -213,13 +209,13 @@ async function executeDCAPurchase(order: DelayedOrder): Promise<void> {
     const nextExecutionAt = calculateNextExecution(frequency, order.nextExecutionAt);
 
     // Update order status and increment execution count
-    const newExecutionCount = (order.executionCount || 0) + 1;
+    const newExecutionCount = currentCount + 1;
     await db.updateDelayedOrderStatus(order.id, 'pending', newExecutionCount, nextExecutionAt);
 
     // Notify user
     await notifyUser(order.telegramId,
       `✅ *DCA Purchase Executed!*\n\n` +
-      `Purchase ${newExecutionCount}/${order.maxExecutions} completed.\n` +
+      `Purchase ${newExecutionCount}/${maxCount} completed.\n` +
       `Bought ${order.amount} worth of ${order.toAsset}.\n\n` +
       `Order ID: \`${sideshiftOrder.id}\`\n` +
       `Next purchase: ${nextExecutionAt ? nextExecutionAt.toLocaleDateString() : 'N/A'}`
@@ -235,9 +231,6 @@ async function executeDCAPurchase(order: DelayedOrder): Promise<void> {
       telegramId: order.telegramId
     }, null, false);
 
-    // Revert status to pending for retry
-    await db.updateDelayedOrderStatus(order.id, 'pending');
-
     // Notify user of failure
     await notifyUser(order.telegramId,
       `⚠️ *DCA Purchase Failed*\n\n` +
@@ -251,7 +244,7 @@ async function executeDCAPurchase(order: DelayedOrder): Promise<void> {
 /**
  * Calculate next execution time based on frequency
  */
-function calculateNextExecution(frequency: string, currentDate: Date | null): Date {
+function calculateNextExecution(frequency: string, currentDate: Date | undefined | null): Date {
   const baseDate = currentDate ? new Date(currentDate) : new Date();
   
   switch (frequency.toLowerCase()) {
