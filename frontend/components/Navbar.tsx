@@ -177,6 +177,18 @@ export default function Navbar() {
             </Link>
 
             <Link
+              href="/rewards"
+              className={`flex items-center gap-1.5 text-sm font-semibold transition-colors px-2 sm:px-3 py-2 rounded-lg ${
+                pathname === "/rewards"
+                  ? "text-white bg-blue-600"
+                  : "text-zinc-400 hover:text-white hover:bg-zinc-800"
+              }`}
+            >
+              <BookOpen className="w-4 h-4" />
+              <span className="hidden sm:inline">Rewards</span>
+            </Link>
+
+            <Link
               href="/terminal"
               className={`flex items-center gap-1.5 text-sm font-semibold transition-colors px-2 sm:px-3 py-2 rounded-lg ${
                 pathname === "/terminal"
