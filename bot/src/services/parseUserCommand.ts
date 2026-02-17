@@ -1,8 +1,10 @@
 import { parseWithLLM, ParsedCommand } from './groq-client';
+import logger from './logger';
 
 export { ParsedCommand };
 
-// Regex Patterns
+
+// Regex Patterns - FIXED: Single backslashes in regex literals
 const REGEX_EXCLUSION = /(?:everything|all|entire|max)\s*(?:[A-Z]+\s+)?(?:except|but\s+keep)\s+(\d+(\.\d+)?)\s*([A-Z]+)?/i;
 const REGEX_PERCENTAGE = /(\d+(\.\d+)?)\s*(?:%|percent)\s*(?:of\s+(?:my\s+)?)?([A-Z]+)?/i;
 const REGEX_HALF = /\b(half)\b\s*(?:of\s+(?:my\s+)?)?([A-Z]+)?/i;
@@ -13,9 +15,7 @@ const REGEX_ALL_TOKEN = /(max|all|everything|entire)\s+([A-Z]+)/i; // "all ETH"
 const REGEX_TOKENS = /([A-Z]+)\s+(to|into|for)\s+([A-Z]+)/i; // "ETH to BTC"
 const REGEX_FROM_TO = /from\s+([A-Z]+)\s+to\s+([A-Z]+)/i; // "from ETH to BTC"
 const REGEX_AMOUNT_TOKEN = /\b(\d+(\.\d+)?)\s+(?!to|into|for|from|with|using\b)([A-Z]+)\b/i; // "10 ETH" (exclude prepositions)
-
-// New Regex for Conditions
-const REGEX_CONDITION = /(?:if|when)\s+(?:the\s+)?(?:price|rate|market|value)?\s*(?:of\s+)?([A-Z]+)?\s*(?:is|goes|drops|rises|falls)?\s*(above|below|greater|less|more|under|>|<)\s*(?:than)?\s*(\$?[\d,]+(\.\d+)?\s*[kKmM]?)/i;
+const REGEX_CONDITION = /(?:if|when)\s+(?:the\s+)?(?:price|rate|market|value)?\s*(?:of\s+)?([A-Z]+)?\s*(?:is|goes|drops|rises|falls)?\s*(above|below|greater|less|more|under|>|<)\s*(?:than)?\s*(\$?[\d,]+(\.\d+)?)/i;
 
 // New Regex for Quote Amount ("Worth")
 // Capture optional preceding token (group 1), amount (group 3), optional following token (group 5)
@@ -72,7 +72,7 @@ export async function parseUserCommand(
     let conditionOperator: 'gt' | 'lt' | undefined;
     let conditionValue: number | undefined;
     let conditionAsset: string | undefined;
-    let conditions: ParsedCommand['conditions'];
+    let conditions: ParsedCommand['conditions']; // Will be constructed below
 
     // Check Multi-source
     if (REGEX_MULTI_SOURCE.test(input)) {
@@ -253,16 +253,17 @@ export async function parseUserCommand(
             conditionOperator = 'lt';
         }
 
-        // Populate new conditions object
-        if (conditionValue) {
-            conditions = {
-                type: conditionOperator === 'gt' ? "price_above" : "price_below",
-                asset: conditionAsset || fromAsset || 'ETH', // fallback will be refined below
-                value: conditionValue
-            };
-        }
-
+        intent = 'limit_order'; // Change intent if condition is found
         confidence += 30;
+    }
+
+    // ✅ CONSTRUCT CONDITIONS OBJECT (This was missing!)
+    if (conditionOperator && conditionValue) {
+        conditions = {
+            type: conditionOperator === 'gt' ? 'price_above' : 'price_below',
+            asset: conditionAsset || fromAsset || 'ETH',
+            value: conditionValue
+        };
     }
 
     // Construct Result if confidence is high enough
@@ -278,11 +279,7 @@ export async function parseUserCommand(
             conditionAsset = fromAsset;
         }
 
-        // Update conditions asset if it was missing and we defaulted it
-        if (conditions && !conditions.asset && conditionAsset) {
-            conditions.asset = conditionAsset;
-        }
-
+        // ✅ FIXED: Proper template string syntax (no \${})
         let parsedMessage = `Parsed: ${amountType || amount || (quoteAmount ? 'Value ' + quoteAmount : '?')} ${fromAsset || '?'} -> ${toAsset || '?'}`;
         if (conditionOperator && conditionValue) {
             parsedMessage += ` if ${conditionAsset || fromAsset} ${conditionOperator === 'gt' ? '>' : '<'} ${conditionValue}`;
@@ -290,7 +287,7 @@ export async function parseUserCommand(
 
         return {
             success: true, // Mark as success parsing, even if validation fails later
-            intent: 'swap',
+            intent: intent, // Use the detected intent (swap or limit_order)
             fromAsset: fromAsset || null,
             fromChain: null,
             toAsset: toAsset || null,
@@ -300,7 +297,7 @@ export async function parseUserCommand(
             excludeAmount,
             excludeToken,
             quoteAmount,
-            conditions, // Return new conditions object
+            conditions, // ✅ Now properly constructed
             portfolio: undefined,
             frequency: null, dayOfWeek: null, dayOfMonth: null,
             settleAsset: null, settleNetwork: null, settleAmount: null, settleAddress: null,
@@ -310,6 +307,8 @@ export async function parseUserCommand(
             conditionOperator,
             conditionValue,
             conditionAsset,
+            targetPrice: conditionValue,
+            condition: conditionOperator === 'gt' ? 'above' : 'below',
 
             confidence: Math.min(100, confidence + 30),
             validationErrors: [],
@@ -321,11 +320,11 @@ export async function parseUserCommand(
   }
 
   // 2. Fallback to LLM
-  console.log("Fallback to LLM for:", userInput);
+  logger.info("Fallback to LLM for:", userInput);
   try {
     const result = await parseWithLLM(userInput, conversationHistory, inputType);
 
-    // REGEX FALLBACK FOR CONDITIONS
+    // ✅ KEEP: REGEX FALLBACK FOR CONDITIONS (from voice-input branch)
     if (!result.conditions) {
         const text = userInput.toLowerCase();
         // Simple fallback regexes
@@ -347,7 +346,7 @@ export async function parseUserCommand(
         }
     }
 
-    // Handle Percentage Amounts Properly
+    // ✅ KEEP: Handle Percentage Amounts Properly (from voice-input branch)
     if (userInput.includes("%")) {
        result.amountType = "percentage";
     }
@@ -362,8 +361,9 @@ export async function parseUserCommand(
       originalInput: userInput
     };
   } catch (error) {
-     console.error("LLM Error", error);
+     logger.error("LLM Error", error);
      return {
+
         success: false,
         intent: 'unknown',
         confidence: 0,

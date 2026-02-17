@@ -1,11 +1,18 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  /* config options here */
-  // Empty turbopack config to silence the warning
-  // MetaMask SDK SSR errors are expected and don't affect functionality
-  turbopack: {},
+  
+  // Enable compilation for the shared folder
+  transpilePackages: ['@swapsmith/shared'],
+  
+  // Correctly trace files from the monorepo root (one level up)
+  // This works dynamically for both Local (Windows/Mac) and Docker
+  outputFileTracingRoot: path.join(process.cwd(), '../'),
+
+  // Leave empty to use defaults, or configure if needed
+  turbopack: {}
 };
 
 export default nextConfig;
