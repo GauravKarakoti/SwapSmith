@@ -1,4 +1,5 @@
 import Groq from "groq-sdk";
+import { safeParseJSON } from "@/lib/safeParse";
 
 // Global singleton declaration to prevent multiple instances during hot reload
 declare global {
@@ -117,7 +118,7 @@ export async function parseUserCommand(userInput: string): Promise<ParsedCommand
       max_tokens: 1024,
     });
 
-    const parsed = JSON.parse(completion.choices[0].message.content || '{}');
+    const parsed = safeParseJSON(completion.choices[0].message.content) || {};
     return validateParsedCommand(parsed, userInput);
   } catch (error) {
     console.error("Error parsing command:", error);

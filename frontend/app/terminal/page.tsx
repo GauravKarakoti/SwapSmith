@@ -27,7 +27,7 @@ import { useChatHistory, useChatSessions } from "@/hooks/useCachedData";
 import { ParsedCommand } from "@/utils/groq-client";
 
 /* -------------------------------------------------------------------------- */
-/*                                    Types                                   */
+/*                                   Types                                    */
 /* -------------------------------------------------------------------------- */
 
 interface QuoteData {
@@ -53,7 +53,12 @@ interface Message {
     | "swap_confirmation"
     | "yield_info"
     | "checkout_link";
-  data?: ParsedCommand | { quoteData: QuoteData; confidence: number } | { url: string } | { parsedCommand: ParsedCommand } | Record<string, unknown>;
+  data?:
+    | ParsedCommand
+    | { quoteData: QuoteData; confidence: number }
+    | { url: string }
+    | { parsedCommand: ParsedCommand }
+    | Record<string, unknown>;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -64,8 +69,8 @@ const SidebarSkeleton = () => (
   <div className="space-y-4 p-2">
     {[1, 2, 3, 4].map((i) => (
       <div key={i} className="px-3 py-2 space-y-2">
-        <div className="h-3 w-3/4 bg-white/5 rounded animate-pulse" />
-        <div className="h-2 w-1/4 bg-white/5 rounded animate-pulse" />
+        <div className="h-3 w-3/4 bg-[var(--panel-soft)] rounded animate-pulse" />
+        <div className="h-2 w-1/4 bg-[var(--panel-soft)] rounded animate-pulse" />
       </div>
     ))}
   </div>
@@ -90,10 +95,10 @@ const LiveStatsCard = () => {
   }, []);
 
   return (
-    <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4">
+    <div className="glass rounded-2xl p-4 shadow-sm">
       <div className="flex items-center gap-2 mb-3">
         <Activity className="w-4 h-4 text-cyan-400" />
-        <span className="text-sm font-semibold text-zinc-200">
+        <span className="text-sm font-semibold text-[var(--text)]">
           Live Network
         </span>
       </div>
@@ -103,15 +108,15 @@ const LiveStatsCard = () => {
           <div className="text-cyan-400 font-bold flex justify-center gap-1">
             <Zap className="w-3 h-3" /> {stats.gasPrice}
           </div>
-          <div className="text-[10px] text-zinc-500">Gwei</div>
+          <div className="text-[10px] text-[var(--muted)]">Gwei</div>
         </div>
         <div>
           <div className="text-purple-400 font-bold">${stats.volume24h}M</div>
-          <div className="text-[10px] text-zinc-500">24h Vol</div>
+          <div className="text-[10px] text-[var(--muted)]">24h Vol</div>
         </div>
         <div>
           <div className="text-pink-400 font-bold">{stats.activeSwaps}</div>
-          <div className="text-[10px] text-zinc-500">Active</div>
+          <div className="text-[10px] text-[var(--muted)]">Active</div>
         </div>
       </div>
     </div>
@@ -119,7 +124,7 @@ const LiveStatsCard = () => {
 };
 
 /* -------------------------------------------------------------------------- */
-/*                                Main Page                                   */
+/*                                 Main Page                                  */
 /* -------------------------------------------------------------------------- */
 
 export default function TerminalPage() {
@@ -140,9 +145,7 @@ export default function TerminalPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
 
-  const [currentSessionId, setCurrentSessionId] = useState(
-    crypto.randomUUID(),
-  );
+  const [currentSessionId, setCurrentSessionId] = useState(crypto.randomUUID());
   const sessionIdRef = useRef(currentSessionId);
   const loadedSessionRef = useRef<string | null>(null);
 
@@ -151,10 +154,7 @@ export default function TerminalPage() {
   const { data: chatSessions, refetch: refetchSessions } = useChatSessions(
     user?.uid,
   );
-  const { data: dbChatHistory } = useChatHistory(
-    user?.uid,
-    currentSessionId,
-  );
+  const { data: dbChatHistory } = useChatHistory(user?.uid, currentSessionId);
 
   /* ------------------------------------------------------------------------ */
 
@@ -164,14 +164,13 @@ export default function TerminalPage() {
 
   useEffect(() => {
     sessionIdRef.current = currentSessionId;
-    loadedSessionRef.current = null; // Reset on session change
+    loadedSessionRef.current = null;
   }, [currentSessionId]);
 
   // Load chat history from database when available
   useEffect(() => {
-    // Only load once per session to prevent cascading renders
     if (loadedSessionRef.current === currentSessionId) return;
-    
+
     if (dbChatHistory?.history?.length) {
       const loadedMessages = dbChatHistory.history.map((m) => ({
         role: m.role as "user" | "assistant",
@@ -179,7 +178,6 @@ export default function TerminalPage() {
         timestamp: new Date(m.createdAt),
         type: "message" as const,
       }));
-      // Using queueMicrotask to defer state updates and prevent cascading renders
       queueMicrotask(() => {
         setMessages(loadedMessages);
         setIsHistoryLoading(false);
@@ -196,12 +194,9 @@ export default function TerminalPage() {
 
   /* ------------------------------------------------------------------------ */
 
-  const addMessage = useCallback(
-    (msg: Omit<Message, "timestamp">) => {
-      setMessages((prev) => [...prev, { ...msg, timestamp: new Date() }]);
-    },
-    [],
-  );
+  const addMessage = useCallback((msg: Omit<Message, "timestamp">) => {
+    setMessages((prev) => [...prev, { ...msg, timestamp: new Date() }]);
+  }, []);
 
   const handleNewChat = () => {
     const id = crypto.randomUUID();
@@ -226,10 +221,9 @@ export default function TerminalPage() {
     e.stopPropagation();
     if (!user?.uid) return;
 
-    await fetch(
-      `/api/chat/history?userId=${user.uid}&sessionId=${sessionId}`,
-      { method: "DELETE" },
-    );
+    await fetch(`/api/chat/history?userId=${user.uid}&sessionId=${sessionId}`, {
+      method: "DELETE",
+    });
 
     if (sessionId === currentSessionId) handleNewChat();
     refetchSessions();
@@ -239,7 +233,7 @@ export default function TerminalPage() {
 
   if (authLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-black">
+      <div className="flex h-screen items-center justify-center app-bg">
         <div className="animate-spin h-8 w-8 border-2 border-cyan-500 border-t-transparent rounded-full" />
       </div>
     );
@@ -253,7 +247,7 @@ export default function TerminalPage() {
     <>
       <Navbar />
 
-      <div className="flex h-screen pt-16 bg-[#030308] text-white overflow-hidden">
+      <div className="flex h-screen pt-16 app-bg overflow-hidden">
         {/* Sidebar */}
         <AnimatePresence>
           {isSidebarOpen && (
@@ -261,12 +255,12 @@ export default function TerminalPage() {
               initial={{ width: 0 }}
               animate={{ width: 320 }}
               exit={{ width: 0 }}
-              className="border-r border-zinc-800 bg-zinc-900/40 backdrop-blur-xl flex flex-col"
+              className="glass border-r flex flex-col"
             >
               <div className="p-4">
                 <button
                   onClick={handleNewChat}
-                  className="w-full flex gap-2 justify-center items-center bg-gradient-to-r from-cyan-600 to-blue-600 rounded-xl py-3 font-semibold"
+                  className="w-full flex gap-2 justify-center items-center bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg rounded-xl py-3 font-semibold hover:brightness-110 transition"
                 >
                   <Plus className="w-4 h-4" /> New Chat
                 </button>
@@ -277,7 +271,7 @@ export default function TerminalPage() {
               </div>
 
               <div className="flex-1 overflow-y-auto p-2 mt-4">
-                <div className="text-xs uppercase text-zinc-500 px-3 mb-2 flex items-center gap-2">
+                <div className="text-xs uppercase text-[var(--muted)] px-3 mb-2 flex items-center gap-2">
                   <Clock className="w-3 h-3" /> Recent
                 </div>
 
@@ -288,38 +282,38 @@ export default function TerminalPage() {
                     <div
                       key={chat.sessionId}
                       onClick={() => handleSwitchSession(chat.sessionId)}
-                      className="group px-3 py-2 rounded-xl hover:bg-white/5 cursor-pointer relative"
+                      className="group px-3 py-2 rounded-xl hover:bg-[var(--panel-soft)]/70 cursor-pointer relative transition-colors"
                     >
-                      <p className="text-sm truncate">{chat.title}</p>
+                      <p className="text-sm truncate text-[var(--text)]">
+                        {chat.title}
+                      </p>
                       <button
-                        onClick={(e) =>
-                          handleDeleteSession(chat.sessionId, e)
-                        }
-                        className="absolute right-2 top-2 opacity-0 group-hover:opacity-100"
+                        onClick={(e) => handleDeleteSession(chat.sessionId, e)}
+                        className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity"
                       >
                         <Trash2 className="w-3 h-3 text-red-400" />
                       </button>
                     </div>
                   ))
                 ) : (
-                  <div className="text-center text-sm text-zinc-500 py-6">
+                  <div className="text-center text-sm text-[var(--muted)] py-6">
                     No chats yet
                   </div>
                 )}
               </div>
 
-              <div className="p-3 border-t border-zinc-800">
+              <div className="p-3 border-t border-[var(--border)] bg-[var(--panel-soft)]/70 backdrop-blur">
                 <a
                   href="https://t.me/SwapSmithBot"
                   target="_blank"
-                  className="flex gap-2 items-center text-sm text-zinc-400 hover:text-cyan-400"
+                  className="flex gap-2 items-center text-sm text-[var(--muted)] hover:text-[var(--accent)] transition-colors"
                 >
                   <MessageCircle className="w-4 h-4" /> Support
                 </a>
 
                 <Link
                   href="/profile"
-                  className="flex gap-2 items-center text-sm text-zinc-400 hover:text-purple-400 mt-2"
+                  className="flex gap-2 items-center text-sm text-[var(--muted)] hover:text-purple-400 mt-2 transition-colors"
                 >
                   <Settings className="w-4 h-4" /> Settings
                 </Link>
@@ -332,42 +326,75 @@ export default function TerminalPage() {
         <div className="relative flex-1 flex flex-col">
           <button
             onClick={() => setIsSidebarOpen((s) => !s)}
-            className="absolute top-4 left-4 z-40 p-2 bg-zinc-900 border border-zinc-700 rounded-xl"
+            className="absolute top-4 left-4 z-40 p-2 glass rounded-xl shadow-sm"
           >
-            <Menu className="w-5 h-5" />
+            <Menu className="w-5 h-5 text-[var(--muted)]" />
           </button>
 
           <div className="flex-1 overflow-y-auto px-4 py-8">
-            <div className="max-w-3xl mx-auto space-y-6">
+            <div className="max-w-3xl mx-auto space-y-4">
+              {/* Header / Hero */}
+              <div className="mb-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--panel-soft)]/80 border border-[var(--border)] text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]" />
+                  AI Trading Assistant
+                </div>
+                <h1 className="mt-3 text-2xl font-semibold text-[var(--text)]">
+                  Terminal Alpha
+                </h1>
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  Chat-native swaps, yield scouting and payment links – from one
+                  unified terminal.
+                </p>
+              </div>
+
+              {/* Messages */}
               {messages.map((msg, i) => (
                 <div
                   key={i}
                   className={`flex ${
-                    msg.role === "user"
-                      ? "justify-end"
-                      : "justify-start"
+                    msg.role === "user" ? "justify-end" : "justify-start"
                   }`}
                 >
                   <div className="max-w-[80%]">
                     <div
                       className={`px-4 py-3 rounded-2xl text-sm ${
                         msg.role === "user"
-                          ? "bg-gradient-to-r from-cyan-600 to-blue-600"
-                          : "bg-zinc-900/70 border border-zinc-800"
+                          ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg"
+                          : "panel"
                       }`}
                     >
-                      {msg.type === "swap_confirmation" && msg.data && 'quoteData' in msg.data ? (
+                      {msg.type === "swap_confirmation" &&
+                      msg.data &&
+                      "quoteData" in msg.data ? (
                         <SwapConfirmation
                           quote={msg.data.quoteData as QuoteData}
                           confidence={msg.data.confidence as number}
                         />
-                      ) : msg.type === "intent_confirmation" && msg.data && 'parsedCommand' in msg.data ? (
+                      ) : msg.type === "intent_confirmation" &&
+                        msg.data &&
+                        "parsedCommand" in msg.data ? (
                         <IntentConfirmation
                           command={msg.data.parsedCommand as ParsedCommand}
                           onConfirm={() => {}}
                         />
+                      ) : msg.type === "yield_info" ? (
+                        <pre className="whitespace-pre-wrap text-xs text-cyan-400">
+                          {msg.content}
+                        </pre>
+                      ) : msg.type === "checkout_link" &&
+                        msg.data &&
+                        "url" in msg.data ? (
+                        <a
+                          href={msg.data.url as string}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline underline-offset-2 text-cyan-400"
+                        >
+                          {msg.data.url as string}
+                        </a>
                       ) : (
-                        <pre className="whitespace-pre-wrap">
+                        <pre className="whitespace-pre-wrap text-[var(--text)]">
                           {msg.content}
                         </pre>
                       )}
@@ -379,7 +406,7 @@ export default function TerminalPage() {
             </div>
           </div>
 
-          <div className="p-4 border-t border-zinc-800">
+          <div className="p-4 border-t border-[var(--border)] bg-[var(--panel)]/90 backdrop-blur">
             <ClaudeChatInput
               onSendMessage={({ message }) =>
                 addMessage({
