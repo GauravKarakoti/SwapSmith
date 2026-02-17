@@ -1,103 +1,37 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { pgTable, serial, text, real, timestamp, unique } from 'drizzle-orm/pg-core';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, sql as drizzleSql } from 'drizzle-orm';
 
-// Check if database is configured
-const isDatabaseConfigured = () => {
-  return !!(process.env.DATABASE_URL && process.env.DATABASE_URL.trim() !== '');
+// Import all table schemas from shared schema file
+import {
+  coinPriceCache,
+  userSettings,
+  swapHistory,
+  chatHistory,
+  discussions,
+  users,
+  courseProgress,
+  rewardsLog,
+} from '../../shared/schema';
+
+const sql = neon(process.env.DATABASE_URL!);
+const db = drizzle(sql);
+
+// Re-export schemas for backward compatibility
+export {
+  coinPriceCache,
+  userSettings,
+  swapHistory,
+  chatHistory,
+  discussions,
+  users,
+  courseProgress,
+  rewardsLog,
 };
 
-// Only initialize database if configured
-let sql: ReturnType<typeof neon> | null = null;
-let db: ReturnType<typeof drizzle> | null = null;
-
-if (isDatabaseConfigured()) {
-  try {
-    sql = neon(process.env.DATABASE_URL!);
-    db = drizzle(sql);
-  } catch (error) {
-    console.error('Database initialization error:', error);
-  }
-} else {
-  console.warn('Database is not configured. DATABASE_URL environment variable is missing.');
-}
-
-// --- SHARED SCHEMAS (matching bot/src/services/database.ts) ---
-
-export const coinPriceCache = pgTable('coin_price_cache', {
-  id: serial('id').primaryKey(),
-  coin: text('coin').notNull(),
-  network: text('network').notNull(),
-  name: text('name').notNull(),
-  usdPrice: text('usd_price'),
-  btcPrice: text('btc_price'),
-  available: text('available').notNull().default('true'),
-  expiresAt: timestamp('expires_at').notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-}, (table) => ({
-  coinNetworkUnique: unique().on(table.coin, table.network),
-}));
-
-export const userSettings = pgTable('user_settings', {
-  id: serial('id').primaryKey(),
-  userId: text('user_id').notNull().unique(),
-  walletAddress: text('wallet_address'),
-  theme: text('theme').default('dark'),
-  slippageTolerance: real('slippage_tolerance').default(0.5),
-  notificationsEnabled: text('notifications_enabled').default('true'),
-  defaultFromAsset: text('default_from_asset'),
-  defaultToAsset: text('default_to_asset'),
-  preferences: text('preferences'), // Additional JSON preferences
-  emailNotifications: text('email_notifications'),
-  telegramNotifications: text('telegram_notifications').default('false'),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
-export const swapHistory = pgTable('swap_history', {
-  id: serial('id').primaryKey(),
-  userId: text('user_id').notNull(),
-  walletAddress: text('wallet_address'),
-  sideshiftOrderId: text('sideshift_order_id').notNull(),
-  quoteId: text('quote_id'),
-  fromAsset: text('from_asset').notNull(),
-  fromNetwork: text('from_network').notNull(),
-  fromAmount: real('from_amount').notNull(),
-  toAsset: text('to_asset').notNull(),
-  toNetwork: text('to_network').notNull(),
-  settleAmount: text('settle_amount').notNull(),
-  depositAddress: text('deposit_address'),
-  status: text('status').notNull().default('pending'),
-  txHash: text('tx_hash'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
-export const chatHistory = pgTable('chat_history', {
-  id: serial('id').primaryKey(),
-  userId: text('user_id').notNull(),
-  walletAddress: text('wallet_address'),
-  role: text('role').notNull(),
-  content: text('content').notNull(),
-  metadata: text('metadata'),
-  sessionId: text('session_id'),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
-export const discussions = pgTable('discussions', {
-  id: serial('id').primaryKey(),
-  userId: text('user_id').notNull(),
-  username: text('username').notNull(),
-  content: text('content').notNull(),
-  category: text('category').default('general'), // general, crypto, help, announcement
-  likes: text('likes').default('0'),
-  replies: text('replies').default('0'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
+export type User = typeof users.$inferSelect;
+export type CourseProgress = typeof courseProgress.$inferSelect;
+export type RewardsLog = typeof rewardsLog.$inferSelect;
 export type CoinPriceCache = typeof coinPriceCache.$inferSelect;
 export type UserSettings = typeof userSettings.$inferSelect;
 export type SwapHistory = typeof swapHistory.$inferSelect;
@@ -503,6 +437,320 @@ export async function likeDiscussion(id: number) {
       })
       .where(eq(discussions.id, id));
   }
+}
+
+// --- REWARDS SYSTEM FUNCTIONS ---
+
+export async function getUserByWalletOrId(identifier: string): Promise<User | undefined> {
+  if (!db) {
+    console.warn('Database not configured');
+    return undefined;
+  }
+  
+  const result = await db.select().from(users)
+    .where(eq(users.walletAddress, identifier))
+    .limit(1);
+  return result[0];
+}
+
+export async function getUserRewardsStats(userId: number) {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  const user = await db.select().from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  
+  if (!user[0]) return null;
+  
+  // Get pending tokens sum
+  const pendingTokens = await db.select({ 
+    total: drizzleSql<string>`COALESCE(SUM(${rewardsLog.tokensPending}), 0)` 
+  })
+    .from(rewardsLog)
+    .where(and(
+      eq(rewardsLog.userId, userId),
+      eq(rewardsLog.mintStatus, 'pending')
+    ));
+  
+  // Get completed courses count
+  const completedCourses = await db.select({ 
+    count: drizzleSql<number>`COUNT(*)` 
+  })
+    .from(courseProgress)
+    .where(and(
+      eq(courseProgress.userId, userId),
+      eq(courseProgress.isCompleted, true)
+    ));
+  
+  // Get user rank
+  const ranks = await db.select({
+    userId: users.id,
+    totalPoints: users.totalPoints,
+  })
+    .from(users)
+    .orderBy(desc(users.totalPoints), desc(users.totalTokensClaimed));
+  
+  const rank = ranks.findIndex(r => r.userId === userId) + 1;
+  
+  return {
+    totalPoints: user[0].totalPoints,
+    totalTokensClaimed: user[0].totalTokensClaimed,
+    totalTokensPending: pendingTokens[0]?.total || '0',
+    rank: rank > 0 ? rank : null,
+    completedCourses: completedCourses[0]?.count || 0,
+  };
+}
+
+export async function getUserCourseProgress(userId: number): Promise<CourseProgress[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
+  return await db.select().from(courseProgress)
+    .where(eq(courseProgress.userId, userId))
+    .orderBy(desc(courseProgress.lastAccessed));
+}
+
+export async function updateCourseProgress(
+  userId: number,
+  courseId: string,
+  courseTitle: string,
+  moduleId: string,
+  totalModules: number
+): Promise<CourseProgress | null> {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  // Get existing progress
+  const existing = await db.select().from(courseProgress)
+    .where(and(
+      eq(courseProgress.userId, userId),
+      eq(courseProgress.courseId, courseId)
+    ))
+    .limit(1);
+  
+  if (existing[0]) {
+    // Update existing progress
+    const completedModules = existing[0].completedModules;
+    if (!completedModules.includes(moduleId)) {
+      completedModules.push(moduleId);
+      
+      const isCompleted = completedModules.length >= totalModules;
+      
+      await db.update(courseProgress)
+        .set({
+          completedModules,
+          isCompleted,
+          completionDate: isCompleted ? new Date() : existing[0].completionDate,
+          lastAccessed: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(courseProgress.id, existing[0].id));
+      
+      return { ...existing[0], completedModules, isCompleted };
+    }
+    return existing[0];
+  } else {
+    // Create new progress
+    const result = await db.insert(courseProgress)
+      .values({
+        userId,
+        courseId,
+        courseTitle,
+        completedModules: [moduleId],
+        totalModules,
+        isCompleted: 1 >= totalModules,
+        completionDate: 1 >= totalModules ? new Date() : null,
+      })
+      .returning();
+    
+    return result[0];
+  }
+}
+
+export async function addRewardActivity(
+  userId: number,
+  actionType: 'course_complete' | 'module_complete' | 'daily_login' | 'swap_complete' | 'referral',
+  pointsEarned: number,
+  tokensPending: string = '0',
+  metadata?: Record<string, unknown>
+) {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  // Add reward log entry
+  const reward = await db.insert(rewardsLog)
+    .values({
+      userId,
+      actionType,
+      pointsEarned,
+      tokensPending,
+      actionMetadata: metadata || null,
+    })
+    .returning();
+  
+  // Update user total points
+  await db.update(users)
+    .set({
+      totalPoints: drizzleSql`${users.totalPoints} + ${pointsEarned}`,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, userId));
+  
+  return reward[0];
+}
+
+export async function getUserRewardActivities(userId: number, limit: number = 50): Promise<RewardsLog[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
+  return await db.select().from(rewardsLog)
+    .where(eq(rewardsLog.userId, userId))
+    .orderBy(desc(rewardsLog.createdAt))
+    .limit(limit);
+}
+
+export async function claimPendingTokens(userId: number) {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  // Get all pending rewards
+  const pendingRewards = await db.select().from(rewardsLog)
+    .where(and(
+      eq(rewardsLog.userId, userId),
+      eq(rewardsLog.mintStatus, 'pending')
+    ));
+  
+  if (pendingRewards.length === 0) return null;
+  
+  // Calculate total pending tokens
+  const totalPending = pendingRewards.reduce(
+    (sum, r) => sum + parseFloat(r.tokensPending as string),
+    0
+  );
+  
+  // Update rewards to processing status
+  const rewardIds = pendingRewards.map(r => r.id);
+  await db.update(rewardsLog)
+    .set({
+      mintStatus: 'processing',
+      claimedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(drizzleSql`${rewardsLog.id} = ANY(${rewardIds})`);
+  
+  // Import token service and mint tokens
+  const { mintTokens } = await import('./token-service');
+  
+  try {
+    // Get user wallet address
+    const user = await db.select().from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    
+    if (!user[0]?.walletAddress) {
+      // Use a default mock address if no wallet connected
+      const mockAddress = `0x${userId.toString().padStart(40, '0')}`;
+      console.warn('No wallet address found, using mock address:', mockAddress);
+      
+      const result = await mintTokens(mockAddress, totalPending.toString());
+      
+      // Update rewards with tx hash
+      await db.update(rewardsLog)
+        .set({
+          mintStatus: 'minted',
+          txHash: result.txHash,
+          blockchainNetwork: 'mock-testnet',
+          updatedAt: new Date(),
+        })
+        .where(drizzleSql`${rewardsLog.id} = ANY(${rewardIds})`);
+      
+      // Update user total claimed
+      await db.update(users)
+        .set({
+          totalTokensClaimed: drizzleSql`${users.totalTokensClaimed} + ${totalPending}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId));
+      
+      return { totalPending, rewardCount: pendingRewards.length, txHash: result.txHash };
+    }
+    
+    const result = await mintTokens(user[0].walletAddress, totalPending.toString());
+    
+    // Update rewards with actual tx hash
+    await db.update(rewardsLog)
+      .set({
+        mintStatus: 'minted',
+        txHash: result.txHash,
+        blockchainNetwork: process.env.BLOCKCHAIN_NETWORK || 'mock-testnet',
+        updatedAt: new Date(),
+      })
+      .where(drizzleSql`${rewardsLog.id} = ANY(${rewardIds})`);
+    
+    // Update user total claimed
+    await db.update(users)
+      .set({
+        totalTokensClaimed: drizzleSql`${users.totalTokensClaimed} + ${totalPending}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+    
+    return { totalPending, rewardCount: pendingRewards.length, txHash: result.txHash };
+  } catch (error) {
+    // Mark as failed on error
+    await db.update(rewardsLog)
+      .set({
+        mintStatus: 'failed',
+        errorMessage: (error as Error).message,
+        updatedAt: new Date(),
+      })
+      .where(drizzleSql`${rewardsLog.id} = ANY(${rewardIds})`);
+    throw error;
+  }
+}
+
+export async function getLeaderboard(limit: number = 100): Promise<Array<{
+  rank: number;
+  userId: number;
+  walletAddress: string | null;
+  totalPoints: number;
+  totalTokensClaimed: string;
+}>> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
+  const leaderboard = await db.select({
+    userId: users.id,
+    walletAddress: users.walletAddress,
+    totalPoints: users.totalPoints,
+    totalTokensClaimed: users.totalTokensClaimed,
+  })
+    .from(users)
+    .orderBy(desc(users.totalPoints), desc(users.totalTokensClaimed))
+    .limit(limit);
+  
+  return leaderboard.map((entry, index) => ({
+    rank: index + 1,
+    userId: entry.userId,
+    walletAddress: entry.walletAddress,
+    totalPoints: entry.totalPoints,
+    totalTokensClaimed: entry.totalTokensClaimed,
+  }));
 }
 
 export default db;
