@@ -29,8 +29,33 @@ import { resolveAddress, isNamingService } from './services/address-resolver';
 import { ADDRESS_PATTERNS } from './config/address-patterns';
 import { limitOrderWorker } from './workers/limitOrderWorker';
 import * as os from 'os';
+import express from 'express';
+import { sql } from 'drizzle-orm';
+
+// --- GLOBAL ERROR HANDLERS ---
+process.on("unhandledRejection", (err) => {
+  console.error("Unhandled Rejection:", err);
+  process.exit(1);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+  process.exit(1);
+});
 
 dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+let isReady = false;
+
+// --- HEALTH CHECK ---
+app.get("/health", (req, res) => {
+  if (!isReady) {
+    return res.status(503).json({ status: "starting" });
+  }
+  res.status(200).json({ status: "ok" });
+});
 
 const bot = new Telegraf(process.env.BOT_TOKEN!);
 const MINI_APP_URL = process.env.MINI_APP_URL!;
@@ -831,31 +856,63 @@ bot.action('cancel_swap', async (ctx) => {
   ctx.editMessageText('❌ Cancelled.');
 });
 
-// ------------------ START SERVICES ------------------
+// ------------------ START SERVICES & SERVER ------------------
 
 let dcaStarted = false;
 let limitOrderStarted = false;
 
-if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('memory')) {
-  dcaScheduler.start();
-  dcaStarted = true;
+const startServer = async () => {
+  try {
+    // 1. Check Database
+    if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('memory')) {
+        await db.db.execute(sql`SELECT 1`);
+        console.log("✅ Database connected");
 
-  limitOrderWorker.start(bot);
-  limitOrderStarted = true;
-}
+        dcaScheduler.start();
+        dcaStarted = true;
 
-// ------------------ LAUNCH ------------------
+        limitOrderWorker.start(bot);
+        limitOrderStarted = true;
+    }
 
-bot.launch();
+    // 2. Start Express
+    const server = app.listen(PORT, () => {
+      console.log(`✅ Server running on port ${PORT}`);
+    });
 
-process.once('SIGINT', () => {
-  if (dcaStarted) dcaScheduler.stop();
-  if (limitOrderStarted) limitOrderWorker.stop();
-  bot.stop('SIGINT');
-});
+    // 3. Launch Bot
+    await new Promise<void>((resolve, reject) => {
+        bot.launch(() => {
+            console.log("✅ Bot polling started");
+            resolve();
+        }).catch((err) => {
+            reject(err);
+        });
+    });
 
-process.once('SIGTERM', () => {
-  if (dcaStarted) dcaScheduler.stop();
-  if (limitOrderStarted) limitOrderWorker.stop();
-  bot.stop('SIGTERM');
-});
+    // 4. Mark Ready
+    isReady = true;
+    console.log("✅ App is ready");
+
+    // Graceful Shutdown
+    const stop = (signal: string) => {
+        console.log(`Received ${signal}. Shutting down...`);
+        if (dcaStarted) dcaScheduler.stop();
+        if (limitOrderStarted) limitOrderWorker.stop();
+        bot.stop(signal);
+        server.close(() => {
+            console.log("Server closed");
+            process.exit(0);
+        });
+    };
+
+    process.once('SIGINT', () => stop('SIGINT'));
+    process.once('SIGTERM', () => stop('SIGTERM'));
+
+  } catch (err) {
+    console.error("Startup failed:", err);
+    process.exit(1);
+  }
+};
+
+startServer();

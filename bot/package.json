@@ -11,7 +11,8 @@
     "db:gen": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "smoke": "node smoke-test.js"
   },
   "keywords": [],
   "author": "",
