@@ -352,7 +352,7 @@ bot.action(['confirm_swap', 'confirm_checkout'], async (ctx) => {
 
     try {
         await ctx.answerCbQuery('Fetching quote...');
-        
+
         // Use default params or what we have in state
         const q = await createQuote(
             state.parsedCommand.fromAsset!,
@@ -364,7 +364,7 @@ bot.action(['confirm_swap', 'confirm_checkout'], async (ctx) => {
 
         await db.setConversationState(userId, { ...state, quoteId: q.id });
 
-        const confirmText = 
+        const confirmText =
             `🔄 *Quote Received*\n\n` +
             `➡️ Send: ${q.depositAmount} ${q.depositCoin}\n` +
             `⬅️ Receive: ~${q.settleAmount} ${q.settleCoin}\n` +
@@ -389,7 +389,7 @@ bot.action(['confirm_swap', 'confirm_checkout'], async (ctx) => {
 bot.action('place_order', async (ctx) => {
     const userId = ctx.from.id;
     const state = await db.getConversationState(userId);
-    
+
     if (!state?.quoteId || !state.parsedCommand?.settleAddress) {
         return ctx.answerCbQuery('Session missing required data. Start over.');
     }
@@ -406,7 +406,7 @@ bot.action('place_order', async (ctx) => {
             );
 
             if (!checkout || !checkout.id) throw new Error("API Error");
-            
+
             try { db.createCheckoutEntry(userId, checkout); } catch (e) { console.error(e); }
 
             const paymentUrl = `https://pay.sideshift.ai/checkout/${checkout.id}`;
@@ -431,9 +431,9 @@ bot.action('place_order', async (ctx) => {
             const msg =
                 `✅ *Order Created!* (ID: \`${order.id}\`)\n\n` +
                 `To complete the swap, please send funds to the address below:\n\n` +
-                `🏦 *Deposit:* \`${(order.depositAddress as {address: string;memo: string;}).address || order.depositAddress}\`\n` +
+                `🏦 *Deposit:* \`${(order.depositAddress as { address: string; memo: string; }).address || order.depositAddress}\`\n` +
                 `💰 *Amount:* ${order.depositAmount} ${order.depositCoin}\n` +
-                ((order.depositAddress as {address: string;memo: string;}).memo ? `📝 *Memo:* \`${(order.depositAddress as {address: string;memo: string;}).memo || ''}\`\n` : '') + 
+                ((order.depositAddress as { address: string; memo: string; }).memo ? `📝 *Memo:* \`${(order.depositAddress as { address: string; memo: string; }).memo || ''}\`\n` : '') +
                 `\n_Destination: ${settleAddress}_`;
 
             ctx.editMessageText(msg, { parse_mode: 'Markdown' });
@@ -454,32 +454,49 @@ bot.action('cancel_swap', async (ctx) => {
 
 // --- Server & Startup ---
 
+// --- Global State ---
+let isReady = false;
+
+// --- Server & Startup ---
+
 const app = express();
-app.get('/', (_, res) => res.send('SwapSmith Alive'));
 const PORT = process.env.PORT || 3000;
+
+app.get('/', (_, res) => {
+    res.send('SwapSmith Alive');
+});
+
+app.get('/health', (_, res) => {
+    if (isReady) {
+        res.status(200).json({ status: 'ok' });
+    } else {
+        res.status(503).json({ status: 'starting' });
+    }
+});
+
 app.listen(PORT, () => console.log(`🌍 Server running on port ${PORT}`));
 
 (async () => {
-<<<<<<< HEAD
-    await orderMonitor.loadPendingOrders();
-    orderMonitor.start();
-    bot.launch();
-    logger.info('🤖 Bot running');
-})();
-
     try {
         await orderMonitor.loadPendingOrders();
         orderMonitor.start();
         console.log('👀 Order Monitor started');
+
+        await bot.launch();
+        console.log('🤖 Bot launched successfully');
+
+        isReady = true;
     } catch (e) {
-        console.error('⚠️ Failed to start order monitor:', e);
+        console.error('⚠️ Failed to start:', e);
+        process.exit(1);
     }
-
-    await bot.launch();
-    console.log('🤖 Bot launched successfully');
 })();
-
 // Enable graceful stop
->>>>>>> a749ce1b103c9e60d0c27197a77e87f67d905a9c
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+process.once('SIGINT', () => {
+    isReady = false;
+    bot.stop('SIGINT');
+});
+process.once('SIGTERM', () => {
+    isReady = false;
+    bot.stop('SIGTERM');
+});
