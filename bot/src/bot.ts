@@ -20,9 +20,10 @@ import { resolveAddress, isNamingService } from './services/address-resolver';
 import { ADDRESS_PATTERNS } from './config/address-patterns';
 import { limitOrderWorker } from './workers/limitOrderWorker';
 import { OrderMonitor } from './services/order-monitor';
+import { parseUserCommand } from './services/parseUserCommand'; // Import corrected function
 
 /* -------------------------------------------------------------------------- */
-/*                               GLOBAL SETUP                                 */
+/* GLOBAL SETUP                                 */
 /* -------------------------------------------------------------------------- */
 
 dotenv.config();
@@ -38,7 +39,7 @@ app.use(express.json());
 const DEFAULT_EVM_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 
 /* -------------------------------------------------------------------------- */
-/*                                   HELPERS                                  */
+/* HELPERS                                  */
 /* -------------------------------------------------------------------------- */
 
 function isValidAddress(address: string, chain?: string): boolean {
@@ -51,7 +52,7 @@ function isValidAddress(address: string, chain?: string): boolean {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                               ORDER MONITOR                                */
+/* ORDER MONITOR                                */
 /* -------------------------------------------------------------------------- */
 
 const orderMonitor = new OrderMonitor({
@@ -86,7 +87,7 @@ const orderMonitor = new OrderMonitor({
 });
 
 /* -------------------------------------------------------------------------- */
-/*                                   COMMANDS                                 */
+/* COMMANDS                                 */
 /* -------------------------------------------------------------------------- */
 
 bot.start((ctx) =>
@@ -107,12 +108,14 @@ bot.command('yield', async (ctx) => {
 });
 
 bot.command('clear', async (ctx) => {
-  await db.clearConversationState(ctx.from!.id);
-  ctx.reply('🗑️ Conversation cleared');
+  if (ctx.from) {
+      await db.clearConversationState(ctx.from.id);
+      ctx.reply('🗑️ Conversation cleared');
+  }
 });
 
 /* -------------------------------------------------------------------------- */
-/*                              MESSAGE HANDLERS                              */
+/* MESSAGE HANDLERS                              */
 /* -------------------------------------------------------------------------- */
 
 bot.on(message('text'), async (ctx) => {
@@ -147,7 +150,7 @@ bot.on(message('voice'), async (ctx) => {
 });
 
 /* -------------------------------------------------------------------------- */
-/*                               CORE HANDLER                                 */
+/* CORE HANDLER                                 */
 /* -------------------------------------------------------------------------- */
 
 async function handleTextMessage(
@@ -165,6 +168,7 @@ async function handleTextMessage(
   if (
     state?.parsedCommand &&
     !state.parsedCommand.settleAddress &&
+    state.parsedCommand.intent && // Check intent exists
     ['swap', 'checkout', 'portfolio'].includes(state.parsedCommand.intent)
   ) {
     const resolved = await resolveAddress(userId, text.trim());
@@ -204,9 +208,9 @@ async function handleTextMessage(
   const parsed = await parseUserCommand(text, state?.messages || [], inputType);
 
   if (!parsed.success) {
-    return ctx.replyWithMarkdown(
-      parsed.validationErrors?.join('\n') || '❌ I didn’t understand.'
-    );
+    // Cast to any to access validationErrors or use type guard
+    const errors = (parsed as any).validationErrors?.join('\n') || '❌ I didn’t understand.';
+    return ctx.replyWithMarkdown(errors);
   }
 
   /* ---------------- Yield Scout ---------------- */
@@ -237,11 +241,12 @@ async function handleTextMessage(
 }
 
 /* -------------------------------------------------------------------------- */
-/*                                   ACTIONS                                  */
+/* ACTIONS                                  */
 /* -------------------------------------------------------------------------- */
 
 bot.action('confirm_swap', async (ctx) => {
-  const state = await db.getConversationState(ctx.from!.id);
+  if (!ctx.from) return;
+  const state = await db.getConversationState(ctx.from.id);
   if (!state?.parsedCommand) return;
 
   const q = await createQuote(
@@ -252,7 +257,7 @@ bot.action('confirm_swap', async (ctx) => {
     state.parsedCommand.amount
   );
 
-  await db.setConversationState(ctx.from!.id, { ...state, quoteId: q.id });
+  await db.setConversationState(ctx.from.id, { ...state, quoteId: q.id });
 
   await ctx.editMessageText(
     `🔄 *Quote*\nSend: ${q.depositAmount} ${q.depositCoin}\nReceive: ~${q.settleAmount} ${q.settleCoin}`,
@@ -267,7 +272,8 @@ bot.action('confirm_swap', async (ctx) => {
 });
 
 bot.action('place_order', async (ctx) => {
-  const state = await db.getConversationState(ctx.from!.id);
+  if (!ctx.from) return;
+  const state = await db.getConversationState(ctx.from.id);
   if (!state?.quoteId || !state.parsedCommand?.settleAddress) return;
 
   const order = await createOrder(
@@ -277,7 +283,7 @@ bot.action('place_order', async (ctx) => {
   );
 
   await db.createOrderEntry(
-    ctx.from!.id,
+    ctx.from.id,
     state.parsedCommand,
     order,
     order.settleAmount,
@@ -289,16 +295,17 @@ bot.action('place_order', async (ctx) => {
     { parse_mode: 'Markdown' }
   );
 
-  await db.clearConversationState(ctx.from!.id);
+  await db.clearConversationState(ctx.from.id);
 });
 
 bot.action('cancel_swap', async (ctx) => {
-  await db.clearConversationState(ctx.from!.id);
+  if (!ctx.from) return;
+  await db.clearConversationState(ctx.from.id);
   ctx.editMessageText('❌ Cancelled');
 });
 
 /* -------------------------------------------------------------------------- */
-/*                                  STARTUP                                   */
+/* STARTUP                                   */
 /* -------------------------------------------------------------------------- */
 
 const dcaScheduler = new DCAScheduler();
@@ -337,24 +344,3 @@ async function start() {
 }
 
 start();
-
-/* -------------------------------------------------------------------------- */
-/*                               NLP STUB (TEMP)                              */
-/* -------------------------------------------------------------------------- */
-
-async function parseUserCommand(
-  _text: string,
-  _history: any[],
-  _inputType: 'text' | 'voice'
-) {
-  return {
-    success: true,
-    intent: 'swap',
-    fromAsset: 'ETH',
-    fromChain: 'ethereum',
-    toAsset: 'BTC',
-    toChain: 'bitcoin',
-    amount: 1,
-    settleAddress: null,
-  };
-}

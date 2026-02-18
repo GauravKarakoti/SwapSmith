@@ -76,8 +76,9 @@ export class LimitOrderWorker {
 
   private async checkOrders() {
     try {
-      // 1. Fetch pending orders
-      const pendingOrders = await db.select().from(limitOrders).where(eq(limitOrders.status, 'pending'));
+      // 1. Fetch pending orders using status or isActive
+      const pendingOrders = await db.select().from(limitOrders)
+        .where(and(eq(limitOrders.isActive, 1), eq(limitOrders.status, 'pending')));
 
       if (pendingOrders.length === 0) return;
 
@@ -87,7 +88,11 @@ export class LimitOrderWorker {
       // 2. Identify unique assets to fetch prices for
       const assetsToFetch = new Set<string>();
       for (const order of pendingOrders) {
-        assetsToFetch.add(order.conditionAsset);
+        if (order.conditionAsset) {
+            assetsToFetch.add(order.conditionAsset);
+        } else if (order.fromAsset) {
+            assetsToFetch.add(order.fromAsset);
+        }
       }
 
       // 3. Fetch prices from CoinGecko
@@ -95,10 +100,12 @@ export class LimitOrderWorker {
 
       // 4. Check conditions and execute
       for (const order of pendingOrders) {
-        const currentPrice = prices.get(order.conditionAsset);
+        // Use conditionAsset or fallback to fromAsset
+        const asset = order.conditionAsset || order.fromAsset;
+        const currentPrice = prices.get(asset);
 
         if (currentPrice === undefined) {
-          logger.warn(`⚠️ No price found for ${order.conditionAsset}, skipping order ${order.id}`);
+          logger.warn(`⚠️ No price found for ${asset}, skipping order ${order.id}`);
           continue;
 
         }
@@ -164,19 +171,25 @@ export class LimitOrderWorker {
   }
 
   private isConditionMet(order: LimitOrder, currentPrice: number): boolean {
-    const { conditionOperator, conditionValue } = order;
+    const { conditionOperator, conditionValue, targetPrice } = order;
+    
+    // Use conditionValue if available, else fallback to targetPrice parsing
+    const target = conditionValue !== null ? conditionValue : parseFloat(targetPrice || '0');
 
     if (conditionOperator === 'gt') {
-      return currentPrice > conditionValue;
+      return currentPrice > target;
     } else if (conditionOperator === 'lt') {
-      return currentPrice < conditionValue;
+      return currentPrice < target;
     }
 
     return false;
   }
 
   private async executeOrder(order: LimitOrder, triggerPrice: number) {
-    logger.info(`⚡ Condition met for Order #${order.id}: ${order.conditionAsset} is ${triggerPrice} (Target: ${order.conditionOperator} ${order.conditionValue})`);
+    const asset = order.conditionAsset || order.fromAsset;
+    const target = order.conditionValue || order.targetPrice;
+    
+    logger.info(`⚡ Condition met for Order #${order.id}: ${asset} is ${triggerPrice} (Target: ${order.conditionOperator} ${target})`);
 
 
     try {
@@ -207,14 +220,16 @@ export class LimitOrderWorker {
         }
 
         // 2. Create Quote
-        logger.info(`Creating quote for ${order.amount} ${order.fromAsset} -> ${order.toAsset}`);
+        // Note: order.fromAmount is text, parse it
+        const amount = parseFloat(order.fromAmount);
+        logger.info(`Creating quote for ${amount} ${order.fromAsset} -> ${order.toAsset}`);
 
         const quote = await createQuote(
             order.fromAsset,
-            order.fromChain,
+            order.fromNetwork, // Used schema field name fromNetwork
             order.toAsset,
-            order.toChain,
-            order.amount,
+            order.toNetwork,   // Used schema field name toNetwork
+            amount,
             undefined // IP
         );
 
@@ -244,10 +259,10 @@ export class LimitOrderWorker {
                 : sideshiftOrder.depositAddress;
 
             const message = `🚀 *Limit Order Triggered!* \n\n` +
-                `Condition: ${order.conditionAsset} reached ${triggerPrice}\n` +
-                `Swap: ${order.amount} ${order.fromAsset} -> ${order.toAsset}\n\n` +
+                `Condition: ${asset} reached ${triggerPrice}\n` +
+                `Swap: ${amount} ${order.fromAsset} -> ${order.toAsset}\n\n` +
                 `*Action Required:*\n` +
-                `Send ${order.amount} ${order.fromAsset} to:\n` +
+                `Send ${amount} ${order.fromAsset} to:\n` +
                 `\`${depositAddress}\`\n\n` +
                 `Order ID: \`${sideshiftOrder.id}\``;
 
@@ -279,6 +294,7 @@ export class LimitOrderWorker {
             }
         }
     }
+}
 }
 
 export const limitOrderWorker = new LimitOrderWorker();

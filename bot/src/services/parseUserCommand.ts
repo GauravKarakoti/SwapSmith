@@ -3,6 +3,17 @@ import logger from './logger';
 
 export { ParsedCommand };
 
+// Define a union type for the result to handle validationErrors safely
+export type ParseResult = ParsedCommand | {
+    success: false;
+    validationErrors: string[];
+    intent?: string;
+    confidence?: number;
+    parsedMessage?: string;
+    requiresConfirmation?: boolean;
+    originalInput?: string;
+    [key: string]: any;
+};
 
 // Regex Patterns
 const REGEX_EXCLUSION = /(?:everything|all|entire|max)\s*(?:[A-Z]+\s+)?(?:except|but\s+keep)\s+(\d+(\.\d+)?)\s*([A-Z]+)?/i;
@@ -20,7 +31,6 @@ const REGEX_AMOUNT_TOKEN = /\b(\d+(\.\d+)?)\s+(?!to|into|for|from|with|using\b)(
 const REGEX_CONDITION = /(?:if|when)\s+(?:the\s+)?(?:price|rate|market|value)?\s*(?:of\s+)?([A-Z]+)?\s*(?:is|goes|drops|rises|falls)?\s*(above|below|greater|less|more|under|>|<)\s*(?:than)?\s*(\$?[\d,]+(\.\d+)?\s*[kKmM]?)/i;
 
 // New Regex for Quote Amount ("Worth")
-// Capture optional preceding token (group 1), amount (group 3), optional following token (group 5)
 const REGEX_QUOTE = /(?:([A-Z]+)\s+)?(?:worth|value|valued\s+at)\s*(?:of)?\s*(\$)?(\d+(\.\d+)?)\s*([A-Z]+)?/i;
 
 // New Regex for Multiple Source Assets
@@ -38,23 +48,11 @@ function normalizeNumber(val: string): number {
   return parseFloat(val);
 }
 
-function normalizeNumber(val: string): number {
-  val = val.toLowerCase().replace(/[\$,]/g, '');
-
-  if (val.endsWith("k")) {
-    return parseFloat(val) * 1000;
-  }
-  if (val.endsWith("m")) {
-    return parseFloat(val) * 1000000;
-  }
-  return parseFloat(val);
-}
-
 export async function parseUserCommand(
   userInput: string,
   conversationHistory: any[] = [],
   inputType: 'text' | 'voice' = 'text'
-): Promise<ParsedCommand> {
+): Promise<ParseResult> {
   let input = userInput.trim();
 
   // Pre-processing: Remove fillers
@@ -64,12 +62,11 @@ export async function parseUserCommand(
                .trim();
 
   // 1. Check for Swap Intent Keywords
-  // Expanded list to catch more variations
   const isSwapRelated = /\b(swap|convert|send|transfer|buy|sell|move|exchange)\b/i.test(input);
 
   if (isSwapRelated) {
     let intent: ParsedCommand['intent'] = 'swap';
-    let amountType: ParsedCommand['amountType'] = null; // Default to null, set to 'exact' later if needed
+    let amountType: ParsedCommand['amountType'] = null;
     let amount: number | null = null;
     let excludeAmount: number | undefined;
     let excludeToken: string | undefined;
@@ -91,7 +88,6 @@ export async function parseUserCommand(
     // Check Multi-source
     if (REGEX_MULTI_SOURCE.test(input)) {
         validationErrors.push('Multiple source assets not supported');
-        // We can stop here or continue parsing. If we stop, we return failure.
         return {
              success: false,
              intent: 'swap',
@@ -113,7 +109,6 @@ export async function parseUserCommand(
       excludeAmount = parseFloat(exclusionMatch[1]);
       if (exclusionMatch[3]) {
         excludeToken = exclusionMatch[3].toUpperCase();
-        // If exclude token is present, it's likely the source asset too
         if (!fromAsset) fromAsset = excludeToken;
       }
       confidence += 40;
@@ -124,7 +119,6 @@ export async function parseUserCommand(
         const allTokenMatch = input.match(REGEX_ALL_TOKEN);
         if (allTokenMatch) {
              const token = allTokenMatch[2].toUpperCase();
-             // Avoid verbs
              if (!/^(swap|convert|send|transfer|buy|sell|move|exchange)$/i.test(token)) {
                  fromAsset = token;
              }
@@ -132,7 +126,7 @@ export async function parseUserCommand(
     }
 
     // B. Detect Percentage / Max
-    if (amountType !== 'all') { // Only check if not already exclusion (which implies all)
+    if (amountType !== 'all') { 
       const pctMatch = input.match(REGEX_PERCENTAGE);
       if (pctMatch) {
         amountType = 'percentage';
@@ -166,30 +160,22 @@ export async function parseUserCommand(
     }
 
     // C. Detect Quote Amount ("Worth")
-    // Needs to be checked before tokens to capture implied intent
     const quoteMatch = input.match(REGEX_QUOTE);
     if (quoteMatch) {
-        // Group 1: Preceding token
         if (quoteMatch[1]) {
              const candidate = quoteMatch[1].toUpperCase();
              if (!/^(swap|convert|send|transfer|buy|sell|move|exchange)$/i.test(candidate)) {
                  if (!fromAsset) fromAsset = candidate;
              }
         }
-
-        // Group 3: Amount
         quoteAmount = parseFloat(quoteMatch[3]);
-
-        // Group 5: Following token (quote currency / toAsset)
         if (quoteMatch[5]) {
             if (!toAsset) toAsset = quoteMatch[5].toUpperCase();
         }
         confidence += 30;
     }
 
-    // D. Detect Tokens (Source and Dest)
-    // Priority: "from X to Y" > "X to Y"
-
+    // D. Detect Tokens
     if (!fromAsset || !toAsset) {
         const fromToMatch = input.match(REGEX_FROM_TO);
         if (fromToMatch) {
@@ -201,13 +187,10 @@ export async function parseUserCommand(
             if (tokenMatch) {
                 const token1 = tokenMatch[1].toUpperCase();
                 const token2 = tokenMatch[3].toUpperCase();
-
-                // Ensure token1 is not a common verb (e.g. "Convert to BTC")
                 const isVerb = /^(swap|convert|send|transfer|buy|sell|move|exchange)$/i.test(token1);
 
                 if (!isVerb) {
                     if (fromAsset && fromAsset !== token1) {
-                        // Conflict logic? Keep existing fromAsset if already set strong
                     } else {
                         fromAsset = token1;
                     }
@@ -218,8 +201,7 @@ export async function parseUserCommand(
         }
     }
 
-    // E. Detect Numeric Amount (if not percentage/exclude/all/quote)
-    // If amountType is null, we assume it might be exact if we find a number
+    // E. Detect Numeric Amount
     if (!amount && amountType === null && !quoteAmount) {
        const amtTokenMatch = input.match(REGEX_AMOUNT_TOKEN);
        if (amtTokenMatch) {
@@ -228,11 +210,9 @@ export async function parseUserCommand(
            if (!fromAsset) fromAsset = amtTokenMatch[3].toUpperCase();
            confidence += 20;
        } else {
-           // Standalone number?
            const numMatch = input.match(/\b(\d+(\.\d+)?)\b/);
            if (numMatch) {
-               // Check if this number was part of exclusion?
-               if (amountType !== 'all') { // If exclusion, we ignore other numbers unless relevant
+               if (amountType !== 'all') { 
                    amount = parseFloat(numMatch[1]);
                    amountType = 'exact';
                    confidence += 10;
@@ -252,26 +232,22 @@ export async function parseUserCommand(
 
         if (assetStr) {
             const candidate = assetStr.toUpperCase();
-            // Ignore common verbs/keywords if captured as asset
             const ignoredWords = ['IS', 'GOES', 'DROPS', 'RISES', 'FALLS', 'THE', 'PRICE', 'OF'];
             if (!ignoredWords.includes(candidate)) {
                 conditionAsset = candidate;
             }
         }
 
-        // above, greater, more, rises, >  => gt
-        // below, less, under, drops, falls, < => lt
         if (['above', 'greater', 'more', 'rises', '>'].some(s => operatorStr.includes(s))) {
             conditionOperator = 'gt';
         } else {
             conditionOperator = 'lt';
         }
 
-        // Populate new conditions object
         if (conditionValue) {
             conditions = {
                 type: conditionOperator === 'gt' ? "price_above" : "price_below",
-                asset: conditionAsset || fromAsset || 'ETH', // fallback will be refined below
+                asset: conditionAsset || fromAsset || 'ETH',
                 value: conditionValue
             };
         }
@@ -279,7 +255,6 @@ export async function parseUserCommand(
         confidence += 30;
     }
 
-    // ✅ CONSTRUCT CONDITIONS OBJECT (This was missing!)
     if (conditionOperator && conditionValue) {
         conditions = {
             type: conditionOperator === 'gt' ? 'price_above' : 'price_below',
@@ -288,20 +263,11 @@ export async function parseUserCommand(
         };
     }
 
-    // Construct Result if confidence is high enough
-    // We need at least an intent and some token info.
-    // If quoteAmount is present, allow null 'amount'.
-
     if (confidence >= 30) {
-        // If amountType is 'all' or 'percentage', amount is optional/derived.
-        // If 'exact', amount is required? No, might be missing.
-
-        // Default conditionAsset to fromAsset if not specified but condition exists
         if ((conditionOperator || conditionValue) && !conditionAsset && fromAsset) {
             conditionAsset = fromAsset;
         }
 
-        // Update conditions asset if it was missing and we defaulted it
         if (conditions && !conditions.asset && conditionAsset) {
             conditions.asset = conditionAsset;
         }
@@ -312,8 +278,8 @@ export async function parseUserCommand(
         }
 
         return {
-            success: true, // Mark as success parsing, even if validation fails later
-            intent: intent, // Use the detected intent (swap or limit_order)
+            success: true,
+            intent: intent,
             fromAsset: fromAsset || null,
             fromChain: null,
             toAsset: toAsset || null,
@@ -323,13 +289,12 @@ export async function parseUserCommand(
             excludeAmount,
             excludeToken,
             quoteAmount,
-            conditions, // Return new conditions object
+            conditions,
             portfolio: undefined,
             frequency: null, dayOfWeek: null, dayOfMonth: null,
             settleAsset: null, settleNetwork: null, settleAmount: null, settleAddress: null,
             fromProject: null, fromYield: null, toProject: null, toYield: null,
 
-            // Limit Order fields
             conditionOperator,
             conditionValue,
             conditionAsset,
@@ -350,10 +315,8 @@ export async function parseUserCommand(
   try {
     const result = await parseWithLLM(userInput, conversationHistory, inputType);
 
-    // REGEX FALLBACK FOR CONDITIONS
     if (!result.conditions) {
         const text = userInput.toLowerCase();
-        // Simple fallback regexes
         const aboveMatch = text.match(/above\s+(\d+(?:k|m)?)/i);
         const belowMatch = text.match(/below\s+(\d+(?:k|m)?)/i);
 
@@ -372,7 +335,6 @@ export async function parseUserCommand(
         }
     }
 
-    // Handle Percentage Amounts Properly
     if (userInput.includes("%")) {
        result.amountType = "percentage";
     }
@@ -389,7 +351,6 @@ export async function parseUserCommand(
   } catch (error) {
      logger.error("LLM Error", error);
      return {
-
         success: false,
         intent: 'unknown',
         confidence: 0,

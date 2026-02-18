@@ -1,19 +1,5 @@
 "use client";
 
-import { useEffect, useState, useRef } from 'react';
-import { useAuth } from '@/hooks/useAuth';
-import { useAccount } from 'wagmi';
-import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
-import Navbar from '@/components/Navbar';
-import ClaudeChatInput from '@/components/ClaudeChatInput';
-import SwapConfirmation from '@/components/SwapConfirmation';
-import IntentConfirmation from '@/components/IntentConfirmation';
-import { ParsedCommand } from '@/utils/groq-client';
-import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
-import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
-import { MessageCircle, Plus, Clock, Settings, Menu, Sparkles, Zap, Activity } from 'lucide-react';
-import Link from 'next/link';
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -37,11 +23,13 @@ import IntentConfirmation from "@/components/IntentConfirmation";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useChatHistory, useChatSessions } from "@/hooks/useCachedData";
+import { useErrorHandler, ErrorType } from "@/hooks/useErrorHandler";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 
 import { ParsedCommand } from "@/utils/groq-client";
 
 /* -------------------------------------------------------------------------- */
-/*                                   Types                                    */
+/* Types                                    */
 /* -------------------------------------------------------------------------- */
 
 interface QuoteData {
@@ -76,7 +64,7 @@ interface Message {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                               UI Components                                */
+/* UI Components                                */
 /* -------------------------------------------------------------------------- */
 
 const SidebarSkeleton = () => (
@@ -138,14 +126,16 @@ const LiveStatsCard = () => {
 };
 
 /* -------------------------------------------------------------------------- */
-/*                                 Main Page                                  */
+/* Main Page                                  */
 /* -------------------------------------------------------------------------- */
 
 export default function TerminalPage() {
   const router = useRouter();
-  const { isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
+  const { handleError } = useErrorHandler();
 
+  // State
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -155,46 +145,34 @@ export default function TerminalPage() {
       type: "message",
     },
   ]);
-
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
 
+  // Session Management
   const [currentSessionId, setCurrentSessionId] = useState(crypto.randomUUID());
   const sessionIdRef = useRef(currentSessionId);
   const loadedSessionRef = useRef<string | null>(null);
-
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { address, isConnected } = useAccount();
-  const { handleError } = useErrorHandler();
 
+  // Data Fetching
+  const { data: chatSessions, refetch: refetchSessions } = useChatSessions(
+    user?.uid,
+  );
+  const { data: dbChatHistory } = useChatHistory(user?.uid, currentSessionId);
+
+  // Speech Recognition
   const {
     isListening: isRecording,
     transcript,
     isSupported: isAudioSupported,
     startRecording,
     stopRecording,
-    error: audioError,
   } = useSpeechRecognition();
 
-  // Handle voice result processing
-  useEffect(() => {
-    if (!isRecording && transcript) {
-      handleSendMessage({
-        message: transcript,
-        files: [],
-        pastedContent: [],
-        model: 'sonnet-4.5',
-        isThinkingEnabled: false
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRecording, transcript]);
-
-  const { data: chatSessions, refetch: refetchSessions } = useChatSessions(
-    user?.uid,
-  );
-  const { data: dbChatHistory } = useChatHistory(user?.uid, currentSessionId);
-
+  /* ------------------------------------------------------------------------ */
+  /* Effects                                  */
   /* ------------------------------------------------------------------------ */
 
   useEffect(() => {
@@ -206,7 +184,7 @@ export default function TerminalPage() {
     loadedSessionRef.current = null;
   }, [currentSessionId]);
 
-  // Load chat history from database when available
+  // Load chat history
   useEffect(() => {
     if (loadedSessionRef.current === currentSessionId) return;
 
@@ -231,6 +209,16 @@ export default function TerminalPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Handle voice transcript
+  useEffect(() => {
+    if (!isRecording && transcript) {
+      processCommand(transcript);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRecording, transcript]);
+
+  /* ------------------------------------------------------------------------ */
+  /* Handlers                                   */
   /* ------------------------------------------------------------------------ */
 
   const addMessage = useCallback((msg: Omit<Message, "timestamp">) => {
@@ -240,15 +228,8 @@ export default function TerminalPage() {
   const handleStartRecording = () => {
     if (!isAudioSupported) {
       addMessage({
-  const handleNewChat = () => {
-    const id = crypto.randomUUID();
-    setCurrentSessionId(id);
-    setMessages([
-      {
         role: "assistant",
-        content:
-          "Hello! I can help you swap assets, create payment links, or scout yields.",
-        timestamp: new Date(),
+        content: "Voice input is not supported in this browser.",
         type: "message",
       });
       return;
@@ -260,8 +241,84 @@ export default function TerminalPage() {
     stopRecording();
   };
 
+  const handleNewChat = () => {
+    const id = crypto.randomUUID();
+    setCurrentSessionId(id);
+    setMessages([
+      {
+        role: "assistant",
+        content:
+          "Hello! I can help you swap assets, create payment links, or scout yields.",
+        timestamp: new Date(),
+        type: "message",
+      },
+    ]);
+  };
+
+  const handleSwitchSession = (id: string) => setCurrentSessionId(id);
+
+  const handleDeleteSession = async (
+    sessionId: string,
+    e: React.MouseEvent,
+  ) => {
+    e.stopPropagation();
+    if (!user?.uid) return;
+
+    await fetch(`/api/chat/history?userId=${user.uid}&sessionId=${sessionId}`, {
+      method: "DELETE",
+    });
+
+    if (sessionId === currentSessionId) handleNewChat();
+    refetchSessions();
+  };
+
+  /* ------------------------------------------------------------------------ */
+  /* Core Logic                                   */
+  /* ------------------------------------------------------------------------ */
+
+  const executeSwap = async (command: ParsedCommand) => {
+    try {
+      const quoteResponse = await fetch("/api/create-swap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fromAsset: command.fromAsset,
+          toAsset: command.toAsset,
+          amount: command.amount,
+          fromChain: command.fromChain,
+          toChain: command.toChain,
+        }),
+      });
+      const quote = await quoteResponse.json();
+      if (quote.error) throw new Error(quote.error);
+      
+      addMessage({
+        role: "assistant",
+        content: `Swap Prepared: ${quote.depositAmount} ${quote.depositCoin} → ${quote.settleAmount} ${quote.settleCoin}`,
+        type: "swap_confirmation",
+        data: { quoteData: quote, confidence: command.confidence },
+      });
+    } catch (error: unknown) {
+      const errorMessage = handleError(error, ErrorType.API_FAILURE, {
+        operation: "swap_quote",
+        retryable: true,
+      });
+      addMessage({ role: "assistant", content: errorMessage, type: "message" });
+    }
+  };
+
   const processCommand = async (text: string) => {
+    if (!text.trim()) return;
+    
+    // Add user message first
+    addMessage({
+        role: "user",
+        content: text,
+        type: "message",
+    });
+
     if (!isLoading) setIsLoading(true);
+    
     try {
       const response = await fetch("/api/parse-command", {
         method: "POST",
@@ -273,7 +330,7 @@ export default function TerminalPage() {
       if (!command.success && command.intent !== "yield_scout") {
         addMessage({
           role: "assistant",
-          content: `I couldn't understand. ${command.validationErrors.join(", ")}`,
+          content: `I couldn't understand. ${command.validationErrors?.join(", ") || "Please try again."}`,
           type: "message",
         });
         setIsLoading(false);
@@ -285,7 +342,7 @@ export default function TerminalPage() {
         const yieldData = await yieldRes.json();
         addMessage({
           role: "assistant",
-          content: yieldData.message,
+          content: yieldData.message || "Here are the top yields:",
           type: "yield_info",
         });
         setIsLoading(false);
@@ -374,56 +431,8 @@ export default function TerminalPage() {
     }
   };
 
-  const executeSwap = async (command: ParsedCommand) => {
-    try {
-      const quoteResponse = await fetch("/api/create-swap", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fromAsset: command.fromAsset,
-          toAsset: command.toAsset,
-          amount: command.amount,
-          fromChain: command.fromChain,
-          toChain: command.toChain,
-        }),
-      });
-      const quote = await quoteResponse.json();
-      if (quote.error) throw new Error(quote.error);
-      addMessage({
-        role: "assistant",
-        content: `Swap Prepared: ${quote.depositAmount} ${quote.depositCoin} → ${quote.settleAmount} ${quote.settleCoin}`,
-        type: "swap_confirmation",
-        data: { quoteData: quote, confidence: command.confidence },
-      });
-    } catch (error: unknown) {
-      const errorMessage = handleError(error, ErrorType.API_FAILURE, {
-        operation: "swap_quote",
-        retryable: true,
-      });
-      addMessage({ role: "assistant", content: errorMessage, type: "message" });
-    }
-  };
-      },
-    ]);
-  };
-
-  const handleSwitchSession = (id: string) => setCurrentSessionId(id);
-
-  const handleDeleteSession = async (
-    sessionId: string,
-    e: React.MouseEvent,
-  ) => {
-    e.stopPropagation();
-    if (!user?.uid) return;
-
-    await fetch(`/api/chat/history?userId=${user.uid}&sessionId=${sessionId}`, {
-      method: "DELETE",
-    });
-
-    if (sessionId === currentSessionId) handleNewChat();
-    refetchSessions();
-  };
-
+  /* ------------------------------------------------------------------------ */
+  /* Render                                   */
   /* ------------------------------------------------------------------------ */
 
   if (authLoading) {
@@ -435,8 +444,6 @@ export default function TerminalPage() {
   }
 
   if (!isAuthenticated) return null;
-
-  /* ------------------------------------------------------------------------ */
 
   return (
     <>
@@ -563,15 +570,15 @@ export default function TerminalPage() {
                       msg.data &&
                       "quoteData" in msg.data ? (
                         <SwapConfirmation
-                          quote={msg.data.quoteData as QuoteData}
-                          confidence={msg.data.confidence as number}
+                          quote={(msg.data as { quoteData: QuoteData }).quoteData}
+                          confidence={(msg.data as { confidence: number }).confidence}
                         />
                       ) : msg.type === "intent_confirmation" &&
                         msg.data &&
                         "parsedCommand" in msg.data ? (
                         <IntentConfirmation
-                          command={msg.data.parsedCommand as ParsedCommand}
-                          onConfirm={() => {}}
+                          command={(msg.data as { parsedCommand: ParsedCommand }).parsedCommand}
+                          onConfirm={() => executeSwap((msg.data as { parsedCommand: ParsedCommand }).parsedCommand)}
                         />
                       ) : msg.type === "yield_info" ? (
                         <pre className="whitespace-pre-wrap text-xs text-cyan-400">
@@ -581,12 +588,12 @@ export default function TerminalPage() {
                         msg.data &&
                         "url" in msg.data ? (
                         <a
-                          href={msg.data.url as string}
+                          href={(msg.data as { url: string }).url}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="underline underline-offset-2 text-cyan-400"
                         >
-                          {msg.data.url as string}
+                          {(msg.data as { url: string }).url}
                         </a>
                       ) : (
                         <pre className="whitespace-pre-wrap text-[var(--text)]">
@@ -603,17 +610,11 @@ export default function TerminalPage() {
 
           <div className="p-4 border-t border-[var(--border)] bg-[var(--panel)]/90 backdrop-blur">
             <ClaudeChatInput
-              onSendMessage={({ message }) =>
-                addMessage({
-                  role: "user",
-                  content: message,
-                  type: "message",
-                })
-              }
-              isRecording={false}
-              isAudioSupported={false}
-              onStartRecording={() => {}}
-              onStopRecording={() => {}}
+              onSendMessage={({ message }) => processCommand(message)}
+              isRecording={isRecording}
+              isAudioSupported={isAudioSupported}
+              onStartRecording={handleStartRecording}
+              onStopRecording={handleStopRecording}
               isConnected={isConnected}
             />
           </div>

@@ -119,10 +119,25 @@ export const limitOrders = pgTable('limit_orders', {
   toAsset: text('to_asset').notNull(),
   toNetwork: text('to_network').notNull(),
   fromAmount: text('from_amount').notNull(),
-  targetPrice: text('target_price').notNull(),
+  
+  // Logic fields
+  conditionOperator: text('condition_operator'), // 'gt' | 'lt'
+  conditionValue: real('condition_value'),
+  conditionAsset: text('condition_asset'),
+  
+  // Legacy/Schema compatibility
+  targetPrice: text('target_price'), 
+  
   currentPrice: text('current_price'),
+  settleAddress: text('settle_address'),
+  
   isActive: integer('is_active').notNull().default(1),
+  status: text('status').default('pending'),
+  sideShiftOrderId: text('sideshift_order_id'),
+  error: text('error'),
+  
   createdAt: timestamp('created_at').defaultNow(),
+  executedAt: timestamp('executed_at'),
   lastCheckedAt: timestamp('last_checked_at'),
 });
 
@@ -604,7 +619,12 @@ export async function createLimitOrder(
       toNetwork,
       fromAmount: amount,
       targetPrice: targetPrice.toString(),
+      conditionOperator,
+      conditionValue: typeof targetPrice === 'string' ? parseFloat(targetPrice) : targetPrice,
+      conditionAsset,
+      settleAddress,
       isActive: 1,
+      status: 'pending',
       createdAt: new Date(),
       lastCheckedAt: new Date()
   }).returning();
@@ -622,6 +642,10 @@ export async function createDelayedOrder(data: Partial<DelayedOrder>) {
             toNetwork: data.toChain!,
             fromAmount: data.amount!.toString(),
             targetPrice: data.targetPrice!.toString(),
+            conditionValue: data.targetPrice,
+            conditionOperator: data.condition === 'above' ? 'gt' : 'lt',
+            conditionAsset: data.fromAsset!, // assumption
+            settleAddress: data.settleAddress,
             currentPrice: null,
             isActive: 1,
             lastCheckedAt: new Date(),
@@ -652,20 +676,8 @@ export async function getPendingDelayedOrders(): Promise<DelayedOrder[]> {
   const allOrders: DelayedOrder[] = [];
 
   // Fetch Limit Orders
-  const pendingLimits = await db.select({
-      id: limitOrders.id,
-      telegramId: limitOrders.telegramId,
-      fromAsset: limitOrders.fromAsset,
-      fromChain: limitOrders.fromNetwork,
-      toAsset: limitOrders.toAsset,
-      toChain: limitOrders.toNetwork,
-      amount: limitOrders.fromAmount,
-      targetPrice: limitOrders.targetPrice,
-      walletAddress: users.walletAddress
-  })
-  .from(limitOrders)
-  .leftJoin(users, eq(limitOrders.telegramId, users.telegramId))
-  .where(eq(limitOrders.isActive, 1));
+  const pendingLimits = await db.select().from(limitOrders)
+    .where(eq(limitOrders.isActive, 1));
 
   pendingLimits.forEach(o => {
       allOrders.push({
@@ -673,13 +685,13 @@ export async function getPendingDelayedOrders(): Promise<DelayedOrder[]> {
           telegramId: o.telegramId,
           orderType: 'limit_order',
           fromAsset: o.fromAsset,
-          fromChain: o.fromChain,
+          fromChain: o.fromNetwork,
           toAsset: o.toAsset,
-          toChain: o.toChain,
-          amount: parseFloat(o.amount),
-          settleAddress: o.walletAddress,
-          targetPrice: parseFloat(o.targetPrice),
-          condition: 'below', // Defaulting as schema is missing this field
+          toChain: o.toNetwork,
+          amount: parseFloat(o.fromAmount),
+          settleAddress: o.settleAddress,
+          targetPrice: o.conditionValue ? o.conditionValue : parseFloat(o.targetPrice || '0'),
+          condition: o.conditionOperator === 'gt' ? 'above' : 'below', 
       });
   });
 
@@ -763,4 +775,27 @@ export async function cancelDelayedOrder(id: number, type: 'limit_order' | 'dca'
     } else {
         await db.update(dcaSchedules).set({ isActive: 0 }).where(eq(dcaSchedules.id, id));
     }
+}
+
+export async function updateLimitOrderStatus(
+  orderId: number,
+  status: string,
+  sideshiftOrderId?: string,
+  error?: string
+) {
+  const updateData: any = { status };
+  
+  if (sideshiftOrderId) updateData.sideShiftOrderId = sideshiftOrderId;
+  if (error) updateData.error = error;
+  if (status === 'executed') {
+      updateData.executedAt = new Date();
+      updateData.isActive = 0;
+  }
+  if (status === 'failed' || status === 'cancelled') {
+      updateData.isActive = 0;
+  }
+
+  await db.update(limitOrders)
+    .set(updateData)
+    .where(eq(limitOrders.id, orderId));
 }
