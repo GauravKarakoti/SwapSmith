@@ -10,31 +10,33 @@ import express from 'express';
 import { sql } from 'drizzle-orm';
 import { ethers } from 'ethers';
 
-/* -------------------------------- SERVICES -------------------------------- */
-
+// Services
 import { transcribeAudio } from './services/groq-client';
 import logger from './services/logger';
 import {
     createQuote,
     createOrder,
+    createCheckout,
     getOrderStatus
 } from './services/sideshift-client';
 import {
-    getTopStablecoinYields
+    getTopStablecoinYields,
+    getTopYieldPools
 } from './services/yield-client';
-import {
-    createSwapAndStakeOrder,
-    getEstimatedAPY
-} from './services/staking-service';
 import * as db from './services/database';
+import { chainIdMap } from './config/chains';
+import { tokenResolver } from './services/token-resolver';
 import { DCAScheduler } from './services/dca-scheduler';
+import { resolveAddress, isNamingService } from './services/address-resolver';
 import { ADDRESS_PATTERNS } from './config/address-patterns';
 import { limitOrderWorker } from './workers/limitOrderWorker';
 import { OrderMonitor } from './services/order-monitor';
 
-/* --------------------------------- SETUP ---------------------------------- */
-
 dotenv.config();
+
+/* -------------------------------------------------------------------------- */
+/*                               GLOBAL SETUP                                 */
+/* -------------------------------------------------------------------------- */
 
 process.on('unhandledRejection', (err) => {
     console.error('Unhandled Rejection:', err);
@@ -58,7 +60,9 @@ const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 
 const DEFAULT_EVM_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 
-/* -------------------------------- HELPERS --------------------------------- */
+/* -------------------------------------------------------------------------- */
+/*                                   HELPERS                                  */
+/* -------------------------------------------------------------------------- */
 
 function isValidAddress(address: string, chain?: string): boolean {
     if (!address) return false;
@@ -80,7 +84,9 @@ async function logAnalytics(ctx: any, type: string, details: any) {
     } catch {}
 }
 
-/* ------------------------------ ORDER MONITOR ------------------------------ */
+/* -------------------------------------------------------------------------- */
+/*                               ORDER MONITOR                                */
+/* -------------------------------------------------------------------------- */
 
 const orderMonitor = new OrderMonitor({
     getOrderStatus,
@@ -95,7 +101,9 @@ const orderMonitor = new OrderMonitor({
     }
 });
 
-/* -------------------------------- COMMANDS -------------------------------- */
+/* -------------------------------------------------------------------------- */
+/*                                   COMMANDS                                 */
+/* -------------------------------------------------------------------------- */
 
 bot.start((ctx) => {
     ctx.reply(
@@ -119,7 +127,9 @@ bot.command('clear', async (ctx) => {
     ctx.reply('🗑️ Conversation cleared');
 });
 
-/* ------------------------------ MESSAGE INPUT ------------------------------ */
+/* -------------------------------------------------------------------------- */
+/*                              MESSAGE HANDLERS                              */
+/* -------------------------------------------------------------------------- */
 
 bot.on(message('text'), async (ctx) => {
     if (ctx.message.text.startsWith('/')) return;
@@ -150,63 +160,38 @@ bot.on(message('voice'), async (ctx) => {
     }
 });
 
-/* ----------------------------- CORE NLP HANDLER ---------------------------- */
-
-async function parseUserCommand(text: string): Promise<any> {
-    // TODO: replace with real NLP
-    return {
-        success: true,
-        intent: 'swap',
-        fromAsset: 'ETH',
-        fromChain: 'ethereum',
-        toAsset: 'BTC',
-        toChain: 'bitcoin',
-        amount: 1
-    };
-}
+/* -------------------------------------------------------------------------- */
+/*                               CORE HANDLER                                 */
+/* -------------------------------------------------------------------------- */
 
 async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'voice' = 'text') {
-    const userId = ctx.from.id;
-    const state = await db.getConversationState(userId);
-
-    if (state?.parsedCommand && !state.parsedCommand.settleAddress) {
-        const addr = text.trim();
-        if (isValidAddress(addr, state.parsedCommand.toChain)) {
-            await db.setConversationState(userId, {
-                parsedCommand: { ...state.parsedCommand, settleAddress: addr }
-            });
-
-            return ctx.reply(
-                'Confirm swap?',
-                Markup.inlineKeyboard([
-                    Markup.button.callback('✅ Yes', 'confirm_swap'),
-                    Markup.button.callback('❌ Cancel', 'cancel_swap')
-                ])
-            );
-        }
-
-        return ctx.reply('❌ Invalid address. Try again.');
-    }
-
     const parsed = await parseUserCommand(text);
 
     if (!parsed.success) {
         await logAnalytics(ctx, 'ParseError', { input: text });
-        return ctx.reply('❌ I didn’t understand.');
+        return ctx.reply('❌ I didn’t understand. Try: "Swap 1 ETH to BTC"');
     }
 
-    await db.setConversationState(userId, { parsedCommand: parsed });
+    if (parsed.intent === 'yield_scout') {
+        const yields = await getTopStablecoinYields();
+        return ctx.replyWithMarkdown(yields);
+    }
 
-    ctx.reply(
-        'Confirm swap?',
-        Markup.inlineKeyboard([
-            Markup.button.callback('✅ Yes', 'confirm_swap'),
-            Markup.button.callback('❌ Cancel', 'cancel_swap')
-        ])
-    );
+    if (parsed.intent === 'swap') {
+        await db.setConversationState(ctx.from.id, { parsedCommand: parsed });
+        return ctx.reply(
+            'Confirm swap?',
+            Markup.inlineKeyboard([
+                Markup.button.callback('✅ Yes', 'confirm_swap'),
+                Markup.button.callback('❌ Cancel', 'cancel_swap')
+            ])
+        );
+    }
 }
 
-/* -------------------------------- ACTIONS -------------------------------- */
+/* -------------------------------------------------------------------------- */
+/*                                   ACTIONS                                  */
+/* -------------------------------------------------------------------------- */
 
 bot.action('confirm_swap', async (ctx) => {
     const state = await db.getConversationState(ctx.from.id);
@@ -244,13 +229,7 @@ bot.action('place_order', async (ctx) => {
         state.parsedCommand.settleAddress
     );
 
-    await db.createOrderEntry(
-        ctx.from.id,
-        state.parsedCommand,
-        order,
-        order.settleAmount,
-        state.quoteId
-    );
+    await db.createOrderEntry(ctx.from.id, state.parsedCommand, order, order.settleAmount, state.quoteId);
 
     ctx.editMessageText(
         `✅ Order Created\n\nSend ${order.depositAmount} ${order.depositCoin} to:\n\`${order.depositAddress}\``,
@@ -265,7 +244,9 @@ bot.action('cancel_swap', async (ctx) => {
     ctx.editMessageText('❌ Cancelled');
 });
 
-/* ---------------------------------- API ---------------------------------- */
+/* -------------------------------------------------------------------------- */
+/*                                   APIs                                     */
+/* -------------------------------------------------------------------------- */
 
 app.get('/', (_, res) => res.send('SwapSmith Alive'));
 
@@ -274,9 +255,25 @@ app.get('/health', (_, res) => {
     res.json({ status: 'ok' });
 });
 
-/* -------------------------------- STARTUP -------------------------------- */
+/* -------------------------------------------------------------------------- */
+/*                                  STARTUP                                   */
+/* -------------------------------------------------------------------------- */
 
 const dcaScheduler = new DCAScheduler();
+
+async function parseUserCommand(text: string): Promise<any> {
+    // TODO: replace with real NLP
+    return {
+        success: true,
+        intent: 'swap',
+        fromAsset: 'ETH',
+        fromChain: 'ethereum',
+        toAsset: 'BTC',
+        toChain: 'bitcoin',
+        amount: 1,
+        settleAddress: '0x0000000000000000000000000000000000000000'
+    };
+}
 
 async function start() {
     try {

@@ -38,7 +38,6 @@ import {
 import Image from 'next/image'
 import { useAuth } from '@/hooks/useAuth'
 import Navbar from '@/components/Navbar'
-import { ReputationCard } from '@/components/ReputationCard'
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 
