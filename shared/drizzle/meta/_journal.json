@@ -3,17 +3,17 @@
   "dialect": "postgresql",
   "entries": [
     {
-      "idx": 0,
+      "idx": 1,
       "version": "7",
-      "when": 1771170791365,
-      "tag": "0000_quiet_wild_pack",
+      "when": 1771333996913,
+      "tag": "0001_third_nomad",
       "breakpoints": true
     },
     {
-      "idx": 1,
+      "idx": 2,
       "version": "7",
-      "when": 1739692800000,
-      "tag": "0001_learning_rewards_schema",
+      "when": 1771334928839,
+      "tag": "0002_clear_logan",
       "breakpoints": true
     }
   ]

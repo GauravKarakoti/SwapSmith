@@ -1,15 +1,24 @@
 /**
  * Next.js Instrumentation Hook
- * This file is automatically executed on server startup
- * https://nextjs.org/docs/app/building-your-application/optimizing/instrumentation
+ * Runs only in production Node.js runtime
  */
 
 export async function register() {
-  if (process.env.NEXT_RUNTIME === 'nodejs') {
-    // Only run in Node.js runtime (not Edge runtime)
-    const { startPriceRefreshCron } = await import('./lib/price-refresh-cron');
-    
-    console.log('[Instrumentation] Starting price refresh cron service on server startup...');
+  // 🚨 Prevent running during Next dev server
+  if (process.env.NODE_ENV !== "production") {
+    console.log("[Instrumentation] Skipping cron in dev mode");
+    return;
+  }
+
+  // Run only in Node runtime
+  if (process.env.NEXT_RUNTIME !== "nodejs") return;
+
+  try {
+    const { startPriceRefreshCron } = await import("./lib/price-refresh-cron");
+
+    console.log("[Instrumentation] Starting price refresh cron...");
     startPriceRefreshCron();
+  } catch (err) {
+    console.log("[Instrumentation] Cron skipped:", err);
   }
 }
