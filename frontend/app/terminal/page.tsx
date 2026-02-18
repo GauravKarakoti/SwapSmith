@@ -20,6 +20,7 @@ import Navbar from "@/components/Navbar";
 import ClaudeChatInput from "@/components/ClaudeChatInput";
 import SwapConfirmation from "@/components/SwapConfirmation";
 import IntentConfirmation from "@/components/IntentConfirmation";
+import { ReputationCard } from "@/components/ReputationCard";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useChatHistory, useChatSessions } from "@/hooks/useCachedData";
@@ -268,6 +269,10 @@ export default function TerminalPage() {
 
               <div className="px-4">
                 <LiveStatsCard />
+              </div>
+
+              <div className="px-4 mt-4">
+                <ReputationCard userId={user?.uid} compact={true} showDetails={false} />
               </div>
 
               <div className="flex-1 overflow-y-auto p-2 mt-4">
