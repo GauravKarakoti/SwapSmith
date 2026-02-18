@@ -25,6 +25,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useChatHistory, useChatSessions } from "@/hooks/useCachedData";
 import { useErrorHandler, ErrorType } from "@/hooks/useErrorHandler";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { trackTerminalUsage, showRewardNotification } from "@/lib/rewards-service";
 
 import { ParsedCommand } from "@/utils/groq-client";
 
@@ -148,7 +149,6 @@ export default function TerminalPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
 
   // Session Management
   const [currentSessionId, setCurrentSessionId] = useState(crypto.randomUUID());
@@ -178,6 +178,17 @@ export default function TerminalPage() {
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push("/login");
   }, [authLoading, isAuthenticated, router]);
+
+  // Track terminal usage for rewards
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      trackTerminalUsage().then((result) => {
+        if (result.success && !result.alreadyClaimed) {
+          showRewardNotification(result);
+        }
+      });
+    }
+  }, [isAuthenticated, user]);
 
   useEffect(() => {
     sessionIdRef.current = currentSessionId;
@@ -410,7 +421,6 @@ export default function TerminalPage() {
       }
 
       if (command.requiresConfirmation || command.confidence < 80) {
-        setPendingCommand(command);
         addMessage({
           role: "assistant",
           content: "",
