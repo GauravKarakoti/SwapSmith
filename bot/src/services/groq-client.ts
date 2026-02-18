@@ -33,7 +33,7 @@ export interface ParsedCommand {
   toAsset: string | null;
   toChain: string | null;
   amount: number | null;
-  amountType?: "exact" | "percentage" | "all" | "exclude" | null; 
+  amountType?: "exact" | "absolute" | "percentage" | "all" | "exclude" | null; // Extended with 'absolute'
 
   excludeAmount?: number;
   excludeToken?: string;
@@ -93,15 +93,46 @@ Your job is to parse natural language into specific JSON commands.
 
 MODES:
 1. "swap": 1 Input -> 1 Output (immediate market swap).
+   Example: "Swap 100 ETH for BTC"
+   
 2. "portfolio": 1 Input -> Multiple Outputs (Split allocation).
-3. "checkout": Payment link creation.
+   Example: "Split 1000 ETH: 50% to BTC, 30% to SOL, 20% to USDC"
+   
+3. "checkout": Payment link creation for receiving assets.
+   Example: "Create a payment link for 500 USDC on Ethereum"
+   
 4. "yield_scout": User asking for high APY/Yield info.
+   Example: "What are the best yields right now?"
+
 5. "yield_deposit": Deposit assets into yield platforms.
 6. "yield_migrate": Move funds between pools.
 7. "dca": Dollar Cost Averaging.
 8. "limit_order": Buy/Sell at specific price.
 
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
+
+ADDRESS RESOLUTION:
+- Users can specify addresses as raw wallet addresses (0x...), ENS names (ending in .eth), Lens handles (ending in .lens), Unstoppable Domains (ending in .crypto, .nft, .blockchain, etc.), or nicknames from their address book.
+- If an address is specified, include it in settleAddress field.
+- The system will resolve nicknames, ENS, Lens, and Unstoppable Domains automatically.
+
+IMPORTANT: ENS/ADDRESS HANDLING:
+- When a user says "Swap X ETH to vitalik.eth" or "Send X ETH to vitalik.eth", they mean:
+  * Keep the same asset (ETH)
+  * Send it to the address vitalik.eth
+  * This should be parsed as: toAsset: "ETH", toChain: "ethereum", settleAddress: "vitalik.eth"
+- Patterns to recognize as addresses (not assets):
+  * Ends with .eth (ENS)
+  * Ends with .lens (Lens Protocol)
+  * Ends with .crypto, .nft, .blockchain, .wallet, etc. (Unstoppable Domains)
+  * Starts with 0x followed by 40 hex characters
+  * Looks like a nickname (single word, lowercase, no special chars)
+
+AMBIGUITY HANDLING:
+- If the command is ambiguous (e.g., "swap all my ETH to BTC or USDC"), set confidence low (0-30) and add validation error "Command is ambiguous. Please specify clearly."
+- For complex commands, prefer explicit allocations over assumptions.
+- If multiple interpretations possible, choose the most straightforward and set requiresConfirmation: true.
+- If the user includes conditions such as "only if", "when price is", "above", "below", extract them into a "conditions" object.
 
 RESPONSE FORMAT:
 {
@@ -110,17 +141,29 @@ RESPONSE FORMAT:
   "fromAsset": string | null,
   "fromChain": string | null,
   "amount": number | null,
-  "amountType": "exact" | "percentage" | "all" | null,
+  "amountType": "exact" | "absolute" | "percentage" | "all" | null,
+
+  // Optional: Conditions
+  "conditions": {
+    "type": "price_above" | "price_below",
+    "asset": "BTC",
+    "value": 60000
+  },
+
+  // Fill for 'swap'
   "toAsset": string | null,
   "toChain": string | null,
   "portfolio": [],
-  "frequency": null,
-  "dayOfWeek": null,
-  "dayOfMonth": null,
+  "frequency": "daily" | "weekly" | "monthly" | null,
+  "dayOfWeek": "monday" | "tuesday" | ... | null,
+  "dayOfMonth": "1" to "31" | null,
   "settleAsset": null,
   "settleNetwork": null,
   "settleAmount": null,
   "settleAddress": null,
+  "conditionOperator": "gt" | "lt" | null,
+  "conditionValue": number | null,
+  "conditionAsset": string | null,
   "confidence": number,
   "validationErrors": string[],
   "parsedMessage": "Human readable summary",
