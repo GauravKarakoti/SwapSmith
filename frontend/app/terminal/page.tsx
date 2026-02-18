@@ -1,5 +1,19 @@
 "use client";
 
+import { useEffect, useState, useRef } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import { useAccount } from 'wagmi';
+import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import Navbar from '@/components/Navbar';
+import ClaudeChatInput from '@/components/ClaudeChatInput';
+import SwapConfirmation from '@/components/SwapConfirmation';
+import IntentConfirmation from '@/components/IntentConfirmation';
+import { ParsedCommand } from '@/utils/groq-client';
+import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
+import { MessageCircle, Plus, Clock, Settings, Menu, Sparkles, Zap, Activity } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -150,6 +164,31 @@ export default function TerminalPage() {
   const loadedSessionRef = useRef<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { address, isConnected } = useAccount();
+  const { handleError } = useErrorHandler();
+
+  const {
+    isListening: isRecording,
+    transcript,
+    isSupported: isAudioSupported,
+    startRecording,
+    stopRecording,
+    error: audioError,
+  } = useSpeechRecognition();
+
+  // Handle voice result processing
+  useEffect(() => {
+    if (!isRecording && transcript) {
+      handleSendMessage({
+        message: transcript,
+        files: [],
+        pastedContent: [],
+        model: 'sonnet-4.5',
+        isThinkingEnabled: false
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRecording, transcript]);
 
   const { data: chatSessions, refetch: refetchSessions } = useChatSessions(
     user?.uid,
@@ -198,6 +237,9 @@ export default function TerminalPage() {
     setMessages((prev) => [...prev, { ...msg, timestamp: new Date() }]);
   }, []);
 
+  const handleStartRecording = () => {
+    if (!isAudioSupported) {
+      addMessage({
   const handleNewChat = () => {
     const id = crypto.randomUUID();
     setCurrentSessionId(id);
@@ -208,6 +250,159 @@ export default function TerminalPage() {
           "Hello! I can help you swap assets, create payment links, or scout yields.",
         timestamp: new Date(),
         type: "message",
+      });
+      return;
+    }
+    startRecording();
+  };
+
+  const handleStopRecording = () => {
+    stopRecording();
+  };
+
+  const processCommand = async (text: string) => {
+    if (!isLoading) setIsLoading(true);
+    try {
+      const response = await fetch("/api/parse-command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text }),
+      });
+      const command: ParsedCommand = await response.json();
+
+      if (!command.success && command.intent !== "yield_scout") {
+        addMessage({
+          role: "assistant",
+          content: `I couldn't understand. ${command.validationErrors.join(", ")}`,
+          type: "message",
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      if (command.intent === "yield_scout") {
+        const yieldRes = await fetch("/api/yields");
+        const yieldData = await yieldRes.json();
+        addMessage({
+          role: "assistant",
+          content: yieldData.message,
+          type: "yield_info",
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      if (command.intent === "checkout") {
+        let finalAddress = command.settleAddress;
+        if (!finalAddress) {
+          if (!isConnected || !address) {
+            addMessage({
+              role: "assistant",
+              content:
+                "To create a receive link for yourself, please connect your wallet first.",
+              type: "message",
+            });
+            setIsLoading(false);
+            return;
+          }
+          finalAddress = address;
+        }
+        const checkoutRes = await fetch("/api/create-checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            settleAsset: command.settleAsset,
+            settleNetwork: command.settleNetwork,
+            settleAmount: command.settleAmount,
+            settleAddress: finalAddress,
+          }),
+        });
+        const checkoutData = await checkoutRes.json();
+        if (checkoutData.error) throw new Error(checkoutData.error);
+        addMessage({
+          role: "assistant",
+          content: `Payment Link Created for ${checkoutData.settleAmount} ${checkoutData.settleCoin} on ${command.settleNetwork}`,
+          type: "checkout_link",
+          data: { url: checkoutData.url },
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      if (command.intent === "portfolio" && command.portfolio) {
+        addMessage({
+          role: "assistant",
+          content: `📊 **Portfolio Strategy Detected**\nSplitting ${command.amount} ${command.fromAsset} into multiple assets. Generating orders...`,
+          type: "message",
+        });
+        for (const item of command.portfolio) {
+          const splitAmount = (command.amount! * item.percentage) / 100;
+          const subCommand: ParsedCommand = {
+            ...command,
+            intent: "swap",
+            amount: splitAmount,
+            toAsset: item.toAsset,
+            toChain: item.toChain,
+            portfolio: undefined,
+            confidence: 100,
+          };
+          await executeSwap(subCommand);
+        }
+        setIsLoading(false);
+        return;
+      }
+
+      if (command.requiresConfirmation || command.confidence < 80) {
+        setPendingCommand(command);
+        addMessage({
+          role: "assistant",
+          content: "",
+          type: "intent_confirmation",
+          data: { parsedCommand: command },
+        });
+      } else {
+        await executeSwap(command);
+      }
+    } catch (error: unknown) {
+      const errorMessage = handleError(error, ErrorType.API_FAILURE, {
+        operation: "command_processing",
+        retryable: true,
+      });
+      addMessage({ role: "assistant", content: errorMessage, type: "message" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const executeSwap = async (command: ParsedCommand) => {
+    try {
+      const quoteResponse = await fetch("/api/create-swap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fromAsset: command.fromAsset,
+          toAsset: command.toAsset,
+          amount: command.amount,
+          fromChain: command.fromChain,
+          toChain: command.toChain,
+        }),
+      });
+      const quote = await quoteResponse.json();
+      if (quote.error) throw new Error(quote.error);
+      addMessage({
+        role: "assistant",
+        content: `Swap Prepared: ${quote.depositAmount} ${quote.depositCoin} → ${quote.settleAmount} ${quote.settleCoin}`,
+        type: "swap_confirmation",
+        data: { quoteData: quote, confidence: command.confidence },
+      });
+    } catch (error: unknown) {
+      const errorMessage = handleError(error, ErrorType.API_FAILURE, {
+        operation: "swap_quote",
+        retryable: true,
+      });
+      addMessage({ role: "assistant", content: errorMessage, type: "message" });
+    }
+  };
       },
     ]);
   };
