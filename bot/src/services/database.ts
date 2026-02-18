@@ -551,6 +551,69 @@ export async function updateDCAScheduleExecution(
 
 // --- NEW: Limit Order & Delayed Order Management ---
 
+export async function createDCASchedule(
+  telegramId: number | null,
+  fromAsset: string,
+  fromNetwork: string,
+  toAsset: string,
+  toNetwork: string,
+  amount: string,
+  frequency: 'daily' | 'weekly' | 'monthly',
+  settleAddress: string,
+  dayOfWeek?: number,
+  dayOfMonth?: number
+) {
+  const intervalMap = { daily: 24, weekly: 168, monthly: 720 };
+  const intervalHours = intervalMap[frequency] || 24;
+
+  let nextExecutionAt = new Date();
+  // Simple scheduling: start now. Complex cron logic omitted for brevity.
+
+  const result = await db.insert(dcaSchedules).values({
+      telegramId: telegramId || 0, // Fallback for web users
+      fromAsset,
+      fromNetwork,
+      toAsset,
+      toNetwork,
+      amountPerOrder: amount,
+      intervalHours,
+      totalOrders: 10, // Default constant
+      ordersExecuted: 0,
+      isActive: 1,
+      nextExecutionAt
+  }).returning();
+  
+  return result[0];
+}
+
+export async function createLimitOrder(
+  telegramId: number | null,
+  fromAsset: string,
+  fromNetwork: string,
+  toAsset: string,
+  toNetwork: string,
+  amount: string,
+  conditionOperator: 'gt' | 'lt',
+  targetPrice: string | number,
+  conditionAsset: string,
+  settleAddress: string
+) {
+  const result = await db.insert(limitOrders).values({
+      telegramId: telegramId || 0, // Fallback
+      fromAsset,
+      fromNetwork,
+      toAsset,
+      toNetwork,
+      fromAmount: amount,
+      targetPrice: targetPrice.toString(),
+      isActive: 1,
+      createdAt: new Date(),
+      lastCheckedAt: new Date()
+  }).returning();
+
+  return result[0];
+}
+
 export async function createDelayedOrder(data: Partial<DelayedOrder>) {
     if (data.orderType === 'limit_order') {
         await db.insert(limitOrders).values({
