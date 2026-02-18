@@ -1,12 +1,12 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { parseUserCommand } from '../services/groq-client';
+import Groq from 'groq-sdk';
 
-const mockCreate = jest.fn() as any;
 
 jest.mock('groq-sdk', () => {
   return {
     __esModule: true,
-    default: jest.fn().mockImplementation(() => ({
-      chat: {
+    default: jest.fn().mockImplementation(function (this: any) {
+      this.chat = {
         completions: {
           create: mockCreate
         }
@@ -15,8 +15,8 @@ jest.mock('groq-sdk', () => {
         transcriptions: {
           create: jest.fn()
         }
-      }
-    }))
+      };
+    })
   };
 });
 
@@ -59,7 +59,10 @@ describe('parseUserCommand', () => {
   });
 
   it('should handle ambiguous command with low confidence', async () => {
-    mockCreate.mockResolvedValueOnce({
+    const mockGroq = Groq as unknown as jest.Mock;
+
+    const mockCreate = mockGroq.mock.instances[0].chat.completions.create;
+    mockCreate.mockResolvedValue({
       choices: [{
         message: {
           content: JSON.stringify({
@@ -68,7 +71,7 @@ describe('parseUserCommand', () => {
             fromAsset: 'ETH',
             toAsset: null,
             confidence: 20,
-            validationErrors: ['Command is ambiguous.'],
+            validationErrors: ['Command is ambiguous. Please specify clearly.'],
             parsedMessage: ''
           })
         }
@@ -81,7 +84,9 @@ describe('parseUserCommand', () => {
   });
 
   it('should parse portfolio allocation correctly', async () => {
-    mockCreate.mockResolvedValueOnce({
+    const mockGroq = Groq as unknown as jest.Mock;
+    const mockCreate = mockGroq.mock.instances[0].chat.completions.create;
+    mockCreate.mockResolvedValue({
       choices: [{
         message: {
           content: JSON.stringify({
@@ -96,7 +101,7 @@ describe('parseUserCommand', () => {
             ],
             confidence: 95,
             validationErrors: [],
-            parsedMessage: 'Split 1 ETH'
+            parsedMessage: 'Split 1 ETH into 50% USDC and 50% SOL'
           })
         }
       }]
@@ -106,5 +111,81 @@ describe('parseUserCommand', () => {
     expect(result.success).toBe(true);
     expect(result.intent).toBe('portfolio');
     expect(result.portfolio).toHaveLength(2);
+  });
+
+  it('should validate portfolio percentages', async () => {
+    const mockGroq = Groq as unknown as jest.Mock;
+    const mockCreate = mockGroq.mock.instances[0].chat.completions.create;
+    mockCreate.mockResolvedValue({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            success: true,
+            intent: 'portfolio',
+            fromAsset: 'ETH',
+            amount: 1,
+            portfolio: [
+              { toAsset: 'BTC', toChain: 'bitcoin', percentage: 60 },
+              { toAsset: 'USDC', toChain: 'ethereum', percentage: 50 }
+            ],
+            confidence: 80,
+            validationErrors: [],
+            parsedMessage: 'Invalid portfolio'
+          })
+        }
+      }]
+    });
+
+    const result = await parseUserCommand('split 1 ETH into 60% BTC and 50% USDC');
+    expect(result.success).toBe(false);
+    expect(result.validationErrors).toContain('Total allocation is 110%, but should be 100%');
+  });
+
+  it('should handle yield scout intent', async () => {
+    const mockGroq = Groq as unknown as jest.Mock;
+    const mockCreate = mockGroq.mock.instances[0].chat.completions.create;
+    mockCreate.mockResolvedValue({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            success: true,
+            intent: 'yield_scout',
+            confidence: 100,
+            validationErrors: [],
+            parsedMessage: 'Looking for yield opportunities'
+          })
+        }
+      }]
+    });
+
+    const result = await parseUserCommand('where can I get good yield?');
+    expect(result.success).toBe(true);
+    expect(result.intent).toBe('yield_scout');
+  });
+
+  it('should handle yield deposit intent', async () => {
+    const mockGroq = Groq as unknown as jest.Mock;
+    const mockCreate = mockGroq.mock.instances[0].chat.completions.create;
+    mockCreate.mockResolvedValue({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            success: true,
+            intent: 'yield_deposit',
+            fromAsset: 'ETH',
+            amount: 1,
+            confidence: 95,
+            validationErrors: [],
+            parsedMessage: 'Depositing 1 ETH to yield'
+          })
+        }
+      }]
+    });
+
+    const result = await parseUserCommand('deposit 1 ETH to yield');
+    expect(result.success).toBe(true);
+    expect(result.intent).toBe('yield_deposit');
+    expect(result.fromAsset).toBe('ETH');
+    expect(result.amount).toBe(1);
   });
 });

@@ -10,15 +10,17 @@ import {
 import logger from './logger';
 
 
-export interface YieldPool {
-  chain: string;
-  project: string;
-  symbol: string;
-  tvlUsd: number;
-  apy: number;
-  poolId?: string; // DefiLlama pool ID
-}
+export async function getTopStablecoinYields(): Promise<string> {
+  try {
+    // Attempt to fetch from DefiLlama (Open API)
+    const response = await axios.get('https://yields.llama.fi/pools');
+    const data = response.data.data;
 
+    // Filter for stablecoins, high APY, major chains, and sufficient TVL
+    const topPools = data
+      .filter((p: any) =>
+        ['USDC', 'USDT', 'DAI'].includes(p.symbol) &&
+        p.tvlUsd > 1000000 &&
 export interface StakingQuote {
   pool: YieldPool;
   stakeAmount: string;
@@ -46,61 +48,34 @@ export async function getTopYieldPools(): Promise<YieldPool[]> {
 
     if (topPools.length === 0) throw new Error("No pools found");
 
-    return topPools.map((p: any) => ({
-      chain: p.chain,
-      project: p.project,
-      symbol: p.symbol,
-      tvlUsd: p.tvlUsd,
-      apy: p.apy,
-      poolId: p.pool
-    }));
+    return topPools.map((p: any) =>
+      `• *${p.symbol} on ${p.chain}* via ${p.project}: *${p.apy.toFixed(2)}% APY*`
+    ).join('\n');
 
   } catch (error) {
     logger.error("Yield fetch error, using fallback data:", error);
     // Fallback Mock Data for demo reliability
-
-    return [
-      { chain: 'Base', project: 'Aave', symbol: 'USDC', tvlUsd: 5000000, apy: 12.4, poolId: 'base-aave-usdc' },
-      { chain: 'Base', project: 'merkl', symbol: 'USDC', tvlUsd: 8000000, apy: 22.79, poolId: 'base-merkl-usdc' },
-      { chain: 'Base', project: 'yo-protocol', symbol: 'USDC', tvlUsd: 4000000, apy: 19.28, poolId: 'base-yo-usdc' },
-      { chain: 'Arbitrum', project: 'Radiant', symbol: 'USDC', tvlUsd: 6000000, apy: 15.2, poolId: 'arb-radiant-usdc' }
-    ];
+    return `• *USDC on Base* via Aave: *12.4% APY*\n` +
+      `• *USDT on Arbitrum* via Radiant: *8.2% APY*\n` +
+      `• *USDC on Optimism* via Velodrome: *6.5% APY*`;
   }
 }
 
-export async function getTopStablecoinYields(): Promise<string> {
-  const pools = await getTopYieldPools();
-  return pools.map(p =>
-    `• *${p.symbol} on ${p.chain}* via ${p.project}: *${p.apy.toFixed(2)}% APY*`
-  ).join('\n');
-}
-
-export interface MigrationSuggestion {
-  fromPool: YieldPool;
-  toPool: YieldPool;
-  apyDifference: number;
-  annualExtraYield: number;
-  isCrossChain: boolean;
-}
-
-export async function suggestMigration(
-  asset: string,
-  chain?: string,
-  currentProject?: string,
-  amount: number = 10000
-): Promise<MigrationSuggestion | null> {
-  const pools = await getTopYieldPools();
-  const relevantPools = pools.filter(p => p.symbol.toUpperCase() === asset.toUpperCase());
-
-  if (relevantPools.length < 1) return null;
-
-  let fromPool: YieldPool | undefined;
-
-  if (currentProject) {
-    fromPool = relevantPools.find(p =>
-      p.project.toLowerCase() === currentProject.toLowerCase() &&
-      (!chain || p.chain.toLowerCase() === chain.toLowerCase())
-    );
+export async function getTopYieldPools(): Promise<any[]> {
+  try {
+    const response = await axios.get('https://yields.llama.fi/pools');
+    const data = response.data.data;
+    return data
+      .filter((p: any) =>
+        ['USDC', 'USDT', 'DAI'].includes(p.symbol) &&
+        p.tvlUsd > 1000000 &&
+        ['Ethereum', 'Polygon', 'Arbitrum', 'Optimism', 'Base', 'Avalanche'].includes(p.chain)
+      )
+      .sort((a: any, b: any) => b.apy - a.apy)
+      .slice(0, 3);
+  } catch (error) {
+    console.error("Error fetching yield pools:", error);
+    return [];
   }
 
   if (!fromPool && chain) {
