@@ -65,10 +65,6 @@ export interface ParsedCommand {
   toProject: string | null;
   toYield: number | null;
 
-  // Staking Fields (for swap_and_stake intent)
-  stakingProtocol?: string | null;
-  estimatedApy?: number | null;
-
   // Limit Order Fields
   conditionOperator?: 'gt' | 'lt';
   conditionValue?: number;
@@ -126,8 +122,6 @@ RESPONSE FORMAT:
   "settleNetwork": null,
   "settleAmount": null,
   "settleAddress": null,
-  "stakingProtocol": string | null,
-  "estimatedApy": number | null,
   "conditionOperator": "gt" | "lt" | null,
   "conditionValue": number | null,
   "conditionAsset": string | null,

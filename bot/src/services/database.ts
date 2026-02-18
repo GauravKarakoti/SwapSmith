@@ -273,7 +273,6 @@ const schema = {
   chatHistory,
   dcaSchedules,
   limitOrders,
-  stakeOrders,
   courseProgress,
   rewardsLog,
   courseProgressRelations,
@@ -303,7 +302,6 @@ export type SwapHistory = typeof swapHistory.$inferSelect;
 export type ChatHistory = typeof chatHistory.$inferSelect;
 export type DCASchedule = typeof dcaSchedules.$inferSelect;
 export type LimitOrder = typeof limitOrders.$inferSelect;
-export type StakeOrder = typeof stakeOrders.$inferSelect;
 export type CourseProgress = typeof courseProgress.$inferSelect;
 export type RewardsLog = typeof rewardsLog.$inferSelect;
 
