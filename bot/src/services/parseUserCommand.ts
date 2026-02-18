@@ -21,10 +21,22 @@ const REGEX_CONDITION = /(?:if|when)\s+(?:the\s+)?(?:price|rate|market|value)?\s
 
 // New Regex for Quote Amount ("Worth")
 // Capture optional preceding token (group 1), amount (group 3), optional following token (group 5)
-const REGEX_QUOTE = /(?:([A-Z]+)\\s+)?(?:worth|value|valued\\s+at)\\s*(?:of)?\\s*(\\$)?(\\d+(\\.\\d+)?)\\s*([A-Z]+)?/i;
+const REGEX_QUOTE = /(?:([A-Z]+)\s+)?(?:worth|value|valued\s+at)\s*(?:of)?\s*(\$)?(\d+(\.\d+)?)\s*([A-Z]+)?/i;
 
 // New Regex for Multiple Source Assets
-const REGEX_MULTI_SOURCE = /([A-Z]+)\\s+(?:and|&)\\s+([A-Z]+)\\s+(?:to|into|for)/i;
+const REGEX_MULTI_SOURCE = /([A-Z]+)\s+(?:and|&)\s+([A-Z]+)\s+(?:to|into|for)/i;
+
+function normalizeNumber(val: string): number {
+  val = val.toLowerCase().replace(/[\$,]/g, '');
+
+  if (val.endsWith("k")) {
+    return parseFloat(val) * 1000;
+  }
+  if (val.endsWith("m")) {
+    return parseFloat(val) * 1000000;
+  }
+  return parseFloat(val);
+}
 
 function normalizeNumber(val: string): number {
   val = val.toLowerCase().replace(/[\$,]/g, '');
@@ -46,14 +58,14 @@ export async function parseUserCommand(
   let input = userInput.trim();
 
   // Pre-processing: Remove fillers
-  input = input.replace(/^(hey|hi|hello|please|kindly|can you)\\s+/i, '')
-               .replace(/\\s+(please|kindly|immediately|now|right now)$/i, '')
-               .replace(/\\b(like)\\b/gi, '') // "swap like 100" -> "swap 100"
+  input = input.replace(/^(hey|hi|hello|please|kindly|can you)\s+/i, '')
+               .replace(/\s+(please|kindly|immediately|now|right now)$/i, '')
+               .replace(/\b(like)\b/gi, '') // "swap like 100" -> "swap 100"
                .trim();
 
   // 1. Check for Swap Intent Keywords
   // Expanded list to catch more variations
-  const isSwapRelated = /\\b(swap|convert|send|transfer|buy|sell|move|exchange)\\b/i.test(input);
+  const isSwapRelated = /\b(swap|convert|send|transfer|buy|sell|move|exchange)\b/i.test(input);
 
   if (isSwapRelated) {
     let intent: ParsedCommand['intent'] = 'swap';
@@ -217,7 +229,7 @@ export async function parseUserCommand(
            confidence += 20;
        } else {
            // Standalone number?
-           const numMatch = input.match(/\\b(\\d+(\\.\\d+)?)\\b/);
+           const numMatch = input.match(/\b(\d+(\.\d+)?)\b/);
            if (numMatch) {
                // Check if this number was part of exclusion?
                if (amountType !== 'all') { // If exclusion, we ignore other numbers unless relevant
@@ -267,6 +279,15 @@ export async function parseUserCommand(
         confidence += 30;
     }
 
+    // ✅ CONSTRUCT CONDITIONS OBJECT (This was missing!)
+    if (conditionOperator && conditionValue) {
+        conditions = {
+            type: conditionOperator === 'gt' ? 'price_above' : 'price_below',
+            asset: conditionAsset || fromAsset || 'ETH',
+            value: conditionValue
+        };
+    }
+
     // Construct Result if confidence is high enough
     // We need at least an intent and some token info.
     // If quoteAmount is present, allow null 'amount'.
@@ -287,7 +308,7 @@ export async function parseUserCommand(
 
         let parsedMessage = `Parsed: ${amountType || amount || (quoteAmount ? 'Value ' + quoteAmount : '?')} ${fromAsset || '?'} -> ${toAsset || '?'}`;
         if (conditionOperator && conditionValue) {
-            parsedMessage += ` if \${conditionAsset || fromAsset} \${conditionOperator === 'gt' ? '>' : '<'} \${conditionValue}`;
+            parsedMessage += ` if ${conditionAsset || fromAsset} ${conditionOperator === 'gt' ? '>' : '<'} ${conditionValue}`;
         }
 
         return {

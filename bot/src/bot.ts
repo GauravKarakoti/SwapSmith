@@ -12,15 +12,8 @@ import { sql } from 'drizzle-orm';
 // Services
 import { transcribeAudio } from './services/groq-client';
 import logger from './services/logger';
-import {
-  createQuote,
-  createOrder,
-  getOrderStatus,
-} from './services/sideshift-client';
-import {
-  getTopStablecoinYields,
-  getTopYieldPools,
-} from './services/yield-client';
+import { createQuote, createOrder, getOrderStatus } from './services/sideshift-client';
+import { getTopStablecoinYields, getTopYieldPools } from './services/yield-client';
 import * as db from './services/database';
 import { DCAScheduler } from './services/dca-scheduler';
 import { resolveAddress, isNamingService } from './services/address-resolver';
@@ -34,25 +27,13 @@ import { OrderMonitor } from './services/order-monitor';
 
 dotenv.config();
 
-process.on('unhandledRejection', (err) => {
-  console.error('Unhandled Rejection:', err);
-  process.exit(1);
-});
+const BOT_TOKEN = process.env.BOT_TOKEN!;
+const MINI_APP_URL = process.env.MINI_APP_URL || 'https://swapsmithminiapp.netlify.app/';
+const PORT = Number(process.env.PORT || 3000);
 
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
-  process.exit(1);
-});
-
+const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 app.use(express.json());
-
-const PORT = Number(process.env.PORT || 3000);
-let isReady = false;
-
-const bot = new Telegraf(process.env.BOT_TOKEN!);
-const MINI_APP_URL = process.env.MINI_APP_URL!;
-const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 
 const DEFAULT_EVM_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 
@@ -100,13 +81,7 @@ const orderMonitor = new OrderMonitor({
         ? `*Received:* ${details.settleAmount} ${details.settleCoin}\n`
         : '');
 
-    try {
-      await bot.telegram.sendMessage(telegramId, msg, {
-        parse_mode: 'Markdown',
-      });
-    } catch (e) {
-      logger.error('Order update notify failed', e);
-    }
+    await bot.telegram.sendMessage(telegramId, msg, { parse_mode: 'Markdown' });
   },
 });
 
@@ -114,7 +89,7 @@ const orderMonitor = new OrderMonitor({
 /*                                   COMMANDS                                 */
 /* -------------------------------------------------------------------------- */
 
-bot.start((ctx) => {
+bot.start((ctx) =>
   ctx.reply(
     `🤖 *Welcome to SwapSmith!*\n\nVoice-enabled crypto trading assistant.`,
     {
@@ -123,8 +98,8 @@ bot.start((ctx) => {
         Markup.button.url('🌐 Open Web App', MINI_APP_URL),
       ]),
     }
-  );
-});
+  )
+);
 
 bot.command('yield', async (ctx) => {
   const yields = await getTopStablecoinYields();
@@ -154,9 +129,7 @@ bot.on(message('voice'), async (ctx) => {
   const mp3 = oga.replace('.oga', '.mp3');
 
   try {
-    const res = await axios.get(fileLink.href, {
-      responseType: 'arraybuffer',
-    });
+    const res = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
     fs.writeFileSync(oga, res.data);
 
     await new Promise<void>((resolve, reject) =>
@@ -187,20 +160,21 @@ async function handleTextMessage(
   const userId = ctx.from.id;
   const state = await db.getConversationState(userId);
 
-  /* ---------------- Address Resolution Flow ---------------- */
+  /* ---------------- Address Resolution ---------------- */
 
-  if (state?.parsedCommand && !state.parsedCommand.settleAddress) {
+  if (
+    state?.parsedCommand &&
+    !state.parsedCommand.settleAddress &&
+    ['swap', 'checkout', 'portfolio'].includes(state.parsedCommand.intent)
+  ) {
     const resolved = await resolveAddress(userId, text.trim());
+    const targetChain =
+      state.parsedCommand.toChain ||
+      state.parsedCommand.settleNetwork ||
+      state.parsedCommand.fromChain;
 
-    if (
-      resolved.address &&
-      isValidAddress(resolved.address, state.parsedCommand.toChain)
-    ) {
-      const updated = {
-        ...state.parsedCommand,
-        settleAddress: resolved.address,
-      };
-
+    if (resolved.address && isValidAddress(resolved.address, targetChain)) {
+      const updated = { ...state.parsedCommand, settleAddress: resolved.address };
       await db.setConversationState(userId, { parsedCommand: updated });
 
       await ctx.reply(
@@ -211,15 +185,15 @@ async function handleTextMessage(
       return ctx.reply(
         'Ready to proceed?',
         Markup.inlineKeyboard([
-          Markup.button.callback('✅ Yes', 'confirm_swap'),
-          Markup.button.callback('❌ Cancel', 'cancel_swap'),
+          Markup.button.callback('✅ Yes', `confirm_${updated.intent}`),
+          Markup.button.callback('❌ No', 'cancel_swap'),
         ])
       );
     }
 
     if (isNamingService(text)) {
       return ctx.reply(
-        `❌ Could not resolve \`${text}\`.\nTry ENS, Lens, Unstoppable Domains, or a raw address.`,
+        `❌ Could not resolve \`${text}\`. Please check the domain or try a raw address.`,
         { parse_mode: 'Markdown' }
       );
     }
@@ -235,17 +209,19 @@ async function handleTextMessage(
     );
   }
 
+  /* ---------------- Yield Scout ---------------- */
+
   if (parsed.intent === 'yield_scout') {
     const yields = await getTopStablecoinYields();
-    return ctx.replyWithMarkdown(yields);
+    return ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields*\n\n${yields}`);
   }
+
+  /* ---------------- Swap / Checkout ---------------- */
 
   if (parsed.intent === 'swap' || parsed.intent === 'checkout') {
     if (!parsed.settleAddress) {
       await db.setConversationState(userId, { parsedCommand: parsed });
-      return ctx.reply(
-        'Please provide the destination wallet address.'
-      );
+      return ctx.reply('Please provide the destination wallet address.');
     }
 
     await db.setConversationState(userId, { parsedCommand: parsed });
@@ -253,7 +229,7 @@ async function handleTextMessage(
     return ctx.reply(
       'Confirm parameters?',
       Markup.inlineKeyboard([
-        Markup.button.callback('✅ Yes', 'confirm_swap'),
+        Markup.button.callback('✅ Yes', `confirm_${parsed.intent}`),
         Markup.button.callback('❌ Cancel', 'cancel_swap'),
       ])
     );
@@ -276,12 +252,9 @@ bot.action('confirm_swap', async (ctx) => {
     state.parsedCommand.amount
   );
 
-  await db.setConversationState(ctx.from!.id, {
-    ...state,
-    quoteId: q.id,
-  });
+  await db.setConversationState(ctx.from!.id, { ...state, quoteId: q.id });
 
-  ctx.editMessageText(
+  await ctx.editMessageText(
     `🔄 *Quote*\nSend: ${q.depositAmount} ${q.depositCoin}\nReceive: ~${q.settleAmount} ${q.settleCoin}`,
     {
       parse_mode: 'Markdown',
@@ -330,24 +303,6 @@ bot.action('cancel_swap', async (ctx) => {
 
 const dcaScheduler = new DCAScheduler();
 
-async function parseUserCommand(
-  _text: string,
-  _history: any[],
-  _inputType: 'text' | 'voice'
-) {
-  // Replace with real NLP
-  return {
-    success: true,
-    intent: 'swap',
-    fromAsset: 'ETH',
-    fromChain: 'ethereum',
-    toAsset: 'BTC',
-    toChain: 'bitcoin',
-    amount: 1,
-    settleAddress: null,
-  };
-}
-
 async function start() {
   try {
     if (process.env.DATABASE_URL) {
@@ -364,7 +319,6 @@ async function start() {
     );
 
     await bot.launch();
-    isReady = true;
 
     const shutdown = () => {
       dcaScheduler.stop();
@@ -383,3 +337,24 @@ async function start() {
 }
 
 start();
+
+/* -------------------------------------------------------------------------- */
+/*                               NLP STUB (TEMP)                              */
+/* -------------------------------------------------------------------------- */
+
+async function parseUserCommand(
+  _text: string,
+  _history: any[],
+  _inputType: 'text' | 'voice'
+) {
+  return {
+    success: true,
+    intent: 'swap',
+    fromAsset: 'ETH',
+    fromChain: 'ethereum',
+    toAsset: 'BTC',
+    toChain: 'bitcoin',
+    amount: 1,
+    settleAddress: null,
+  };
+}
