@@ -248,7 +248,119 @@ bot.action('cancel_swap', async (ctx) => {
 /*                                   APIs                                     */
 /* -------------------------------------------------------------------------- */
 
+const app = express();
+app.use(express.json());
+
+// Health check
 app.get('/', (_, res) => res.send('SwapSmith Alive'));
+
+// --- DCA API Endpoints ---
+app.post('/api/dca/create', async (req, res) => {
+    try {
+        const {
+            fromAsset,
+            fromChain,
+            toAsset,
+            toChain,
+            amount,
+            frequency,
+            dayOfWeek,
+            dayOfMonth,
+            settleAddress,
+        } = req.body;
+
+        // Validate parameters
+        if (!fromAsset || !toAsset || !amount || !frequency || !settleAddress) {
+            return res.status(400).json({
+                error: 'Missing required parameters',
+            });
+        }
+
+        // Create DCA schedule (no telegram ID for web user - use 0)
+        const dcaSchedule = await db.createDCASchedule(
+            null,
+            fromAsset,
+            fromChain || 'ethereum',
+            toAsset,
+            toChain || 'ethereum',
+            amount,
+            frequency as 'daily' | 'weekly' | 'monthly',
+            settleAddress,
+            dayOfWeek,
+            dayOfMonth
+        );
+
+        res.status(201).json({
+            success: true,
+            id: dcaSchedule.id,
+            message: `DCA schedule created successfully`,
+            data: dcaSchedule,
+        });
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+        console.error('Error creating DCA schedule:', errorMessage);
+        res.status(500).json({ error: errorMessage });
+    }
+});
+
+// --- Limit Order API Endpoints ---
+app.post('/api/limit-order/create', async (req, res) => {
+    try {
+        const {
+            fromAsset,
+            fromChain,
+            toAsset,
+            toChain,
+            amount,
+            conditionOperator,
+            conditionValue,
+            conditionAsset,
+            settleAddress,
+        } = req.body;
+
+        // Validate parameters
+        if (
+            !fromAsset ||
+            !toAsset ||
+            !amount ||
+            !conditionOperator ||
+            conditionValue === undefined ||
+            !conditionAsset
+        ) {
+            return res.status(400).json({
+                error: 'Missing required parameters',
+            });
+        }
+
+        // Create limit order (no telegram ID for web user - use 0)
+        const limitOrder = await db.createLimitOrder(
+            null,
+            fromAsset,
+            fromChain || 'ethereum',
+            toAsset,
+            toChain || 'ethereum',
+            amount,
+            conditionOperator as 'gt' | 'lt',
+            conditionValue,
+            conditionAsset,
+            settleAddress
+        );
+
+        res.status(201).json({
+            success: true,
+            id: limitOrder.id,
+            message: `Limit order created successfully`,
+            data: limitOrder,
+        });
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+        console.error('Error creating limit order:', errorMessage);
+        res.status(500).json({ error: errorMessage });
+    }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🌍 Server running on port ${PORT}`));
 
 app.get('/health', (_, res) => {
     if (!isReady) return res.status(503).json({ status: 'starting' });
