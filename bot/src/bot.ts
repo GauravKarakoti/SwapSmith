@@ -1,4 +1,4 @@
-import { Telegraf, Markup } from 'telegraf';
+import { Telegraf, Markup, Context } from 'telegraf';
 import { message } from 'telegraf/filters';
 import dotenv from 'dotenv';
 import * as fs from 'fs';
@@ -8,44 +8,40 @@ import axios from 'axios';
 import { exec } from 'child_process';
 import express from 'express';
 import { sql } from 'drizzle-orm';
-import { ethers } from 'ethers';
 
 // Services
 import { transcribeAudio } from './services/groq-client';
 import logger from './services/logger';
 import {
-    createQuote,
-    createOrder,
-    createCheckout,
-    getOrderStatus
+  createQuote,
+  createOrder,
+  getOrderStatus,
 } from './services/sideshift-client';
 import {
-    getTopStablecoinYields,
-    getTopYieldPools
+  getTopStablecoinYields,
+  getTopYieldPools,
 } from './services/yield-client';
 import * as db from './services/database';
-import { chainIdMap } from './config/chains';
-import { tokenResolver } from './services/token-resolver';
 import { DCAScheduler } from './services/dca-scheduler';
 import { resolveAddress, isNamingService } from './services/address-resolver';
 import { ADDRESS_PATTERNS } from './config/address-patterns';
 import { limitOrderWorker } from './workers/limitOrderWorker';
 import { OrderMonitor } from './services/order-monitor';
 
-dotenv.config();
-
 /* -------------------------------------------------------------------------- */
 /*                               GLOBAL SETUP                                 */
 /* -------------------------------------------------------------------------- */
 
+dotenv.config();
+
 process.on('unhandledRejection', (err) => {
-    console.error('Unhandled Rejection:', err);
-    process.exit(1);
+  console.error('Unhandled Rejection:', err);
+  process.exit(1);
 });
 
 process.on('uncaughtException', (err) => {
-    console.error('Uncaught Exception:', err);
-    process.exit(1);
+  console.error('Uncaught Exception:', err);
+  process.exit(1);
 });
 
 const app = express();
@@ -65,23 +61,12 @@ const DEFAULT_EVM_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 /* -------------------------------------------------------------------------- */
 
 function isValidAddress(address: string, chain?: string): boolean {
-    if (!address) return false;
-    const normalized = chain ? chain.toLowerCase().replace(/[^a-z]/g, '') : 'ethereum';
-    const pattern = ADDRESS_PATTERNS[normalized] || DEFAULT_EVM_PATTERN;
-    return pattern.test(address.trim());
-}
-
-async function logAnalytics(ctx: any, type: string, details: any) {
-    logger.error(`[Analytics] ${type}`, details);
-    if (!ADMIN_CHAT_ID) return;
-
-    try {
-        await bot.telegram.sendMessage(
-            ADMIN_CHAT_ID,
-            `⚠️ *${type}*\nUser: ${ctx.from?.id}\nInput: ${details.input}`,
-            { parse_mode: 'Markdown' }
-        );
-    } catch {}
+  if (!address) return false;
+  const normalized = chain
+    ? chain.toLowerCase().replace(/[^a-z]/g, '')
+    : 'ethereum';
+  const pattern = ADDRESS_PATTERNS[normalized] || DEFAULT_EVM_PATTERN;
+  return pattern.test(address.trim());
 }
 
 /* -------------------------------------------------------------------------- */
@@ -89,16 +74,40 @@ async function logAnalytics(ctx: any, type: string, details: any) {
 /* -------------------------------------------------------------------------- */
 
 const orderMonitor = new OrderMonitor({
-    getOrderStatus,
-    updateOrderStatus: db.updateOrderStatus,
-    getPendingOrders: db.getPendingOrders,
-    onStatusChange: async (telegramId, orderId, oldStatus, newStatus) => {
-        await bot.telegram.sendMessage(
-            telegramId,
-            `🔔 Order *${orderId}*\n${oldStatus} → *${newStatus}*`,
-            { parse_mode: 'Markdown' }
-        );
+  getOrderStatus,
+  updateOrderStatus: db.updateOrderStatus,
+  getPendingOrders: db.getPendingOrders,
+  onStatusChange: async (telegramId, orderId, oldStatus, newStatus, details) => {
+    const emoji: Record<string, string> = {
+      waiting: '⏳',
+      pending: '⏳',
+      processing: '⚙️',
+      settling: '📤',
+      settled: '✅',
+      refunded: '↩️',
+      expired: '⏰',
+      failed: '❌',
+    };
+
+    const msg =
+      `${emoji[newStatus] || '🔔'} *Order Update*\n\n` +
+      `*Order:* \`${orderId}\`\n` +
+      `*Status:* ${oldStatus} → *${newStatus.toUpperCase()}*\n` +
+      (details?.depositAmount
+        ? `*Sent:* ${details.depositAmount} ${details.depositCoin}\n`
+        : '') +
+      (details?.settleAmount
+        ? `*Received:* ${details.settleAmount} ${details.settleCoin}\n`
+        : '');
+
+    try {
+      await bot.telegram.sendMessage(telegramId, msg, {
+        parse_mode: 'Markdown',
+      });
+    } catch (e) {
+      logger.error('Order update notify failed', e);
     }
+  },
 });
 
 /* -------------------------------------------------------------------------- */
@@ -106,25 +115,25 @@ const orderMonitor = new OrderMonitor({
 /* -------------------------------------------------------------------------- */
 
 bot.start((ctx) => {
-    ctx.reply(
-        `🤖 *Welcome to SwapSmith!*\n\nVoice-enabled crypto trading assistant.`,
-        {
-            parse_mode: 'Markdown',
-            ...Markup.inlineKeyboard([
-                Markup.button.url('🌐 Open Web App', MINI_APP_URL)
-            ])
-        }
-    );
+  ctx.reply(
+    `🤖 *Welcome to SwapSmith!*\n\nVoice-enabled crypto trading assistant.`,
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        Markup.button.url('🌐 Open Web App', MINI_APP_URL),
+      ]),
+    }
+  );
 });
 
 bot.command('yield', async (ctx) => {
-    const yields = await getTopStablecoinYields();
-    ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields*\n\n${yields}`);
+  const yields = await getTopStablecoinYields();
+  ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields*\n\n${yields}`);
 });
 
 bot.command('clear', async (ctx) => {
-    await db.clearConversationState(ctx.from.id);
-    ctx.reply('🗑️ Conversation cleared');
+  await db.clearConversationState(ctx.from!.id);
+  ctx.reply('🗑️ Conversation cleared');
 });
 
 /* -------------------------------------------------------------------------- */
@@ -132,61 +141,123 @@ bot.command('clear', async (ctx) => {
 /* -------------------------------------------------------------------------- */
 
 bot.on(message('text'), async (ctx) => {
-    if (ctx.message.text.startsWith('/')) return;
-    await handleTextMessage(ctx, ctx.message.text);
+  if (ctx.message.text.startsWith('/')) return;
+  await handleTextMessage(ctx, ctx.message.text);
 });
 
 bot.on(message('voice'), async (ctx) => {
-    await ctx.reply('👂 Listening...');
-    const fileId = ctx.message.voice.file_id;
-    const fileLink = await ctx.telegram.getFileLink(fileId);
+  await ctx.reply('👂 Listening...');
+  const fileId = ctx.message.voice.file_id;
+  const fileLink = await ctx.telegram.getFileLink(fileId);
 
-    const oga = path.join(os.tmpdir(), `${Date.now()}.oga`);
-    const mp3 = oga.replace('.oga', '.mp3');
+  const oga = path.join(os.tmpdir(), `${Date.now()}.oga`);
+  const mp3 = oga.replace('.oga', '.mp3');
 
-    try {
-        const res = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
-        fs.writeFileSync(oga, res.data);
+  try {
+    const res = await axios.get(fileLink.href, {
+      responseType: 'arraybuffer',
+    });
+    fs.writeFileSync(oga, res.data);
 
-        await new Promise<void>((resolve, reject) =>
-            exec(`ffmpeg -i "${oga}" "${mp3}" -y`, (e) => e ? reject(e) : resolve())
-        );
+    await new Promise<void>((resolve, reject) =>
+      exec(`ffmpeg -i "${oga}" "${mp3}" -y`, (e) =>
+        e ? reject(e) : resolve()
+      )
+    );
 
-        const text = await transcribeAudio(mp3);
-        await handleTextMessage(ctx, text, 'voice');
-    } finally {
-        fs.existsSync(oga) && fs.unlinkSync(oga);
-        fs.existsSync(mp3) && fs.unlinkSync(mp3);
-    }
+    const text = await transcribeAudio(mp3);
+    await handleTextMessage(ctx, text, 'voice');
+  } finally {
+    fs.existsSync(oga) && fs.unlinkSync(oga);
+    fs.existsSync(mp3) && fs.unlinkSync(mp3);
+  }
 });
 
 /* -------------------------------------------------------------------------- */
 /*                               CORE HANDLER                                 */
 /* -------------------------------------------------------------------------- */
 
-async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'voice' = 'text') {
-    const parsed = await parseUserCommand(text);
+async function handleTextMessage(
+  ctx: Context,
+  text: string,
+  inputType: 'text' | 'voice' = 'text'
+) {
+  if (!ctx.from) return;
 
-    if (!parsed.success) {
-        await logAnalytics(ctx, 'ParseError', { input: text });
-        return ctx.reply('❌ I didn’t understand. Try: "Swap 1 ETH to BTC"');
+  const userId = ctx.from.id;
+  const state = await db.getConversationState(userId);
+
+  /* ---------------- Address Resolution Flow ---------------- */
+
+  if (state?.parsedCommand && !state.parsedCommand.settleAddress) {
+    const resolved = await resolveAddress(userId, text.trim());
+
+    if (
+      resolved.address &&
+      isValidAddress(resolved.address, state.parsedCommand.toChain)
+    ) {
+      const updated = {
+        ...state.parsedCommand,
+        settleAddress: resolved.address,
+      };
+
+      await db.setConversationState(userId, { parsedCommand: updated });
+
+      await ctx.reply(
+        `✅ Address resolved:\n\`${resolved.originalInput}\` → \`${resolved.address}\``,
+        { parse_mode: 'Markdown' }
+      );
+
+      return ctx.reply(
+        'Ready to proceed?',
+        Markup.inlineKeyboard([
+          Markup.button.callback('✅ Yes', 'confirm_swap'),
+          Markup.button.callback('❌ Cancel', 'cancel_swap'),
+        ])
+      );
     }
 
-    if (parsed.intent === 'yield_scout') {
-        const yields = await getTopStablecoinYields();
-        return ctx.replyWithMarkdown(yields);
+    if (isNamingService(text)) {
+      return ctx.reply(
+        `❌ Could not resolve \`${text}\`.\nTry ENS, Lens, Unstoppable Domains, or a raw address.`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+  }
+
+  /* ---------------- NLP Parsing ---------------- */
+
+  const parsed = await parseUserCommand(text, state?.messages || [], inputType);
+
+  if (!parsed.success) {
+    return ctx.replyWithMarkdown(
+      parsed.validationErrors?.join('\n') || '❌ I didn’t understand.'
+    );
+  }
+
+  if (parsed.intent === 'yield_scout') {
+    const yields = await getTopStablecoinYields();
+    return ctx.replyWithMarkdown(yields);
+  }
+
+  if (parsed.intent === 'swap' || parsed.intent === 'checkout') {
+    if (!parsed.settleAddress) {
+      await db.setConversationState(userId, { parsedCommand: parsed });
+      return ctx.reply(
+        'Please provide the destination wallet address.'
+      );
     }
 
-    if (parsed.intent === 'swap') {
-        await db.setConversationState(ctx.from.id, { parsedCommand: parsed });
-        return ctx.reply(
-            'Confirm swap?',
-            Markup.inlineKeyboard([
-                Markup.button.callback('✅ Yes', 'confirm_swap'),
-                Markup.button.callback('❌ Cancel', 'cancel_swap')
-            ])
-        );
-    }
+    await db.setConversationState(userId, { parsedCommand: parsed });
+
+    return ctx.reply(
+      'Confirm parameters?',
+      Markup.inlineKeyboard([
+        Markup.button.callback('✅ Yes', 'confirm_swap'),
+        Markup.button.callback('❌ Cancel', 'cancel_swap'),
+      ])
+    );
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -194,65 +265,63 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
 /* -------------------------------------------------------------------------- */
 
 bot.action('confirm_swap', async (ctx) => {
-    const state = await db.getConversationState(ctx.from.id);
-    if (!state?.parsedCommand) return;
+  const state = await db.getConversationState(ctx.from!.id);
+  if (!state?.parsedCommand) return;
 
-    const q = await createQuote(
-        state.parsedCommand.fromAsset,
-        state.parsedCommand.fromChain,
-        state.parsedCommand.toAsset,
-        state.parsedCommand.toChain,
-        state.parsedCommand.amount
-    );
+  const q = await createQuote(
+    state.parsedCommand.fromAsset,
+    state.parsedCommand.fromChain,
+    state.parsedCommand.toAsset,
+    state.parsedCommand.toChain,
+    state.parsedCommand.amount
+  );
 
-    await db.setConversationState(ctx.from.id, { ...state, quoteId: q.id });
+  await db.setConversationState(ctx.from!.id, {
+    ...state,
+    quoteId: q.id,
+  });
 
-    ctx.editMessageText(
-        `🔄 *Quote*\nSend: ${q.depositAmount} ${q.depositCoin}\nReceive: ~${q.settleAmount} ${q.settleCoin}`,
-        {
-            parse_mode: 'Markdown',
-            ...Markup.inlineKeyboard([
-                Markup.button.callback('🚀 Place Order', 'place_order'),
-                Markup.button.callback('❌ Cancel', 'cancel_swap')
-            ])
-        }
-    );
+  ctx.editMessageText(
+    `🔄 *Quote*\nSend: ${q.depositAmount} ${q.depositCoin}\nReceive: ~${q.settleAmount} ${q.settleCoin}`,
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        Markup.button.callback('🚀 Place Order', 'place_order'),
+        Markup.button.callback('❌ Cancel', 'cancel_swap'),
+      ]),
+    }
+  );
 });
 
 bot.action('place_order', async (ctx) => {
-    const state = await db.getConversationState(ctx.from.id);
-    if (!state?.quoteId || !state.parsedCommand?.settleAddress) return;
+  const state = await db.getConversationState(ctx.from!.id);
+  if (!state?.quoteId || !state.parsedCommand?.settleAddress) return;
 
-    const order = await createOrder(
-        state.quoteId,
-        state.parsedCommand.settleAddress,
-        state.parsedCommand.settleAddress
-    );
+  const order = await createOrder(
+    state.quoteId,
+    state.parsedCommand.settleAddress,
+    state.parsedCommand.settleAddress
+  );
 
-    await db.createOrderEntry(ctx.from.id, state.parsedCommand, order, order.settleAmount, state.quoteId);
+  await db.createOrderEntry(
+    ctx.from!.id,
+    state.parsedCommand,
+    order,
+    order.settleAmount,
+    state.quoteId
+  );
 
-    ctx.editMessageText(
-        `✅ Order Created\n\nSend ${order.depositAmount} ${order.depositCoin} to:\n\`${order.depositAddress}\``,
-        { parse_mode: 'Markdown' }
-    );
+  await ctx.editMessageText(
+    `✅ Order Created\n\nSend ${order.depositAmount} ${order.depositCoin} to:\n\`${order.depositAddress}\``,
+    { parse_mode: 'Markdown' }
+  );
 
-    await db.clearConversationState(ctx.from.id);
+  await db.clearConversationState(ctx.from!.id);
 });
 
 bot.action('cancel_swap', async (ctx) => {
-    await db.clearConversationState(ctx.from.id);
-    ctx.editMessageText('❌ Cancelled');
-});
-
-/* -------------------------------------------------------------------------- */
-/*                                   APIs                                     */
-/* -------------------------------------------------------------------------- */
-
-app.get('/', (_, res) => res.send('SwapSmith Alive'));
-
-app.get('/health', (_, res) => {
-    if (!isReady) return res.status(503).json({ status: 'starting' });
-    res.json({ status: 'ok' });
+  await db.clearConversationState(ctx.from!.id);
+  ctx.editMessageText('❌ Cancelled');
 });
 
 /* -------------------------------------------------------------------------- */
@@ -261,55 +330,56 @@ app.get('/health', (_, res) => {
 
 const dcaScheduler = new DCAScheduler();
 
-async function parseUserCommand(text: string): Promise<any> {
-    // TODO: replace with real NLP
-    return {
-        success: true,
-        intent: 'swap',
-        fromAsset: 'ETH',
-        fromChain: 'ethereum',
-        toAsset: 'BTC',
-        toChain: 'bitcoin',
-        amount: 1,
-        settleAddress: '0x0000000000000000000000000000000000000000'
-    };
+async function parseUserCommand(
+  _text: string,
+  _history: any[],
+  _inputType: 'text' | 'voice'
+) {
+  // Replace with real NLP
+  return {
+    success: true,
+    intent: 'swap',
+    fromAsset: 'ETH',
+    fromChain: 'ethereum',
+    toAsset: 'BTC',
+    toChain: 'bitcoin',
+    amount: 1,
+    settleAddress: null,
+  };
 }
 
 async function start() {
-    try {
-        if (process.env.DATABASE_URL) {
-            await db.db.execute(sql`SELECT 1`);
-            dcaScheduler.start();
-            limitOrderWorker.start(bot);
-        }
-
-        await orderMonitor.loadPendingOrders();
-        orderMonitor.start();
-
-        const server = app.listen(PORT, () =>
-            logger.info(`🌍 Server running on ${PORT}`)
-        );
-
-        await bot.launch();
-        logger.info('🤖 Bot started');
-
-        isReady = true;
-
-        const shutdown = () => {
-            dcaScheduler.stop();
-            limitOrderWorker.stop();
-            orderMonitor.stop();
-            bot.stop();
-            server.close(() => process.exit(0));
-        };
-
-        process.once('SIGINT', shutdown);
-        process.once('SIGTERM', shutdown);
-
-    } catch (e) {
-        logger.error('Startup failed', e);
-        process.exit(1);
+  try {
+    if (process.env.DATABASE_URL) {
+      await db.db.execute(sql`SELECT 1`);
+      dcaScheduler.start();
+      limitOrderWorker.start(bot);
     }
+
+    await orderMonitor.loadPendingOrders();
+    orderMonitor.start();
+
+    const server = app.listen(PORT, () =>
+      logger.info(`🌍 Server running on ${PORT}`)
+    );
+
+    await bot.launch();
+    isReady = true;
+
+    const shutdown = () => {
+      dcaScheduler.stop();
+      limitOrderWorker.stop();
+      orderMonitor.stop();
+      bot.stop();
+      server.close(() => process.exit(0));
+    };
+
+    process.once('SIGINT', shutdown);
+    process.once('SIGTERM', shutdown);
+  } catch (e) {
+    logger.error('Startup failed', e);
+    process.exit(1);
+  }
 }
 
 start();
