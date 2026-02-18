@@ -569,26 +569,18 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🌍 Server running on port ${PORT}`));
 
 (async () => {
-<<<<<<< HEAD
-    await orderMonitor.loadPendingOrders();
-    orderMonitor.start();
-    bot.launch();
-    logger.info('🤖 Bot running');
-})();
-
     try {
         await orderMonitor.loadPendingOrders();
         orderMonitor.start();
-        console.log('👀 Order Monitor started');
+        logger.info('👀 Order Monitor started');
     } catch (e) {
-        console.error('⚠️ Failed to start order monitor:', e);
+        logger.error('⚠️ Failed to start order monitor:', e);
     }
 
     await bot.launch();
-    console.log('🤖 Bot launched successfully');
+    logger.info('🤖 Bot running');
 })();
 
 // Enable graceful stop
->>>>>>> a749ce1b103c9e60d0c27197a77e87f67d905a9c
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));

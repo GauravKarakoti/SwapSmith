@@ -1,26 +1,15 @@
 import axios from 'axios';
-import { getStakingAbi, getStakingSelector, STAKING_FUNCTION_SELECTORS } from '../config/staking-abis';
-import { getOrderStatus } from './sideshift-client';
-import { 
-  getPendingStakeOrders, 
-  updateStakeOrderSwapStatus, 
-  updateStakeOrderStakeStatus,
-  type StakeOrder 
-} from './database';
 import logger from './logger';
 
+export interface YieldPool {
+  chain: string;
+  project: string;
+  symbol: string;
+  apy: number;
+  tvlUsd: number;
+  poolId?: string;
+}
 
-export async function getTopStablecoinYields(): Promise<string> {
-  try {
-    // Attempt to fetch from DefiLlama (Open API)
-    const response = await axios.get('https://yields.llama.fi/pools');
-    const data = response.data.data;
-
-    // Filter for stablecoins, high APY, major chains, and sufficient TVL
-    const topPools = data
-      .filter((p: any) =>
-        ['USDC', 'USDT', 'DAI'].includes(p.symbol) &&
-        p.tvlUsd > 1000000 &&
 export interface StakingQuote {
   pool: YieldPool;
   stakeAmount: string;
@@ -33,35 +22,43 @@ export interface StakingQuote {
   }
 }
 
-export async function getTopYieldPools(): Promise<YieldPool[]> {
+export interface MigrationSuggestion {
+  fromPool: YieldPool;
+  toPool: YieldPool;
+  apyDifference: number;
+  annualExtraYield: number;
+  isCrossChain: boolean;
+}
+
+export async function getTopStablecoinYields(): Promise<string> {
   try {
-    // Fetch data from yield aggregator (likely DefiLlama based on variable names)
+    // Attempt to fetch from DefiLlama (Open API)
     const response = await axios.get('https://yields.llama.fi/pools');
     const data = response.data.data;
 
-    const topPools = data.filter((p: any) => 
-        ['USDC', 'USDT', 'DAI'].includes(p.symbol) && 
+    // Filter for stablecoins, high APY, major chains, and sufficient TVL
+    const topPools = data
+      .filter((p: any) =>
+        ['USDC', 'USDT', 'DAI'].includes(p.symbol) &&
+        p.tvlUsd > 1000000 &&
         ['Ethereum', 'Polygon', 'Arbitrum', 'Optimism', 'Base', 'Avalanche'].includes(p.chain)
       )
       .sort((a: any, b: any) => b.apy - a.apy)
-      .slice(0, 5); // Increased to 5 to give more options
-
-    if (topPools.length === 0) throw new Error("No pools found");
+      .slice(0, 5);
+      
+    if (topPools.length === 0) return "No high-yield pools found at the moment.";
 
     return topPools.map((p: any) =>
       `• *${p.symbol} on ${p.chain}* via ${p.project}: *${p.apy.toFixed(2)}% APY*`
     ).join('\n');
 
   } catch (error) {
-    logger.error("Yield fetch error, using fallback data:", error);
-    // Fallback Mock Data for demo reliability
-    return `• *USDC on Base* via Aave: *12.4% APY*\n` +
-      `• *USDT on Arbitrum* via Radiant: *8.2% APY*\n` +
-      `• *USDC on Optimism* via Velodrome: *6.5% APY*`;
+    logger.error("Yield fetch error:", error);
+    return "❌ Failed to fetch current yields.";
   }
 }
 
-export async function getTopYieldPools(): Promise<any[]> {
+export async function getTopYieldPools(): Promise<YieldPool[]> {
   try {
     const response = await axios.get('https://yields.llama.fi/pools');
     const data = response.data.data;
@@ -72,11 +69,28 @@ export async function getTopYieldPools(): Promise<any[]> {
         ['Ethereum', 'Polygon', 'Arbitrum', 'Optimism', 'Base', 'Avalanche'].includes(p.chain)
       )
       .sort((a: any, b: any) => b.apy - a.apy)
-      .slice(0, 3);
+      .slice(0, 5);
   } catch (error) {
-    console.error("Error fetching yield pools:", error);
+    logger.error("Error fetching yield pools:", error);
     return [];
   }
+}
+
+export async function findHigherYieldPools(
+  asset: string,
+  chain?: string,
+  minApy: number = 0
+): Promise<YieldPool[]> {
+  const pools = await getTopYieldPools();
+  return pools.filter(p =>
+    p.symbol.toUpperCase() === asset.toUpperCase() &&
+    p.apy > minApy &&
+    (!chain || p.chain.toLowerCase() === chain.toLowerCase())
+  ).sort((a, b) => b.apy - a.apy);
+}
+
+export function calculateYieldMigration(relevantPools: YieldPool[], amount: number, chain?: string, fromAsset?: string): MigrationSuggestion | null {
+  let fromPool = relevantPools.find(p => p.symbol === fromAsset);
 
   if (!fromPool && chain) {
     fromPool = relevantPools.find(p => p.chain.toLowerCase() === chain.toLowerCase());
@@ -100,19 +114,6 @@ export async function getTopYieldPools(): Promise<any[]> {
     annualExtraYield,
     isCrossChain: fromPool.chain.toLowerCase() !== toPool.chain.toLowerCase()
   };
-}
-
-export async function findHigherYieldPools(
-  asset: string,
-  chain?: string,
-  minApy: number = 0
-): Promise<YieldPool[]> {
-  const pools = await getTopYieldPools();
-  return pools.filter(p =>
-    p.symbol.toUpperCase() === asset.toUpperCase() &&
-    p.apy > minApy &&
-    (!chain || p.chain.toLowerCase() === chain.toLowerCase())
-  ).sort((a, b) => b.apy - a.apy);
 }
 
 export function formatMigrationMessage(suggestion: MigrationSuggestion, amount: number = 10000): string {

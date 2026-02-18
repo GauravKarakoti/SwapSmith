@@ -1,6 +1,6 @@
-import { parseUserCommand } from '../services/groq-client';
 import Groq from 'groq-sdk';
 
+const mockCreate = jest.fn();
 
 jest.mock('groq-sdk', () => {
   return {
@@ -10,8 +10,8 @@ jest.mock('groq-sdk', () => {
         completions: {
           create: mockCreate
         }
-      },
-      audio: {
+      };
+      this.audio = {
         transcriptions: {
           create: jest.fn()
         }
@@ -61,7 +61,10 @@ describe('parseUserCommand', () => {
   it('should handle ambiguous command with low confidence', async () => {
     const mockGroq = Groq as unknown as jest.Mock;
 
-    const mockCreate = mockGroq.mock.instances[0].chat.completions.create;
+    // mockCreate is already available from the outer scope, 
+    // but we can also access it via the mock instance if strict encapsulation is preferred.
+    // const mockCreate = mockGroq.mock.instances[0].chat.completions.create;
+    
     mockCreate.mockResolvedValue({
       choices: [{
         message: {
@@ -84,8 +87,6 @@ describe('parseUserCommand', () => {
   });
 
   it('should parse portfolio allocation correctly', async () => {
-    const mockGroq = Groq as unknown as jest.Mock;
-    const mockCreate = mockGroq.mock.instances[0].chat.completions.create;
     mockCreate.mockResolvedValue({
       choices: [{
         message: {
@@ -114,8 +115,6 @@ describe('parseUserCommand', () => {
   });
 
   it('should validate portfolio percentages', async () => {
-    const mockGroq = Groq as unknown as jest.Mock;
-    const mockCreate = mockGroq.mock.instances[0].chat.completions.create;
     mockCreate.mockResolvedValue({
       choices: [{
         message: {
@@ -142,8 +141,6 @@ describe('parseUserCommand', () => {
   });
 
   it('should handle yield scout intent', async () => {
-    const mockGroq = Groq as unknown as jest.Mock;
-    const mockCreate = mockGroq.mock.instances[0].chat.completions.create;
     mockCreate.mockResolvedValue({
       choices: [{
         message: {
@@ -164,8 +161,6 @@ describe('parseUserCommand', () => {
   });
 
   it('should handle yield deposit intent', async () => {
-    const mockGroq = Groq as unknown as jest.Mock;
-    const mockCreate = mockGroq.mock.instances[0].chat.completions.create;
     mockCreate.mockResolvedValue({
       choices: [{
         message: {
