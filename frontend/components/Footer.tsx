@@ -62,13 +62,17 @@ export default function Footer() {
             
             <div className="space-y-6">
               <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Governance</h4>
-              <ul className="space-y-4">
-                {['Security', 'Documentation', 'Privacy'].map((item) => (
-                  <li key={item}>
-                    <a href="#" className="text-sm text-zinc-400 hover:text-white transition-colors">{item}</a>
+                <ul className="space-y-4">
+                  <li key="Security">
+                    <a href="#" className="text-sm text-zinc-400 hover:text-white transition-colors">Security</a>
                   </li>
-                ))}
-              </ul>
+                  <li key="Documentation">
+                    <a href="#" className="text-sm text-zinc-400 hover:text-white transition-colors">Documentation</a>
+                  </li>
+                  <li key="Privacy">
+                    <a href="/privacy" className="text-sm text-zinc-400 hover:text-white transition-colors">Privacy Policy</a>
+                  </li>
+                </ul>
             </div>
 
             <div className="space-y-6 col-span-2 sm:col-span-1">

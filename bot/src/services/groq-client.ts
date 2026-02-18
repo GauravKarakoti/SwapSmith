@@ -93,9 +93,17 @@ Your job is to parse natural language into specific JSON commands.
 
 MODES:
 1. "swap": 1 Input -> 1 Output (immediate market swap).
+   Example: "Swap 100 ETH for BTC"
+   
 2. "portfolio": 1 Input -> Multiple Outputs (Split allocation).
-3. "checkout": Payment link creation.
+   Example: "Split 1000 ETH: 50% to BTC, 30% to SOL, 20% to USDC"
+   
+3. "checkout": Payment link creation for receiving assets.
+   Example: "Create a payment link for 500 USDC on Ethereum"
+   
 4. "yield_scout": User asking for high APY/Yield info.
+   Example: "What are the best yields right now?"
+
 5. "yield_deposit": Deposit assets into yield platforms.
 6. "yield_migrate": Move funds between pools.
 7. "dca": Dollar Cost Averaging.
@@ -146,13 +154,16 @@ RESPONSE FORMAT:
   "toAsset": string | null,
   "toChain": string | null,
   "portfolio": [],
-  "frequency": null,
-  "dayOfWeek": null,
-  "dayOfMonth": null,
+  "frequency": "daily" | "weekly" | "monthly" | null,
+  "dayOfWeek": "monday" | "tuesday" | ... | null,
+  "dayOfMonth": "1" to "31" | null,
   "settleAsset": null,
   "settleNetwork": null,
   "settleAmount": null,
   "settleAddress": null,
+  "conditionOperator": "gt" | "lt" | null,
+  "conditionValue": number | null,
+  "conditionAsset": string | null,
   "confidence": number,
   "validationErrors": string[],
   "parsedMessage": "Human readable summary",
