@@ -1,11 +1,9 @@
 import axios from 'axios';
 import { getStakingAbi, getStakingSelector, STAKING_FUNCTION_SELECTORS } from '../config/staking-abis';
 import { getOrderStatus } from './sideshift-client';
-import { 
-  getPendingStakeOrders, 
-  updateStakeOrderSwapStatus, 
-  updateStakeOrderStakeStatus,
-  type StakeOrder 
+import {
+  getPendingOrders,
+  updateOrderStatus,
 } from './database';
 import logger from './logger';
 
@@ -37,10 +35,10 @@ export async function getTopYieldPools(): Promise<YieldPool[]> {
     const response = await axios.get('https://yields.llama.fi/pools');
     const data = response.data.data;
 
-    const topPools = data.filter((p: any) => 
-        ['USDC', 'USDT', 'DAI'].includes(p.symbol) && 
-        ['Ethereum', 'Polygon', 'Arbitrum', 'Optimism', 'Base', 'Avalanche'].includes(p.chain)
-      )
+    const topPools = data.filter((p: any) =>
+      ['USDC', 'USDT', 'DAI'].includes(p.symbol) &&
+      ['Ethereum', 'Polygon', 'Arbitrum', 'Optimism', 'Base', 'Avalanche'].includes(p.chain)
+    )
       .sort((a: any, b: any) => b.apy - a.apy)
       .slice(0, 5); // Increased to 5 to give more options
 
@@ -68,11 +66,8 @@ export async function getTopYieldPools(): Promise<YieldPool[]> {
   }
 }
 
-export async function getTopStablecoinYields(): Promise<string> {
-  const pools = await getTopYieldPools();
-  return pools.map(p =>
-    `• *${p.symbol} on ${p.chain}* via ${p.project}: *${p.apy.toFixed(2)}% APY*`
-  ).join('\n');
+export async function getTopStablecoinYields(): Promise<YieldPool[]> {
+  return await getTopYieldPools();
 }
 
 export interface MigrationSuggestion {
@@ -138,6 +133,11 @@ export async function findHigherYieldPools(
     p.apy > minApy &&
     (!chain || p.chain.toLowerCase() === chain.toLowerCase())
   ).sort((a, b) => b.apy - a.apy);
+}
+
+export function formatYieldPools(yields: YieldPool[]): string {
+  if (yields.length === 0) return "No yield opportunities found at the moment.";
+  return yields.map(p => `• *${p.symbol} on ${p.chain}* via ${p.project}: *${p.apy.toFixed(2)}% APY*`).join('\n');
 }
 
 export function formatMigrationMessage(suggestion: MigrationSuggestion, amount: number = 10000): string {

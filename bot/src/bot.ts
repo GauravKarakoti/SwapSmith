@@ -20,11 +20,13 @@ import {
 } from './services/sideshift-client';
 import {
     getTopStablecoinYields,
-    getTopYieldPools
+    getTopYieldPools,
+    formatYieldPools
 } from './services/yield-client';
 import * as db from './services/database';
 import { OrderMonitor } from './services/order-monitor';
 import { parseUserCommand } from './services/parseUserCommand';
+import { ADDRESS_PATTERNS, isValidAddress } from './config/address-patterns';
 
 dotenv.config();
 
@@ -40,28 +42,7 @@ if (!BOT_TOKEN) {
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// --- Constants ---
-const DEFAULT_EVM_PATTERN = /^0x[a-fA-F0-9]{40}$/;
-const ADDRESS_PATTERNS: Record<string, RegExp> = {
-    ethereum: DEFAULT_EVM_PATTERN,
-    base: DEFAULT_EVM_PATTERN,
-    arbitrum: DEFAULT_EVM_PATTERN,
-    polygon: DEFAULT_EVM_PATTERN,
-    bsc: DEFAULT_EVM_PATTERN,
-    optimism: DEFAULT_EVM_PATTERN,
-    bitcoin: /^(1|3|bc1)[a-zA-Z0-9]{25,39}$/,
-    solana: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
-};
-
-// --- Helpers ---
-
-function isValidAddress(address: string, chain?: string): boolean {
-    if (!address || typeof address !== 'string') return false;
-    const trimmed = address.trim();
-    const normalized = chain ? chain.toLowerCase().replace(/[^a-z]/g, '') : 'ethereum';
-    const pattern = ADDRESS_PATTERNS[normalized] || DEFAULT_EVM_PATTERN;
-    return pattern.test(trimmed);
-}
+// Address validation is now imported from config/address-patterns.ts
 
 function checkFFmpeg(): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -155,7 +136,8 @@ bot.command('yield', async (ctx) => {
     await ctx.reply('📈 Fetching top yield opportunities...');
     try {
         const yields = await getTopStablecoinYields();
-        ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields:*\n\n${yields}`);
+        const msg = formatYieldPools(yields);
+        ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields:*\n\n${msg}`);
     } catch (error) {
         ctx.reply("❌ Failed to fetch yields.");
     }
@@ -264,7 +246,8 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
     // 3. Handle Intents
     if (parsed.intent === 'yield_scout') {
         const yields = await getTopStablecoinYields();
-        return ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields:*\n\n${yields}`);
+        const msg = formatYieldPools(yields);
+        return ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields:*\n\n${msg}`);
     }
 
     if (parsed.intent === 'yield_deposit') {
@@ -352,7 +335,7 @@ bot.action(['confirm_swap', 'confirm_checkout'], async (ctx) => {
 
     try {
         await ctx.answerCbQuery('Fetching quote...');
-        
+
         // Use default params or what we have in state
         const q = await createQuote(
             state.parsedCommand.fromAsset!,
@@ -364,7 +347,7 @@ bot.action(['confirm_swap', 'confirm_checkout'], async (ctx) => {
 
         await db.setConversationState(userId, { ...state, quoteId: q.id });
 
-        const confirmText = 
+        const confirmText =
             `🔄 *Quote Received*\n\n` +
             `➡️ Send: ${q.depositAmount} ${q.depositCoin}\n` +
             `⬅️ Receive: ~${q.settleAmount} ${q.settleCoin}\n` +
@@ -389,7 +372,7 @@ bot.action(['confirm_swap', 'confirm_checkout'], async (ctx) => {
 bot.action('place_order', async (ctx) => {
     const userId = ctx.from.id;
     const state = await db.getConversationState(userId);
-    
+
     if (!state?.quoteId || !state.parsedCommand?.settleAddress) {
         return ctx.answerCbQuery('Session missing required data. Start over.');
     }
@@ -402,11 +385,11 @@ bot.action('place_order', async (ctx) => {
         if (intent === 'checkout') {
             // --- Checkout Flow ---
             const checkout = await createCheckout(
-                settleAsset!, settleNetwork!, settleAmount!, settleAddress!, '1.1.1.1' // dummy IP
+                settleAsset!, settleNetwork!, settleAmount!, settleAddress!
             );
 
             if (!checkout || !checkout.id) throw new Error("API Error");
-            
+
             try { db.createCheckoutEntry(userId, checkout); } catch (e) { console.error(e); }
 
             const paymentUrl = `https://pay.sideshift.ai/checkout/${checkout.id}`;
@@ -431,9 +414,9 @@ bot.action('place_order', async (ctx) => {
             const msg =
                 `✅ *Order Created!* (ID: \`${order.id}\`)\n\n` +
                 `To complete the swap, please send funds to the address below:\n\n` +
-                `🏦 *Deposit:* \`${(order.depositAddress as {address: string;memo: string;}).address || order.depositAddress}\`\n` +
+                `🏦 *Deposit:* \`${(order.depositAddress as { address: string; memo: string; }).address || order.depositAddress}\`\n` +
                 `💰 *Amount:* ${order.depositAmount} ${order.depositCoin}\n` +
-                ((order.depositAddress as {address: string;memo: string;}).memo ? `📝 *Memo:* \`${(order.depositAddress as {address: string;memo: string;}).memo || ''}\`\n` : '') + 
+                ((order.depositAddress as { address: string; memo: string; }).memo ? `📝 *Memo:* \`${(order.depositAddress as { address: string; memo: string; }).memo || ''}\`\n` : '') +
                 `\n_Destination: ${settleAddress}_`;
 
             ctx.editMessageText(msg, { parse_mode: 'Markdown' });
@@ -460,26 +443,43 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🌍 Server running on port ${PORT}`));
 
 (async () => {
-<<<<<<< HEAD
-    await orderMonitor.loadPendingOrders();
-    orderMonitor.start();
-    bot.launch();
-    logger.info('🤖 Bot running');
-})();
-
     try {
         await orderMonitor.loadPendingOrders();
         orderMonitor.start();
-        console.log('👀 Order Monitor started');
+        logger.info('👀 Order Monitor started');
     } catch (e) {
-        console.error('⚠️ Failed to start order monitor:', e);
+        logger.error('⚠️ Failed to start order monitor:', e);
     }
 
     await bot.launch();
-    console.log('🤖 Bot launched successfully');
+    logger.info('🤖 Bot launched successfully');
 })();
 
-// Enable graceful stop
->>>>>>> a749ce1b103c9e60d0c27197a77e87f67d905a9c
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+// --- Graceful Shutdown ---
+
+async function shutdown(signal: string) {
+    logger.info(`\n${signal} received. Shutting down gracefully...`);
+
+    try {
+        // 1. Stop the bot from receiving new updates
+        bot.stop(signal);
+
+        // 2. Stop the Order Monitor interval
+        orderMonitor.stop();
+
+        // 3. Database connection acknowledgement
+        logger.info('Acknowledging database connection closure (stateless).');
+
+        // 4. Close server (if needed) - app.listen returns a server instance
+        // server.close(); 
+
+        logger.info('Cleanup complete. Goodbye!');
+        process.exit(0);
+    } catch (error) {
+        logger.error('Error during shutdown:', error);
+        process.exit(1);
+    }
+}
+
+process.once('SIGINT', () => shutdown('SIGINT'));
+process.once('SIGTERM', () => shutdown('SIGTERM'));
