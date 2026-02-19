@@ -24,10 +24,7 @@ import WalletConnector from "./WalletConnector";
 const NAV_ITEMS = [
   { href: "/prices", label: "Live Prices", Icon: TrendingUp },
   { href: "/discussions", label: "Discussions", Icon: MessageSquare },
-  { href: "/learn", label: "Learn", Icon: BookOpen },
-  { href: "/rewards", label: "Rewards", Icon: Trophy },
   { href: "/terminal", label: "Terminal", Icon: TerminalIcon },
-  { href: "/about", label: "About", Icon: Info },
 ];
 
 export default function Navbar() {
@@ -43,7 +40,10 @@ export default function Navbar() {
 
   // Close mobile menu on route change
   useEffect(() => {
-    setMobileMenuOpen(false);
+    if (mobileMenuOpen) {
+      setMobileMenuOpen(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
   // Close mobile menu when resizing to desktop
@@ -193,6 +193,13 @@ export default function Navbar() {
                       onClick={() => setShowProfileMenu(false)}
                     >
                       <BookOpen className="w-4 h-4" /> Learn
+                    </Link>
+                    <Link
+                      href="/about"
+                      className="menu-item"
+                      onClick={() => setShowProfileMenu(false)}
+                    >
+                      <Info className="w-4 h-4" /> About
                     </Link>
                     <div className="h-px bg-zinc-800" />
                     <button

@@ -18,10 +18,9 @@
 .faq-section .border-b {
   border-color: #44318D33;
 }
+
 @import "tailwindcss";
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+
 body {
   overflow-x: hidden;
 }
@@ -694,6 +693,25 @@ body {
 .sidebar-item.active {
   background-color: rgb(var(--sidebar-active) / 0.2);
   border-color: rgb(var(--sidebar-active));
+}
+
+/* Dropdown Menu Items */
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  color: rgb(var(--text-primary));
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.menu-item:hover {
+  background-color: rgb(var(--sidebar-hover));
+}
+
+.menu-item:active {
+  background-color: rgb(var(--sidebar-active) / 0.1);
 }
 
 /* Chat Messages */

@@ -53,11 +53,11 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Waitlist API error:', error);
 
     // Handle duplicate key error from MongoDB
-    if (error.code === 11000) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
       return NextResponse.json(
         { error: 'This email is already on the waitlist' },
         { status: 409 }

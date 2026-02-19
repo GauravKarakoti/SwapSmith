@@ -1,7 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
+import Link from "next/link";
 import {
   Shield,
   Database,
@@ -9,6 +10,16 @@ import {
   UserCheck,
   RefreshCcw,
 } from "lucide-react";
+
+// Generate particle positions once
+const generateParticles = () => 
+  [...Array(25)].map(() => ({
+    initialX: Math.random() * 1200,
+    initialY: Math.random() * 800,
+    animateY: Math.random() * 800,
+    animateX: Math.random() * 1200,
+    duration: 20 + Math.random() * 20,
+  }));
 
 const sections = [
   {
@@ -56,6 +67,7 @@ const sections = [
 ];
 
 export default function Privacy() {
+  const [particles] = useState(generateParticles);
 
   return (
     <div className="relative min-h-screen overflow-hidden 
@@ -64,7 +76,7 @@ export default function Privacy() {
 
       {/* Back Button */}
       <div className="max-w-5xl mx-auto mb-8">
-        <a
+        <Link
           href="/"
           className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-indigo-500/80 text-indigo-500 hover:text-white font-semibold shadow transition-colors duration-200 border border-indigo-200/30"
         >
@@ -72,25 +84,25 @@ export default function Privacy() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
           </svg>
           Back to Home
-        </a>
+        </Link>
       </div>
 
       {/* Floating Animated Particles */}
       <div className="absolute inset-0 -z-10 overflow-hidden">
-        {[...Array(25)].map((_, i) => (
+        {particles.map((particle, i) => (
           <motion.div
             key={i}
             className="absolute w-2 h-2 bg-indigo-500/30 rounded-full blur-sm"
             initial={{
-              x: Math.random() * 1200,
-              y: Math.random() * 800,
+              x: particle.initialX,
+              y: particle.initialY,
             }}
             animate={{
-              y: [null, Math.random() * 800],
-              x: [null, Math.random() * 1200],
+              y: [null, particle.animateY],
+              x: [null, particle.animateX],
             }}
             transition={{
-              duration: 20 + Math.random() * 20,
+              duration: particle.duration,
               repeat: Infinity,
               repeatType: "reverse",
             }}
