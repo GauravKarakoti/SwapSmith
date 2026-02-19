@@ -180,9 +180,9 @@ export default function Navbar() {
                 <button onClick={() => setMobileMenuOpen(false)} className="p-2 rounded-full bg-zinc-100 dark:bg-zinc-800"><X /></button>
               </div>
               <div className="space-y-2 flex-1">
-                {[ {href: "/", label: "Home", icon: Home}, ...NAV_ITEMS].map((item) => (
+                {[ {href: "/", label: "Home", Icon: Home}, ...NAV_ITEMS].map((item) => (
                    <Link key={item.href} href={item.href} className={`flex items-center gap-4 p-4 rounded-2xl text-lg font-bold transition-all ${pathname === item.href ? "bg-blue-600 text-white shadow-lg" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"}`}>
-                     <item.icon className="w-6 h-6" /> {item.label}
+                     <item.Icon className="w-6 h-6" /> {item.label}
                    </Link>
                 ))}
               </div>
