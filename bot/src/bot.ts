@@ -169,7 +169,7 @@ async function handleTextMessage(
     state?.parsedCommand &&
     !state.parsedCommand.settleAddress &&
     state.parsedCommand.intent && // Check intent exists
-    ['swap', 'checkout', 'portfolio'].includes(state.parsedCommand.intent)
+    ['swap', 'checkout', 'portfolio', 'limit_order'].includes(state.parsedCommand.intent)
   ) {
     const resolved = await resolveAddress(userId, text.trim());
     const targetChain =
@@ -238,11 +238,79 @@ async function handleTextMessage(
       ])
     );
   }
+
+  /* ---------------- Limit Order ---------------- */
+
+  if (parsed.intent === 'limit_order') {
+    if (!parsed.settleAddress) {
+      await db.setConversationState(userId, { parsedCommand: parsed });
+      return ctx.reply('Please provide the destination wallet address.');
+    }
+
+    await db.setConversationState(userId, { parsedCommand: parsed });
+
+    const conditionText = parsed.conditions
+      ? `${parsed.conditions.asset || parsed.fromAsset} ${
+          parsed.conditions.type === 'price_above' ? '>' : '<'
+        } $${parsed.conditions.value}`
+      : 'Unknown Condition';
+
+    return ctx.reply(
+      `Confirm Limit Order?\n\n` +
+        `Swap: ${parsed.amount} ${parsed.fromAsset} → ${parsed.toAsset}\n` +
+        `Condition: ${conditionText}\n` +
+        `Destination: \`${parsed.settleAddress}\``,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          Markup.button.callback('✅ Yes', `confirm_limit_order`),
+          Markup.button.callback('❌ Cancel', 'cancel_swap'),
+        ]),
+      }
+    );
+  }
 }
 
 /* -------------------------------------------------------------------------- */
 /* ACTIONS                                  */
 /* -------------------------------------------------------------------------- */
+
+bot.action('confirm_limit_order', async (ctx) => {
+  if (!ctx.from) return;
+  const state = await db.getConversationState(ctx.from.id);
+  const cmd = state?.parsedCommand;
+
+  if (!cmd || !cmd.conditions) {
+    return ctx.reply('❌ Missing order details.');
+  }
+
+  try {
+    await db.db.insert(db.limitOrders).values({
+      telegramId: ctx.from.id,
+      fromAsset: cmd.fromAsset || 'ETH',
+      fromNetwork: cmd.fromChain || 'ethereum', // Default
+      toAsset: cmd.toAsset || 'USDC',
+      toNetwork: cmd.toChain || 'ethereum', // Default
+      fromAmount: cmd.amount ? cmd.amount.toString() : '0',
+
+      conditionOperator: cmd.conditions.type === 'price_above' ? 'gt' : 'lt',
+      conditionValue: cmd.conditions.value,
+      conditionAsset: cmd.conditions.asset || cmd.fromAsset || 'ETH',
+
+      settleAddress: cmd.settleAddress || '',
+      status: 'pending',
+      isActive: 1,
+    });
+
+    await db.clearConversationState(ctx.from.id);
+    await ctx.editMessageText(
+      '✅ Limit Order Created!\nI will monitor the price and notify you when it executes.'
+    );
+  } catch (err) {
+    logger.error('Failed to create limit order', err);
+    await ctx.reply('❌ Failed to save limit order.');
+  }
+});
 
 bot.action('confirm_swap', async (ctx) => {
   if (!ctx.from) return;
