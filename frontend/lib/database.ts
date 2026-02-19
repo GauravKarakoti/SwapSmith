@@ -576,7 +576,7 @@ export async function updateCourseProgress(
 
 export async function addRewardActivity(
   userId: number,
-  actionType: 'course_complete' | 'module_complete' | 'daily_login' | 'swap_complete' | 'referral',
+  actionType: 'course_complete' | 'module_complete' | 'daily_login' | 'swap_complete' | 'referral' | 'wallet_connected' | 'terminal_used' | 'notification_enabled',
   pointsEarned: number,
   tokensPending: string = '0',
   metadata?: Record<string, unknown>
