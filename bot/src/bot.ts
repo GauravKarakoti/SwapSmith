@@ -250,6 +250,7 @@ bot.action('confirm_swap', async (ctx) => {
   if (!state?.parsedCommand) return;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     try {
         await ctx.answerCbQuery('Fetching quote...');
 
@@ -262,6 +263,8 @@ bot.action('confirm_swap', async (ctx) => {
             state.parsedCommand.amount!
         );
 =======
+=======
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
   const q = await createQuote(
     state.parsedCommand.fromAsset,
     state.parsedCommand.fromChain,
@@ -269,6 +272,7 @@ bot.action('confirm_swap', async (ctx) => {
     state.parsedCommand.toChain,
     state.parsedCommand.amount
   );
+<<<<<<< HEAD
 >>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
 
   await db.setConversationState(ctx.from.id, { ...state, quoteId: q.id });
@@ -294,6 +298,11 @@ bot.action('confirm_swap', async (ctx) => {
         console.error(e);
         ctx.reply('❌ Failed to get a quote. Please try again.');
 =======
+=======
+
+  await db.setConversationState(ctx.from.id, { ...state, quoteId: q.id });
+
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
   await ctx.editMessageText(
     `🔄 *Quote*\nSend: ${q.depositAmount} ${q.depositCoin}\nReceive: ~${q.settleAmount} ${q.settleCoin}`,
     {
@@ -302,6 +311,9 @@ bot.action('confirm_swap', async (ctx) => {
         Markup.button.callback('🚀 Place Order', 'place_order'),
         Markup.button.callback('❌ Cancel', 'cancel_swap'),
       ]),
+<<<<<<< HEAD
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
+=======
 >>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
     }
   );
@@ -309,12 +321,18 @@ bot.action('confirm_swap', async (ctx) => {
 
 bot.action('place_order', async (ctx) => {
 <<<<<<< HEAD
+<<<<<<< HEAD
     const userId = ctx.from.id;
     const state = await db.getConversationState(userId);
 
     if (!state?.quoteId || !state.parsedCommand?.settleAddress) {
         return ctx.answerCbQuery('Session missing required data. Start over.');
     }
+=======
+  if (!ctx.from) return;
+  const state = await db.getConversationState(ctx.from.id);
+  if (!state?.quoteId || !state.parsedCommand?.settleAddress) return;
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
 =======
   if (!ctx.from) return;
   const state = await db.getConversationState(ctx.from.id);
@@ -340,6 +358,7 @@ bot.action('place_order', async (ctx) => {
     { parse_mode: 'Markdown' }
   );
 
+<<<<<<< HEAD
 <<<<<<< HEAD
             if (!checkout || !checkout.id) throw new Error("API Error");
 
@@ -384,6 +403,9 @@ bot.action('place_order', async (ctx) => {
 =======
   await db.clearConversationState(ctx.from.id);
 >>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
+=======
+  await db.clearConversationState(ctx.from.id);
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
 });
 
 bot.action('cancel_swap', async (ctx) => {
@@ -395,6 +417,7 @@ bot.action('cancel_swap', async (ctx) => {
 /* -------------------------------------------------------------------------- */
 /* STARTUP                                   */
 /* -------------------------------------------------------------------------- */
+<<<<<<< HEAD
 
 <<<<<<< HEAD
 // --- Global State ---
@@ -446,6 +469,11 @@ process.once('SIGTERM', () => {
 =======
 const dcaScheduler = new DCAScheduler();
 
+=======
+
+const dcaScheduler = new DCAScheduler();
+
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
 async function start() {
   try {
     if (process.env.DATABASE_URL) {
@@ -479,5 +507,9 @@ async function start() {
   }
 }
 
+<<<<<<< HEAD
+start();
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
+=======
 start();
 >>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd

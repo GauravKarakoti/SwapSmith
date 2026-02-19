@@ -27,6 +27,7 @@ const REGEX_TOKENS = /([A-Z]+)\s+(to|into|for)\s+([A-Z]+)/i; // "ETH to BTC"
 const REGEX_FROM_TO = /from\s+([A-Z]+)\s+to\s+([A-Z]+)/i; // "from ETH to BTC"
 const REGEX_AMOUNT_TOKEN = /\b(\d+(\.\d+)?)\s+(?!to|into|for|from|with|using\b)([A-Z]+)\b/i; // "10 ETH" (exclude prepositions)
 <<<<<<< HEAD
+<<<<<<< HEAD
 const REGEX_CONDITION = /(?:if|when)\s+(?:the\s+)?(?:price|rate|market|value)?\s*(?:of\s+)?([A-Z]+)?\s*(?:is|goes|drops|rises|falls)?\s*(above|below|greater|less|more|under|>|<)\s*(?:than)?\s*(\$?[\d,]+(\.\d+)?)/i;
 
 // New Regex for Quote Amount ("Worth")
@@ -38,10 +39,18 @@ const REGEX_CONDITION = /(?:if|when)\s+(?:the\s+)?(?:price|rate|market|value)?\s
 
 // New Regex for Quote Amount ("Worth")
 >>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
+=======
+
+// New Regex for Conditions
+const REGEX_CONDITION = /(?:if|when)\s+(?:the\s+)?(?:price|rate|market|value)?\s*(?:of\s+)?([A-Z]+)?\s*(?:is|goes|drops|rises|falls)?\s*(above|below|greater|less|more|under|>|<)\s*(?:than)?\s*(\$?[\d,]+(\.\d+)?\s*[kKmM]?)/i;
+
+// New Regex for Quote Amount ("Worth")
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
 const REGEX_QUOTE = /(?:([A-Z]+)\s+)?(?:worth|value|valued\s+at)\s*(?:of)?\s*(\$)?(\d+(\.\d+)?)\s*([A-Z]+)?/i;
 
 // New Regex for Multiple Source Assets
 const REGEX_MULTI_SOURCE = /([A-Z]+)\s+(?:and|&)\s+([A-Z]+)\s+(?:to|into|for)/i;
+<<<<<<< HEAD
 <<<<<<< HEAD
 
 export async function parseUserCommand(
@@ -73,6 +82,8 @@ export async function parseUserCommand(
         let confidence = 0;
         let validationErrors: string[] = [];
 =======
+=======
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
 
 function normalizeNumber(val: string): number {
   val = val.toLowerCase().replace(/[\$,]/g, '');
@@ -470,6 +481,7 @@ export async function parseUserCommand(
         }
     }
 
+<<<<<<< HEAD
     // 2. Fallback to LLM
     logger.info("Fallback to LLM for:", userInput);
     try {
@@ -496,6 +508,8 @@ export async function parseUserCommand(
             settleAsset: null, settleNetwork: null, settleAmount: null, settleAddress: null,
             fromProject: null, fromYield: null, toProject: null, toYield: null,
 =======
+=======
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
     // E. Detect Numeric Amount
     if (!amount && amountType === null && !quoteAmount) {
        const amtTokenMatch = input.match(REGEX_AMOUNT_TOKEN);
