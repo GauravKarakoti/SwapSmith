@@ -12,7 +12,11 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "db:push": "drizzle-kit push",
+<<<<<<< HEAD
     "test:smoke": "ts-node scripts/smoke-test.ts"
+=======
+    "smoke": "node smoke-test.js"
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
   },
   "keywords": [],
   "author": "",

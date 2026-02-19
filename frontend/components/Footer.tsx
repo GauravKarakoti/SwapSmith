@@ -1,9 +1,83 @@
 'use client'
 
-import { Github, Twitter, MessageCircle, ExternalLink, Zap, ArrowUpRight } from 'lucide-react'
+import { Github, Twitter, MessageCircle, ExternalLink, Zap, ArrowUpRight, Loader2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import toast from 'react-hot-toast'
 
 export default function Footer() {
   const currentYear = new Date().getFullYear()
+  const [email, setEmail] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [waitlistCount, setWaitlistCount] = useState<number | null>(null)
+
+  // Fetch waitlist count on mount
+  useEffect(() => {
+    fetchWaitlistCount()
+  }, [])
+
+  const fetchWaitlistCount = async () => {
+    try {
+      const response = await fetch('/api/waitlist/count')
+      const data = await response.json()
+      if (data.success) {
+        setWaitlistCount(data.count)
+      }
+    } catch (error) {
+      console.error('Failed to fetch waitlist count:', error)
+    }
+  }
+
+  const validateEmail = (email: string) => {
+    const emailRegex = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/
+    return emailRegex.test(email)
+  }
+
+  const handleJoinWaitlist = async () => {
+    // Validate email
+    if (!email.trim()) {
+      toast.error('Please enter your email address')
+      return
+    }
+
+    if (!validateEmail(email)) {
+      toast.error('Please enter a valid email address')
+      return
+    }
+
+    setIsLoading(true)
+
+    try {
+      const response = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast.success(data.message || 'Successfully joined the waitlist!')
+        // Refresh count
+        fetchWaitlistCount()
+      } else {
+        toast.error(data.error || 'Something went wrong')
+      }
+    } catch (error) {
+      console.error('Error joining waitlist:', error)
+      toast.error('Network error. Please try again.')
+    } finally {
+      setEmail('')
+      setIsLoading(false)
+    }
+  }
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !isLoading) {
+      handleJoinWaitlist()
+    }
+  }
 
   return (
     <footer className="relative w-full mt-20 overflow-hidden border-t border-white/5 bg-[#050505]">
@@ -34,15 +108,39 @@ export default function Footer() {
               </p>
             </div>
 
-            <div className="relative max-w-sm group">
-              <input 
-                type="email" 
-                placeholder="Join the waitlist" 
-                className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-blue-500/50 transition-all"
-              />
-              <button className="absolute right-1.5 top-1.5 bottom-1.5 px-4 bg-white text-black text-xs font-bold rounded-lg hover:bg-zinc-200 transition-colors">
-                Join
-              </button>
+            <div className="space-y-3">
+              <div className="relative max-w-sm group">
+                <input 
+                  type="email" 
+                  placeholder="Join the waitlist" 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  disabled={isLoading}
+                  className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-blue-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+                <button 
+                  onClick={handleJoinWaitlist}
+                  disabled={isLoading}
+                  className="absolute right-1.5 top-1.5 bottom-1.5 px-4 bg-white text-black text-xs font-bold rounded-lg hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Joining...
+                    </>
+                  ) : (
+                    'Join'
+                  )}
+                </button>
+              </div>
+              {waitlistCount !== null && waitlistCount > 0 && (
+                <p className="text-xs text-zinc-500 flex items-center gap-1.5">
+                  <span className="text-orange-500">🔥</span>
+                  <span className="font-semibold text-orange-400">{waitlistCount}</span> 
+                  {waitlistCount === 1 ? 'person has' : 'people have'} already joined the waitlist
+                </p>
+              )}
             </div>
           </div>
 
@@ -62,13 +160,17 @@ export default function Footer() {
             
             <div className="space-y-6">
               <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Governance</h4>
-              <ul className="space-y-4">
-                {['Security', 'Documentation', 'Privacy'].map((item) => (
-                  <li key={item}>
-                    <a href="#" className="text-sm text-zinc-400 hover:text-white transition-colors">{item}</a>
+                <ul className="space-y-4">
+                  <li key="Security">
+                    <a href="#" className="text-sm text-zinc-400 hover:text-white transition-colors">Security</a>
                   </li>
-                ))}
-              </ul>
+                  <li key="Documentation">
+                    <a href="#" className="text-sm text-zinc-400 hover:text-white transition-colors">Documentation</a>
+                  </li>
+                  <li key="Privacy">
+                    <a href="/privacy" className="text-sm text-zinc-400 hover:text-white transition-colors">Privacy Policy</a>
+                  </li>
+                </ul>
             </div>
 
             <div className="space-y-6 col-span-2 sm:col-span-1">

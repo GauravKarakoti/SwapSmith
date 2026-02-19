@@ -23,11 +23,13 @@ import IntentConfirmation from "@/components/IntentConfirmation";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useChatHistory, useChatSessions } from "@/hooks/useCachedData";
+import { useErrorHandler, ErrorType } from "@/hooks/useErrorHandler";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 
 import { ParsedCommand } from "@/utils/groq-client";
 
 /* -------------------------------------------------------------------------- */
-/*                                   Types                                    */
+/* Types                                    */
 /* -------------------------------------------------------------------------- */
 
 interface QuoteData {
@@ -62,7 +64,7 @@ interface Message {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                               UI Components                                */
+/* UI Components                                */
 /* -------------------------------------------------------------------------- */
 
 const SidebarSkeleton = () => (
@@ -124,14 +126,16 @@ const LiveStatsCard = () => {
 };
 
 /* -------------------------------------------------------------------------- */
-/*                                 Main Page                                  */
+/* Main Page                                  */
 /* -------------------------------------------------------------------------- */
 
 export default function TerminalPage() {
   const router = useRouter();
-  const { isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
+  const { handleError } = useErrorHandler();
 
+  // State
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -141,21 +145,34 @@ export default function TerminalPage() {
       type: "message",
     },
   ]);
-
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
 
+  // Session Management
   const [currentSessionId, setCurrentSessionId] = useState(crypto.randomUUID());
   const sessionIdRef = useRef(currentSessionId);
   const loadedSessionRef = useRef<string | null>(null);
-
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Data Fetching
   const { data: chatSessions, refetch: refetchSessions } = useChatSessions(
     user?.uid,
   );
   const { data: dbChatHistory } = useChatHistory(user?.uid, currentSessionId);
 
+  // Speech Recognition
+  const {
+    isListening: isRecording,
+    transcript,
+    isSupported: isAudioSupported,
+    startRecording,
+    stopRecording,
+  } = useSpeechRecognition();
+
+  /* ------------------------------------------------------------------------ */
+  /* Effects                                  */
   /* ------------------------------------------------------------------------ */
 
   useEffect(() => {
@@ -167,7 +184,7 @@ export default function TerminalPage() {
     loadedSessionRef.current = null;
   }, [currentSessionId]);
 
-  // Load chat history from database when available
+  // Load chat history
   useEffect(() => {
     if (loadedSessionRef.current === currentSessionId) return;
 
@@ -192,11 +209,37 @@ export default function TerminalPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Handle voice transcript
+  useEffect(() => {
+    if (!isRecording && transcript) {
+      processCommand(transcript);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRecording, transcript]);
+
+  /* ------------------------------------------------------------------------ */
+  /* Handlers                                   */
   /* ------------------------------------------------------------------------ */
 
   const addMessage = useCallback((msg: Omit<Message, "timestamp">) => {
     setMessages((prev) => [...prev, { ...msg, timestamp: new Date() }]);
   }, []);
+
+  const handleStartRecording = () => {
+    if (!isAudioSupported) {
+      addMessage({
+        role: "assistant",
+        content: "Voice input is not supported in this browser.",
+        type: "message",
+      });
+      return;
+    }
+    startRecording();
+  };
+
+  const handleStopRecording = () => {
+    stopRecording();
+  };
 
   const handleNewChat = () => {
     const id = crypto.randomUUID();
@@ -230,6 +273,167 @@ export default function TerminalPage() {
   };
 
   /* ------------------------------------------------------------------------ */
+  /* Core Logic                                   */
+  /* ------------------------------------------------------------------------ */
+
+  const executeSwap = async (command: ParsedCommand) => {
+    try {
+      const quoteResponse = await fetch("/api/create-swap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fromAsset: command.fromAsset,
+          toAsset: command.toAsset,
+          amount: command.amount,
+          fromChain: command.fromChain,
+          toChain: command.toChain,
+        }),
+      });
+      const quote = await quoteResponse.json();
+      if (quote.error) throw new Error(quote.error);
+      
+      addMessage({
+        role: "assistant",
+        content: `Swap Prepared: ${quote.depositAmount} ${quote.depositCoin} → ${quote.settleAmount} ${quote.settleCoin}`,
+        type: "swap_confirmation",
+        data: { quoteData: quote, confidence: command.confidence },
+      });
+    } catch (error: unknown) {
+      const errorMessage = handleError(error, ErrorType.API_FAILURE, {
+        operation: "swap_quote",
+        retryable: true,
+      });
+      addMessage({ role: "assistant", content: errorMessage, type: "message" });
+    }
+  };
+
+  const processCommand = async (text: string) => {
+    if (!text.trim()) return;
+    
+    // Add user message first
+    addMessage({
+        role: "user",
+        content: text,
+        type: "message",
+    });
+
+    if (!isLoading) setIsLoading(true);
+    
+    try {
+      const response = await fetch("/api/parse-command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text }),
+      });
+      const command: ParsedCommand = await response.json();
+
+      if (!command.success && command.intent !== "yield_scout") {
+        addMessage({
+          role: "assistant",
+          content: `I couldn't understand. ${command.validationErrors?.join(", ") || "Please try again."}`,
+          type: "message",
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      if (command.intent === "yield_scout") {
+        const yieldRes = await fetch("/api/yields");
+        const yieldData = await yieldRes.json();
+        addMessage({
+          role: "assistant",
+          content: yieldData.message || "Here are the top yields:",
+          type: "yield_info",
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      if (command.intent === "checkout") {
+        let finalAddress = command.settleAddress;
+        if (!finalAddress) {
+          if (!isConnected || !address) {
+            addMessage({
+              role: "assistant",
+              content:
+                "To create a receive link for yourself, please connect your wallet first.",
+              type: "message",
+            });
+            setIsLoading(false);
+            return;
+          }
+          finalAddress = address;
+        }
+        const checkoutRes = await fetch("/api/create-checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            settleAsset: command.settleAsset,
+            settleNetwork: command.settleNetwork,
+            settleAmount: command.settleAmount,
+            settleAddress: finalAddress,
+          }),
+        });
+        const checkoutData = await checkoutRes.json();
+        if (checkoutData.error) throw new Error(checkoutData.error);
+        addMessage({
+          role: "assistant",
+          content: `Payment Link Created for ${checkoutData.settleAmount} ${checkoutData.settleCoin} on ${command.settleNetwork}`,
+          type: "checkout_link",
+          data: { url: checkoutData.url },
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      if (command.intent === "portfolio" && command.portfolio) {
+        addMessage({
+          role: "assistant",
+          content: `📊 **Portfolio Strategy Detected**\nSplitting ${command.amount} ${command.fromAsset} into multiple assets. Generating orders...`,
+          type: "message",
+        });
+        for (const item of command.portfolio) {
+          const splitAmount = (command.amount! * item.percentage) / 100;
+          const subCommand: ParsedCommand = {
+            ...command,
+            intent: "swap",
+            amount: splitAmount,
+            toAsset: item.toAsset,
+            toChain: item.toChain,
+            portfolio: undefined,
+            confidence: 100,
+          };
+          await executeSwap(subCommand);
+        }
+        setIsLoading(false);
+        return;
+      }
+
+      if (command.requiresConfirmation || command.confidence < 80) {
+        setPendingCommand(command);
+        addMessage({
+          role: "assistant",
+          content: "",
+          type: "intent_confirmation",
+          data: { parsedCommand: command },
+        });
+      } else {
+        await executeSwap(command);
+      }
+    } catch (error: unknown) {
+      const errorMessage = handleError(error, ErrorType.API_FAILURE, {
+        operation: "command_processing",
+        retryable: true,
+      });
+      addMessage({ role: "assistant", content: errorMessage, type: "message" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /* ------------------------------------------------------------------------ */
+  /* Render                                   */
+  /* ------------------------------------------------------------------------ */
 
   if (authLoading) {
     return (
@@ -241,6 +445,7 @@ export default function TerminalPage() {
 
   if (!isAuthenticated) return null;
 
+<<<<<<< HEAD
   /* ------------------------------------------------------------------------ */
 
   /* ------------------------------------------------------------------------ */
@@ -379,6 +584,8 @@ export default function TerminalPage() {
 
   /* ------------------------------------------------------------------------ */
 
+=======
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
   return (
     <>
       <Navbar />
@@ -502,17 +709,27 @@ export default function TerminalPage() {
                         msg.data &&
                         "quoteData" in msg.data ? (
                         <SwapConfirmation
+<<<<<<< HEAD
                           quote={msg.data.quoteData as QuoteData}
                           confidence={msg.data.confidence as number}
                           onRequote={handleRequote}
+=======
+                          quote={(msg.data as { quoteData: QuoteData }).quoteData}
+                          confidence={(msg.data as { confidence: number }).confidence}
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
                         />
                       ) : msg.type === "intent_confirmation" &&
                         msg.data &&
                         "parsedCommand" in msg.data ? (
                         /* Note: Intent confirmation callback logic omitted for brevity in this task, but rendering is here */
                         <IntentConfirmation
+<<<<<<< HEAD
                           command={msg.data.parsedCommand as ParsedCommand}
                           onConfirm={() => { }}
+=======
+                          command={(msg.data as { parsedCommand: ParsedCommand }).parsedCommand}
+                          onConfirm={() => executeSwap((msg.data as { parsedCommand: ParsedCommand }).parsedCommand)}
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
                         />
                       ) : msg.type === "yield_info" ? (
                         <pre className="whitespace-pre-wrap text-xs text-cyan-400">
@@ -522,12 +739,12 @@ export default function TerminalPage() {
                         msg.data &&
                         "url" in msg.data ? (
                         <a
-                          href={msg.data.url as string}
+                          href={(msg.data as { url: string }).url}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="underline underline-offset-2 text-cyan-400"
                         >
-                          {msg.data.url as string}
+                          {(msg.data as { url: string }).url}
                         </a>
                       ) : (
                         <pre className="whitespace-pre-wrap text-[var(--text)]">
@@ -544,6 +761,7 @@ export default function TerminalPage() {
 
           <div className="p-4 border-t border-[var(--border)] bg-[var(--panel)]/90 backdrop-blur">
             <ClaudeChatInput
+<<<<<<< HEAD
               onSendMessage={({ message }) => {
                 addMessage({
                   role: "user",
@@ -556,6 +774,13 @@ export default function TerminalPage() {
               isAudioSupported={false}
               onStartRecording={() => { }}
               onStopRecording={() => { }}
+=======
+              onSendMessage={({ message }) => processCommand(message)}
+              isRecording={isRecording}
+              isAudioSupported={isAudioSupported}
+              onStartRecording={handleStartRecording}
+              onStopRecording={handleStopRecording}
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
               isConnected={isConnected}
             />
           </div>

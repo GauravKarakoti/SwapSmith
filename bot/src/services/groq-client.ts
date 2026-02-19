@@ -33,11 +33,18 @@ export interface ParsedCommand {
   toAsset: string | null;
   toChain: string | null;
   amount: number | null;
-  amountType?: "exact" | "percentage" | "all" | "exclude" | null; 
+  amountType?: "exact" | "absolute" | "percentage" | "all" | "exclude" | null; // Extended with 'absolute'
 
   excludeAmount?: number;
   excludeToken?: string;
   quoteAmount?: number;
+
+  // Conditional Fields
+  conditions?: {
+    type: "price_above" | "price_below";
+    asset: string;
+    value: number;
+  };
   
   // Portfolio Fields
   portfolio?: {
@@ -65,7 +72,7 @@ export interface ParsedCommand {
   toProject: string | null;
   toYield: number | null;
 
-  // Limit Order Fields
+  // Limit Order Fields (Legacy - kept for compatibility, prefer 'conditions')
   conditionOperator?: 'gt' | 'lt';
   conditionValue?: number;
   conditionAsset?: string;
@@ -86,15 +93,46 @@ Your job is to parse natural language into specific JSON commands.
 
 MODES:
 1. "swap": 1 Input -> 1 Output (immediate market swap).
+   Example: "Swap 100 ETH for BTC"
+   
 2. "portfolio": 1 Input -> Multiple Outputs (Split allocation).
-3. "checkout": Payment link creation.
+   Example: "Split 1000 ETH: 50% to BTC, 30% to SOL, 20% to USDC"
+   
+3. "checkout": Payment link creation for receiving assets.
+   Example: "Create a payment link for 500 USDC on Ethereum"
+   
 4. "yield_scout": User asking for high APY/Yield info.
+   Example: "What are the best yields right now?"
+
 5. "yield_deposit": Deposit assets into yield platforms.
 6. "yield_migrate": Move funds between pools.
 7. "dca": Dollar Cost Averaging.
 8. "limit_order": Buy/Sell at specific price.
 
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
+
+ADDRESS RESOLUTION:
+- Users can specify addresses as raw wallet addresses (0x...), ENS names (ending in .eth), Lens handles (ending in .lens), Unstoppable Domains (ending in .crypto, .nft, .blockchain, etc.), or nicknames from their address book.
+- If an address is specified, include it in settleAddress field.
+- The system will resolve nicknames, ENS, Lens, and Unstoppable Domains automatically.
+
+IMPORTANT: ENS/ADDRESS HANDLING:
+- When a user says "Swap X ETH to vitalik.eth" or "Send X ETH to vitalik.eth", they mean:
+  * Keep the same asset (ETH)
+  * Send it to the address vitalik.eth
+  * This should be parsed as: toAsset: "ETH", toChain: "ethereum", settleAddress: "vitalik.eth"
+- Patterns to recognize as addresses (not assets):
+  * Ends with .eth (ENS)
+  * Ends with .lens (Lens Protocol)
+  * Ends with .crypto, .nft, .blockchain, .wallet, etc. (Unstoppable Domains)
+  * Starts with 0x followed by 40 hex characters
+  * Looks like a nickname (single word, lowercase, no special chars)
+
+AMBIGUITY HANDLING:
+- If the command is ambiguous (e.g., "swap all my ETH to BTC or USDC"), set confidence low (0-30) and add validation error "Command is ambiguous. Please specify clearly."
+- For complex commands, prefer explicit allocations over assumptions.
+- If multiple interpretations possible, choose the most straightforward and set requiresConfirmation: true.
+- If the user includes conditions such as "only if", "when price is", "above", "below", extract them into a "conditions" object.
 
 RESPONSE FORMAT:
 {
@@ -103,35 +141,77 @@ RESPONSE FORMAT:
   "fromAsset": string | null,
   "fromChain": string | null,
   "amount": number | null,
-  "amountType": "exact" | "percentage" | "all" | null,
+  "amountType": "exact" | "absolute" | "percentage" | "all" | null,
+
+  // Optional: Conditions
+  "conditions": {
+    "type": "price_above" | "price_below",
+    "asset": "BTC",
+    "value": 60000
+  },
+
+  // Fill for 'swap'
   "toAsset": string | null,
   "toChain": string | null,
   "portfolio": [],
-  "frequency": null,
-  "dayOfWeek": null,
-  "dayOfMonth": null,
+  "frequency": "daily" | "weekly" | "monthly" | null,
+  "dayOfWeek": "monday" | "tuesday" | ... | null,
+  "dayOfMonth": "1" to "31" | null,
   "settleAsset": null,
   "settleNetwork": null,
   "settleAmount": null,
   "settleAddress": null,
+  "conditionOperator": "gt" | "lt" | null,
+  "conditionValue": number | null,
+  "conditionAsset": string | null,
   "confidence": number,
   "validationErrors": string[],
   "parsedMessage": "Human readable summary",
-  "requiresConfirmation": boolean,
-
-  // Limit Order
-  "targetPrice": number | null,
-  "condition": "above" | "below" | null,
-  
-  // DCA
-  "totalAmount": number | null,
-  "numPurchases": number | null,
-
-  // Fill for 'swap_and_stake'
-  "stakeAsset": string | null,
-  "stakeProtocol": string | null,
-  "stakeChain": string | null
+  "requiresConfirmation": boolean
 }
+
+EXAMPLES:
+1. "Split 1 ETH on Base into 50% USDC on Arb and 50% SOL"
+   -> intent: "portfolio", fromAsset: "ETH", fromChain: "base", amount: 1, portfolio: [{toAsset: "USDC", toChain: "arbitrum", percentage: 50}, {toAsset: "SOL", toChain: "solana", percentage: 50}], confidence: 95
+
+2. "Swap 50% of my ETH for BTC only if BTC price is above 60k"
+   -> intent: "swap", amount: 50, amountType: "percentage", fromAsset: "ETH", toAsset: "BTC", conditions: { type: "price_above", asset: "BTC", value: 60000 }, confidence: 95
+
+3. "Where can I get good yield on stables?"
+   -> intent: "yield_scout", confidence: 100
+
+4. "Swap 1 ETH to BTC or USDC" (ambiguous)
+   -> intent: "swap", fromAsset: "ETH", toAsset: null, confidence: 20, validationErrors: ["Command is ambiguous. Please specify clearly."], requiresConfirmation: true
+
+5. "If ETH > $3000, swap to BTC, else to USDC" (conditional)
+   -> intent: "portfolio", fromAsset: "ETH", portfolio: [{toAsset: "BTC", toChain: "bitcoin", percentage: 100}], confidence: 70, parsedMessage: "Conditional swap: If ETH > $3000, swap to BTC", requiresConfirmation: true
+
+6. "Deposit 1 ETH to yield"
+   -> intent: "yield_deposit", fromAsset: "ETH", amount: 1, confidence: 95
+
+7. "Swap 1 ETH to mywallet"
+   -> intent: "swap", fromAsset: "ETH", toAsset: "ETH", toChain: "ethereum", amount: 1, settleAddress: "mywallet", confidence: 95
+
+8. "Send 5 USDC to vitalik.eth"
+   -> intent: "checkout", settleAsset: "USDC", settleNetwork: "ethereum", settleAmount: 5, settleAddress: "vitalik.eth", confidence: 95
+
+9. "Move my USDC from Aave on Base to a higher yield pool"
+   -> intent: "yield_migrate", fromAsset: "USDC", fromChain: "base", fromProject: "Aave", confidence: 95
+
+10. "Switch my ETH yield from 5% to something better"
+   -> intent: "yield_migrate", fromAsset: "ETH", fromYield: 5, confidence: 90
+
+11. "Migrate my stables to the best APY pool"
+    -> intent: "yield_migrate", fromAsset: "USDC", confidence: 85
+
+12. "Swap $50 of USDC for ETH every Monday"
+    -> intent: "dca", fromAsset: "USDC", toAsset: "ETH", amount: 50, frequency: "weekly", dayOfWeek: "monday", confidence: 95
+
+13. "Buy 100 USDC of BTC daily"
+    -> intent: "dca", fromAsset: "USDC", toAsset: "BTC", amount: 100, frequency: "daily", confidence: 95
+
+14. "DCA 200 USDC into ETH every month on the 1st"
+    -> intent: "dca", fromAsset: "USDC", toAsset: "ETH", amount: 200, frequency: "monthly", dayOfMonth: "1", confidence: 95
 `;
 
 // RENAMED from parseUserCommand to parseWithLLM
@@ -215,6 +295,7 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     excludeAmount: parsed.excludeAmount,
     excludeToken: parsed.excludeToken,
     quoteAmount: parsed.quoteAmount,
+    conditions: parsed.conditions, // Pass through conditions
     portfolio: parsed.portfolio, // Pass through portfolio
     frequency: parsed.frequency || null,
     dayOfWeek: parsed.dayOfWeek || null,
