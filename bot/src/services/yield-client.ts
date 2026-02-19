@@ -7,14 +7,13 @@ import {
 } from './database';
 import logger from './logger';
 
-
 export interface YieldPool {
   chain: string;
   project: string;
   symbol: string;
-  tvlUsd: number;
   apy: number;
-  poolId?: string; // DefiLlama pool ID
+  tvlUsd: number;
+  poolId?: string;
 }
 
 export interface StakingQuote {
@@ -37,10 +36,11 @@ export async function getTopYieldPools(): Promise<YieldPool[]> {
 
     const topPools = data.filter((p: any) =>
       ['USDC', 'USDT', 'DAI'].includes(p.symbol) &&
+      p.tvlUsd > 1000000 &&
       ['Ethereum', 'Polygon', 'Arbitrum', 'Optimism', 'Base', 'Avalanche'].includes(p.chain)
     )
       .sort((a: any, b: any) => b.apy - a.apy)
-      .slice(0, 5); // Increased to 5 to give more options
+      .slice(0, 5);
 
     if (topPools.length === 0) throw new Error("No pools found");
 
@@ -56,7 +56,6 @@ export async function getTopYieldPools(): Promise<YieldPool[]> {
   } catch (error) {
     logger.error("Yield fetch error, using fallback data:", error);
     // Fallback Mock Data for demo reliability
-
     return [
       { chain: 'Base', project: 'Aave', symbol: 'USDC', tvlUsd: 5000000, apy: 12.4, poolId: 'base-aave-usdc' },
       { chain: 'Base', project: 'merkl', symbol: 'USDC', tvlUsd: 8000000, apy: 22.79, poolId: 'base-merkl-usdc' },
@@ -78,25 +77,21 @@ export interface MigrationSuggestion {
   isCrossChain: boolean;
 }
 
-export async function suggestMigration(
+export async function findHigherYieldPools(
   asset: string,
   chain?: string,
-  currentProject?: string,
-  amount: number = 10000
-): Promise<MigrationSuggestion | null> {
+  minApy: number = 0
+): Promise<YieldPool[]> {
   const pools = await getTopYieldPools();
-  const relevantPools = pools.filter(p => p.symbol.toUpperCase() === asset.toUpperCase());
+  return pools.filter(p =>
+    p.symbol.toUpperCase() === asset.toUpperCase() &&
+    p.apy > minApy &&
+    (!chain || p.chain.toLowerCase() === chain.toLowerCase())
+  ).sort((a, b) => b.apy - a.apy);
+}
 
-  if (relevantPools.length < 1) return null;
-
-  let fromPool: YieldPool | undefined;
-
-  if (currentProject) {
-    fromPool = relevantPools.find(p =>
-      p.project.toLowerCase() === currentProject.toLowerCase() &&
-      (!chain || p.chain.toLowerCase() === chain.toLowerCase())
-    );
-  }
+export function calculateYieldMigration(relevantPools: YieldPool[], amount: number, chain?: string, fromAsset?: string): MigrationSuggestion | null {
+  let fromPool = relevantPools.find(p => p.symbol === fromAsset);
 
   if (!fromPool && chain) {
     fromPool = relevantPools.find(p => p.chain.toLowerCase() === chain.toLowerCase());
@@ -120,19 +115,6 @@ export async function suggestMigration(
     annualExtraYield,
     isCrossChain: fromPool.chain.toLowerCase() !== toPool.chain.toLowerCase()
   };
-}
-
-export async function findHigherYieldPools(
-  asset: string,
-  chain?: string,
-  minApy: number = 0
-): Promise<YieldPool[]> {
-  const pools = await getTopYieldPools();
-  return pools.filter(p =>
-    p.symbol.toUpperCase() === asset.toUpperCase() &&
-    p.apy > minApy &&
-    (!chain || p.chain.toLowerCase() === chain.toLowerCase())
-  ).sort((a, b) => b.apy - a.apy);
 }
 
 export function formatYieldPools(yields: YieldPool[]): string {

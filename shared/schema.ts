@@ -7,7 +7,10 @@ export const rewardActionType = pgEnum('reward_action_type', [
   'module_complete',
   'daily_login',
   'swap_complete',
-  'referral'
+  'referral',
+  'wallet_connected',
+  'terminal_used',
+  'notification_enabled'
 ]);
 
 export const mintStatusType = pgEnum('mint_status_type', [
