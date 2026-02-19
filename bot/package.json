@@ -46,12 +46,14 @@
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "node",
+    "cache": false,
     "roots": [
       "<rootDir>/src"
     ],
     "testMatch": [
       "**/__tests__/**/*.test.ts",
       "**/?(*.)+(spec|test).ts"
-    ]
+    ],
+    "verbose": true
   }
 }
