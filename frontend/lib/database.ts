@@ -826,11 +826,11 @@ export async function calculateReputationMetrics(userId: string): Promise<Reputa
 
     // Get last swap date
     const lastSwap = userSwaps.reduce((latest, current) => {
-      const currentDate = new Date(current.createdAt);
-      const latestDate = new Date(latest.createdAt);
+      const currentDate = new Date(current.createdAt || 0);
+      const latestDate = new Date(latest.createdAt || 0);
       return currentDate > latestDate ? current : latest;
     });
-    const lastSwapDate = lastSwap ? new Date(lastSwap.createdAt) : null;
+    const lastSwapDate = lastSwap.createdAt ? new Date(lastSwap.createdAt) : null;
 
     // Determine recent activity level
     let recentActivity: 'active' | 'moderate' | 'inactive' = 'inactive';
@@ -940,11 +940,11 @@ export async function calculateReputationMetricsByWallet(walletAddress: string):
     const avgSwapValue = totalSwaps > 0 ? totalVolumeSwapped / totalSwaps : 0;
 
     const lastSwap = walletSwaps.reduce((latest, current) => {
-      const currentDate = new Date(current.createdAt);
-      const latestDate = new Date(latest.createdAt);
+      const currentDate = new Date(current.createdAt || 0);
+      const latestDate = new Date(latest.createdAt || 0);
       return currentDate > latestDate ? current : latest;
     });
-    const lastSwapDate = lastSwap ? new Date(lastSwap.createdAt) : null;
+    const lastSwapDate = lastSwap.createdAt ? new Date(lastSwap.createdAt) : null;
 
     let recentActivity: 'active' | 'moderate' | 'inactive' = 'inactive';
     if (lastSwapDate) {
