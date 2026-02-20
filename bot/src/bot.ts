@@ -249,6 +249,22 @@ bot.action('confirm_swap', async (ctx) => {
   const state = await db.getConversationState(ctx.from.id);
   if (!state?.parsedCommand) return;
 
+<<<<<<< HEAD
+<<<<<<< HEAD
+    try {
+        await ctx.answerCbQuery('Fetching quote...');
+
+        // Use default params or what we have in state
+        const q = await createQuote(
+            state.parsedCommand.fromAsset!,
+            state.parsedCommand.fromChain!,
+            state.parsedCommand.toAsset || state.parsedCommand.settleAsset!, // Handle both swap/checkout keys
+            state.parsedCommand.toChain || state.parsedCommand.settleNetwork!,
+            state.parsedCommand.amount!
+        );
+=======
+=======
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
   const q = await createQuote(
     state.parsedCommand.fromAsset,
     state.parsedCommand.fromChain,
@@ -256,9 +272,37 @@ bot.action('confirm_swap', async (ctx) => {
     state.parsedCommand.toChain,
     state.parsedCommand.amount
   );
+<<<<<<< HEAD
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
 
   await db.setConversationState(ctx.from.id, { ...state, quoteId: q.id });
 
+<<<<<<< HEAD
+        const confirmText =
+            `🔄 *Quote Received*\n\n` +
+            `➡️ Send: ${q.depositAmount} ${q.depositCoin}\n` +
+            `⬅️ Receive: ~${q.settleAmount} ${q.settleCoin}\n` +
+            `⏱️ Rate: 1 ${q.depositCoin} ≈ ${q.rate} ${q.settleCoin}`;
+
+        ctx.editMessageText(
+            confirmText,
+            {
+                parse_mode: 'Markdown',
+                ...Markup.inlineKeyboard([
+                    Markup.button.callback('✅ Place Order', 'place_order'),
+                    Markup.button.callback('❌ Cancel', 'cancel_swap')
+                ])
+            }
+        );
+    } catch (e) {
+        console.error(e);
+        ctx.reply('❌ Failed to get a quote. Please try again.');
+=======
+=======
+
+  await db.setConversationState(ctx.from.id, { ...state, quoteId: q.id });
+
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
   await ctx.editMessageText(
     `🔄 *Quote*\nSend: ${q.depositAmount} ${q.depositCoin}\nReceive: ~${q.settleAmount} ${q.settleCoin}`,
     {
@@ -267,14 +311,33 @@ bot.action('confirm_swap', async (ctx) => {
         Markup.button.callback('🚀 Place Order', 'place_order'),
         Markup.button.callback('❌ Cancel', 'cancel_swap'),
       ]),
+<<<<<<< HEAD
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
+=======
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
     }
   );
 });
 
 bot.action('place_order', async (ctx) => {
+<<<<<<< HEAD
+<<<<<<< HEAD
+    const userId = ctx.from.id;
+    const state = await db.getConversationState(userId);
+
+    if (!state?.quoteId || !state.parsedCommand?.settleAddress) {
+        return ctx.answerCbQuery('Session missing required data. Start over.');
+    }
+=======
   if (!ctx.from) return;
   const state = await db.getConversationState(ctx.from.id);
   if (!state?.quoteId || !state.parsedCommand?.settleAddress) return;
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
+=======
+  if (!ctx.from) return;
+  const state = await db.getConversationState(ctx.from.id);
+  if (!state?.quoteId || !state.parsedCommand?.settleAddress) return;
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
 
   const order = await createOrder(
     state.quoteId,
@@ -295,7 +358,54 @@ bot.action('place_order', async (ctx) => {
     { parse_mode: 'Markdown' }
   );
 
+<<<<<<< HEAD
+<<<<<<< HEAD
+            if (!checkout || !checkout.id) throw new Error("API Error");
+
+            try { db.createCheckoutEntry(userId, checkout); } catch (e) { console.error(e); }
+
+            const paymentUrl = `https://pay.sideshift.ai/checkout/${checkout.id}`;
+            const checkoutMessage =
+                `✅ *Checkout Link Created!*\n\n` +
+                `💰 *Receive:* ${checkout.settleAmount} ${checkout.settleCoin}\n` +
+                `📬 *Address:* \`${checkout.settleAddress}\`\n\n` +
+                `[Pay Here](${paymentUrl})`;
+
+            ctx.editMessageText(checkoutMessage, {
+                parse_mode: 'Markdown',
+                link_preview_options: { is_disabled: true }
+            });
+
+        } else {
+            // --- Standard Swap Flow ---
+            const order = await createOrder(state.quoteId, settleAddress, settleAddress); // refundAddress = settleAddress for simplicity
+            if (!order.id) throw new Error("Failed to create order");
+
+            db.createOrderEntry(userId, state.parsedCommand, order, order.settleAmount, state.quoteId);
+
+            const msg =
+                `✅ *Order Created!* (ID: \`${order.id}\`)\n\n` +
+                `To complete the swap, please send funds to the address below:\n\n` +
+                `🏦 *Deposit:* \`${(order.depositAddress as { address: string; memo: string; }).address || order.depositAddress}\`\n` +
+                `💰 *Amount:* ${order.depositAmount} ${order.depositCoin}\n` +
+                ((order.depositAddress as { address: string; memo: string; }).memo ? `📝 *Memo:* \`${(order.depositAddress as { address: string; memo: string; }).memo || ''}\`\n` : '') +
+                `\n_Destination: ${settleAddress}_`;
+
+            ctx.editMessageText(msg, { parse_mode: 'Markdown' });
+        }
+
+    } catch (error) {
+        console.error(error);
+        ctx.editMessageText(`❌ Error creating order.`);
+    } finally {
+        db.clearConversationState(userId);
+    }
+=======
   await db.clearConversationState(ctx.from.id);
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
+=======
+  await db.clearConversationState(ctx.from.id);
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
 });
 
 bot.action('cancel_swap', async (ctx) => {
@@ -307,9 +417,63 @@ bot.action('cancel_swap', async (ctx) => {
 /* -------------------------------------------------------------------------- */
 /* STARTUP                                   */
 /* -------------------------------------------------------------------------- */
+<<<<<<< HEAD
+
+<<<<<<< HEAD
+// --- Global State ---
+let isReady = false;
+
+// --- Server & Startup ---
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (_, res) => {
+    res.send('SwapSmith Alive');
+});
+
+app.get('/health', (_, res) => {
+    if (isReady) {
+        res.status(200).json({ status: 'ok' });
+    } else {
+        res.status(503).json({ status: 'starting' });
+    }
+});
+
+app.listen(PORT, () => console.log(`🌍 Server running on port ${PORT}`));
+
+(async () => {
+    try {
+        await orderMonitor.loadPendingOrders();
+        orderMonitor.start();
+        console.log('👀 Order Monitor started');
+
+        await bot.launch();
+        console.log('🤖 Bot launched successfully');
+
+        isReady = true;
+    } catch (e) {
+        console.error('⚠️ Failed to start:', e);
+        process.exit(1);
+    }
+})();
+// Enable graceful stop
+process.once('SIGINT', () => {
+    isReady = false;
+    bot.stop('SIGINT');
+});
+process.once('SIGTERM', () => {
+    isReady = false;
+    bot.stop('SIGTERM');
+});
+=======
+const dcaScheduler = new DCAScheduler();
+
+=======
 
 const dcaScheduler = new DCAScheduler();
 
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
 async function start() {
   try {
     if (process.env.DATABASE_URL) {
@@ -343,4 +507,9 @@ async function start() {
   }
 }
 
+<<<<<<< HEAD
 start();
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
+=======
+start();
+>>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
