@@ -388,7 +388,7 @@ export async function parseUserCommand(
                 confidence += 20;
             } else {
                 // Standalone number?
-                const numMatch = input.match(/\\b(\\d+(\\.\\d+)?)\\b/);
+                const numMatch = input.match(/\b(\d+(\.\d+)?)\b/);
                 if (numMatch) {
                     // Check if this number was part of exclusion?
                     if (amountType !== 'all') { // If exclusion, we ignore other numbers unless relevant
