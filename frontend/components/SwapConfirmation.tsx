@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { CheckCircle, AlertCircle, ExternalLink, Copy, Check, ShieldCheck, Shield, AlertTriangle, Info, TrendingUp, Zap } from 'lucide-react'
 import { useAccount, useSendTransaction, useSwitchChain, usePublicClient, useBalance } from 'wagmi' // Added usePublicClient, useBalance
 import { parseEther, formatEther, type Chain, formatUnits, parseUnits } from 'viem'
