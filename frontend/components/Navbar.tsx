@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import {
   Zap,
   User,
+  Users,
   LogOut,
   Home,
   TrendingUp,
@@ -30,6 +31,7 @@ const NAV_ITEMS = [
   { href: "/prices", label: "Live Prices", Icon: TrendingUp },
   { href: "/discussions", label: "Discussions", Icon: MessageSquare },
   { href: "/terminal", label: "Terminal", Icon: TerminalIcon },
+  { href: "/contributors", label: "Contributors", Icon: Users },
 ];
 
 /* ================================================================ */
