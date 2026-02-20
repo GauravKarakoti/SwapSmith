@@ -1,6 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
+import { createSwapHistoryEntry } from '@/lib/database';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -15,7 +17,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     conditionValue,
     conditionAsset,
     settleAddress,
+    userId,
+    walletAddress,
   } = req.body;
+
 
   // Validate required parameters
   if (
@@ -67,6 +72,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const result = await response.json();
 
+    // Create swap history entry for reputation tracking (limit orders are tracked as scheduled swaps)
+    if (userId && result.id) {
+      try {
+        await createSwapHistoryEntry(userId, walletAddress, {
+          sideshiftOrderId: `limit-${result.id}`,
+          quoteId: result.quoteId || null,
+          fromAsset,
+          fromNetwork: fromChain || fromAsset,
+          fromAmount: parseFloat(amount),
+          toAsset,
+          toNetwork: toChain || toAsset,
+          settleAmount: '0', // Will be updated when limit order executes
+          depositAddress: settleAddress,
+          status: 'pending',
+        });
+        console.log(`[Reputation] Limit order swap history entry created for order ${result.id}`);
+      } catch (historyError) {
+        console.error('[Reputation] Failed to create limit order swap history entry:', historyError);
+        // Don't fail the limit order creation if history creation fails
+      }
+    }
+
     const operatorText = conditionOperator === 'gt' ? 'above' : 'below';
     return res.status(201).json({
       success: true,
@@ -74,6 +101,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       message: `Limit order created: Swap ${amount} ${fromAsset} to ${toAsset} when ${conditionAsset} is ${operatorText} $${conditionValue}`,
       data: result,
     });
+
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     console.error('API Route Error - Error creating limit order:', errorMessage);

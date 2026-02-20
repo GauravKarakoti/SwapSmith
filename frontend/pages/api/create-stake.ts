@@ -1,7 +1,9 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
+import { createSwapHistoryEntry } from '@/lib/database';
 
 const BOT_SERVICE_URL = process.env.BOT_SERVICE_URL || 'http://localhost:3001';
+
 const SIDESHIFT_CLIENT_IP = process.env.SIDESHIFT_CLIENT_IP || "127.0.0.1";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -17,7 +19,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     toChain,
     stakingProtocol,
     stakerAddress,
+    userId,
+    walletAddress,
   } = req.body;
+
 
   // Validate required parameters
   if (!fromAsset || !toAsset || !amount || !stakingProtocol || !stakerAddress) {
@@ -65,13 +70,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
+    const orderId = response.data.orderId || response.data.id;
+
+    // Create swap history entry for reputation tracking (stake orders are tracked as swaps)
+    if (userId && orderId) {
+      try {
+        await createSwapHistoryEntry(userId, walletAddress, {
+          sideshiftOrderId: `stake-${orderId}`,
+          quoteId: response.data.data?.quoteId || null,
+          fromAsset,
+          fromNetwork: fromChain || fromAsset,
+          fromAmount: parseFloat(amount),
+          toAsset,
+          toNetwork: toChain || toAsset,
+          settleAmount: '0', // Will be updated when stake executes
+          depositAddress: stakerAddress,
+          status: 'pending',
+        });
+        console.log(`[Reputation] Stake swap history entry created for order ${orderId}`);
+      } catch (historyError) {
+        console.error('[Reputation] Failed to create stake swap history entry:', historyError);
+        // Don't fail the stake creation if history creation fails
+      }
+    }
+
     return res.status(201).json({
       success: true,
-      orderId: response.data.orderId || response.data.id,
+      orderId: orderId,
       message: `Swap and Stake order created: ${amount} ${fromAsset} → ${toAsset} with ${stakingProtocol}`,
       data: response.data.data,
       estimatedApy: response.data.estimatedApy,
     });
+
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     console.error('API Route Error - Error creating swap and stake order:', errorMessage);
