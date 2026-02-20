@@ -269,6 +269,7 @@ async function handleTextMessage(
     );
   }
 
+
   /* ---------------- Swap / Checkout ---------------- */
 
   if (['swap', 'checkout'].includes(parsed.intent)) {
