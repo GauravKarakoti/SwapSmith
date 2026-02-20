@@ -4,14 +4,15 @@ import { useState, useRef, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { Mic, Send, StopCircle, Zap } from 'lucide-react';
 import SwapConfirmation from './SwapConfirmation';
+import PortfolioSummary, { PortfolioItem } from './PortfolioSummary'; // Added Import
 import TrustIndicators from './TrustIndicators';
 import IntentConfirmation from './IntentConfirmation';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 
-// Import QuoteData type from SwapConfirmation
-interface QuoteData {
+// Export QuoteData to be used in PortfolioSummary
+export interface QuoteData {
   depositAmount: string;
   depositCoin: string;
   depositNetwork: string;
@@ -28,12 +29,13 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  type?: 'message' | 'intent_confirmation' | 'swap_confirmation' | 'yield_info' | 'checkout_link';
+  type?: 'message' | 'intent_confirmation' | 'swap_confirmation' | 'yield_info' | 'checkout_link' | 'portfolio_summary';
   data?: { 
     parsedCommand?: ParsedCommand; 
     quoteData?: QuoteData; 
     confidence?: number;
     url?: string;
+    portfolioItems?: PortfolioItem[];
   };
 }
 
@@ -94,6 +96,101 @@ export default function ChatInterface() {
 
   const addMessage = (message: Omit<Message, 'timestamp'>) => {
     setMessages(prev => [...prev, { ...message, timestamp: new Date() }]);
+  };
+
+
+  const executeSwapAsync = async (
+    fromAsset: string, 
+    toAsset: string, 
+    amount: number, 
+    fromChain: string, 
+    toChain: string
+  ): Promise<QuoteData> => {
+     const quoteResponse = await fetch('/api/create-swap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fromAsset, toAsset, amount, fromChain, toChain }),
+      });
+      const quote = await quoteResponse.json();
+      if (quote.error) throw new Error(quote.error);
+      return quote;
+  };
+
+  const handlePortfolioRetry = (failedItems: PortfolioItem[], originalCommand: ParsedCommand) => {
+      // 1. Reset failed items to pending in UI
+      setMessages(prev => {
+        const msgIndex = prev.findLastIndex(m => m.type === 'portfolio_summary');
+        if (msgIndex === -1) return prev;
+        
+        const msg = prev[msgIndex];
+        if (!msg.data?.portfolioItems) return prev;
+
+        const newItems = msg.data.portfolioItems.map(item => {
+            if (failedItems.some(f => f.id === item.id)) {
+                return { ...item, status: 'pending' as const, error: undefined };
+            }
+            return item;
+        });
+
+        const newMsg = { ...msg, data: { ...msg.data, portfolioItems: newItems } };
+        const newMessages = [...prev];
+        newMessages[msgIndex] = newMsg;
+        return newMessages;
+      });
+
+      // 2. Trigger execution
+      processPortfolioBatch(failedItems, originalCommand);
+  };
+
+  const processPortfolioBatch = async (itemsToProcess: PortfolioItem[], command: ParsedCommand) => {
+      for (const item of itemsToProcess) {
+          try {
+             const fromChain = command.fromChain || 'ethereum';
+             const toChain = item.toChain || command.toChain || 'ethereum';
+
+             const quote = await executeSwapAsync(
+                 item.fromAsset,
+                 item.toAsset,
+                 item.amount,
+                 fromChain,
+                 toChain
+             );
+             
+             // Update Success
+             setMessages(prev => {
+                 const msgIndex = prev.findLastIndex(m => m.type === 'portfolio_summary');
+                 if (msgIndex === -1) return prev;
+                 const msg = prev[msgIndex];
+                 if (!msg.data?.portfolioItems) return prev;
+                 
+                 const newItems = msg.data.portfolioItems.map(i => 
+                     i.id === item.id ? { ...i, status: 'success' as const, quote } : i
+                 );
+                 
+                 const newMessages = [...prev];
+                 newMessages[msgIndex] = { ...msg, data: { ...msg.data, portfolioItems: newItems } };
+                 return newMessages;
+             });
+
+          } catch (error: unknown) {
+             const errorMessage = error instanceof Error ? error.message : "Unknown error";
+             // Update Error
+             setMessages(prev => {
+                 const msgIndex = prev.findLastIndex(m => m.type === 'portfolio_summary');
+                 if (msgIndex === -1) return prev;
+                 const msg = prev[msgIndex];
+                 if (!msg.data?.portfolioItems) return prev;
+                 
+                 const newItems = msg.data.portfolioItems.map(i => 
+                     i.id === item.id ? { ...i, status: 'error' as const, error: errorMessage } : i
+                 );
+                 
+                 const newMessages = [...prev];
+                 newMessages[msgIndex] = { ...msg, data: { ...msg.data, portfolioItems: newItems } };
+                 return newMessages;
+             });
+          }
+      }
   };
 
   const processCommand = async (text: string) => {
@@ -174,26 +271,31 @@ export default function ChatInterface() {
 
       // Handle Portfolio
       if (command.intent === 'portfolio' && command.portfolio) {
+         if (command.requiresConfirmation || command.confidence < 80) {
+             setPendingCommand(command);
+             addMessage({ role: 'assistant', content: '', type: 'intent_confirmation', data: { parsedCommand: command } });
+             setIsLoading(false);
+             return;
+         }
+
+         // Prepare Portfolio Items
+         const items: PortfolioItem[] = command.portfolio.map((item, index) => ({
+             id: `${item.toAsset}-${index}`,
+             fromAsset: command.fromAsset || 'ETH',
+             toAsset: item.toAsset,
+             amount: (command.amount! * item.percentage) / 100,
+             status: 'pending',
+             toChain: item.toChain 
+         }));
+
          addMessage({ 
              role: 'assistant', 
-             content: `📊 **Portfolio Strategy Detected**\nSplitting ${command.amount} ${command.fromAsset} into multiple assets. Generating orders...`, 
-             type: 'message' 
+             content: `📊 **Portfolio Strategy Detected**\nSplitting ${command.amount} ${command.fromAsset}...`, 
+             type: 'portfolio_summary',
+             data: { portfolioItems: items, parsedCommand: command } 
          });
 
-         for (const item of command.portfolio) {
-             const splitAmount = (command.amount! * item.percentage) / 100;
-             const subCommand: ParsedCommand = {
-                 ...command,
-                 intent: 'swap',
-                 amount: splitAmount,
-                 toAsset: item.toAsset,
-                 toChain: item.toChain,
-                 portfolio: undefined, 
-                 confidence: 100 
-             };
-             
-             await executeSwap(subCommand);
-         }
+         await processPortfolioBatch(items, command);
          
          setIsLoading(false);
          return;
@@ -357,19 +459,25 @@ export default function ChatInterface() {
     if (confirmed && pendingCommand) {
         if (pendingCommand.intent === 'portfolio') {
              const confirmedCmd = { ...pendingCommand, requiresConfirmation: false, confidence: 100 };
-             addMessage({ role: 'assistant', content: "Executing Portfolio Strategy...", type: 'message' });
              
              if (confirmedCmd.portfolio) {
-                for (const item of confirmedCmd.portfolio) {
-                    const splitAmount = (confirmedCmd.amount! * item.percentage) / 100;
-                    await executeSwap({
-                        ...confirmedCmd,
-                        intent: 'swap',
-                        amount: splitAmount,
-                        toAsset: item.toAsset,
-                        toChain: item.toChain
-                    });
-                }
+                 const items: PortfolioItem[] = confirmedCmd.portfolio.map((item, index) => ({
+                     id: `${item.toAsset}-${index}`,
+                     fromAsset: confirmedCmd.fromAsset || 'ETH',
+                     toAsset: item.toAsset,
+                     amount: (confirmedCmd.amount! * item.percentage) / 100,
+                     status: 'pending',
+                     toChain: item.toChain 
+                 }));
+
+                 addMessage({ 
+                     role: 'assistant', 
+                     content: `📊 **Portfolio Strategy Executing**\nSplitting ${confirmedCmd.amount} ${confirmedCmd.fromAsset}...`, 
+                     type: 'portfolio_summary',
+                     data: { portfolioItems: items, parsedCommand: confirmedCmd } 
+                 });
+
+                 await processPortfolioBatch(items, confirmedCmd);
              }
         } else if (pendingCommand.intent === 'dca') {
              await executeDCA(pendingCommand);
@@ -420,6 +528,17 @@ return (
                 <div className="space-y-3">
                   <div className="bg-white/[0.04] border border-white/10 text-gray-200 px-5 py-4 rounded-2xl rounded-tl-none text-sm leading-relaxed backdrop-blur-sm">
                     {msg.type === 'message' && <div className="whitespace-pre-line">{msg.content}</div>}
+                    {msg.type === 'portfolio_summary' && (
+                        <div>
+                          <div className="whitespace-pre-line mb-3">{msg.content}</div>
+                          {msg.data?.portfolioItems && msg.data?.parsedCommand && (
+                            <PortfolioSummary 
+                                items={msg.data.portfolioItems} 
+                                onRetry={(failedItems) => handlePortfolioRetry(failedItems, msg.data!.parsedCommand!)} 
+                            />
+                          )}
+                        </div>
+                    )}
                     {msg.type === 'yield_info' && <div className="font-mono text-xs text-blue-300">{msg.content}</div>}
                     
                     {/* Inject your Custom Components (SwapConfirmation etc) here */}
