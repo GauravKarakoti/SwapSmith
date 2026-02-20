@@ -24,7 +24,7 @@ import IntentConfirmation from "@/components/IntentConfirmation";
 import { useAuth } from "@/hooks/useAuth";
 import { useChatHistory, useChatSessions } from "@/hooks/useCachedData";
 import { useErrorHandler, ErrorType } from "@/hooks/useErrorHandler";
-import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { useAudioRecorder } from "@/hooks/useAudioRecorder";
 import { trackTerminalUsage, showRewardNotification } from "@/lib/rewards-service";
 
 import { ParsedCommand } from "@/utils/groq-client";
@@ -164,12 +164,11 @@ export default function TerminalPage() {
 
   // Speech Recognition
   const {
-    isListening: isRecording,
-    transcript,
+    isRecording,
     isSupported: isAudioSupported,
     startRecording,
     stopRecording,
-  } = useSpeechRecognition();
+  } = useAudioRecorder();
 
   /* ------------------------------------------------------------------------ */
   /* Effects                                  */
@@ -220,13 +219,6 @@ export default function TerminalPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Handle voice transcript
-  useEffect(() => {
-    if (!isRecording && transcript) {
-      processCommand(transcript);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRecording, transcript]);
 
   /* ------------------------------------------------------------------------ */
   /* Handlers                                   */
@@ -248,8 +240,35 @@ export default function TerminalPage() {
     startRecording();
   };
 
-  const handleStopRecording = () => {
-    stopRecording();
+  const handleStopRecording = async () => {
+    setIsLoading(true);
+    try {
+      const audioBlob = await stopRecording();
+      if (audioBlob) {
+        const audioFile = new File([audioBlob], "voice_command.wav", { type: audioBlob.type || 'audio/wav' });
+
+        const formData = new FormData();
+        formData.append("file", audioFile);
+
+        const response = await fetch("/api/transcribe", { method: "POST", body: formData });
+        const data = await response.json();
+
+        if (data.error) throw new Error(data.error);
+
+        if (data.text) {
+          processCommand(data.text);
+        }
+      }
+    } catch (err) {
+      console.error("Voice processing failed:", err);
+      addMessage({
+        role: "assistant",
+        content: "Sorry, I couldn't process your voice command. Please try again.",
+        type: "message",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleNewChat = () => {
