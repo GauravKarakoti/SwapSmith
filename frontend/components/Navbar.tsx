@@ -124,22 +124,37 @@ export default function Navbar() {
 
           {/* ── Desktop Nav ── */}
           <div className="hidden md:flex flex-1 justify-center">
-            <div className="flex items-center gap-0.5 bg-zinc-100/90 dark:bg-zinc-800/50 p-1 rounded-xl border border-zinc-200/70 dark:border-zinc-700/50">
+            <div className="flex items-center gap-1">
               <Link
                 href="/"
-                className={`nav-btn ${pathname === "/" ? "nav-active" : ""}`}
+                className={`nav-link group ${
+                  pathname === "/"
+                    ? "text-zinc-900 dark:text-white nav-link-active"
+                    : "text-zinc-600 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white"
+                }`}
               >
-                <Home className="w-4 h-4" /> Home
+                <Home className="w-4 h-4" />
+                <span>Home</span>
+                <span className={`nav-link-indicator ${
+                  pathname === "/" ? "opacity-100" : "opacity-0 group-hover:opacity-60"
+                }`} />
               </Link>
 
               {NAV_ITEMS.map(({ href, label, Icon }) => (
                 <Link
                   key={href}
                   href={href}
-                  className={`nav-btn ${pathname === href ? "nav-active" : ""}`}
+                  className={`nav-link group ${
+                    pathname === href
+                      ? "text-zinc-900 dark:text-white nav-link-active"
+                      : "text-zinc-600 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white"
+                  }`}
                 >
                   <Icon className="w-4 h-4" />
                   <span className="hidden lg:inline">{label}</span>
+                  <span className={`nav-link-indicator ${
+                    pathname === href ? "opacity-100" : "opacity-0 group-hover:opacity-60"
+                  }`} />
                 </Link>
               ))}
             </div>
