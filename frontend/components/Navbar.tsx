@@ -63,11 +63,13 @@ export default function Navbar() {
 
     loadImage();
     window.addEventListener("profileImageChanged", loadImage);
-    return () => window.removeEventListener("profileImageChanged", loadImage);
+    return () =>
+      window.removeEventListener("profileImageChanged", loadImage);
   }, [user?.uid]);
 
   return (
     <>
+      {/* ========================= NAVBAR ========================= */}
       <nav
         className={`fixed top-0 left-0 right-0 z-50 h-16 sm:h-20 border-b border-zinc-200 dark:border-zinc-800 backdrop-blur-xl ${
           isTerminal
@@ -76,7 +78,6 @@ export default function Navbar() {
         }`}
       >
         <div className="max-w-[1600px] mx-auto px-4 h-full flex items-center justify-between gap-4">
-
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5 group">
             <div className="bg-blue-600 p-1.5 rounded-lg shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform">
@@ -189,63 +190,50 @@ export default function Navbar() {
         </div>
       </nav>
 
-      {/* Mobile Drawer */}
+      {/* ========================= MOBILE DRAWER ========================= */}
       {mobileMenuOpen && (
         <>
-<<<<<<< HEAD
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]" onClick={() => setMobileMenuOpen(false)} />
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]"
+            onClick={() => setMobileMenuOpen(false)}
+          />
           <div className="fixed top-0 right-0 bottom-0 w-[85%] max-w-sm bg-white dark:bg-zinc-900 shadow-2xl z-[70] animate-in slide-in-from-right">
             <div className="p-6 flex flex-col h-full">
               <div className="flex items-center justify-between mb-8">
-                <span className="font-black tracking-tighter text-xl">MENU</span>
-                <button onClick={() => setMobileMenuOpen(false)} className="p-2 rounded-full bg-zinc-100 dark:bg-zinc-800"><X /></button>
+                <span className="font-black tracking-tighter text-xl">
+                  MENU
+                </span>
+                <button
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="p-2 rounded-full bg-zinc-100 dark:bg-zinc-800"
+                >
+                  <X />
+                </button>
               </div>
+
               <div className="space-y-2 flex-1">
-                {[ {href: "/", label: "Home", Icon: Home}, ...NAV_ITEMS].map((item) => (
-                   <Link key={item.href} href={item.href} className={`flex items-center gap-4 p-4 rounded-2xl text-lg font-bold transition-all ${pathname === item.href ? "bg-blue-600 text-white shadow-lg" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"}`}>
-                     <item.Icon className="w-6 h-6" /> {item.label}
-                   </Link>
-                ))}
+                {[{ href: "/", label: "Home", Icon: Home }, ...NAV_ITEMS].map(
+                  ({ href, label, Icon }) => (
+                    <Link
+                      key={href}
+                      href={href}
+                      className={`flex items-center gap-4 p-4 rounded-2xl text-lg font-bold transition-all ${
+                        pathname === href
+                          ? "bg-blue-600 text-white shadow-lg"
+                          : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                      }`}
+                    >
+                      <Icon className="w-6 h-6" /> {label}
+                    </Link>
+                  )
+                )}
               </div>
+
               <div className="pt-6 border-t border-zinc-100 dark:border-zinc-800 space-y-4">
                 <WalletConnector />
-                <div className="flex justify-center"><ThemeToggle /></div>
-=======
-          <div
-            className="fixed inset-0 bg-black/60 z-[60]"
-            onClick={() => setMobileMenuOpen(false)}
-          />
-          <div className="fixed top-0 right-0 bottom-0 w-[85%] max-w-sm bg-white dark:bg-zinc-900 z-[70] shadow-2xl p-6">
-            <div className="flex justify-between mb-6">
-              <span className="font-black text-xl">MENU</span>
-              <button onClick={() => setMobileMenuOpen(false)}>
-                <X />
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              {[{ href: "/", label: "Home", Icon: Home }, ...NAV_ITEMS].map(
-                ({ href, label, Icon }) => (
-                  <Link
-                    key={href}
-                    href={href}
-                    className={`flex items-center gap-4 p-4 rounded-xl font-bold ${
-                      pathname === href
-                        ? "bg-blue-600 text-white"
-                        : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                    }`}
-                  >
-                    <Icon className="w-6 h-6" /> {label}
-                  </Link>
-                )
-              )}
-            </div>
-
-            <div className="mt-6 pt-6 border-t border-zinc-200 dark:border-zinc-800 space-y-4">
-              <WalletConnector />
-              <div className="flex justify-center">
-                <ThemeToggle />
->>>>>>> e13d029883d08432b4edf70fe3b1e5900f450853
+                <div className="flex justify-center">
+                  <ThemeToggle />
+                </div>
               </div>
             </div>
           </div>
