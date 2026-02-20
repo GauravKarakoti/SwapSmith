@@ -573,12 +573,15 @@ export default function TerminalPage() {
                           confidence={(msg.data as { confidence: number }).confidence}
                           onAmountChange={(newAmount) => {
                             // Update the quote with the new amount
-                            const updatedQuote = { ...((msg.data as { quoteData: QuoteData }).quoteData), depositAmount: newAmount };
-                            addMessage({
-                              role: 'assistant',
-                              content: `Amount updated to ${newAmount} ${((msg.data as { quoteData: QuoteData }).quoteData).depositCoin}. Please review the new swap details.`,
-                              type: 'message'
-                            });
+                            const quoteData = (msg.data as { quoteData?: QuoteData })?.quoteData;
+                            if (quoteData) {
+                              const updatedQuote = { ...quoteData, depositAmount: newAmount };
+                              addMessage({
+                                role: 'assistant',
+                                content: `Amount updated to ${newAmount} ${quoteData.depositCoin}. Please review the new swap details.`,
+                                type: 'message'
+                              });
+                            }
                           }}
                         />
                       ) : msg.type === "intent_confirmation" &&
