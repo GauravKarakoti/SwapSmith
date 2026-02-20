@@ -119,6 +119,13 @@ export const limitOrders = pgTable('limit_orders', {
   isActive: integer('is_active').notNull().default(1),
   createdAt: timestamp('created_at').defaultNow(),
   lastCheckedAt: timestamp('last_checked_at'),
+  conditionOperator: text('condition_operator'), // 'gt' or 'lt'
+  conditionValue: real('condition_value'),
+  conditionAsset: text('condition_asset'),
+  status: text('status').notNull().default('pending'),
+  sideshiftOrderId: text('sideshift_order_id'),
+  error: text('error'),
+  executedAt: timestamp('executed_at'),
 });
 
 // --- SHARED SCHEMAS (used by both bot and frontend) ---
