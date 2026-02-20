@@ -573,7 +573,21 @@ return (
                     
                     {/* Inject your Custom Components (SwapConfirmation etc) here */}
                     {msg.type === 'intent_confirmation' && <IntentConfirmation command={msg.data?.parsedCommand} onConfirm={handleIntentConfirm} />}
-                    {msg.type === 'swap_confirmation' && msg.data?.quoteData && <SwapConfirmation quote={msg.data.quoteData} confidence={msg.data.confidence} />}
+                    {msg.type === 'swap_confirmation' && msg.data?.quoteData && (
+                      <SwapConfirmation 
+                        quote={msg.data.quoteData} 
+                        confidence={msg.data.confidence}
+                        onAmountChange={(newAmount) => {
+                          // Update the quote with the new amount
+                          const updatedQuote = { ...msg.data.quoteData, depositAmount: newAmount };
+                          addMessage({
+                            role: 'assistant',
+                            content: `Amount updated to ${newAmount} ${msg.data.quoteData.depositCoin}. Please review the new swap details.`,
+                            type: 'message'
+                          });
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
               )}
