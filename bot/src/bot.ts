@@ -116,6 +116,7 @@ bot.command('yield', async (ctx) => {
   }
 });
 
+
 bot.command('clear', async (ctx) => {
   if (ctx.from) {
     await db.clearConversationState(ctx.from.id);

@@ -57,7 +57,10 @@ export const orders = pgTable('orders', {
   status: text('status').notNull().default('pending'),
   tx_hash: text('tx_hash'),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => [
+  index('orders_status_idx').on(table.status),
+]);
+
 
 export const checkouts = pgTable('checkouts', {
   id: serial('id').primaryKey(),
