@@ -151,7 +151,7 @@ export default function Footer() {
                 {[
                   { label: 'Terminal', href: '/terminal' },
                   { label: 'Yield Scout', href: '/yield-scout' },
-                  { label: 'Integrations', href: '/integrations' },
+                  { label: 'Integrations', href: '/integration' },
                 ].map((item) => (
                   <li key={item.label}>
                     <a href={item.href} className="text-sm text-zinc-400 hover:text-white flex items-center gap-1 group transition-colors">
