@@ -1,11 +1,17 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { createQuote } from '@/utils/sideshift-client';
+import { csrfGuard } from '@/lib/csrf';
 
 const SIDESHIFT_CLIENT_IP = process.env.SIDESHIFT_CLIENT_IP || "127.0.0.1";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // CSRF Protection
+  if (!csrfGuard(req, res)) {
+    return;
   }
 
   const { fromAsset, toAsset, amount, fromChain, toChain } = req.body;
