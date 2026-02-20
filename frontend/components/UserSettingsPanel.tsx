@@ -11,6 +11,7 @@ import { useState, useEffect } from 'react';
 import { useUserSettings } from '@/hooks/useCachedData';
 import { useAuth } from '@/hooks/useAuth';
 import { invalidateCache } from '@/lib/cache-utils';
+import { trackNotificationEnabled, showRewardNotification } from '@/lib/rewards-service';
 
 export function UserSettingsPanel() {
   const { user } = useAuth();
@@ -56,6 +57,10 @@ export function UserSettingsPanel() {
     setIsSaving(true);
     setSaveStatus('idle');
 
+    // Track if notifications were just enabled
+    const notificationsJustEnabled = settings.notificationsEnabled && 
+      (data?.preferences ? !JSON.parse(data.preferences).notificationsEnabled : true);
+
     try {
       const response = await fetch('/api/user/settings', {
         method: 'POST',
@@ -68,6 +73,15 @@ export function UserSettingsPanel() {
       });
 
       if (!response.ok) throw new Error('Failed to save settings');
+
+      // Track notification enable reward if notifications were just enabled
+      if (notificationsJustEnabled) {
+        trackNotificationEnabled().then((result) => {
+          if (result.success && !result.alreadyClaimed) {
+            showRewardNotification(result);
+          }
+        });
+      }
 
       setSaveStatus('success');
       invalidateCache(`/api/user/settings?userId=${user.uid}`);
