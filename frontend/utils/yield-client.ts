@@ -1,7 +1,16 @@
 import axios from 'axios';
 import { yieldConfig } from '@/config/yield.config';
 
-export async function getTopStablecoinYields(): Promise<string> {
+export interface YieldPool {
+  chain: string;
+  project: string;
+  symbol: string;
+  apy: number;
+  tvlUsd: number;
+  poolId?: string;
+}
+
+export async function getTopStablecoinYields(): Promise<YieldPool[]> {
   try {
     const response = await axios.get('https://yields.llama.fi/pools');
     const data = response.data.data;
@@ -16,17 +25,29 @@ export async function getTopStablecoinYields(): Promise<string> {
         allowedChains.has(p.chain)
       )
       .sort((a: { apy: number }, b: { apy: number }) => b.apy - a.apy)
-      .slice(0, 5);
+      .slice(0, 5)
+      .map((p: { symbol: string; chain: string; project: string; apy: number; tvlUsd: number; poolId?: string }) => ({
+        chain: p.chain,
+        project: p.project,
+        symbol: p.symbol,
+        apy: p.apy,
+        tvlUsd: p.tvlUsd,
+        poolId: p.poolId
+      }));
 
-    if (topPools.length === 0) throw new Error("No pools found");
-
-    return topPools.map((p: { symbol: string; chain: string; project: string; apy: number }) => 
-      `• ${p.symbol} on ${p.chain} via ${p.project}: **${p.apy.toFixed(2)}% APY**`
-    ).join('\n');
+    return topPools;
 
   } catch (error: unknown) {
     const err = error as Error;
     console.error("Yield fetch error:", err);
-    return "Could not fetch live yield data at the moment.";
+    return [];
   }
+}
+
+export function formatYieldPools(yields: YieldPool[]): string {
+  if (yields.length === 0) return "Could not fetch live yield data at the moment.";
+  
+  return yields.map((p) => 
+    `• ${p.symbol} on ${p.chain} via ${p.project}: **${p.apy.toFixed(2)}% APY**`
+  ).join('\n');
 }

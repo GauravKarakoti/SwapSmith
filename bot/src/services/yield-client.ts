@@ -30,7 +30,7 @@ export interface MigrationSuggestion {
   isCrossChain: boolean;
 }
 
-export async function getTopStablecoinYields(): Promise<string> {
+export async function getTopStablecoinYields(): Promise<YieldPool[]> {
   try {
     // Attempt to fetch from DefiLlama (Open API)
     const response = await axios.get('https://yields.llama.fi/pools');
@@ -44,19 +44,32 @@ export async function getTopStablecoinYields(): Promise<string> {
         ['Ethereum', 'Polygon', 'Arbitrum', 'Optimism', 'Base', 'Avalanche'].includes(p.chain)
       )
       .sort((a: any, b: any) => b.apy - a.apy)
-      .slice(0, 5);
-      
-    if (topPools.length === 0) return "No high-yield pools found at the moment.";
+      .slice(0, 5)
+      .map((p: any) => ({
+        chain: p.chain,
+        project: p.project,
+        symbol: p.symbol,
+        apy: p.apy,
+        tvlUsd: p.tvlUsd,
+        poolId: p.poolId
+      }));
 
-    return topPools.map((p: any) =>
-      `• *${p.symbol} on ${p.chain}* via ${p.project}: *${p.apy.toFixed(2)}% APY*`
-    ).join('\n');
+    return topPools;
 
   } catch (error) {
     logger.error("Yield fetch error:", error);
-    return "❌ Failed to fetch current yields.";
+    return [];
   }
 }
+
+export function formatYieldPools(yields: YieldPool[]): string {
+  if (yields.length === 0) return "No high-yield pools found at the moment.";
+  
+  return yields.map((p) =>
+    `• *${p.symbol} on ${p.chain}* via ${p.project}: *${p.apy.toFixed(2)}% APY*`
+  ).join('\n');
+}
+
 
 export async function getTopYieldPools(): Promise<YieldPool[]> {
   try {

@@ -13,7 +13,8 @@ import { sql } from 'drizzle-orm';
 import { transcribeAudio } from './services/groq-client';
 import logger from './services/logger';
 import { createQuote, createOrder, getOrderStatus } from './services/sideshift-client';
-import { getTopStablecoinYields, getTopYieldPools } from './services/yield-client';
+import { getTopStablecoinYields, getTopYieldPools, formatYieldPools } from './services/yield-client';
+
 import * as db from './services/database';
 import { DCAScheduler } from './services/dca-scheduler';
 import { resolveAddress, isNamingService } from './services/address-resolver';
@@ -104,8 +105,10 @@ bot.start((ctx) =>
 
 bot.command('yield', async (ctx) => {
   const yields = await getTopStablecoinYields();
-  ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields*\n\n${yields}`);
+  const formattedYields = formatYieldPools(yields);
+  ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields*\n\n${formattedYields}`);
 });
+
 
 
 bot.command('clear', async (ctx) => {
@@ -218,8 +221,10 @@ async function handleTextMessage(
 
   if (parsed.intent === 'yield_scout') {
     const yields = await getTopStablecoinYields();
-    return ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields*\n\n${yields}`);
+    const formattedYields = formatYieldPools(yields);
+    return ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields*\n\n${formattedYields}`);
   }
+
 
   /* ---------------- Swap / Checkout ---------------- */
 
