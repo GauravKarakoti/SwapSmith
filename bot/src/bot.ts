@@ -308,6 +308,11 @@ const dcaScheduler = new DCAScheduler();
 
 async function start() {
   try {
+    // Add Sentry request handler for Express
+    if (process.env.SENTRY_DSN) {
+      app.use(Sentry.Handlers.requestHandler() as any);
+    }
+
     if (process.env.DATABASE_URL) {
       await db.db.execute(sql`SELECT 1`);
       dcaScheduler.start();
@@ -336,6 +341,9 @@ async function start() {
     process.once('SIGTERM', () => shutdown('SIGTERM'));
   } catch (e) {
     logger.error('Startup failed', e);
+    if (process.env.SENTRY_DSN) {
+      Sentry.captureException(e);
+    }
     process.exit(1);
   }
 }

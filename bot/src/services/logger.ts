@@ -1,10 +1,12 @@
 import winston from 'winston';
 import { Telegraf } from 'telegraf';
 import dotenv from 'dotenv';
+import * as Sentry from '@sentry/node';
 
 dotenv.config();
 
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
+const SENTRY_DSN = process.env.SENTRY_DSN;
 const bot = new Telegraf(process.env.BOT_TOKEN!);
 
 const levels = {
@@ -49,18 +51,45 @@ const logger = winston.createLogger({
   ],
 });
 
+// Initialize Sentry if DSN is provided
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    tracesSampleRate: 1.0,
+  });
+  logger.info('Sentry initialized for error tracking');
+}
+
 export async function handleError(
   errorType: string,
   details: any,
   ctx?: any,
   sendAlert: boolean = true
 ) {
+  // Always log to Winston
   logger.error(`[${errorType}]`, {
     details,
     userId: ctx?.from?.id || 'unknown',
     timestamp: new Date().toISOString(),
   });
 
+  // Always send to Sentry if DSN is configured - this ensures errors are never swallowed
+  if (SENTRY_DSN) {
+    try {
+      Sentry.captureException(details instanceof Error ? details : new Error(JSON.stringify(details)), {
+        extra: {
+          errorType,
+          userId: ctx?.from?.id || 'unknown',
+          details,
+        },
+      });
+    } catch (sentryError) {
+      logger.error('Failed to send error to Sentry', sentryError);
+    }
+  }
+
+  // Optional: Send Telegram alert to admin if configured
   if (sendAlert && ADMIN_CHAT_ID) {
     try {
       const msg = `⚠️ *Error Alert*\n\n*Type:* ${errorType}\n*User:* ${ctx?.from?.id || 'unknown'}\n*Details:* ${JSON.stringify(details, null, 2)}`;
@@ -70,5 +99,8 @@ export async function handleError(
     }
   }
 }
+
+// Export Sentry for manual error capture if needed
+export { Sentry };
 
 export default logger;
