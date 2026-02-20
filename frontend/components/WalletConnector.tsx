@@ -4,6 +4,7 @@ import { useAccount, useConnect, useDisconnect } from 'wagmi';
 import { Wallet, LogOut, Loader2 } from 'lucide-react';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
 import { useState, useEffect } from 'react';
+import { trackWalletConnection, showRewardNotification } from '@/lib/rewards-service';
 import {
   ConnectorAlreadyConnectedError,
   ConnectorNotFoundError,
@@ -56,6 +57,15 @@ export default function WalletConnector() {
     if (isConnected) {
       // Clear error when successfully connected
       errorMessage = '';
+      
+      // Track wallet connection reward
+      if (address) {
+        trackWalletConnection(address).then((result) => {
+          if (result.success && !result.alreadyClaimed) {
+            showRewardNotification(result);
+          }
+        });
+      }
     } else if (error) {
       if (error instanceof ConnectorNotFoundError) {
         errorMessage = 'Wallet not detected.';
@@ -73,9 +83,8 @@ export default function WalletConnector() {
       }
     }
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setConnectionError(errorMessage);
-  }, [error, isConnected, handleError]);
+  }, [error, isConnected, handleError, address]);
 
   // 1. Loading/Syncing State
   if (isReconnecting) {

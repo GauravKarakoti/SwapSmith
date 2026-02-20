@@ -1,6 +1,5 @@
 import { pgTable, serial, text, bigint, timestamp, integer, real, unique, pgEnum, uuid, boolean, numeric, jsonb, index } from 'drizzle-orm/pg-core';
-
-import { sql } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 
 // --- ENUMS ---
 export const rewardActionType = pgEnum('reward_action_type', [
@@ -8,7 +7,10 @@ export const rewardActionType = pgEnum('reward_action_type', [
   'module_complete',
   'daily_login',
   'swap_complete',
-  'referral'
+  'referral',
+  'wallet_connected',
+  'terminal_used',
+  'notification_enabled'
 ]);
 
 export const mintStatusType = pgEnum('mint_status_type', [
@@ -119,34 +121,6 @@ export const limitOrders = pgTable('limit_orders', {
   lastCheckedAt: timestamp('last_checked_at'),
 });
 
-export const stakeOrders = pgTable('stake_orders', {
-  id: serial('id').primaryKey(),
-  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
-  sideshiftOrderId: text('sideshift_order_id').notNull().unique(),
-  quoteId: text('quote_id'),
-  // Swap phase
-  swapFromAsset: text('swap_from_asset').notNull(),
-  swapFromNetwork: text('swap_from_network').notNull(),
-  swapFromAmount: text('swap_from_amount').notNull(),
-  swapToAsset: text('swap_to_asset').notNull(),
-  swapToNetwork: text('swap_to_network').notNull(),
-  swapSettleAmount: text('swap_settle_amount'),
-  // Staking phase
-  stakingProtocol: text('staking_protocol').notNull(), // e.g., 'Lido', 'RocketPool', 'Frax'
-  stakingAsset: text('staking_asset').notNull(),
-  stakingNetwork: text('staking_network').notNull(),
-  stakerAddress: text('staker_address').notNull(),
-  // Status tracking
-  swapStatus: text('swap_status').notNull().default('pending'), // pending, processing, settled, failed
-  stakeStatus: text('stake_status').notNull().default('pending'), // pending, processing, staked, failed
-  swapTxHash: text('swap_tx_hash'),
-  stakeTxHash: text('stake_tx_hash'),
-  // Yield info
-  estimatedApy: real('estimated_apy'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
 // --- SHARED SCHEMAS (used by both bot and frontend) ---
 
 export const coinPriceCache = pgTable('coin_price_cache', {
@@ -220,7 +194,11 @@ export const discussions = pgTable('discussions', {
   replies: text('replies').default('0'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at'),
-});
+}, (table) => [
+	index("idx_discussions_category").on(table.category),
+	index("idx_discussions_created_at").on(table.createdAt),
+	index("idx_discussions_user_id").on(table.userId),
+]);
 
 // --- REWARDS SCHEMAS ---
 
@@ -255,3 +233,24 @@ export const rewardsLog = pgTable('rewards_log', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
+
+// --- RELATIONS ---
+
+export const courseProgressRelations = relations(courseProgress, ({one}) => ({
+	user: one(users, {
+		fields: [courseProgress.userId],
+		references: [users.id]
+	}),
+}));
+
+export const usersRelations = relations(users, ({many}) => ({
+	courseProgresses: many(courseProgress),
+	rewardsLogs: many(rewardsLog),
+}));
+
+export const rewardsLogRelations = relations(rewardsLog, ({one}) => ({
+	user: one(users, {
+		fields: [rewardsLog.userId],
+		references: [users.id]
+	}),
+}));

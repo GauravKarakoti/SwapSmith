@@ -1,4 +1,4 @@
-import { parseUserCommand } from '../services/groq-client';
+import { parseUserCommand } from '../services/parseUserCommand'; // Fixed import
 import * as priceMonitor from '../services/price-monitor';
 import * as db from '../services/database';
 
@@ -37,7 +37,7 @@ jest.mock('groq-sdk', () => {
 
 describe('Limit Order & DCA Parsing', () => {
   it('should parse a limit order command', async () => {
-    const result = await parseUserCommand('Buy 1 ETH with USDC if the price drops below $2500');
+    const result = await parseUserCommand('Buy 1 ETH with USDC if the price drops below $2500', []);
     expect(result.success).toBe(true);
     expect(result.intent).toBe('limit_order');
     expect(result.toAsset).toBe('ETH');
@@ -76,7 +76,7 @@ describe('Limit Order & DCA Parsing', () => {
       }
     }));
 
-    const result = await parseUserCommand('Sell 2 ETH when price hits $4000');
+    const result = await parseUserCommand('Sell 2 ETH when price hits $4000', []);
     expect(result.success).toBe(true);
     expect(result.intent).toBe('limit_order');
     expect(result.condition).toBe('above');
@@ -112,7 +112,7 @@ describe('Limit Order & DCA Parsing', () => {
       }
     }));
 
-    const result = await parseUserCommand('DCA $50 into Bitcoin every week for a month');
+    const result = await parseUserCommand('DCA $50 into Bitcoin every week for a month', []);
     expect(result.success).toBe(true);
     expect(result.intent).toBe('dca');
     expect(result.toAsset).toBe('BTC');
@@ -149,7 +149,7 @@ describe('Limit Order & DCA Parsing', () => {
       }
     }));
 
-    const result = await parseUserCommand('Buy ETH when cheap');
+    const result = await parseUserCommand('Buy ETH when cheap', []);
     expect(result.success).toBe(false);
     expect(result.validationErrors).toContain('Target price not specified');
   });
@@ -181,7 +181,7 @@ describe('Limit Order & DCA Parsing', () => {
       }
     }));
 
-    const result = await parseUserCommand('DCA into Bitcoin');
+    const result = await parseUserCommand('DCA into Bitcoin', []);
     expect(result.success).toBe(false);
     expect(result.validationErrors).toContain('Total investment amount not specified');
   });
