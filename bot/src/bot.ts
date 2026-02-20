@@ -11,7 +11,7 @@ import { sql } from 'drizzle-orm';
 
 // Services
 import { transcribeAudio } from './services/groq-client';
-import logger from './services/logger';
+import logger, { Sentry } from './services/logger';
 import { createQuote, createOrder, getOrderStatus } from './services/sideshift-client';
 import { getTopStablecoinYields, getTopYieldPools, formatYieldPools } from './services/yield-client';
 
@@ -36,6 +36,22 @@ const PORT = Number(process.env.PORT || 3000);
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 app.use(express.json());
+
+// Setup Sentry error handlers if available
+if (process.env.SENTRY_DSN) {
+  // Catch uncaught exceptions
+  process.on('uncaughtException', (error) => {
+    logger.error('Uncaught Exception', error);
+    Sentry.captureException(error);
+    process.exit(1);
+  });
+
+  // Catch unhandled promise rejections
+  process.on('unhandledRejection', (reason) => {
+    logger.error('Unhandled Promise Rejection', reason);
+    Sentry.captureException(reason instanceof Error ? reason : new Error(String(reason)));
+  });
+}
 
 const DEFAULT_EVM_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 
@@ -318,6 +334,11 @@ const dcaScheduler = new DCAScheduler();
 
 async function start() {
   try {
+    // Add Sentry request handler for Express
+    if (process.env.SENTRY_DSN) {
+      app.use(Sentry.Handlers.requestHandler() as any);
+    }
+
     if (process.env.DATABASE_URL) {
       await db.db.execute(sql`SELECT 1`);
       dcaScheduler.start();
@@ -345,6 +366,9 @@ async function start() {
     process.once('SIGTERM', shutdown);
   } catch (e) {
     logger.error('Startup failed', e);
+    if (process.env.SENTRY_DSN) {
+      Sentry.captureException(e);
+    }
     process.exit(1);
   }
 }
