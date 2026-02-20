@@ -443,7 +443,7 @@ export async function parseUserCommand(
                 conditionAsset = fromAsset || undefined;
             }
 
-            let parsedMessage = `Parsed: \${amountType || amount || (quoteAmount ? 'Value ' + quoteAmount : '?')} \${fromAsset || '?'} -> \${toAsset || '?'}`;
+            let parsedMessage = `Parsed: ${amountType || amount || (quoteAmount ? 'Value ' + quoteAmount : '?')} ${fromAsset || '?'} -> ${toAsset || '?'}`;
             if (conditionOperator && conditionValue) {
                 parsedMessage += ` if ${conditionAsset || fromAsset} ${conditionOperator === 'gt' ? '>' : '<'} ${conditionValue}`;
             }
