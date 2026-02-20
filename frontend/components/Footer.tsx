@@ -148,10 +148,14 @@ export default function Footer() {
             <div className="space-y-6">
               <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Ecosystem</h4>
               <ul className="space-y-4">
-                {['Terminal', 'Yield Scout', 'Integrations'].map((item) => (
-                  <li key={item}>
-                    <a href="#" className="text-sm text-zinc-400 hover:text-white flex items-center gap-1 group transition-colors">
-                      {item} <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-all -translate-y-1 group-hover:translate-y-0" />
+                {[
+                  { label: 'Terminal', href: '/terminal' },
+                  { label: 'Yield Scout', href: '/yield-scout' },
+                  { label: 'Integrations', href: '/integrations' },
+                ].map((item) => (
+                  <li key={item.label}>
+                    <a href={item.href} className="text-sm text-zinc-400 hover:text-white flex items-center gap-1 group transition-colors">
+                      {item.label} <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-all -translate-y-1 group-hover:translate-y-0" />
                     </a>
                   </li>
                 ))}
@@ -161,13 +165,13 @@ export default function Footer() {
             <div className="space-y-6">
               <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Governance</h4>
                 <ul className="space-y-4">
-                  <li key="Security">
-                    <a href="#" className="text-sm text-zinc-400 hover:text-white transition-colors">Security</a>
+                  <li>
+                    <a href="/security" className="text-sm text-zinc-400 hover:text-white transition-colors">Security</a>
                   </li>
-                  <li key="Documentation">
-                    <a href="#" className="text-sm text-zinc-400 hover:text-white transition-colors">Documentation</a>
+                  <li>
+                    <a href="/docs" className="text-sm text-zinc-400 hover:text-white transition-colors">Documentation</a>
                   </li>
-                  <li key="Privacy">
+                  <li>
                     <a href="/privacy" className="text-sm text-zinc-400 hover:text-white transition-colors">Privacy Policy</a>
                   </li>
                 </ul>
@@ -176,15 +180,15 @@ export default function Footer() {
             <div className="space-y-6 col-span-2 sm:col-span-1">
               <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Connect</h4>
               <div className="flex flex-wrap gap-3">
-                <a href="#" className="p-2.5 bg-white/5 border border-white/10 rounded-xl text-gray-400 hover:text-blue-400 hover:border-blue-400/50 transition-all">
-                <Twitter className="w-5 h-5" />
-              </a>
-              <a href="https://github.com/GauravKarakoti/SwapSmith" target="_blank" className="p-2.5 bg-white/5 border border-white/10 rounded-xl text-gray-400 hover:text-blue-400 hover:border-blue-400/50 transition-all">
-                <Github className="w-5 h-5" />
-              </a>
-              <a href="https://t.me/SwapSmithBot" target='_blank' className="p-2.5 bg-white/5 border border-white/10 rounded-xl text-gray-400 hover:text-[#229ED9] hover:border-[#229ED9]/50 transition-all">
-                <MessageCircle className="w-5 h-5" />
-              </a>
+                <a href="https://twitter.com/SwapSmith" target="_blank" rel="noopener noreferrer" className="p-2.5 bg-white/5 border border-white/10 rounded-xl text-gray-400 hover:text-blue-400 hover:border-blue-400/50 transition-all">
+                  <Twitter className="w-5 h-5" />
+                </a>
+                <a href="https://github.com/GauravKarakoti/SwapSmith" target="_blank" rel="noopener noreferrer" className="p-2.5 bg-white/5 border border-white/10 rounded-xl text-gray-400 hover:text-blue-400 hover:border-blue-400/50 transition-all">
+                  <Github className="w-5 h-5" />
+                </a>
+                <a href="https://t.me/SwapSmithBot" target='_blank' rel="noopener noreferrer" className="p-2.5 bg-white/5 border border-white/10 rounded-xl text-gray-400 hover:text-[#229ED9] hover:border-[#229ED9]/50 transition-all">
+                  <MessageCircle className="w-5 h-5" />
+                </a>
               </div>
             </div>
           </div>
@@ -205,7 +209,7 @@ export default function Footer() {
           </div>
 
           <div className="flex items-center gap-6">
-            <a href="#" className="text-[10px] font-bold text-zinc-500 hover:text-zinc-200 transition-colors uppercase tracking-widest flex items-center gap-1.5">
+            <a href="/legal" className="text-[10px] font-bold text-zinc-500 hover:text-zinc-200 transition-colors uppercase tracking-widest flex items-center gap-1.5">
               Legal <ExternalLink className="w-3 h-3" />
             </a>
             <div className="h-4 w-px bg-white/10" />

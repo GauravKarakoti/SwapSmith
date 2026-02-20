@@ -12,47 +12,45 @@ import { sql } from 'drizzle-orm';
 // Services
 import { transcribeAudio } from './services/groq-client';
 import logger from './services/logger';
-import { createQuote, createOrder, getOrderStatus } from './services/sideshift-client';
-import { getTopStablecoinYields, getTopYieldPools } from './services/yield-client';
+
+import {
+  createQuote,
+  createOrder,
+  createCheckout,
+  getOrderStatus,
+} from './services/sideshift-client';
+
+import {
+  getTopStablecoinYields,
+  getTopYieldPools,
+  formatYieldPools,
+} from './services/yield-client';
+
 import * as db from './services/database';
 import { DCAScheduler } from './services/dca-scheduler';
 import { resolveAddress, isNamingService } from './services/address-resolver';
-import { ADDRESS_PATTERNS } from './config/address-patterns';
 import { limitOrderWorker } from './workers/limitOrderWorker';
 import { OrderMonitor } from './services/order-monitor';
-import { parseUserCommand } from './services/parseUserCommand'; // Import corrected function
-
-/* -------------------------------------------------------------------------- */
-/* GLOBAL SETUP                                 */
-/* -------------------------------------------------------------------------- */
+import { parseUserCommand } from './services/parseUserCommand';
+import { isValidAddress } from './config/address-patterns';
 
 dotenv.config();
 
+/* -------------------------------------------------------------------------- */
+/* CONFIG                                                                     */
+/* -------------------------------------------------------------------------- */
+
 const BOT_TOKEN = process.env.BOT_TOKEN!;
-const MINI_APP_URL = process.env.MINI_APP_URL || 'https://swapsmithminiapp.netlify.app/';
+const MINI_APP_URL =
+  process.env.MINI_APP_URL || 'https://swapsmithminiapp.netlify.app/';
 const PORT = Number(process.env.PORT || 3000);
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 app.use(express.json());
 
-const DEFAULT_EVM_PATTERN = /^0x[a-fA-F0-9]{40}$/;
-
 /* -------------------------------------------------------------------------- */
-/* HELPERS                                  */
-/* -------------------------------------------------------------------------- */
-
-function isValidAddress(address: string, chain?: string): boolean {
-  if (!address) return false;
-  const normalized = chain
-    ? chain.toLowerCase().replace(/[^a-z]/g, '')
-    : 'ethereum';
-  const pattern = ADDRESS_PATTERNS[normalized] || DEFAULT_EVM_PATTERN;
-  return pattern.test(address.trim());
-}
-
-/* -------------------------------------------------------------------------- */
-/* ORDER MONITOR                                */
+/* ORDER MONITOR                                                              */
 /* -------------------------------------------------------------------------- */
 
 const orderMonitor = new OrderMonitor({
@@ -60,7 +58,7 @@ const orderMonitor = new OrderMonitor({
   updateOrderStatus: db.updateOrderStatus,
   getPendingOrders: db.getPendingOrders,
   onStatusChange: async (telegramId, orderId, oldStatus, newStatus, details) => {
-    const emoji: Record<string, string> = {
+    const emojiMap: Record<string, string> = {
       waiting: '⏳',
       pending: '⏳',
       processing: '⚙️',
@@ -72,7 +70,7 @@ const orderMonitor = new OrderMonitor({
     };
 
     const msg =
-      `${emoji[newStatus] || '🔔'} *Order Update*\n\n` +
+      `${emojiMap[newStatus] || '🔔'} *Order Update*\n\n` +
       `*Order:* \`${orderId}\`\n` +
       `*Status:* ${oldStatus} → *${newStatus.toUpperCase()}*\n` +
       (details?.depositAmount
@@ -80,47 +78,60 @@ const orderMonitor = new OrderMonitor({
         : '') +
       (details?.settleAmount
         ? `*Received:* ${details.settleAmount} ${details.settleCoin}\n`
+        : '') +
+      (details?.settleHash
+        ? `*Tx:* \`${details.settleHash.slice(0, 16)}...\`\n`
         : '');
 
-    await bot.telegram.sendMessage(telegramId, msg, { parse_mode: 'Markdown' });
+    try {
+      await bot.telegram.sendMessage(telegramId, msg, {
+        parse_mode: 'Markdown',
+      });
+    } catch (e) {
+      logger.error('Order update notify failed:', e);
+    }
   },
 });
 
 /* -------------------------------------------------------------------------- */
-/* COMMANDS                                 */
+/* COMMANDS                                                                   */
 /* -------------------------------------------------------------------------- */
 
 bot.start((ctx) =>
-  ctx.reply(
-    `🤖 *Welcome to SwapSmith!*\n\nVoice-enabled crypto trading assistant.`,
-    {
-      parse_mode: 'Markdown',
-      ...Markup.inlineKeyboard([
-        Markup.button.url('🌐 Open Web App', MINI_APP_URL),
-      ]),
-    }
-  )
+  ctx.reply(`🤖 *Welcome to SwapSmith!*\n\nVoice-enabled crypto trading assistant.`, {
+    parse_mode: 'Markdown',
+    ...Markup.inlineKeyboard([
+      Markup.button.url('🌐 Open Web App', MINI_APP_URL),
+    ]),
+  })
 );
 
 bot.command('yield', async (ctx) => {
-  const yields = await getTopStablecoinYields();
-  ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields*\n\n${yields}`);
+  await ctx.reply('📈 Fetching top yield opportunities...');
+  try {
+    const yields = await getTopStablecoinYields();
+    ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields:*\n\n${formatYieldPools(yields)}`);
+  } catch {
+    ctx.reply('❌ Failed to fetch yields.');
+  }
 });
+
 
 bot.command('clear', async (ctx) => {
   if (ctx.from) {
-      await db.clearConversationState(ctx.from.id);
-      ctx.reply('🗑️ Conversation cleared');
+    await db.clearConversationState(ctx.from.id);
+    ctx.reply('🗑️ Conversation cleared');
   }
 });
 
 /* -------------------------------------------------------------------------- */
-/* MESSAGE HANDLERS                              */
+/* MESSAGE HANDLERS                                                           */
 /* -------------------------------------------------------------------------- */
 
 bot.on(message('text'), async (ctx) => {
-  if (ctx.message.text.startsWith('/')) return;
-  await handleTextMessage(ctx, ctx.message.text);
+  if (!ctx.message.text.startsWith('/')) {
+    await handleTextMessage(ctx, ctx.message.text);
+  }
 });
 
 bot.on(message('voice'), async (ctx) => {
@@ -136,9 +147,7 @@ bot.on(message('voice'), async (ctx) => {
     fs.writeFileSync(oga, res.data);
 
     await new Promise<void>((resolve, reject) =>
-      exec(`ffmpeg -i "${oga}" "${mp3}" -y`, (e) =>
-        e ? reject(e) : resolve()
-      )
+      exec(`ffmpeg -i "${oga}" "${mp3}" -y`, (e) => (e ? reject(e) : resolve()))
     );
 
     const text = await transcribeAudio(mp3);
@@ -150,7 +159,7 @@ bot.on(message('voice'), async (ctx) => {
 });
 
 /* -------------------------------------------------------------------------- */
-/* CORE HANDLER                                 */
+/* CORE HANDLER                                                               */
 /* -------------------------------------------------------------------------- */
 
 async function handleTextMessage(
@@ -168,36 +177,36 @@ async function handleTextMessage(
   if (
     state?.parsedCommand &&
     !state.parsedCommand.settleAddress &&
-    state.parsedCommand.intent && // Check intent exists
-    ['swap', 'checkout', 'portfolio'].includes(state.parsedCommand.intent)
+    ['swap', 'checkout', 'portfolio', 'limit_order'].includes(
+      state.parsedCommand.intent
+    )
   ) {
     const resolved = await resolveAddress(userId, text.trim());
     const targetChain =
       state.parsedCommand.toChain ||
       state.parsedCommand.settleNetwork ||
-      state.parsedCommand.fromChain;
+      state.parsedCommand.fromChain ||
+      'ethereum';
 
     if (resolved.address && isValidAddress(resolved.address, targetChain)) {
       const updated = { ...state.parsedCommand, settleAddress: resolved.address };
       await db.setConversationState(userId, { parsedCommand: updated });
 
-      await ctx.reply(
-        `✅ Address resolved:\n\`${resolved.originalInput}\` → \`${resolved.address}\``,
-        { parse_mode: 'Markdown' }
-      );
-
       return ctx.reply(
-        'Ready to proceed?',
-        Markup.inlineKeyboard([
-          Markup.button.callback('✅ Yes', `confirm_${updated.intent}`),
-          Markup.button.callback('❌ No', 'cancel_swap'),
-        ])
+        `✅ Address resolved:\n\`${resolved.originalInput}\` → \`${resolved.address}\``,
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([
+            Markup.button.callback('✅ Yes', `confirm_${updated.intent}`),
+            Markup.button.callback('❌ No', 'cancel_swap'),
+          ]),
+        }
       );
     }
 
     if (isNamingService(text)) {
       return ctx.reply(
-        `❌ Could not resolve \`${text}\`. Please check the domain or try a raw address.`,
+        `❌ Could not resolve \`${text}\`. Please try a raw address.`,
         { parse_mode: 'Markdown' }
       );
     }
@@ -206,23 +215,63 @@ async function handleTextMessage(
   /* ---------------- NLP Parsing ---------------- */
 
   const parsed = await parseUserCommand(text, state?.messages || [], inputType);
-
   if (!parsed.success) {
-    // Cast to any to access validationErrors or use type guard
-    const errors = (parsed as any).validationErrors?.join('\n') || '❌ I didn’t understand.';
-    return ctx.replyWithMarkdown(errors);
+    return ctx.replyWithMarkdown(
+      (parsed as any).validationErrors?.join('\n') ||
+        '❌ I didn’t understand.'
+    );
   }
 
   /* ---------------- Yield Scout ---------------- */
 
   if (parsed.intent === 'yield_scout') {
     const yields = await getTopStablecoinYields();
-    return ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields*\n\n${yields}`);
+    return ctx.replyWithMarkdown(
+      `📈 *Top Stablecoin Yields:*\n\n${formatYieldPools(yields)}`
+    );
+  }
+
+  /* ---------------- Portfolio ---------------- */
+
+  if (parsed.intent === 'portfolio') {
+    await db.setConversationState(userId, { parsedCommand: parsed });
+
+    let msg = `📊 *Portfolio Strategy*\n\n`;
+    parsed.portfolio?.forEach((p: any) => {
+      msg += `• ${p.percentage}% → ${p.toAsset} on ${p.toChain}\n`;
+    });
+
+    return ctx.replyWithMarkdown(
+      msg,
+      Markup.inlineKeyboard([
+        Markup.button.webApp('📱 Batch Sign', MINI_APP_URL),
+        Markup.button.callback('❌ Cancel', 'cancel_swap'),
+      ])
+    );
+  }
+
+  /* ---------------- Limit Order ---------------- */
+
+  if (parsed.intent === 'limit_order') {
+    if (!parsed.settleAddress) {
+      await db.setConversationState(userId, { parsedCommand: parsed });
+      return ctx.reply('Please provide the destination wallet address.');
+    }
+
+    await db.setConversationState(userId, { parsedCommand: parsed });
+
+    return ctx.reply(
+      'Confirm Limit Order?',
+      Markup.inlineKeyboard([
+        Markup.button.callback('✅ Yes', 'confirm_limit_order'),
+        Markup.button.callback('❌ Cancel', 'cancel_swap'),
+      ])
+    );
   }
 
 /* ---------------- Swap / Checkout ---------------- */
 
-  if (parsed.intent === 'swap' || parsed.intent === 'checkout') {
+  if (['swap', 'checkout'].includes(parsed.intent)) {
     if (!parsed.settleAddress) {
       await db.setConversationState(userId, { parsedCommand: parsed });
       return ctx.reply('Please provide the destination wallet address.');
@@ -271,62 +320,8 @@ async function handleTextMessage(
 
 
 /* -------------------------------------------------------------------------- */
-/* ACTIONS                                  */
+/* ACTIONS                                                                    */
 /* -------------------------------------------------------------------------- */
-
-bot.action('confirm_swap', async (ctx) => {
-  if (!ctx.from) return;
-  const state = await db.getConversationState(ctx.from.id);
-  if (!state?.parsedCommand) return;
-
-  const q = await createQuote(
-    state.parsedCommand.fromAsset,
-    state.parsedCommand.fromChain,
-    state.parsedCommand.toAsset,
-    state.parsedCommand.toChain,
-    state.parsedCommand.amount
-  );
-
-  await db.setConversationState(ctx.from.id, { ...state, quoteId: q.id });
-
-  await ctx.editMessageText(
-    `🔄 *Quote*\nSend: ${q.depositAmount} ${q.depositCoin}\nReceive: ~${q.settleAmount} ${q.settleCoin}`,
-    {
-      parse_mode: 'Markdown',
-      ...Markup.inlineKeyboard([
-        Markup.button.callback('🚀 Place Order', 'place_order'),
-        Markup.button.callback('❌ Cancel', 'cancel_swap'),
-      ]),
-    }
-  );
-});
-
-bot.action('place_order', async (ctx) => {
-  if (!ctx.from) return;
-  const state = await db.getConversationState(ctx.from.id);
-  if (!state?.quoteId || !state.parsedCommand?.settleAddress) return;
-
-  const order = await createOrder(
-    state.quoteId,
-    state.parsedCommand.settleAddress,
-    state.parsedCommand.settleAddress
-  );
-
-  await db.createOrderEntry(
-    ctx.from.id,
-    state.parsedCommand,
-    order,
-    order.settleAmount,
-    state.quoteId
-  );
-
-  await ctx.editMessageText(
-    `✅ Order Created\n\nSend ${order.depositAmount} ${order.depositCoin} to:\n\`${order.depositAddress}\``,
-    { parse_mode: 'Markdown' }
-  );
-
-  await db.clearConversationState(ctx.from.id);
-});
 
 bot.action('cancel_swap', async (ctx) => {
   if (!ctx.from) return;
@@ -335,65 +330,7 @@ bot.action('cancel_swap', async (ctx) => {
 });
 
 /* -------------------------------------------------------------------------- */
-/* SWAP AND STAKE ACTIONS                       */
-/* -------------------------------------------------------------------------- */
-
-bot.action('confirm_swap_and_stake', async (ctx) => {
-  if (!ctx.from) return;
-  const state = await db.getConversationState(ctx.from.id);
-  if (!state?.parsedCommand || state.parsedCommand.intent !== 'swap_and_stake') return;
-
-  const parsed = state.parsedCommand;
-
-  await ctx.editMessageText(
-    '⏳ Creating swap and stake order...',
-    { parse_mode: 'Markdown' }
-  );
-
-  try {
-    // Call the API to create swap and stake order
-    const response = await axios.post(
-      `${process.env.BOT_SERVICE_URL || 'http://localhost:3001'}/api/swap-and-stake/create`,
-      {
-        fromAsset: parsed.fromAsset,
-        fromChain: parsed.fromChain || 'ethereum',
-        toAsset: parsed.toAsset,
-        toChain: parsed.toChain || 'ethereum',
-        amount: parsed.amount,
-        stakingProtocol: parsed.stakingProtocol,
-        stakerAddress: parsed.settleAddress,
-      }
-    );
-
-    if (response.data.success) {
-      await ctx.editMessageText(
-        `✅ *Swap and Stake Order Created*\n\n` +
-        `Order ID: \`${response.data.orderId}\`\n` +
-        `Swap: ${parsed.amount} ${parsed.fromAsset} → ${parsed.toAsset}\n` +
-        `Staking: ${parsed.stakingProtocol || 'Best available pool'}\n\n` +
-        `You'll receive a notification when the swap completes and staking begins.`,
-        { parse_mode: 'Markdown' }
-      );
-    } else {
-      await ctx.editMessageText(
-        `❌ Failed to create order: ${response.data.error || 'Unknown error'}`,
-        { parse_mode: 'Markdown' }
-      );
-    }
-  } catch (error) {
-    logger.error('Swap and stake error:', error);
-    await ctx.editMessageText(
-      '❌ Error creating swap and stake order. Please try again.',
-      { parse_mode: 'Markdown' }
-    );
-  }
-
-  await db.clearConversationState(ctx.from.id);
-});
-
-
-/* -------------------------------------------------------------------------- */
-/* STARTUP                                   */
+/* STARTUP                                                                    */
 /* -------------------------------------------------------------------------- */
 
 const dcaScheduler = new DCAScheduler();
@@ -410,21 +347,22 @@ async function start() {
     orderMonitor.start();
 
     const server = app.listen(PORT, () =>
-      logger.info(`🌍 Server running on ${PORT}`)
+      logger.info(`🌍 Server running on port ${PORT}`)
     );
 
     await bot.launch();
+    logger.info('🤖 Bot launched');
 
-    const shutdown = () => {
+    const shutdown = (signal: string) => {
       dcaScheduler.stop();
       limitOrderWorker.stop();
       orderMonitor.stop();
-      bot.stop();
+      bot.stop(signal);
       server.close(() => process.exit(0));
     };
 
-    process.once('SIGINT', shutdown);
-    process.once('SIGTERM', shutdown);
+    process.once('SIGINT', () => shutdown('SIGINT'));
+    process.once('SIGTERM', () => shutdown('SIGTERM'));
   } catch (e) {
     logger.error('Startup failed', e);
     process.exit(1);
