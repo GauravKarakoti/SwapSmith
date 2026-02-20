@@ -9,7 +9,7 @@ import TrustIndicators from './TrustIndicators';
 import IntentConfirmation from './IntentConfirmation';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
-import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
+import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 
 // Export QuoteData to be used in PortfolioSummary
 export interface QuoteData {
@@ -56,15 +56,14 @@ export default function ChatInterface() {
   const { address, isConnected } = useAccount();
   const { handleError } = useErrorHandler();
   
-  // Use cross-browser audio recorder with simplified approach
+  // Use cross-browser audio recorder
   const { 
-    isListening: isRecording,
-    transcript,
+    isRecording,
     isSupported: isAudioSupported, 
     startRecording, 
     stopRecording, 
     error: audioError
-  } = useSpeechRecognition();
+  } = useAudioRecorder();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -76,15 +75,6 @@ export default function ChatInterface() {
       addMessage({ role: 'assistant', content: audioError, type: 'message' });
     }
   }, [audioError]);
-
-  // Handle voice result
-  useEffect(() => {
-    if (!isRecording && transcript) {
-        addMessage({ role: 'user', content: transcript, type: 'message' });
-        processCommand(transcript);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRecording, transcript]);
 
   const formatTime = (date: Date) => {
     const hours = date.getHours();
@@ -493,6 +483,46 @@ export default function ChatInterface() {
     setPendingCommand(null);
   };
 
+  const handleVoiceRecording = async () => {
+    if (isRecording) {
+      setIsLoading(true);
+      try {
+        const audioBlob = await stopRecording();
+        if (audioBlob) {
+            const audioFile = new File([audioBlob], "voice_command.wav", { type: audioBlob.type || 'audio/wav' });
+            
+            const formData = new FormData();
+            formData.append('file', audioFile);
+
+            const response = await fetch('/api/transcribe', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+            
+            if (data.error) throw new Error(data.error);
+
+            if (data.text) {
+                addMessage({ role: 'user', content: data.text, type: 'message' });
+                processCommand(data.text);
+            }
+        }
+      } catch (err) {
+        console.error("Voice processing failed:", err);
+        addMessage({ 
+            role: 'assistant', 
+            content: "Sorry, I couldn't process your voice command. Please try again.", 
+            type: 'message' 
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      await startRecording();
+    }
+  };
+
 return (
     <div className="flex flex-col h-[700px] bg-[#0B0E11] border border-white/10 rounded-3xl overflow-hidden shadow-2xl relative">
       
@@ -565,13 +595,7 @@ return (
           
           <div className="relative flex items-center gap-3 bg-[#161A1E] border border-white/10 p-2 rounded-2xl group-focus-within:border-blue-500/50 transition-all">
             <button 
-              onClick={() => {
-                if (isRecording) {
-                  stopRecording();
-                } else {
-                  startRecording();
-                }
-              }}
+              onClick={handleVoiceRecording}
               disabled={!isAudioSupported}
               className={`p-3 rounded-xl transition-all ${
                 !isAudioSupported ? 'bg-white/5 text-gray-600 cursor-not-allowed' :
