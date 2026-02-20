@@ -160,12 +160,16 @@ bot.command('website', (ctx) => {
 bot.command('yield', async (ctx) => {
     await ctx.reply('📈 Fetching top yield opportunities...');
     try {
-        const yields = await getTopStablecoinYields();
+        const pools = await getTopStablecoinYields();
+        const yields = pools.map(p =>
+            `• *${p.symbol} on ${p.chain}* via ${p.project}: *${p.apy.toFixed(2)}% APY*`
+        ).join('\n');
         ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields:*\n\n${yields}`);
     } catch (error) {
         ctx.reply("❌ Failed to fetch yields.");
     }
 });
+
 
 bot.command('clear', async (ctx) => {
     await db.clearConversationState(ctx.from.id);
@@ -272,9 +276,13 @@ async function handleTextMessage(ctx: any, text: string, inputType: 'text' | 'vo
 
     // 3. Handle Intents
     if (parsed.intent === 'yield_scout') {
-        const yields = await getTopStablecoinYields();
+        const pools = await getTopStablecoinYields();
+        const yields = pools.map(p =>
+            `• *${p.symbol} on ${p.chain}* via ${p.project}: *${p.apy.toFixed(2)}% APY*`
+        ).join('\n');
         return ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields:*\n\n${yields}`);
     }
+
 
     if (parsed.intent === 'yield_deposit') {
         // Logic to bridge/swap into a yield pool
@@ -765,13 +773,6 @@ app.post('/api/swap-and-stake/create', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🌍 Server running on port ${PORT}`));
-
-(async () => {
-<<<<<<< HEAD
-    await orderMonitor.loadPendingOrders();
-    orderMonitor.start();
-    bot.launch();
 app.listen(PORT, () => console.log(`🌍 Server running on port ${PORT}`));
 
 (async () => {

@@ -19,9 +19,8 @@ export interface YieldPool {
   poolId?: string; // DefiLlama pool ID
 }
 
-<<<<<<< HEAD
 export interface StakingQuote {
-  pool: StakingPool;
+  pool: YieldPool;
   stakeAmount: string;
   estimatedReward: string;
   lockPeriod?: string;
@@ -29,6 +28,17 @@ export interface StakingQuote {
     to: string;
     value: string;
     data: string;
+  };
+}
+
+export async function getTopYieldPools(): Promise<YieldPool[]> {
+  try {
+    const response = await axios.get("https://yields.llama.fi/pools");
+    const pools = response.data.data;
+
+    const topPools = pools
+      .filter((p: any) => 
+        p.stablecoin === true &&
         ['USDC', 'USDT', 'DAI'].includes(p.symbol) && 
         ['Ethereum', 'Polygon', 'Arbitrum', 'Optimism', 'Base', 'Avalanche'].includes(p.chain)
       )
@@ -59,11 +69,8 @@ export interface StakingQuote {
   }
 }
 
-export async function getTopStablecoinYields(): Promise<string> {
-  const pools = await getTopYieldPools();
-  return pools.map(p =>
-    `• *${p.symbol} on ${p.chain}* via ${p.project}: *${p.apy.toFixed(2)}% APY*`
-  ).join('\n');
+export async function getTopStablecoinYields(): Promise<YieldPool[]> {
+  return getTopYieldPools();
 }
 
 export interface MigrationSuggestion {
