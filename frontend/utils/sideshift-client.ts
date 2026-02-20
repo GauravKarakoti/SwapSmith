@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift';
+import { SideShiftQuoteSchema, SideShiftCheckoutResponseSchema, CoinSchema } from '../../shared/schemas/sideshift';
 const AFFILIATE_ID = process.env.NEXT_PUBLIC_AFFILIATE_ID;
 const API_KEY = process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
 
@@ -79,7 +80,7 @@ export async function createQuote(
         }
       }
     );
-    return { ...response.data, id: response.data.id };
+    return SideShiftQuoteSchema.parse(response.data);
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: { message?: string } } } };
     throw new Error(err.response?.data?.error?.message || 'Failed to create quote');
@@ -95,7 +96,7 @@ export async function createCheckout(
 ): Promise<SideShiftCheckoutResponse> {
   try {
     const response = await axios.post(
-      `${SIDESHIFT_BASE_URL}/checkout`,
+      `${SIDESHIFT_CONFIG.BASE_URL}/checkout`,
       {
         settleCoin,
         settleNetwork,
@@ -114,11 +115,13 @@ export async function createCheckout(
       }
     );
 
+    const validatedData = SideShiftCheckoutResponseSchema.parse(response.data);
+
     return {
-      id: response.data.id,
-      url: `${SIDESHIFT_CONFIG.CHECKOUT_URL}/${response.data.id}`,
-      settleAmount: response.data.settleAmount,
-      settleCoin: response.data.settleCoin
+      id: validatedData.id,
+      url: `${SIDESHIFT_CONFIG.CHECKOUT_URL}/${validatedData.id}`,
+      settleAmount: validatedData.settleAmount,
+      settleCoin: validatedData.settleCoin
     };
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: { message?: string } } } };
@@ -129,10 +132,10 @@ export async function createCheckout(
 /**
  * Fetches all available coins from SideShift API
  */
-export async function getCoins(): Promise<Coin[]> {
+export async function getCoins(): Promise<any[]> {
   try {
     const response = await axios.get(`${SIDESHIFT_CONFIG.BASE_URL}/coins`);
-    return response.data;
+    return CoinSchema.array().parse(response.data);
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: { message?: string } } } };
     throw new Error(err.response?.data?.error?.message || 'Failed to fetch coins');

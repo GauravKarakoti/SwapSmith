@@ -36,7 +36,8 @@
     "react-dom": "19.2.4",
     "react-hot-toast": "^2.6.0",
     "viem": "^2.37.3",
-    "wagmi": "^2.16.9"
+    "wagmi": "^2.16.9",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
