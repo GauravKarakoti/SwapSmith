@@ -29,10 +29,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 const NAV_ITEMS = [
   { href: "/prices", label: "Live Prices", Icon: TrendingUp },
   { href: "/discussions", label: "Discussions", Icon: MessageSquare },
-  { href: "/learn", label: "Learn", Icon: BookOpen },
-  { href: "/rewards", label: "Rewards", Icon: Trophy },
   { href: "/terminal", label: "Terminal", Icon: TerminalIcon },
-  { href: "/about", label: "About", Icon: Info },
 ];
 
 /* ================================================================ */
