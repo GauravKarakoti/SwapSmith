@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import Image from 'next/image';
-import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import {
@@ -51,14 +50,14 @@ const GITHUB_API = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}`;
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 30 },
   animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.5, delay, ease: [0.25, 0.46, 0.45, 0.94] },
+  transition: { duration: 0.5, delay, ease: [0.25, 0.46, 0.45, 0.94] as [number, number, number, number] },
 });
 
 const stagger = {
   animate: { transition: { staggerChildren: 0.06 } },
 };
 
-const cardVariant = {
+const cardVariant: Variants = {
   initial: { opacity: 0, y: 20, scale: 0.95 },
   animate: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.4, ease: 'easeOut' } },
 };
