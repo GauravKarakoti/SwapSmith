@@ -1,8 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { createSwapHistoryEntry } from '@/lib/database';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -17,10 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     dayOfWeek,
     dayOfMonth,
     settleAddress,
-    userId,
-    walletAddress,
   } = req.body;
-
 
   // Validate required parameters
   if (!fromAsset || !toAsset || !amount || !frequency || !settleAddress) {
@@ -74,35 +69,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const result = await response.json();
 
-    // Create swap history entry for reputation tracking (DCA orders are tracked as scheduled swaps)
-    if (userId && result.id) {
-      try {
-        await createSwapHistoryEntry(userId, walletAddress, {
-          sideshiftOrderId: `dca-${result.id}`,
-          quoteId: result.quoteId || null,
-          fromAsset,
-          fromNetwork: fromChain || fromAsset,
-          fromAmount: parseFloat(amount),
-          toAsset,
-          toNetwork: toChain || toAsset,
-          settleAmount: '0', // Will be updated when DCA executes
-          depositAddress: settleAddress,
-          status: 'pending',
-        });
-        console.log(`[Reputation] DCA swap history entry created for schedule ${result.id}`);
-      } catch (historyError) {
-        console.error('[Reputation] Failed to create DCA swap history entry:', historyError);
-        // Don't fail the DCA creation if history creation fails
-      }
-    }
-
     return res.status(201).json({
       success: true,
       dcaId: result.id,
       message: `DCA schedule created: ${amount} ${fromAsset} → ${toAsset} every ${frequency}`,
       data: result,
     });
-
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     console.error('API Route Error - Error creating DCA:', errorMessage);

@@ -1,21 +1,18 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { createQuote } from '@/utils/sideshift-client';
-import { createSwapHistoryEntry } from '@/lib/database';
 
 const SIDESHIFT_CLIENT_IP = process.env.SIDESHIFT_CLIENT_IP || "127.0.0.1";
-
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { fromAsset, toAsset, amount, fromChain, toChain, userId, walletAddress } = req.body;
+  const { fromAsset, toAsset, amount, fromChain, toChain } = req.body;
 
   if (!fromAsset || !toAsset || !amount) {
     return res.status(400).json({ error: 'Missing required parameters' });
   }
-
 
   try {
     // Use more robust logic to get the user's IP address.
@@ -48,31 +45,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       amount,
       userIP // Pass the validated IP
     );
-
-    // Create swap history entry for reputation tracking
-    if (userId && quote.id) {
-      try {
-        await createSwapHistoryEntry(userId, walletAddress, {
-          sideshiftOrderId: quote.id,
-          quoteId: quote.quoteId,
-          fromAsset,
-          fromNetwork: fromChain || fromAsset,
-          fromAmount: parseFloat(amount),
-          toAsset,
-          toNetwork: toChain || toAsset,
-          settleAmount: quote.settleAmount || '0',
-          depositAddress: quote.depositAddress?.address || quote.depositAddress,
-          status: 'pending',
-        });
-        console.log(`[Reputation] Swap history entry created for order ${quote.id}`);
-      } catch (historyError) {
-        console.error('[Reputation] Failed to create swap history entry:', historyError);
-        // Don't fail the swap if history creation fails
-      }
-    }
     
     res.status(200).json(quote);
-
   } catch (error: unknown) {
     // ✅ FIX: Changed `error: any` to a safer type guard.
     const errorMessage = error instanceof Error ? error.message : 'Internal server error';
