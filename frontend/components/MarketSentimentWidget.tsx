@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { fetchMarketSentiment } from "@/lib/market-sentiment";
 import SentimentDetailsModal from "@/components/SentimentDetailsModal";
+import Link from "next/link";
 
 export default function MarketSentimentWidget() {
   const [sentiment, setSentiment] = useState({
@@ -52,7 +53,8 @@ export default function MarketSentimentWidget() {
   };
 
   const handleDoubleClick = () => {
-    window.open("https://www.coingecko.com/en", "_blank");
+    // window.open("https://www.coingecko.com/en", "_blank");
+    // No redirect on double click
   };
 
   const handleMouseEnter = () => {
@@ -93,7 +95,7 @@ export default function MarketSentimentWidget() {
         className={`flex items-center gap-2 px-3 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-sm select-none cursor-pointer ${sentimentColor} text-sm font-semibold transition-opacity ${
           refreshing ? "opacity-60" : ""
         }`}
-        title="AI Market Sentiment (Live, based on CoinGecko trends)"
+        title="AI Market Sentiment (Live, based on Live Prices trends)"
         onContextMenu={handleContextMenu}
         onDoubleClick={handleDoubleClick}
         onMouseEnter={handleMouseEnter}
@@ -121,14 +123,12 @@ export default function MarketSentimentWidget() {
             <div className="mb-2 text-zinc-600 dark:text-zinc-300">
               <b>Market Sentiment Details</b><br />
               Based on top 50 coins 24h price & volume trends.<br />
-              <a
-                href="https://www.coingecko.com/en"
-                target="_blank"
-                rel="noopener noreferrer"
+              <Link
+                href="/prices"
                 className="text-blue-600 underline"
               >
-                View on CoinGecko
-              </a>
+                View on Live Prices
+              </Link>
             </div>
 
             <ul className="space-y-1 mb-1">
