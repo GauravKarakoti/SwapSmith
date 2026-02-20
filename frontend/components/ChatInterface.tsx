@@ -8,7 +8,7 @@ import TrustIndicators from './TrustIndicators';
 import IntentConfirmation from './IntentConfirmation';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
-import { useAudioRecorder } from '@/hooks/useAudioRecorder';
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 
 // Import QuoteData type from SwapConfirmation
 interface QuoteData {
@@ -56,15 +56,13 @@ export default function ChatInterface() {
   
   // Use cross-browser audio recorder with simplified approach
   const { 
-    isRecording, 
+    isListening: isRecording,
+    transcript,
     isSupported: isAudioSupported, 
     startRecording, 
     stopRecording, 
     error: audioError
-  } = useAudioRecorder({
-    sampleRate: 16000,
-    numberOfAudioChannels: 1
-  });
+  } = useSpeechRecognition();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -77,6 +75,15 @@ export default function ChatInterface() {
     }
   }, [audioError]);
 
+  // Handle voice result
+  useEffect(() => {
+    if (!isRecording && transcript) {
+        addMessage({ role: 'user', content: transcript, type: 'message' });
+        processCommand(transcript);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRecording, transcript]);
+
   const formatTime = (date: Date) => {
     const hours = date.getHours();
     const minutes = date.getMinutes();
@@ -87,101 +94,6 @@ export default function ChatInterface() {
 
   const addMessage = (message: Omit<Message, 'timestamp'>) => {
     setMessages(prev => [...prev, { ...message, timestamp: new Date() }]);
-  };
-
-  // Voice recording handlers (reserved for future UI integration)
-  const _handleStartRecording = async () => {
-    if (!isAudioSupported) {
-      addMessage({ 
-        role: 'assistant', 
-        content: `Voice input is not supported in this browser. Please use text input instead.`, 
-        type: 'message' 
-      });
-      return;
-    }
-
-    try {
-      await startRecording();
-    } catch (err) {
-      const errorMessage = handleError(err, ErrorType.VOICE_ERROR, { 
-        operation: 'microphone_access',
-        retryable: true 
-      });
-      addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
-    }
-  };
-
-  const _handleStopRecording = async () => {
-    try {
-      const audioBlob = await stopRecording();
-      if (audioBlob) {
-        await handleVoiceInput(audioBlob);
-      }
-    } catch (err) {
-      const errorMessage = handleError(err, ErrorType.VOICE_ERROR, { 
-        operation: 'stop_recording',
-        retryable: true 
-      });
-      addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
-    }
-  };
-
-  const handleVoiceInput = async (audioBlob: Blob) => {
-    setIsLoading(true);
-    addMessage({ role: 'user', content: '🎤 [Sending Voice...]', type: 'message' });
-    
-    const formData = new FormData();
-    
-    // Determine file extension based on blob type and browser
-    let fileName = 'voice.webm';
-    if (audioBlob.type.includes('mp4')) {
-      fileName = 'voice.mp4';
-    } else if (audioBlob.type.includes('wav')) {
-      fileName = 'voice.wav';
-    } else if (audioBlob.type.includes('ogg')) {
-      fileName = 'voice.ogg';
-    }
-    
-    formData.append('file', audioBlob, fileName);
-
-    try {
-        const response = await fetch('/api/transcribe', {
-            method: 'POST',
-            body: formData,
-        });
-
-        if (!response.ok) throw new Error('Transcription failed');
-
-        const data = await response.json();
-        
-        if (data.text) {
-            setMessages(prev => {
-                const newMsgs = [...prev];
-                const lastIndex = newMsgs.length - 1;
-                if (lastIndex >= 0 && newMsgs[lastIndex].content === '🎤 [Sending Voice...]') {
-                    newMsgs[lastIndex] = {
-                        ...newMsgs[lastIndex],
-                        content: `🎤 "${data.text}"`
-                    };
-                }
-                return newMsgs;
-            });
-            
-            await processCommand(data.text);
-        } else {
-            addMessage({ role: 'assistant', content: "I couldn't hear anything clearly.", type: 'message' });
-            setIsLoading(false);
-        }
-
-    } catch (error) {
-        const errorMessage = handleError(error, ErrorType.VOICE_ERROR, { 
-          operation: 'voice_transcription',
-          retryable: true 
-        });
-        setMessages(prev => prev.filter(m => m.content !== '🎤 [Sending Voice...]'));
-        addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
-        setIsLoading(false);
-    }
   };
 
   const processCommand = async (text: string) => {
@@ -536,12 +448,14 @@ return (
             <button 
               onClick={() => {
                 if (isRecording) {
-                  _handleStopRecording();
+                  stopRecording();
                 } else {
-                  _handleStartRecording();
+                  startRecording();
                 }
               }}
+              disabled={!isAudioSupported}
               className={`p-3 rounded-xl transition-all ${
+                !isAudioSupported ? 'bg-white/5 text-gray-600 cursor-not-allowed' :
                 isRecording ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/40' : 'bg-white/5 text-gray-400 hover:bg-white/10'
               }`}
             >
@@ -569,6 +483,13 @@ return (
           </div>
         </div>
         
+        {/* Voice Fallback */}
+        {!isAudioSupported && (
+            <div className="text-red-500 text-xs mt-2 px-1 text-center font-medium">
+                🎤 Voice input is not supported in your browser. Please use Chrome or type your command.
+            </div>
+        )}
+
         {/* Footer Warning */}
         {!isConnected && (
           <div className="flex justify-center mt-4">
