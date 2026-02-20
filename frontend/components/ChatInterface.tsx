@@ -579,12 +579,15 @@ return (
                         confidence={msg.data.confidence}
                         onAmountChange={(newAmount) => {
                           // Update the quote with the new amount
-                          const updatedQuote = { ...msg.data.quoteData, depositAmount: newAmount };
-                          addMessage({
-                            role: 'assistant',
-                            content: `Amount updated to ${newAmount} ${msg.data.quoteData.depositCoin}. Please review the new swap details.`,
-                            type: 'message'
-                          });
+                          const quoteData = msg.data?.quoteData;
+                          if (quoteData) {
+                            const updatedQuote = { ...quoteData, depositAmount: newAmount };
+                            addMessage({
+                              role: 'assistant',
+                              content: `Amount updated to ${newAmount} ${quoteData.depositCoin}. Please review the new swap details.`,
+                              type: 'message'
+                            });
+                          }
                         }}
                       />
                     )}
