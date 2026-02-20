@@ -10,6 +10,7 @@ import IntentConfirmation from './IntentConfirmation';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
+import { useAuth } from '@/hooks/useAuth';
 
 // Export QuoteData to be used in PortfolioSummary
 export interface QuoteData {
@@ -39,22 +40,47 @@ interface Message {
   };
 }
 
+const CHAT_LOCAL_STORAGE_KEY = 'swapsmith-chatinterface-messages-v1';
+const CHAT_SESSION_ID = 'chat-interface-default';
+const DEFAULT_ASSISTANT_MESSAGE: Message = {
+  role: 'assistant',
+  content: "Hello! I can help you swap assets, create payment links, or scout yields.\n\n💡 Tip: Try our Telegram Bot for on-the-go access!",
+  timestamp: new Date(),
+  type: 'message'
+};
+
+const normalizeLoadedMessages = (messages: Partial<Message>[] | undefined): Message[] => {
+  if (!Array.isArray(messages)) return [];
+
+  return messages
+    .filter((msg): msg is Partial<Message> & Pick<Message, 'role' | 'content'> =>
+      !!msg &&
+      (msg.role === 'user' || msg.role === 'assistant') &&
+      typeof msg.content === 'string'
+    )
+    .map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+      timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
+      type: msg.type || 'message',
+      data: msg.data
+    }))
+    .filter((msg) => !Number.isNaN(msg.timestamp.getTime()));
+};
+
 export default function ChatInterface() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: 'assistant',
-      content: "Hello! I can help you swap assets, create payment links, or scout yields.\n\n💡 Tip: Try our Telegram Bot for on-the-go access!",
-      timestamp: new Date(),
-      type: 'message'
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([DEFAULT_ASSISTANT_MESSAGE]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { address, isConnected } = useAccount();
+  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const { handleError } = useErrorHandler();
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasLoadedPersistenceRef = useRef(false);
+  const saveSequenceRef = useRef(0);
   
   // Use cross-browser audio recorder
   const { 
@@ -68,6 +94,158 @@ export default function ChatInterface() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    let isCancelled = false;
+    hasLoadedPersistenceRef.current = false;
+
+    const loadLocalMessages = (): Message[] => {
+      try {
+        const raw = localStorage.getItem(CHAT_LOCAL_STORAGE_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw) as Partial<Message>[];
+        return normalizeLoadedMessages(parsed);
+      } catch (error) {
+        console.error('Failed to load local chat history:', error);
+        return [];
+      }
+    };
+
+    const loadPersistedMessages = async () => {
+      if (isAuthLoading) return;
+
+      // Guest flow: load from localStorage
+      if (!isAuthenticated || !user?.uid) {
+        const localMessages = loadLocalMessages();
+        if (!isCancelled) {
+          setMessages(localMessages.length ? localMessages : [DEFAULT_ASSISTANT_MESSAGE]);
+          hasLoadedPersistenceRef.current = true;
+        }
+        return;
+      }
+
+      // Authenticated flow: load from PostgreSQL (via API)
+      try {
+        const response = await fetch(
+          `/api/chat/history?userId=${encodeURIComponent(user.uid)}&sessionId=${encodeURIComponent(CHAT_SESSION_ID)}&limit=200`
+        );
+
+        if (!response.ok) {
+          throw new Error(`Failed to load chat history: ${response.status}`);
+        }
+
+        const payload = await response.json();
+        const dbHistory = Array.isArray(payload.history) ? payload.history : [];
+        const normalizedDbMessages: Message[] = dbHistory
+          .slice()
+          .reverse()
+          .map((item: { role: Message['role']; content: string; createdAt: string; metadata?: { type?: Message['type']; data?: Message['data']; timestamp?: string } | null }) => ({
+            role: item.role,
+            content: item.content,
+            timestamp: item.metadata?.timestamp ? new Date(item.metadata.timestamp) : new Date(item.createdAt),
+            type: item.metadata?.type || 'message',
+            data: item.metadata?.data
+          }))
+          .filter((msg: Message) => !Number.isNaN(msg.timestamp.getTime()));
+
+        if (!isCancelled && normalizedDbMessages.length) {
+          setMessages(normalizedDbMessages);
+          hasLoadedPersistenceRef.current = true;
+          return;
+        }
+
+        // If DB is empty, hydrate from local guest messages once (migration path)
+        const localMessages = loadLocalMessages();
+        if (!isCancelled) {
+          setMessages(localMessages.length ? localMessages : [DEFAULT_ASSISTANT_MESSAGE]);
+          hasLoadedPersistenceRef.current = true;
+        }
+      } catch (error) {
+        console.error('Failed to load persisted chat history:', error);
+        const localMessages = loadLocalMessages();
+        if (!isCancelled) {
+          setMessages(localMessages.length ? localMessages : [DEFAULT_ASSISTANT_MESSAGE]);
+          hasLoadedPersistenceRef.current = true;
+        }
+      }
+    };
+
+    void loadPersistedMessages();
+
+    return () => {
+      isCancelled = true;
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [isAuthenticated, isAuthLoading, user?.uid]);
+
+  useEffect(() => {
+    if (!hasLoadedPersistenceRef.current || isAuthLoading) return;
+    const sequence = ++saveSequenceRef.current;
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(async () => {
+      if (sequence !== saveSequenceRef.current) return;
+
+      const normalizedForSave = messages.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp.toISOString(),
+        type: msg.type || 'message',
+        data: msg.data
+      }));
+
+      // Guest flow persistence
+      if (!isAuthenticated || !user?.uid) {
+        localStorage.setItem(CHAT_LOCAL_STORAGE_KEY, JSON.stringify(normalizedForSave));
+        return;
+      }
+
+      // Authenticated flow persistence to PostgreSQL (snapshot strategy)
+      try {
+        if (sequence !== saveSequenceRef.current) return;
+        await fetch(`/api/chat/history?userId=${encodeURIComponent(user.uid)}&sessionId=${encodeURIComponent(CHAT_SESSION_ID)}`, {
+          method: 'DELETE'
+        });
+
+        for (const msg of normalizedForSave) {
+          if (sequence !== saveSequenceRef.current) return;
+          await fetch('/api/chat/history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: user.uid,
+              walletAddress: address,
+              role: msg.role,
+              content: msg.content,
+              sessionId: CHAT_SESSION_ID,
+              metadata: {
+                type: msg.type,
+                data: msg.data,
+                timestamp: msg.timestamp
+              }
+            })
+          });
+        }
+
+        // Keep local cache as fallback for temporary API/DB outages
+        localStorage.setItem(CHAT_LOCAL_STORAGE_KEY, JSON.stringify(normalizedForSave));
+      } catch (error) {
+        console.error('Failed to save chat history to database:', error);
+        localStorage.setItem(CHAT_LOCAL_STORAGE_KEY, JSON.stringify(normalizedForSave));
+      }
+    }, 400);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [messages, isAuthenticated, isAuthLoading, user?.uid, address]);
 
   // Show audio error if any
   useEffect(() => {
