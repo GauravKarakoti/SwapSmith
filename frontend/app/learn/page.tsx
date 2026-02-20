@@ -18,6 +18,8 @@ import {
   Users,
   AlertCircle,
   LucideIcon,
+  Trophy,
+  Star,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import Navbar from '@/components/Navbar'
@@ -1160,6 +1162,19 @@ export default function LearnPage() {
                       <FileText className="w-3 h-3" />
                       {module.topics.length} topics
                     </span>
+                    {/* Reward Badge */}
+                    {!module.completed && (
+                      <span className="flex items-center gap-1 px-2 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded-full text-xs font-semibold text-yellow-400">
+                        <Trophy className="w-3 h-3" />
+                        {module.topics.length * 5} pts
+                      </span>
+                    )}
+                    {module.completed && (
+                      <span className="flex items-center gap-1 px-2 py-1 bg-green-500/10 border border-green-500/20 rounded-full text-xs font-semibold text-green-400">
+                        <Star className="w-3 h-3" />
+                        Completed
+                      </span>
+                    )}
                   </div>
 
                   {/* Progress Bar */}

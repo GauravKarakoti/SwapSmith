@@ -18,10 +18,9 @@
 .faq-section .border-b {
   border-color: #44318D33;
 }
+
 @import "tailwindcss";
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+
 body {
   overflow-x: hidden;
 }
@@ -199,5 +198,711 @@ body {
   .input-area input {
     margin-right: 0;
     margin-bottom: 0.5rem;
+  }
+}
+
+/* ================= THEME DESIGN SYSTEM ================= */
+
+:root {
+  --bg: #f6f8fb;
+  --panel: #ffffff;
+  --panel-soft: #f1f5f9;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --muted: #64748b;
+  --accent: #2563eb;
+}
+
+.dark {
+  --bg: #030308;
+  --panel: #0b0b12;
+  --panel-soft: #09090f;
+  --border: #1f2937;
+  --text: #f1f5f9;
+  --muted: #94a3b8;
+  --accent: #22d3ee;
+}
+
+/* smooth theme transition */
+* {
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    color 0.25s ease;
+}
+
+/* page background */
+.app-bg {
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* glass panel */
+.glass {
+  background: color-mix(in oklab, var(--panel) 85%, transparent);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--border);
+}
+
+/* soft panel */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+
+/* subtle gradient border */
+.gradient-border {
+  position: relative;
+}
+
+.gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    rgba(34,211,238,0.4),
+    rgba(168,85,247,0.4)
+  );
+  z-index: -1;
+  opacity: 0.4;
+}
+
+/* scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(120,120,120,0.3);
+  border-radius: 10px;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+/* ---------- CSS Variables - Auto Switch on .dark class ---------- */
+
+:root {
+  /* ===== LIGHT THEME - Vibrant & Modern ===== */
+  
+  /* Main backgrounds */
+  --bg-primary: 248 250 252;              /* Soft blue-gray */
+  --bg-secondary: 241 245 249;            /* Lighter blue-gray */
+  --bg-tertiary: 255 255 255;             /* Pure white for cards */
+  
+  /* Profile specific */
+  --profile-bg: 248 250 252;              /* Page background */
+  --profile-card-bg: 255 255 255;         /* Card background */
+  --profile-card-hover: 240 247 255;      /* Card hover */
+  --profile-border: 226 232 240;          /* Borders */
+  --profile-input-bg: 255 255 255;        /* Input background */
+  --profile-input-border: 226 232 240;    /* Input border */
+  
+  /* Glow card */
+  --glow-card-bg: 255 255 255;
+  --glow-card-border: 226 232 240;
+  --glow-overlay: 59 130 246;             /* Blue glow */
+  
+  /* Section backgrounds */
+  --section-bg: 248 250 252;
+  --section-hover: 240 247 255;
+  
+  /* Icon backgrounds */
+  --icon-bg: 241 245 249;
+  --icon-bg-hover: 219 234 254;
+  --icon-danger-bg: 254 226 226;
+  
+  /* Sidebar */
+  --sidebar-bg: 255 255 255;
+  --sidebar-hover: 240 247 255;           /* Light blue hover */
+  --sidebar-active: 219 234 254;          /* Stronger blue active */
+  --sidebar-border: 226 232 240;
+  
+  /* Chat bubbles */
+  --chat-user-bg: 14 165 233;             /* Cyan gradient start */
+  --chat-user-bg-end: 59 130 246;         /* Blue gradient end */
+  --chat-assistant-bg: 255 255 255;
+  --chat-assistant-border: 226 232 240;
+  
+  /* Text colors */
+  --text-primary: 15 23 42;               /* Deep slate */
+  --text-secondary: 71 85 105;            /* Medium slate */
+  --text-tertiary: 148 163 184;           /* Light slate */
+  --text-muted: 148 163 184;
+  
+  /* Borders */
+  --border-primary: 226 232 240;
+  --border-secondary: 203 213 225;
+  --border-accent: 147 197 253;           /* Blue accent border */
+  
+  /* Accents */
+  --accent-primary: 14 165 233;           /* Sky blue */
+  --accent-secondary: 59 130 246;         /* Blue */
+  --accent-tertiary: 139 92 246;          /* Purple */
+  
+  /* Status colors */
+  --success: 34 197 94;
+  --success-bg: 220 252 231;
+  --warning: 251 146 60;
+  --warning-bg: 254 243 199;
+  --error: 239 68 68;
+  --error-bg: 254 226 226;
+  --info: 14 165 233;
+  --info-bg: 224 242 254;
+  
+  /* Stats card */
+  --stats-bg: 255 255 255;
+  --stats-border: 226 232 240;
+  --stats-item-bg: 248 250 252;
+  
+  /* Input */
+  --input-bg: 255 255 255;
+  --input-border: 226 232 240;
+  --input-focus: 14 165 233;
+  
+  /* Toggle switch */
+  --toggle-bg: 226 232 240;
+  --toggle-active-bg: 59 130 246;
+  
+  /* Shadows & Effects */
+  --shadow-sm: 0 1px 3px 0 rgba(15, 23, 42, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(15, 23, 42, 0.1);
+  
+  /* Gradient overlays */
+  --gradient-overlay-start: 14 165 233;   /* Cyan */
+  --gradient-overlay-mid: 59 130 246;     /* Blue */
+  --gradient-overlay-end: 139 92 246;     /* Purple */
+  
+  /* Ambient gradient colors */
+  --ambient-blue: 59 130 246;
+  --ambient-purple: 139 92 246;
+  --ambient-cyan: 6 182 212;
+}
+
+.dark {
+  /* ===== DARK THEME - Sleek & Professional ===== */
+  
+  /* Main backgrounds */
+  --bg-primary: 5 5 5;                    /* Rich black */
+  --bg-secondary: 18 18 21;               /* Slightly lighter */
+  --bg-tertiary: 24 24 27;                /* Cards */
+  
+  /* Profile specific */
+  --profile-bg: 5 5 5;                    /* Page background */
+  --profile-card-bg: 24 24 27;            /* Card background */
+  --profile-card-hover: 39 39 42;         /* Card hover */
+  --profile-border: 39 39 42;             /* Borders */
+  --profile-input-bg: 24 24 27;           /* Input background */
+  --profile-input-border: 39 39 42;       /* Input border */
+  
+  /* Glow card */
+  --glow-card-bg: 24 24 27;
+  --glow-card-border: 39 39 42;
+  --glow-overlay: 59 130 246;             /* Blue glow */
+  
+  /* Section backgrounds */
+  --section-bg: 24 24 27;
+  --section-hover: 39 39 42;
+  
+  /* Icon backgrounds */
+  --icon-bg: 39 39 42;
+  --icon-bg-hover: 14 165 233;
+  --icon-danger-bg: 127 29 29;
+  
+  /* Sidebar */
+  --sidebar-bg: 24 24 27;
+  --sidebar-hover: 39 39 42;
+  --sidebar-active: 14 165 233;           /* Cyan active */
+  --sidebar-border: 39 39 42;
+  
+  /* Chat bubbles */
+  --chat-user-bg: 14 165 233;             /* Same gradient */
+  --chat-user-bg-end: 59 130 246;
+  --chat-assistant-bg: 24 24 27;
+  --chat-assistant-border: 39 39 42;
+  
+  /* Text colors */
+  --text-primary: 250 250 250;            /* Near white */
+  --text-secondary: 212 212 216;          /* Light gray */
+  --text-tertiary: 161 161 170;           /* Medium gray */
+  --text-muted: 113 113 122;
+  
+  /* Borders */
+  --border-primary: 39 39 42;
+  --border-secondary: 63 63 70;
+  --border-accent: 14 165 233;            /* Cyan accent */
+  
+  /* Accents */
+  --accent-primary: 14 165 233;           /* Cyan */
+  --accent-secondary: 59 130 246;         /* Blue */
+  --accent-tertiary: 139 92 246;          /* Purple */
+  
+  /* Status colors */
+  --success: 34 197 94;
+  --success-bg: 20 83 45;
+  --warning: 251 146 60;
+  --warning-bg: 120 53 15;
+  --error: 239 68 68;
+  --error-bg: 127 29 29;
+  --info: 14 165 233;
+  --info-bg: 12 74 110;
+  
+  /* Stats card */
+  --stats-bg: 24 24 27;
+  --stats-border: 39 39 42;
+  --stats-item-bg: 18 18 21;
+  
+  /* Input */
+  --input-bg: 24 24 27;
+  --input-border: 39 39 42;
+  --input-focus: 14 165 233;
+  
+  /* Toggle switch */
+  --toggle-bg: 63 63 70;
+  --toggle-active-bg: 59 130 246;
+  
+  /* Shadows & Effects (glows for dark) */
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
+  
+  /* Gradient overlays */
+  --gradient-overlay-start: 14 165 233;   /* Cyan */
+  --gradient-overlay-mid: 59 130 246;     /* Blue */
+  --gradient-overlay-end: 139 92 246;     /* Purple */
+  
+  /* Ambient gradient colors */
+  --ambient-blue: 59 130 246;
+  --ambient-purple: 139 92 246;
+  --ambient-cyan: 6 182 212;
+}
+
+/* Apply theme colors to body */
+body {
+  background-color: rgb(var(--bg-primary));
+  color: rgb(var(--text-primary));
+  transition: background-color 300ms ease, color 300ms ease;
+}
+
+/* ---------- Utility Classes for Theme-Aware Components ---------- */
+
+/* Backgrounds */
+.bg-primary {
+  background-color: rgb(var(--bg-primary));
+}
+
+.bg-secondary {
+  background-color: rgb(var(--bg-secondary));
+}
+
+.bg-tertiary {
+  background-color: rgb(var(--bg-tertiary));
+}
+
+.bg-profile {
+  background-color: rgb(var(--profile-bg));
+}
+
+.bg-profile-card {
+  background-color: rgb(var(--profile-card-bg));
+}
+
+.bg-profile-card-hover:hover {
+  background-color: rgb(var(--profile-card-hover));
+}
+
+.bg-glow-card {
+  background-color: rgb(var(--glow-card-bg));
+}
+
+.bg-section {
+  background-color: rgb(var(--section-bg));
+}
+
+.bg-section-hover:hover {
+  background-color: rgb(var(--section-hover));
+}
+
+.bg-icon {
+  background-color: rgb(var(--icon-bg));
+}
+
+.bg-icon-hover:hover {
+  background-color: rgb(var(--icon-bg-hover) / 0.1);
+}
+
+.bg-icon-danger {
+  background-color: rgb(var(--icon-danger-bg) / 0.1);
+}
+
+.bg-stats-item {
+  background-color: rgb(var(--stats-item-bg));
+}
+
+.bg-input {
+  background-color: rgb(var(--input-bg));
+}
+
+.bg-success {
+  background-color: rgb(var(--success-bg));
+}
+
+.bg-error {
+  background-color: rgb(var(--error-bg));
+}
+
+.bg-warning {
+  background-color: rgb(var(--warning-bg));
+}
+
+.bg-info {
+  background-color: rgb(var(--info-bg));
+}
+
+/* Text colors */
+.text-primary {
+  color: rgb(var(--text-primary));
+}
+
+.text-secondary {
+  color: rgb(var(--text-secondary));
+}
+
+.text-tertiary {
+  color: rgb(var(--text-tertiary));
+}
+
+.text-muted {
+  color: rgb(var(--text-muted));
+}
+
+.text-success {
+  color: rgb(var(--success));
+}
+
+.text-error {
+  color: rgb(var(--error));
+}
+
+.text-warning {
+  color: rgb(var(--warning));
+}
+
+.text-info {
+  color: rgb(var(--info));
+}
+
+/* Borders */
+.border-primary {
+  border-color: rgb(var(--border-primary));
+}
+
+.border-secondary {
+  border-color: rgb(var(--border-secondary));
+}
+
+.border-accent {
+  border-color: rgb(var(--border-accent));
+}
+
+.border-profile {
+  border-color: rgb(var(--profile-border));
+}
+
+.border-glow-card {
+  border-color: rgb(var(--glow-card-border));
+}
+
+.border-input {
+  border-color: rgb(var(--profile-input-border));
+}
+
+.border-success {
+  border-color: rgb(var(--success));
+}
+
+.border-error {
+  border-color: rgb(var(--error));
+}
+
+.border-warning {
+  border-color: rgb(var(--warning));
+}
+
+/* ---------- Component Styles ---------- */
+
+/* Glow Card */
+.glow-card {
+  background-color: rgb(var(--glow-card-bg));
+  border-color: rgb(var(--glow-card-border));
+  box-shadow: var(--shadow-md);
+}
+
+/* Profile Input */
+.profile-input {
+  background-color: rgb(var(--profile-input-bg));
+  border-color: rgb(var(--profile-input-border));
+  color: rgb(var(--text-primary));
+}
+
+.profile-input::placeholder {
+  color: rgb(var(--text-muted));
+}
+
+.profile-input:focus {
+  border-color: rgb(var(--input-focus));
+  box-shadow: 0 0 0 3px rgba(var(--input-focus) / 0.15);
+}
+
+/* Profile Select */
+.profile-select {
+  background-color: rgb(var(--icon-bg));
+  border-color: rgb(var(--profile-border));
+  color: rgb(var(--text-secondary));
+}
+
+.profile-select:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--input-focus) / 0.4);
+}
+
+/* Toggle Switch Background */
+.toggle-bg {
+  background-color: rgb(var(--toggle-bg));
+}
+
+.toggle-active-bg {
+  background-color: rgb(var(--toggle-active-bg));
+}
+
+/* Sidebar */
+.sidebar-container {
+  background-color: rgb(var(--sidebar-bg));
+  border-color: rgb(var(--sidebar-border));
+}
+
+.sidebar-item:hover {
+  background-color: rgb(var(--sidebar-hover));
+}
+
+.sidebar-item.active {
+  background-color: rgb(var(--sidebar-active) / 0.2);
+  border-color: rgb(var(--sidebar-active));
+}
+
+/* Dropdown Menu Items */
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  color: rgb(var(--text-primary));
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.menu-item:hover {
+  background-color: rgb(var(--sidebar-hover));
+}
+
+.menu-item:active {
+  background-color: rgb(var(--sidebar-active) / 0.1);
+}
+
+/* Chat Messages */
+.chat-user-bubble {
+  background: linear-gradient(135deg, 
+    rgb(var(--chat-user-bg)), 
+    rgb(var(--chat-user-bg-end))
+  );
+  color: white;
+  box-shadow: 0 4px 12px rgba(var(--chat-user-bg) / 0.25);
+}
+
+.chat-assistant-bubble {
+  background-color: rgb(var(--chat-assistant-bg));
+  border-color: rgb(var(--chat-assistant-border));
+  color: rgb(var(--text-primary));
+  box-shadow: var(--shadow-sm);
+}
+
+/* Stats Card */
+.stats-card {
+  background-color: rgb(var(--stats-bg));
+  border-color: rgb(var(--stats-border));
+  box-shadow: var(--shadow-md);
+}
+
+.stats-item {
+  background-color: rgb(var(--stats-item-bg));
+  border-color: rgb(var(--border-primary));
+}
+
+/* Input Field */
+.input-field {
+  background-color: rgb(var(--input-bg));
+  border-color: rgb(var(--input-border));
+  color: rgb(var(--text-primary));
+}
+
+.input-field:focus {
+  border-color: rgb(var(--input-focus));
+  box-shadow: 0 0 0 3px rgba(var(--input-focus) / 0.15);
+}
+
+/* Button Primary */
+.btn-primary {
+  background: linear-gradient(135deg, 
+    rgb(var(--accent-primary)), 
+    rgb(var(--accent-secondary))
+  );
+  color: white;
+  box-shadow: 0 4px 12px rgba(var(--accent-primary) / 0.25);
+}
+
+.btn-primary:hover {
+  box-shadow: 0 6px 16px rgba(var(--accent-primary) / 0.35);
+  transform: translateY(-1px);
+}
+
+/* Card */
+.card {
+  background-color: rgb(var(--bg-tertiary));
+  border-color: rgb(var(--border-primary));
+  box-shadow: var(--shadow-sm);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+/* Toggle Button */
+.toggle-button {
+  background-color: rgb(var(--bg-tertiary));
+  border-color: rgb(var(--border-primary));
+  color: rgb(var(--text-primary));
+  box-shadow: var(--shadow-md);
+}
+
+.toggle-button:hover {
+  box-shadow: var(--shadow-lg);
+}
+
+/* Loading Dots */
+.loading-dot {
+  background-color: rgb(var(--accent-primary));
+}
+
+/* Skeleton Loaders */
+.skeleton {
+  background-color: rgb(var(--bg-secondary));
+}
+
+.skeleton-item {
+  background-color: rgb(var(--bg-tertiary));
+}
+
+/* Ambient Backgrounds */
+.ambient-gradient-blue {
+  background-color: rgba(var(--ambient-blue) / 0.06);
+}
+
+.ambient-gradient-purple {
+  background-color: rgba(var(--ambient-purple) / 0.06);
+}
+
+.ambient-gradient-cyan {
+  background-color: rgba(var(--ambient-cyan) / 0.03);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgb(var(--bg-secondary));
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--border-secondary));
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--text-tertiary));
+}
+
+/* Gradient Text */
+.gradient-text {
+  background: linear-gradient(135deg,
+    rgb(var(--accent-primary)),
+    rgb(var(--accent-secondary)),
+    rgb(var(--accent-tertiary))
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Decorative Gradient Overlay */
+.gradient-overlay {
+  background: linear-gradient(135deg,
+    rgba(var(--gradient-overlay-start) / 0.1),
+    rgba(var(--gradient-overlay-mid) / 0.1),
+    rgba(var(--gradient-overlay-end) / 0.1)
+  );
+}
+
+/* Badge */
+.badge {
+  background: linear-gradient(135deg,
+    rgba(var(--accent-primary) / 0.15),
+    rgba(var(--accent-secondary) / 0.15)
+  );
+  border-color: rgba(var(--accent-primary) / 0.3);
+  color: rgb(var(--accent-primary));
+}
+
+/* Delete Button */
+.btn-delete {
+  color: rgb(var(--error));
+}
+
+.btn-delete:hover {
+  background-color: rgba(var(--error) / 0.1);
+}
+
+/* Success Indicator */
+.success-indicator {
+  background-color: rgb(var(--success));
+}
+
+/* FAQ Section */
+.faq-section {
+  background: linear-gradient(135deg,
+    rgb(var(--bg-secondary)),
+    rgb(var(--bg-tertiary))
+  );
+  border-color: rgb(var(--border-primary));
+  box-shadow: var(--shadow-lg);
+}
+
+/* Smooth Transitions */
+* {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .sidebar-container {
+    width: 280px;
   }
 }

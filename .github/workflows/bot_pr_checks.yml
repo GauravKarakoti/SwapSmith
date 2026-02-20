@@ -1,0 +1,35 @@
+name: Bot PR Checks
+
+on:
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - "bot/**"
+  workflow_dispatch:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./bot
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Use Node.js 22.x
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22.x
+        cache: 'npm'
+        cache-dependency-path: bot/package-lock.json
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run tests
+      run: npm test
+      
+    - name: Run build (type check)
+      run: npm run build
