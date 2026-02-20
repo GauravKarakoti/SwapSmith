@@ -220,7 +220,7 @@ async function handleTextMessage(
     return ctx.replyWithMarkdown(`📈 *Top Stablecoin Yields*\n\n${yields}`);
   }
 
-  /* ---------------- Swap / Checkout ---------------- */
+/* ---------------- Swap / Checkout ---------------- */
 
   if (parsed.intent === 'swap' || parsed.intent === 'checkout') {
     if (!parsed.settleAddress) {
@@ -238,7 +238,37 @@ async function handleTextMessage(
       ])
     );
   }
+
+  /* ---------------- Swap and Stake ---------------- */
+
+  if (parsed.intent === 'swap_and_stake') {
+    if (!parsed.settleAddress) {
+      await db.setConversationState(userId, { parsedCommand: parsed });
+      return ctx.reply('Please provide the destination wallet address for staking.');
+    }
+
+    await db.setConversationState(userId, { parsedCommand: parsed });
+
+    const protocolMsg = parsed.stakingProtocol 
+      ? `Staking Protocol: ${parsed.stakingProtocol}\n` 
+      : 'Staking Protocol: Best available yield pool\n';
+
+    return ctx.reply(
+      `🔄 *Swap and Stake*\n\n` +
+      `Swap: ${parsed.amount} ${parsed.fromAsset} → ${parsed.toAsset}\n` +
+      `${protocolMsg}` +
+      `Destination: ${parsed.settleAddress}`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          Markup.button.callback('✅ Confirm', 'confirm_swap_and_stake'),
+          Markup.button.callback('❌ Cancel', 'cancel_swap'),
+        ])
+      }
+    );
+  }
 }
+
 
 /* -------------------------------------------------------------------------- */
 /* ACTIONS                                  */
@@ -303,6 +333,64 @@ bot.action('cancel_swap', async (ctx) => {
   await db.clearConversationState(ctx.from.id);
   ctx.editMessageText('❌ Cancelled');
 });
+
+/* -------------------------------------------------------------------------- */
+/* SWAP AND STAKE ACTIONS                       */
+/* -------------------------------------------------------------------------- */
+
+bot.action('confirm_swap_and_stake', async (ctx) => {
+  if (!ctx.from) return;
+  const state = await db.getConversationState(ctx.from.id);
+  if (!state?.parsedCommand || state.parsedCommand.intent !== 'swap_and_stake') return;
+
+  const parsed = state.parsedCommand;
+
+  await ctx.editMessageText(
+    '⏳ Creating swap and stake order...',
+    { parse_mode: 'Markdown' }
+  );
+
+  try {
+    // Call the API to create swap and stake order
+    const response = await axios.post(
+      `${process.env.BOT_SERVICE_URL || 'http://localhost:3001'}/api/swap-and-stake/create`,
+      {
+        fromAsset: parsed.fromAsset,
+        fromChain: parsed.fromChain || 'ethereum',
+        toAsset: parsed.toAsset,
+        toChain: parsed.toChain || 'ethereum',
+        amount: parsed.amount,
+        stakingProtocol: parsed.stakingProtocol,
+        stakerAddress: parsed.settleAddress,
+      }
+    );
+
+    if (response.data.success) {
+      await ctx.editMessageText(
+        `✅ *Swap and Stake Order Created*\n\n` +
+        `Order ID: \`${response.data.orderId}\`\n` +
+        `Swap: ${parsed.amount} ${parsed.fromAsset} → ${parsed.toAsset}\n` +
+        `Staking: ${parsed.stakingProtocol || 'Best available pool'}\n\n` +
+        `You'll receive a notification when the swap completes and staking begins.`,
+        { parse_mode: 'Markdown' }
+      );
+    } else {
+      await ctx.editMessageText(
+        `❌ Failed to create order: ${response.data.error || 'Unknown error'}`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+  } catch (error) {
+    logger.error('Swap and stake error:', error);
+    await ctx.editMessageText(
+      '❌ Error creating swap and stake order. Please try again.',
+      { parse_mode: 'Markdown' }
+    );
+  }
+
+  await db.clearConversationState(ctx.from.id);
+});
+
 
 /* -------------------------------------------------------------------------- */
 /* STARTUP                                   */

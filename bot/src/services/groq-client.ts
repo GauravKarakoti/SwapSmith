@@ -25,7 +25,8 @@ const groq = getGroqClient();
 
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "unknown";
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "swap_and_stake" | "unknown";
+
   
   // Single Swap Fields
   fromAsset: string | null;
@@ -72,7 +73,12 @@ export interface ParsedCommand {
   toProject: string | null;
   toYield: number | null;
 
+  // Swap and Stake Fields
+  stakingProtocol?: string;
+  stakeImmediately?: boolean;
+
   // Limit Order Fields (Legacy - kept for compatibility, prefer 'conditions')
+
   conditionOperator?: 'gt' | 'lt';
   conditionValue?: number;
   conditionAsset?: string;
@@ -108,6 +114,9 @@ MODES:
 6. "yield_migrate": Move funds between pools.
 7. "dca": Dollar Cost Averaging.
 8. "limit_order": Buy/Sell at specific price.
+9. "swap_and_stake": Swap assets and immediately stake the result.
+   Example: "Swap 100 USDC for ETH and stake it immediately"
+
 
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
 
@@ -212,7 +221,17 @@ EXAMPLES:
 
 14. "DCA 200 USDC into ETH every month on the 1st"
     -> intent: "dca", fromAsset: "USDC", toAsset: "ETH", amount: 200, frequency: "monthly", dayOfMonth: "1", confidence: 95
+
+15. "Swap 100 USDC for ETH and stake it immediately"
+    -> intent: "swap_and_stake", fromAsset: "USDC", toAsset: "ETH", amount: 100, stakingProtocol: null, stakeImmediately: true, confidence: 95
+
+16. "Swap 50 ETH to USDC and stake on Aave"
+    -> intent: "swap_and_stake", fromAsset: "ETH", toAsset: "USDC", amount: 50, stakingProtocol: "Aave", stakeImmediately: true, confidence: 95
+
+17. "Convert all my BTC to ETH and earn yield"
+    -> intent: "swap_and_stake", fromAsset: "BTC", toAsset: "ETH", amountType: "all", stakingProtocol: null, stakeImmediately: true, confidence: 90
 `;
+
 
 // RENAMED from parseUserCommand to parseWithLLM
 export async function parseWithLLM(

@@ -121,7 +121,39 @@ export const limitOrders = pgTable('limit_orders', {
   lastCheckedAt: timestamp('last_checked_at'),
 });
 
+// --- STAKE ORDERS (Swap and Stake compound actions) ---
+
+export const stakeOrders = pgTable('stake_orders', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
+  sideshiftOrderId: text('sideshift_order_id').notNull().unique(),
+  quoteId: text('quote_id').notNull(),
+  fromAsset: text('from_asset').notNull(),
+  fromNetwork: text('from_network').notNull(),
+  fromAmount: real('from_amount').notNull(),
+  swapToAsset: text('swap_to_asset').notNull(),
+  swapToNetwork: text('swap_to_network').notNull(),
+  stakeAsset: text('stake_asset').notNull(),
+  stakeProtocol: text('stake_protocol').notNull(),
+  stakeNetwork: text('stake_network').notNull(),
+  settleAmount: text('settle_amount'),
+  depositAddress: text('deposit_address').notNull(),
+  depositMemo: text('deposit_memo'),
+  stakeAddress: text('stake_address'),
+  stakeTxHash: text('stake_tx_hash'),
+  swapStatus: text('swap_status').notNull().default('pending'),
+  stakeStatus: text('stake_status').notNull().default('pending'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  completedAt: timestamp('completed_at'),
+}, (table) => [
+  index('idx_stake_orders_telegram_id').on(table.telegramId),
+  index('idx_stake_orders_swap_status').on(table.swapStatus),
+  index('idx_stake_orders_stake_status').on(table.stakeStatus),
+]);
+
 // --- SHARED SCHEMAS (used by both bot and frontend) ---
+
 
 export const coinPriceCache = pgTable('coin_price_cache', {
   id: serial('id').primaryKey(),

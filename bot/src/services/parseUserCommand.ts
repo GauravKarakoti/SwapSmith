@@ -36,6 +36,11 @@ const REGEX_QUOTE = /(?:([A-Z]+)\s+)?(?:worth|value|valued\s+at)\s*(?:of)?\s*(\$
 // New Regex for Multiple Source Assets
 const REGEX_MULTI_SOURCE = /([A-Z]+)\s+(?:and|&)\s+([A-Z]+)\s+(?:to|into|for)/i;
 
+// New Regex for Stake Keywords
+const REGEX_STAKE_KEYWORDS = /\b(stake|staking|deposit\s+to\s+yield|earn\s+yield|farm|pool)\b/i;
+const REGEX_STAKE_PROTOCOL = /\b(?:on|with|via|using|in)\s+([A-Za-z]+(?:\s*[A-Za-z]+)?)\s*(?:pool|protocol|platform)?/i;
+
+
 function normalizeNumber(val: string): number {
   val = val.toLowerCase().replace(/[\$,]/g, '');
 
@@ -63,9 +68,11 @@ export async function parseUserCommand(
 
   // 1. Check for Swap Intent Keywords
   const isSwapRelated = /\b(swap|convert|send|transfer|buy|sell|move|exchange)\b/i.test(input);
+  const hasStakeIntent = REGEX_STAKE_KEYWORDS.test(input);
 
   if (isSwapRelated) {
-    let intent: ParsedCommand['intent'] = 'swap';
+    let intent: ParsedCommand['intent'] = hasStakeIntent ? 'swap_and_stake' : 'swap';
+
     let amountType: ParsedCommand['amountType'] = null;
     let amount: number | null = null;
     let excludeAmount: number | undefined;
@@ -84,6 +91,11 @@ export async function parseUserCommand(
     let conditionValue: number | undefined;
     let conditionAsset: string | undefined;
     let conditions: ParsedCommand['conditions'];
+
+    // Stake fields
+    let stakingProtocol: string | undefined;
+    let stakeImmediately: boolean = hasStakeIntent;
+
 
     // Check Multi-source
     if (REGEX_MULTI_SOURCE.test(input)) {
@@ -221,8 +233,19 @@ export async function parseUserCommand(
        }
     }
 
-    // F. Detect Limit Order Condition
+    // F. Detect Staking Protocol
+    if (hasStakeIntent) {
+      const protocolMatch = input.match(REGEX_STAKE_PROTOCOL);
+      if (protocolMatch) {
+        stakingProtocol = protocolMatch[1].trim();
+        confidence += 20;
+      }
+      // If no specific protocol mentioned, we'll use the best yield pool later
+    }
+
+    // G. Detect Limit Order Condition
     const conditionMatch = input.match(REGEX_CONDITION);
+
     if (conditionMatch) {
         const assetStr = conditionMatch[1];
         const operatorStr = conditionMatch[2].toLowerCase();
@@ -295,13 +318,18 @@ export async function parseUserCommand(
             settleAsset: null, settleNetwork: null, settleAmount: null, settleAddress: null,
             fromProject: null, fromYield: null, toProject: null, toYield: null,
 
-            conditionOperator,
-            conditionValue,
-            conditionAsset,
-            targetPrice: conditionValue,
-            condition: conditionOperator === 'gt' ? 'above' : 'below',
+        conditionOperator,
+        conditionValue,
+        conditionAsset,
+        targetPrice: conditionValue,
+        condition: conditionOperator === 'gt' ? 'above' : 'below',
 
-            confidence: Math.min(100, confidence + 30),
+        // Stake fields
+        stakingProtocol,
+        stakeImmediately,
+
+        confidence: Math.min(100, confidence + 30),
+
             validationErrors: [],
             parsedMessage,
             requiresConfirmation: false,
