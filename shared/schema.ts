@@ -57,7 +57,9 @@ export const orders = pgTable('orders', {
   status: text('status').notNull().default('pending'),
   tx_hash: text('tx_hash'),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => [
+  index("idx_orders_telegram_id").on(table.telegramId),
+]);
 
 export const checkouts = pgTable('checkouts', {
   id: serial('id').primaryKey(),
@@ -69,7 +71,9 @@ export const checkouts = pgTable('checkouts', {
   settleAddress: text('settle_address').notNull(),
   status: text('status').notNull().default('pending'),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => [
+  index("idx_checkouts_telegram_id").on(table.telegramId),
+]);
 
 export const addressBook = pgTable('address_book', {
   id: serial('id').primaryKey(),
@@ -77,7 +81,9 @@ export const addressBook = pgTable('address_book', {
   label: text('label').notNull(),
   address: text('address').notNull(),
   chain: text('chain').notNull(),
-});
+}, (table) => [
+  index("idx_address_book_telegram_id").on(table.telegramId),
+]);
 
 export const watchedOrders = pgTable('watched_orders', {
   id: serial('id').primaryKey(),
@@ -85,7 +91,9 @@ export const watchedOrders = pgTable('watched_orders', {
   sideshiftOrderId: text('sideshift_order_id').notNull().unique(),
   lastStatus: text('last_status').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => [
+  index("idx_watched_orders_telegram_id").on(table.telegramId),
+]);
 
 export const dcaSchedules = pgTable('dca_schedules', {
   id: serial('id').primaryKey(),
@@ -101,7 +109,9 @@ export const dcaSchedules = pgTable('dca_schedules', {
   isActive: integer('is_active').notNull().default(1),
   nextExecutionAt: timestamp('next_execution_at').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => [
+  index("idx_dca_schedules_telegram_id").on(table.telegramId),
+]);
 
 export const limitOrders = pgTable('limit_orders', {
   id: serial('id').primaryKey(),
@@ -116,7 +126,9 @@ export const limitOrders = pgTable('limit_orders', {
   isActive: integer('is_active').notNull().default(1),
   createdAt: timestamp('created_at').defaultNow(),
   lastCheckedAt: timestamp('last_checked_at'),
-});
+}, (table) => [
+  index("idx_limit_orders_telegram_id").on(table.telegramId),
+]);
 
 // --- SHARED SCHEMAS (used by both bot and frontend) ---
 
