@@ -36,6 +36,10 @@ const REGEX_QUOTE = /(?:([A-Z]+)\s+)?(?:worth|value|valued\s+at)\s*(?:of)?\s*(\$
 // New Regex for Multiple Source Assets
 const REGEX_MULTI_SOURCE = /([A-Z]+)\s+(?:and|&)\s+([A-Z]+)\s+(?:to|into|for)/i;
 
+// New Regex for Swap and Stake / Zap intents
+const REGEX_SWAP_STAKE = /(?:swap\s+and\s+stake|zap\s+(?:into|to)|stake\s+(?:my|after|then)|swap\s+(?:to|into)\s+(?:stake|yield))/i;
+const REGEX_STAKE_PROTOCOL = /(?:to\s+)?(aave|compound|yearn|lido|morpho|euler|spark)/i;
+
 function normalizeNumber(val: string): number {
   val = val.toLowerCase().replace(/[\$,]/g, '');
 
@@ -60,6 +64,68 @@ export async function parseUserCommand(
                .replace(/\s+(please|kindly|immediately|now|right now)$/i, '')
                .replace(/\b(like)\b/gi, '') // "swap like 100" -> "swap 100"
                .trim();
+
+  // Check for Swap and Stake / Zap Intent
+  if (REGEX_SWAP_STAKE.test(input)) {
+    const protocolMatch = input.match(REGEX_STAKE_PROTOCOL);
+    const stakeProtocol = protocolMatch ? protocolMatch[1].toLowerCase() : null;
+    
+    let amount: number | null = null;
+    let fromAsset: string | null = null;
+    let toAsset: string | null = null;
+    
+    const amtMatch = input.match(/\b(\d+(\.\d+)?)\b/);
+    if (amtMatch) {
+      amount = parseFloat(amtMatch[1]);
+    }
+    
+    const fromToMatch = input.match(/([A-Z]{2,5})\s+(?:to|into)\s+([A-Z]{2,5})/i);
+    if (fromToMatch) {
+      fromAsset = fromToMatch[1].toUpperCase();
+      toAsset = fromToMatch[2].toUpperCase();
+    }
+    
+    if (!toAsset) {
+      toAsset = 'USDC';
+    }
+    
+    return {
+      success: true,
+      intent: 'swap_and_stake',
+      fromAsset,
+      fromChain: null,
+      toAsset,
+      toChain: null,
+      amount,
+      amountType: amount ? 'exact' : null,
+      excludeAmount: undefined,
+      excludeToken: undefined,
+      quoteAmount: undefined,
+      conditions: undefined,
+      portfolio: undefined,
+      frequency: null,
+      dayOfWeek: null,
+      dayOfMonth: null,
+      settleAsset: null,
+      settleNetwork: null,
+      settleAmount: null,
+      settleAddress: null,
+      fromProject: stakeProtocol,
+      fromYield: null,
+      toProject: stakeProtocol,
+      toYield: null,
+      conditionOperator: undefined,
+      conditionValue: undefined,
+      conditionAsset: undefined,
+      targetPrice: undefined,
+      condition: undefined,
+      confidence: 80,
+      validationErrors: [],
+      parsedMessage: `Parsed: Swap ${amount || '?'} ${fromAsset || '?'} to ${toAsset} and stake`,
+      requiresConfirmation: true,
+      originalInput: userInput
+    };
+  }
 
   // 1. Check for Swap Intent Keywords
   const isSwapRelated = /\b(swap|convert|send|transfer|buy|sell|move|exchange)\b/i.test(input);
