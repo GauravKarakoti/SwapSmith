@@ -59,6 +59,7 @@ export const orders = pgTable('orders', {
   createdAt: timestamp('created_at').defaultNow(),
 }, (table) => [
   index("idx_orders_telegram_id").on(table.telegramId),
+  index("idx_orders_status").on(table.status),
 ]);
 
 export const checkouts = pgTable('checkouts', {
