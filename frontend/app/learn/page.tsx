@@ -7,7 +7,6 @@ import { motion } from 'framer-motion'
 import {
   BookOpen,
   FileText,
-  ChevronRight,
   TrendingUp,
   Zap,
   Shield,
@@ -18,12 +17,12 @@ import {
   Users,
   AlertCircle,
   LucideIcon,
-  Trophy,
-  Star,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
+import FullPageAd from '@/components/FullPageAd'
+import { useLearnFullPageAd } from '@/hooks/useAds'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -942,6 +941,7 @@ SwapSmith shows you:
 // Main Component
 // ---------------------------------------------------------------------------
 export default function LearnPage() {
+  const { showAd: showFeatureAd, dismiss: dismissFeatureAd } = useLearnFullPageAd()
   const router = useRouter()
   const { user, isLoading } = useAuth()
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
@@ -1049,6 +1049,7 @@ export default function LearnPage() {
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col">
+      {showFeatureAd && <FullPageAd variant="features" duration={10000} onDismiss={dismissFeatureAd} />}
       <Navbar />
       <div className="pt-24 pb-16 px-4 sm:px-6 lg:px-8 flex-1 w-full">
         {/* Header */}

@@ -20,8 +20,8 @@ import Navbar from "@/components/Navbar";
 import ClaudeChatInput from "@/components/ClaudeChatInput";
 import SwapConfirmation from "@/components/SwapConfirmation";
 import IntentConfirmation from "@/components/IntentConfirmation";
-import AdsContainer from "@/components/AdsContainer";
-import { useTerminalAds } from "@/hooks/useAds";
+import FullPageAd from "@/components/FullPageAd";
+import { useTerminalFullPageAd } from "@/hooks/useAds";
 
 import { useChatHistory, useChatSessions } from "@/hooks/useCachedData";
 import { useErrorHandler, ErrorType } from "@/hooks/useErrorHandler";
@@ -136,8 +136,8 @@ export default function TerminalPage() {
   const { address, isConnected } = useAccount();
   const { handleError } = useErrorHandler();
 
-  // Ads — shown for 3 s on first terminal visit and always after login
-  const { showAd, currentAd, dismiss: dismissAd } = useTerminalAds();
+  // Ads — full-page plans overlay shown on login arrival + periodic visits
+  const { showAd, dismiss: dismissAd } = useTerminalFullPageAd();
 
   // State
   const [messages, setMessages] = useState<Message[]>([
@@ -453,14 +453,9 @@ export default function TerminalPage() {
     <>
       <Navbar />
 
-      {/* 3-second ad overlay — shown on login arrival or random terminal visits */}
-      {showAd && currentAd && (
-        <AdsContainer
-          ad={currentAd}
-          duration={3000}
-          onDismiss={dismissAd}
-          position="bottom-right"
-        />
+      {/* Full-page plans interstitial — shown on login arrival or periodic visits */}
+      {showAd && (
+        <FullPageAd variant="plans" duration={12000} onDismiss={dismissAd} />
       )}
 
       <div className="flex h-screen pt-16 app-bg overflow-hidden">

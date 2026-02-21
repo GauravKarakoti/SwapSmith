@@ -143,3 +143,69 @@ export function useLearnAds(): UseAdsReturn {
 export function useLoginAds(): UseAdsReturn {
   return { showAd: false, currentAd: null, dismiss: () => {} }
 }
+
+/* ------------------------------------------------------------------ */
+/* Full-page ad hooks (for FullPageAd component)                        */
+/* — These only care about show/dismiss, no currentAd needed.           */
+/* ------------------------------------------------------------------ */
+
+/** Terminal page — 10-minute cooldown (more frequent, but not every time) */
+export function useTerminalFullPageAd() {
+  const [showAd, setShowAd] = useState(false)
+
+  useEffect(() => {
+    const justLoggedIn = consumeJustLoggedIn()
+    const key = PAGE_KEYS.terminal
+    const timer = setTimeout(() => {
+      const now = Date.now()
+      const lastShown = Number(localStorage.getItem(key) ?? 0)
+      if (!justLoggedIn && now - lastShown < 10 * 60 * 1000) return
+      localStorage.setItem(key, String(now))
+      setShowAd(true)
+    }, justLoggedIn ? 600 : 1200)
+    return () => clearTimeout(timer)
+  }, [])
+
+  return { showAd, dismiss: () => setShowAd(false) }
+}
+
+/** Prices page — 85% probability, 8-min cooldown, shows after 3s */
+export function usePricesFullPageAd() {
+  const [showAd, setShowAd] = useState(false)
+
+  useEffect(() => {
+    const key = PAGE_KEYS.prices
+    const timer = setTimeout(() => {
+      const now = Date.now()
+      const lastShown = Number(localStorage.getItem(key) ?? 0)
+      if (now - lastShown < PAGE_COOLDOWNS.prices) return
+      if (Math.random() > PAGE_PROBS.prices) return
+      localStorage.setItem(key, String(now))
+      setShowAd(true)
+    }, 3000)
+    return () => clearTimeout(timer)
+  }, [])
+
+  return { showAd, dismiss: () => setShowAd(false) }
+}
+
+/** Learn page — 80% probability, 60-min cooldown, shows after 6s */
+export function useLearnFullPageAd() {
+  const [showAd, setShowAd] = useState(false)
+
+  useEffect(() => {
+    const key = PAGE_KEYS.learn
+    const timer = setTimeout(() => {
+      const now = Date.now()
+      const lastShown = Number(localStorage.getItem(key) ?? 0)
+      if (now - lastShown < PAGE_COOLDOWNS.learn) return
+      if (Math.random() > PAGE_PROBS.learn) return
+      localStorage.setItem(key, String(now))
+      setShowAd(true)
+    }, 6000)
+    return () => clearTimeout(timer)
+  }, [])
+
+  return { showAd, dismiss: () => setShowAd(false) }
+}
+

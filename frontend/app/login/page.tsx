@@ -93,13 +93,13 @@ export default function LoginPage() {
       {/* LEFT — login form                                              */}
       {/*  */}
       <section
-        className="relative flex flex-1 flex-col items-center justify-center p-8 md:p-12 lg:p-16 z-10"
-        style={{ borderRight: '1px solid rgba(255,255,255,0.05)', background: '#0b0b18', maxWidth: '480px', minWidth: '340px' }}
+        className="relative flex flex-col justify-center z-10 w-full lg:w-[33%] xl:w-[30%]"
+        style={{ borderRight: '1px solid rgba(255,255,255,0.07)', background: '#0b0b18', minWidth: '320px' }}
       >
         {/* Top glow */}
         <div className="pointer-events-none absolute top-0 left-0 right-0 h-72" style={{ background: 'radial-gradient(ellipse at 50% 0%, rgba(79,70,229,0.12) 0%, transparent 70%)' }} />
 
-        <div className="w-full max-w-sm flex flex-col gap-6">
+        <div className="flex flex-col gap-6 px-8 xl:px-12 py-12 w-full">
           {/* Logo */}
           <div className="animate-element animate-delay-100 flex items-center gap-2.5 mb-2">
             <div className="flex items-center justify-center w-9 h-9 rounded-xl" style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.22)' }}>
@@ -193,11 +193,12 @@ export default function LoginPage() {
             </div>
 
             {/* Submit */}
+            <div className="animate-element animate-delay-600 pt-1 flex justify-center">
             <button
               type="submit"
               disabled={isLoading}
-              className="animate-element animate-delay-600 w-full rounded-2xl py-4 font-bold flex items-center justify-center gap-2 transition-all duration-200 active:scale-[0.99] group disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ background: '#2563eb', color: '#fff', boxShadow: '0 8px 24px rgba(37,99,235,0.35)' }}
+              className="rounded-2xl py-4 font-bold flex items-center justify-center gap-2 transition-all duration-200 active:scale-[0.99] group disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: '#2563eb', color: '#fff', boxShadow: '0 8px 24px rgba(37,99,235,0.35)', width: '80%' }}
             >
               {isLoading ? (
                 <><Loader2 className="w-4 h-4 animate-spin" /> Signing in</>
@@ -205,6 +206,7 @@ export default function LoginPage() {
                 <>Sign In <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" /></>
               )}
             </button>
+            </div>
           </form>
 
           {/* Divider */}
@@ -233,43 +235,39 @@ export default function LoginPage() {
       {/*  */}
       {/* RIGHT — plans showcase                                         */}
       {/*  */}
-      <section className="animate-slide-right animate-delay-300 hidden md:flex flex-1 relative overflow-hidden flex-col justify-center px-10 xl:px-16 py-14">
+      <section className="animate-slide-right animate-delay-300 hidden md:flex flex-1 relative overflow-y-auto overflow-x-hidden flex-col">
 
-        {/* Rich diagonal gradient background */}
-        <div className="absolute inset-0 pointer-events-none" style={{
-          background: 'linear-gradient(135deg, #0a0a1a 0%, #0d0820 30%, #080d22 60%, #0a0616 100%)',
-        }} />
+        {/* Background */}
+        <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(145deg, #07071a 0%, #0a0a1e 40%, #080d22 70%, #090716 100%)' }} />
         {/* Ambient glows */}
-        <div className="absolute pointer-events-none" style={{ top: '-15%', right: '-10%', width: '600px', height: '600px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(79,70,229,0.10) 0%, transparent 70%)' }} />
-        <div className="absolute pointer-events-none" style={{ bottom: '-15%', left: '5%', width: '500px', height: '500px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(124,58,237,0.07) 0%, transparent 70%)' }} />
-        <div className="absolute pointer-events-none" style={{ top: '40%', left: '30%', width: '400px', height: '400px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(37,99,235,0.06) 0%, transparent 70%)' }} />
+        <div className="absolute pointer-events-none" style={{ top: '-10%', right: '-5%', width: '650px', height: '650px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(79,70,229,0.11) 0%, transparent 70%)' }} />
+        <div className="absolute pointer-events-none" style={{ bottom: '-15%', left: '10%', width: '500px', height: '500px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(124,58,237,0.07) 0%, transparent 70%)' }} />
         {/* Dot grid */}
-        <div className="absolute inset-0 pointer-events-none opacity-[0.02]" style={{
-          backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.9) 1px, transparent 1px)',
-          backgroundSize: '28px 28px',
-        }} />
+        <div className="absolute inset-0 pointer-events-none" style={{ opacity: 0.022, backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.9) 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
 
-        <div className="relative z-10 max-w-2xl w-full">
-
-          {/* Eyebrow + heading */}
-          <div className="mb-8">
-            <div className="animate-element animate-delay-400 inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-5 text-[10px] font-black uppercase tracking-[0.18em]" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)', color: '#6b7280' }}>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              SwapSmith Plans
-            </div>
-            <h2 className="animate-element animate-delay-500 text-4xl xl:text-5xl font-black tracking-tighter leading-[1.08] mb-3" style={{ color: '#f1f5f9' }}>
-              Upgrade your<br />
-              <span style={{ background: 'linear-gradient(90deg, #60a5fa, #a78bfa, #818cf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                trading stack.
-              </span>
-            </h2>
-            <p className="animate-element animate-delay-600 text-sm leading-relaxed" style={{ color: '#4b5563', maxWidth: '380px' }}>
-              AI-powered routing, yield scouting, Telegram swaps &amp; multi-chain support — all in one terminal.
-            </p>
+        {/* ── Partition 1: header ───────────────────────────────────── */}
+        <div className="relative z-10 px-12 xl:px-16 pt-14 pb-10" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+          <div className="animate-element animate-delay-400 inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-5 text-[10px] font-black uppercase tracking-[0.18em]" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)', color: '#6b7280' }}>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            SwapSmith Plans
           </div>
+          <h2 className="animate-element animate-delay-500 text-4xl xl:text-5xl font-black tracking-tighter leading-[1.08] mb-3" style={{ color: '#f1f5f9' }}>
+            Upgrade your<br />
+            <span style={{ background: 'linear-gradient(90deg, #60a5fa, #a78bfa, #818cf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              trading stack.
+            </span>
+          </h2>
+          <p className="animate-element animate-delay-600 text-sm leading-relaxed" style={{ color: '#4b5563', maxWidth: '380px' }}>
+            AI-powered routing, yield scouting, Telegram swaps &amp; multi-chain support.
+          </p>
+        </div>
+
+        {/* ── Partition 2: plan cards ───────────────────────────────── */}
+        <div className="relative z-10 flex-1 flex flex-col justify-center px-12 xl:px-16 py-8" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+        <div className="max-w-2xl w-full">
 
           {/* Plan cards */}
-          <div className="animate-element animate-delay-700 grid grid-cols-3 gap-3 mb-6">
+          <div className="animate-element animate-delay-700 grid grid-cols-3 gap-3">
             {PLANS.map((plan) => (
               <div
                 key={plan.name}
@@ -313,7 +311,11 @@ export default function LoginPage() {
             ))}
           </div>
 
-          {/* Feature cards (testimonial-style) */}
+        </div>
+        </div>
+
+        {/* ── Partition 3: feature cards ────────────────────────────── */}
+        <div className="relative z-10 px-12 xl:px-16 py-6">
           <div className="grid grid-cols-4 gap-2.5">
             {FEATURES.map((feat, i) => {
               const Icon = feat.icon
