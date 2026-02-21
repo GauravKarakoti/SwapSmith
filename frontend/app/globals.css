@@ -906,3 +906,32 @@ body {
     width: 280px;
   }
 }
+.contributor-badge {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  transform: translateY(0);
+  padding: 0.35rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  z-index: 30;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+}
+@media (max-width: 640px) {
+  .contributor-badge { top: 0.5rem; right: 0.5rem; font-size: 0.7rem; }
+}
+.contributor-card { position: relative; padding: 2.25rem 1.25rem 1.25rem; }
+.contributor-avatar {
+  width: 88px;
+  height: 88px;
+  border-radius: 9999px;
+  display: block;
+  margin: -44px auto 0; /* pulls avatar slightly above card center, keeps it centered */
+  border: 4px solid rgba(255,255,255,0.06); /* subtle stroke */
+  background: linear-gradient(180deg, #fff, #f3f4f6); /* fallback */
+}
+@media (max-width:640px) {
+  .contributor-avatar { width:72px; height:72px; margin:-36px auto 0; }
+  .contributor-card { padding-top:1.5rem; }
+}

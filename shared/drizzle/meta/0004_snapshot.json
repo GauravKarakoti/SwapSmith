@@ -1,5 +1,5 @@
 {
-  "id": "90f22460-5f7b-47dc-a5e0-ff5fa090f868",
+  "id": "1e3e1f2c-db62-47b1-9ed4-123cf5305e2d",
   "prevId": "31c1b62a-c05d-4722-8b78-d36a5bbc5a26",
   "version": "7",
   "dialect": "postgresql",
@@ -39,23 +39,7 @@
           "notNull": true
         }
       },
-      "indexes": {
-        "idx_address_book_telegram_id": {
-          "name": "idx_address_book_telegram_id",
-          "columns": [
-            {
-              "expression": "telegram_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -186,23 +170,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "idx_checkouts_telegram_id": {
-          "name": "idx_checkouts_telegram_id",
-          "columns": [
-            {
-              "expression": "telegram_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
@@ -542,23 +510,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "idx_dca_schedules_telegram_id": {
-          "name": "idx_dca_schedules_telegram_id",
-          "columns": [
-            {
-              "expression": "telegram_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -762,23 +714,7 @@
           "notNull": false
         }
       },
-      "indexes": {
-        "idx_limit_orders_telegram_id": {
-          "name": "idx_limit_orders_telegram_id",
-          "columns": [
-            {
-              "expression": "telegram_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -884,11 +820,11 @@
         }
       },
       "indexes": {
-        "idx_orders_telegram_id": {
-          "name": "idx_orders_telegram_id",
+        "orders_status_idx": {
+          "name": "orders_status_idx",
           "columns": [
             {
-              "expression": "telegram_id",
+              "expression": "status",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1365,23 +1301,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "idx_watched_orders_telegram_id": {
-          "name": "idx_watched_orders_telegram_id",
-          "columns": [
-            {
-              "expression": "telegram_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
