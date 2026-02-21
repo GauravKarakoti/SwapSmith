@@ -71,7 +71,7 @@ export default function Privacy() {
 
   return (
     <div className="relative min-h-screen overflow-hidden 
-    bg-gradient-to-br from-background via-background to-muted/40 
+    bg-linear-to-br from-background via-background to-muted/40
     text-foreground px-6 py-24">
 
       {/* Back Button */}
@@ -115,7 +115,7 @@ export default function Privacy() {
         {/* Header */}
         <div className="text-center mb-20">
           <h1 className="text-5xl font-extrabold tracking-tight 
-          bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-400 
+          bg-linear-to-r from-indigo-500 via-purple-500 to-cyan-400
           bg-clip-text text-transparent">
             Privacy Policy
           </h1>
@@ -149,12 +149,12 @@ export default function Privacy() {
                 {/* Neon Hover Glow */}
                 <div className="absolute inset-0 rounded-3xl opacity-0 
                 group-hover:opacity-100 transition duration-500 
-                bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-cyan-400/10 blur-xl -z-10" />
+                bg-linear-to-r from-indigo-500/10 via-purple-500/10 to-cyan-400/10 blur-xl -z-10" />
 
                 {/* Icon */}
                 <div className="flex items-center gap-4 mb-6">
                   <div className="p-3 rounded-xl 
-                  bg-gradient-to-br from-indigo-500/20 to-purple-500/20 
+                  bg-linear-to-br from-indigo-500/20 to-purple-500/20
                   group-hover:scale-110 transition duration-300">
                     <Icon className="text-indigo-400 w-6 h-6" />
                   </div>
@@ -179,7 +179,7 @@ export default function Privacy() {
 
         {/* Footer */}
         <div className="text-center mt-20">
-          <span className="inline-block px-4 py-2 rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-400 text-white font-semibold shadow-lg animate-pulse">
+          <span className="inline-block px-4 py-2 rounded-full bg-linear-to-r from-indigo-500 via-purple-500 to-cyan-400 text-white font-semibold shadow-lg animate-pulse">
             Last updated: February 17, 2026
           </span>
         </div>
