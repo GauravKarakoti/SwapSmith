@@ -224,6 +224,7 @@ export async function parseUserCommand(
     // F. Detect Limit Order Condition
     const conditionMatch = input.match(REGEX_CONDITION);
     if (conditionMatch) {
+        intent = 'limit_order';
         const assetStr = conditionMatch[1];
         const operatorStr = conditionMatch[2].toLowerCase();
         const valueStr = conditionMatch[3];
@@ -238,10 +239,11 @@ export async function parseUserCommand(
             }
         }
 
-        if (['above', 'greater', 'more', 'rises', '>'].some(s => operatorStr.includes(s))) {
-            conditionOperator = 'gt';
-        } else {
+        // Logic fix: "drops below" -> lt, "rises above" -> gt
+        if (operatorStr.includes('below') || operatorStr.includes('less') || operatorStr.includes('under') || operatorStr.includes('<') || operatorStr.includes('drops') || operatorStr.includes('falls')) {
             conditionOperator = 'lt';
+        } else {
+            conditionOperator = 'gt';
         }
 
         if (conditionValue) {
