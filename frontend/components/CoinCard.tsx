@@ -1,6 +1,6 @@
 'use client'
 
-import { TrendingUp, Network } from 'lucide-react';
+import { TrendingUp, Network, Zap, ArrowUpRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export interface CoinCardProps {
@@ -12,66 +12,92 @@ export interface CoinCardProps {
 }
 
 export default function CoinCard({ coin, name, network, usdPrice, available }: CoinCardProps) {
+  // Parsing price for conditional styling
+  const priceValue = usdPrice ? parseFloat(usdPrice) : 0;
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-4 border border-gray-200 dark:border-gray-700"
+      whileHover={{ y: -5 }}
+      className="glow-card group rounded-[2.5rem] p-6 border-primary transition-all duration-500 flex flex-col h-full"
     >
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg">
-            {coin.slice(0, 2).toUpperCase()}
+      {/* Header: Identity & Status */}
+      <div className="flex items-start justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-accent-primary to-accent-tertiary flex items-center justify-center text-primary font-black text-xl shadow-lg shadow-blue-500/20">
+              {coin.slice(0, 2).toUpperCase()}
+            </div>
+            {available && (
+              <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 border-4 border-white dark:border-zinc-900 rounded-full animate-pulse" />
+            )}
           </div>
-          <div>
-            <h3 className="font-semibold text-lg text-gray-900 dark:text-white">
+          <div className="min-w-0">
+            <h3 className="font-black text-xl text-primary tracking-tighter truncate">
               {coin.toUpperCase()}
             </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">{name}</p>
+            <p className="text-xs font-bold text-muted uppercase tracking-widest truncate max-w-[120px]">
+              {name}
+            </p>
           </div>
         </div>
-        {available && (
-          <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full">
-            Active
-          </span>
+        
+        {available ? (
+          <div className="badge px-3 py-1 rounded-full flex items-center gap-1.5 animate-in fade-in zoom-in duration-500">
+            <Zap className="w-3 h-3 fill-current" />
+            <span className="text-[10px] font-black uppercase tracking-tighter">Live</span>
+          </div>
+        ) : (
+          <div className="px-3 py-1 bg-zinc-100 dark:bg-zinc-800 text-muted rounded-full text-[10px] font-black uppercase tracking-tighter">
+            Offline
+          </div>
         )}
       </div>
 
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-          <Network className="w-4 h-4" />
-          <span className="capitalize">{network}</span>
+      {/* Analytics Section */}
+      <div className="space-y-4 flex-1">
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-2 text-secondary">
+            <Network className="w-4 h-4 text-accent-primary" />
+            <span className="text-xs font-bold uppercase tracking-wide">{network}</span>
+          </div>
+          <ArrowUpRight className="w-4 h-4 text-muted group-hover:text-accent-primary transition-colors" />
         </div>
 
-        {usdPrice && (
-          <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
-              <TrendingUp className="w-4 h-4" />
-              <span className="text-sm font-medium">USD Price</span>
-            </div>
-            <span className="text-lg font-bold text-gray-900 dark:text-white">
-              ${parseFloat(usdPrice).toLocaleString(undefined, { 
+        <div className="p-4 bg-section rounded-2xl border border-primary transition-colors group-hover:bg-section-hover">
+          <div className="flex items-center gap-2 text-[10px] font-black text-muted uppercase tracking-widest mb-1">
+            <TrendingUp className="w-3 h-3" />
+            Market Value
+          </div>
+          {usdPrice ? (
+            <div className="text-2xl font-black text-primary tracking-tighter">
+              <span className="text-sm text-muted mr-1">$</span>
+              {priceValue.toLocaleString(undefined, { 
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 6 
               })}
-            </span>
-          </div>
-        )}
-
-        {!available && (
-          <div className="text-sm text-red-600 dark:text-red-400 italic">
-            Price unavailable
-          </div>
-        )}
+            </div>
+          ) : (
+            <div className="text-sm font-bold text-error italic py-1">
+              Data feed disconnected
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-gray-200 dark:border-gray-700">
+      {/* Action Area */}
+      <div className="mt-6">
         <button 
-          className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors duration-200 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          className="btn-primary w-full py-3.5 rounded-2xl flex items-center justify-center gap-2 text-sm font-black uppercase tracking-widest disabled:opacity-30 disabled:grayscale transition-all"
           disabled={!available}
         >
-          Trade {coin.toUpperCase()}
+          {available ? (
+            <>
+              Trade Asset
+              <Zap className="w-4 h-4 fill-white" />
+            </>
+          ) : (
+            'Unavailable'
+          )}
         </button>
       </div>
     </motion.div>

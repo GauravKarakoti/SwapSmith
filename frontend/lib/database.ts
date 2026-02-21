@@ -1,6 +1,6 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { eq, desc, and, sql as drizzleSql } from 'drizzle-orm';
+import { eq, desc, and, inArray, sql as drizzleSql } from 'drizzle-orm';
 
 // Import all table schemas from shared schema file
 import {
@@ -626,104 +626,106 @@ export async function getUserRewardActivities(userId: number, limit: number = 50
     .limit(limit);
 }
 
-export async function claimPendingTokens(userId: number) {
+export async function claimPendingTokens(userId: number, walletAddressOverride?: string) {
   if (!db) {
     console.warn('Database not configured');
     return null;
   }
-  
-  // Get all pending rewards
+
+  // Pick up both 'pending' and previously-failed rewards so the user can retry
   const pendingRewards = await db.select().from(rewardsLog)
     .where(and(
       eq(rewardsLog.userId, userId),
-      eq(rewardsLog.mintStatus, 'pending')
+      inArray(rewardsLog.mintStatus, ['pending', 'failed'])
     ));
-  
+
   if (pendingRewards.length === 0) return null;
-  
-  // Calculate total pending tokens
+
+  // Total tokens to send
   const totalPending = pendingRewards.reduce(
     (sum, r) => sum + parseFloat(r.tokensPending as string),
     0
   );
-  
-  // Update rewards to processing status
+
   const rewardIds = pendingRewards.map(r => r.id);
-  await db.update(rewardsLog)
-    .set({
-      mintStatus: 'processing',
-      claimedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(drizzleSql`${rewardsLog.id} = ANY(${rewardIds})`);
-  
-  // Import token service and mint tokens
-  const { mintTokens } = await import('./token-service');
-  
-  try {
-    // Get user wallet address
+
+  // ── Step 1: Resolve wallet address BEFORE touching the DB status ──────────
+  let resolvedWallet = walletAddressOverride;
+
+  if (!resolvedWallet) {
     const user = await db.select().from(users)
       .where(eq(users.id, userId))
       .limit(1);
-    
-    if (!user[0]?.walletAddress) {
-      // Use a default mock address if no wallet connected
-      const mockAddress = `0x${userId.toString().padStart(40, '0')}`;
-      console.warn('No wallet address found, using mock address:', mockAddress);
-      
-      const result = await mintTokens(mockAddress, totalPending.toString());
-      
-      // Update rewards with tx hash
-      await db.update(rewardsLog)
-        .set({
-          mintStatus: 'minted',
-          txHash: result.txHash,
-          blockchainNetwork: 'mock-testnet',
-          updatedAt: new Date(),
-        })
-        .where(drizzleSql`${rewardsLog.id} = ANY(${rewardIds})`);
-      
-      // Update user total claimed
-      await db.update(users)
-        .set({
-          totalTokensClaimed: drizzleSql`${users.totalTokensClaimed} + ${totalPending}`,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, userId));
-      
-      return { totalPending, rewardCount: pendingRewards.length, txHash: result.txHash };
+    resolvedWallet = user[0]?.walletAddress ?? undefined;
+  }
+
+  if (!resolvedWallet) {
+    // Don't change status – user just needs to supply a wallet address
+    throw new Error('No wallet address found. Please enter your wallet address to claim tokens.');
+  }
+
+  // ── Step 2: Validate env config BEFORE touching the DB status ────────────
+  // Import here so the config check happens before we mark rows as 'processing'
+  const { mintTokens } = await import('./token-service');
+
+  // ── Step 3: Mark as processing (we're committed to attempting the tx) ─────
+  await db.update(rewardsLog)
+    .set({ mintStatus: 'processing', claimedAt: new Date(), updatedAt: new Date() })
+    .where(inArray(rewardsLog.id, rewardIds));
+
+  // ── Step 4: Send the on-chain transaction ─────────────────────────────────
+  try {
+    const result = await mintTokens(resolvedWallet, totalPending.toString());
+
+    if (!result.success) {
+      throw new Error(`Transaction reverted on-chain (tx: ${result.txHash})`);
     }
-    
-    const result = await mintTokens(user[0].walletAddress, totalPending.toString());
-    
-    // Update rewards with actual tx hash
+
+    // Mark as minted
     await db.update(rewardsLog)
       .set({
         mintStatus: 'minted',
         txHash: result.txHash,
-        blockchainNetwork: process.env.BLOCKCHAIN_NETWORK || 'mock-testnet',
+        blockchainNetwork: 'sepolia',
+        errorMessage: null,
         updatedAt: new Date(),
       })
-      .where(drizzleSql`${rewardsLog.id} = ANY(${rewardIds})`);
-    
-    // Update user total claimed
+      .where(inArray(rewardsLog.id, rewardIds));
+
+    // Update user totals
     await db.update(users)
       .set({
         totalTokensClaimed: drizzleSql`${users.totalTokensClaimed} + ${totalPending}`,
         updatedAt: new Date(),
       })
       .where(eq(users.id, userId));
-    
+
+    // Save wallet address to profile so future claims don't need it re-entered
+    await db.update(users)
+      .set({ walletAddress: resolvedWallet, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+
     return { totalPending, rewardCount: pendingRewards.length, txHash: result.txHash };
+
   } catch (error) {
-    // Mark as failed on error
-    await db.update(rewardsLog)
-      .set({
-        mintStatus: 'failed',
-        errorMessage: (error as Error).message,
-        updatedAt: new Date(),
-      })
-      .where(drizzleSql`${rewardsLog.id} = ANY(${rewardIds})`);
+    const msg = (error as Error).message ?? 'Unknown error';
+    const isConfigError =
+      msg.includes('Missing required env vars') ||
+      msg.includes('REWARD_TOKEN') ||
+      msg.includes('Invalid recipient') ||
+      msg.includes('Invalid token amount');
+
+    if (isConfigError) {
+      // Config problem – reset to 'pending' so the user can retry once fixed
+      await db.update(rewardsLog)
+        .set({ mintStatus: 'pending', errorMessage: msg, updatedAt: new Date() })
+        .where(inArray(rewardsLog.id, rewardIds));
+    } else {
+      // Actual blockchain failure – mark as failed with the error
+      await db.update(rewardsLog)
+        .set({ mintStatus: 'failed', errorMessage: msg, updatedAt: new Date() })
+        .where(inArray(rewardsLog.id, rewardIds));
+    }
     throw error;
   }
 }

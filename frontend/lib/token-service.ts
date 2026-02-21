@@ -1,95 +1,172 @@
 /**
- * Mock Web3 Token Implementation
- * This simulates blockchain token minting without requiring real blockchain setup
- * Perfect for development and testing
+ * Real Sepolia blockchain token service.
+ * Calls rewardUser() on the deployed SwapSmith (SMTH) ERC20 contract
+ * using the owner wallet private key stored in server-side env vars.
+ *
+ * Required env vars (add to frontend/.env.local):
+ *   REWARD_TOKEN_ADDRESS            – deployed contract address on Sepolia
+ *   REWARD_TOKEN_OWNER_PRIVATE_KEY  – deployer/owner wallet private key (0x…)
+ *   SEPOLIA_RPC_URL                 – Alchemy or Infura Sepolia HTTPS endpoint
  */
+
+import {
+  createWalletClient,
+  createPublicClient,
+  http,
+  parseEther,
+  isAddress,
+} from 'viem'
+import { sepolia } from 'viem/chains'
+import { privateKeyToAccount } from 'viem/accounts'
+
+// Minimal ABI – only the functions we call from the backend.
+const REWARD_TOKEN_ABI = [
+  {
+    name: 'rewardUser',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'user',   type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'balanceOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+] as const
 
 interface MintResult {
-  txHash: string;
-  blockNumber: number;
-  success: boolean;
+  txHash: string
+  blockNumber: number
+  success: boolean
 }
 
-// Mock token balance storage (in production, this would be on-chain)
-const mockBalances = new Map<string, number>();
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-/**
- * Mock token minting function
- * Simulates blockchain transaction without actual Web3 calls
- */
-export async function mockMintTokens(
-  recipientAddress: string,
-  amount: string
-): Promise<MintResult> {
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 2000));
+function getConfig() {
+  const contractAddress = process.env.REWARD_TOKEN_ADDRESS ?? process.env.NEXT_PUBLIC_REWARD_TOKEN_ADDRESS
+  const privateKey      = process.env.REWARD_TOKEN_OWNER_PRIVATE_KEY
+  const rpcUrl          = process.env.SEPOLIA_RPC_URL
 
-  // Generate fake transaction hash
-  const txHash = `0x${Math.random().toString(16).substring(2, 66)}`;
-  const blockNumber = Math.floor(Math.random() * 1000000) + 15000000;
+  if (!contractAddress || !privateKey || !rpcUrl) {
+    throw new Error(
+      'Missing required env vars: REWARD_TOKEN_ADDRESS, ' +
+      'REWARD_TOKEN_OWNER_PRIVATE_KEY, SEPOLIA_RPC_URL. ' +
+      'Add them to frontend/.env.local'
+    )
+  }
 
-  // Update mock balance
-  const currentBalance = mockBalances.get(recipientAddress) || 0;
-  mockBalances.set(recipientAddress, currentBalance + parseFloat(amount));
+  if (!isAddress(contractAddress)) {
+    throw new Error(`REWARD_TOKEN_ADDRESS is not a valid address: ${contractAddress}`)
+  }
 
-  console.log(`[Mock Token] Minted ${amount} tokens to ${recipientAddress}`);
-  console.log(`[Mock Token] TX: ${txHash}`);
-  console.log(`[Mock Token] Block: ${blockNumber}`);
+  // Normalise private key – ensure it starts with 0x
+  const normKey = privateKey.startsWith('0x')
+    ? privateKey as `0x${string}`
+    : (`0x${privateKey}` as `0x${string}`)
 
-  return {
-    txHash,
-    blockNumber,
-    success: true,
-  };
+  const account = privateKeyToAccount(normKey)
+
+  const walletClient = createWalletClient({
+    account,
+    chain: sepolia,
+    transport: http(rpcUrl),
+  })
+
+  const publicClient = createPublicClient({
+    chain: sepolia,
+    transport: http(rpcUrl),
+  })
+
+  return { account, walletClient, publicClient, contractAddress: contractAddress as `0x${string}` }
 }
 
-/**
- * Get mock token balance
- */
-export async function getMockTokenBalance(address: string): Promise<string> {
-  const balance = mockBalances.get(address) || 0;
-  return balance.toFixed(8);
-}
+// ---------------------------------------------------------------------------
+// mintTokens – calls rewardUser() on Sepolia
+// ---------------------------------------------------------------------------
 
 /**
- * Clear all mock balances (for testing)
- */
-export function resetMockBalances() {
-  mockBalances.clear();
-}
-
-/**
- * Production-ready function that switches between mock and real implementation
+ * Send SMTH tokens to a recipient by calling rewardUser() on Sepolia.
+ * @param recipientAddress  User's MetaMask wallet address (0x…)
+ * @param amount            Token amount as a decimal string (e.g. "10.5")
  */
 export async function mintTokens(
   recipientAddress: string,
   amount: string
 ): Promise<MintResult> {
-  const useMock = process.env.USE_MOCK_WEB3 !== 'false'; // Default to mock
-
-  if (useMock) {
-    console.log('[Token Service] Using mock Web3 implementation');
-    return mockMintTokens(recipientAddress, amount);
+  if (!isAddress(recipientAddress)) {
+    throw new Error(`Invalid recipient address: ${recipientAddress}`)
   }
 
-  // In production, you would use real Web3 here:
-  // const { ethers } = require('ethers');
-  // const provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL);
-  // ... actual minting logic
+  const amountFloat = parseFloat(amount)
+  if (isNaN(amountFloat) || amountFloat <= 0) {
+    throw new Error(`Invalid token amount: ${amount}`)
+  }
 
-  throw new Error('Real Web3 implementation not configured. Set USE_MOCK_WEB3=false and configure RPC_URL, PRIVATE_KEY, TOKEN_CONTRACT_ADDRESS');
+  const { walletClient, publicClient, contractAddress } = getConfig()
+
+  console.log(
+    `[Token Service] Sending ${amount} SMTH to ${recipientAddress} ` +
+    `via contract ${contractAddress} on Sepolia`
+  )
+
+  // Send transaction
+  const hash = await walletClient.writeContract({
+    address: contractAddress,
+    abi: REWARD_TOKEN_ABI,
+    functionName: 'rewardUser',
+    args: [recipientAddress as `0x${string}`, parseEther(amount)],
+  })
+
+  console.log(`[Token Service] Transaction submitted: ${hash}`)
+
+  // Wait for confirmation (1 block)
+  const receipt = await publicClient.waitForTransactionReceipt({
+    hash,
+    confirmations: 1,
+  })
+
+  const success = receipt.status === 'success'
+  console.log(
+    `[Token Service] Transaction ${success ? 'confirmed ✅' : 'failed ❌'} ` +
+    `| block ${receipt.blockNumber} | tx ${hash}`
+  )
+
+  return {
+    txHash:      hash,
+    blockNumber: Number(receipt.blockNumber),
+    success,
+  }
 }
 
-/**
- * Get token balance (switches between mock and real)
- */
+// ---------------------------------------------------------------------------
+// getTokenBalance – read SMTH balance for any address
+// ---------------------------------------------------------------------------
+
 export async function getTokenBalance(address: string): Promise<string> {
-  const useMock = process.env.USE_MOCK_WEB3 !== 'false';
+  if (!isAddress(address)) return '0'
 
-  if (useMock) {
-    return getMockTokenBalance(address);
+  try {
+    const { publicClient, contractAddress } = getConfig()
+
+    const raw = await publicClient.readContract({
+      address: contractAddress,
+      abi: REWARD_TOKEN_ABI,
+      functionName: 'balanceOf',
+      args: [address as `0x${string}`],
+    })
+
+    // Convert from wei (18 decimals) to human-readable
+    const human = Number(raw) / 1e18
+    return human.toFixed(6)
+  } catch {
+    return '0'
   }
-
-  // Real implementation would go here
-  throw new Error('Real Web3 implementation not configured');
 }
