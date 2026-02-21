@@ -95,7 +95,7 @@ export async function createCheckout(
 ): Promise<SideShiftCheckoutResponse> {
   try {
     const response = await axios.post(
-      `${SIDESHIFT_BASE_URL}/checkout`,
+      `${SIDESHIFT_CONFIG.BASE_URL}/checkout`,
       {
         settleCoin,
         settleNetwork,
