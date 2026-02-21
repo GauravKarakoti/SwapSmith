@@ -1,6 +1,6 @@
 {
-  "id": "1e3e1f2c-db62-47b1-9ed4-123cf5305e2d",
-  "prevId": "31c1b62a-c05d-4722-8b78-d36a5bbc5a26",
+  "id": "1617df45-4b5d-46d0-a676-97f995c3dfcf",
+  "prevId": "1e3e1f2c-db62-47b1-9ed4-123cf5305e2d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -709,6 +709,49 @@
         },
         "last_checked_at": {
           "name": "last_checked_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "condition_operator": {
+          "name": "condition_operator",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "condition_value": {
+          "name": "condition_value",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "condition_asset": {
+          "name": "condition_asset",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "sideshift_order_id": {
+          "name": "sideshift_order_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "executed_at": {
+          "name": "executed_at",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false
