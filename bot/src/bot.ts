@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import axios from 'axios';
-import { exec } from 'child_process';
+import { spawn } from 'child_process';
 import express from 'express';
 import { sql } from 'drizzle-orm';
 
@@ -155,11 +155,13 @@ bot.on(message('voice'), async (ctx) => {
     const res = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
     fs.writeFileSync(oga, res.data);
 
-    await new Promise<void>((resolve, reject) =>
-      exec(`ffmpeg -i "${oga}" "${mp3}" -y`, (e) =>
-        e ? reject(e) : resolve()
-      )
-    );
+    await new Promise<void>((resolve, reject) => {
+      const ffmpeg = spawn('ffmpeg', ['-i', oga, mp3, '-y']);
+      ffmpeg.on('close', (code) => {
+        code === 0 ? resolve() : reject(new Error(`ffmpeg exited with code ${code}`));
+      });
+      ffmpeg.on('error', reject);
+    });
 
     const text = await transcribeAudio(mp3);
     await handleTextMessage(ctx, text, 'voice');
