@@ -580,14 +580,14 @@ export default function SwapConfirmation({ quote, confidence = 100, onAmountChan
 
         <div className="flex gap-2 text-xs">
           <button
-            onClick={() => window.open('https://help.sideshift.ai/en/', '_blank')}
+            onClick={() => window.open(SIDESHIFT_CONFIG.HELP_URL, '_blank')}
             className="text-blue-600 hover:text-blue-800"
           >
             Need help?
           </button>
           <span className="text-gray-400">•</span>
           <button
-            onClick={() => window.open('https://docs.sideshift.ai/faq/', '_blank')}
+            onClick={() => window.open(SIDESHIFT_CONFIG.FAQ_URL, '_blank')}
             className="text-blue-600 hover:text-blue-800"
           >
             FAQ
