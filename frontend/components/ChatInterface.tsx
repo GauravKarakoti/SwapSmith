@@ -51,6 +51,7 @@ export default function ChatInterface() {
   const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const { address, isConnected } = useAccount();
   const { handleError } = useErrorHandler();
 
@@ -66,10 +67,11 @@ export default function ChatInterface() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Show audio error if any
+  // Show audio error if any, and refocus text input so the user can type
   useEffect(() => {
     if (audioError) {
       addMessage({ role: 'assistant', content: audioError, type: 'message' });
+      inputRef.current?.focus();
     }
   }, [audioError]);
 
@@ -94,6 +96,7 @@ export default function ChatInterface() {
         content: `Voice input is not supported in this browser. Please use text input instead.`,
         type: 'message'
       });
+      inputRef.current?.focus();
       return;
     }
 
@@ -105,6 +108,7 @@ export default function ChatInterface() {
         retryable: true
       });
       addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
+      inputRef.current?.focus();
     }
   };
 
@@ -127,6 +131,7 @@ export default function ChatInterface() {
         retryable: true
       });
       addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
+      inputRef.current?.focus();
     }
   };
 
@@ -178,6 +183,7 @@ export default function ChatInterface() {
       }
 
     } catch (error) {
+<<<<<<< HEAD
       const errorMessage = handleError(error, ErrorType.VOICE_ERROR, {
         operation: 'voice_transcription',
         retryable: true
@@ -185,6 +191,16 @@ export default function ChatInterface() {
       setMessages(prev => prev.filter(m => m.content !== '🎤 [Sending Voice...]'));
       addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
       setIsLoading(false);
+=======
+        const errorMessage = handleError(error, ErrorType.VOICE_ERROR, { 
+          operation: 'voice_transcription',
+          retryable: true 
+        });
+        setMessages(prev => prev.filter(m => m.content !== '🎤 [Sending Voice...]'));
+        addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
+        setIsLoading(false);
+        inputRef.current?.focus();
+>>>>>>> e926bdf90d7ee73e765cf2b962e13cf46b8e8bd0
     }
   };
 
@@ -583,6 +599,7 @@ export default function ChatInterface() {
             </button>
 
             <input
+              ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
