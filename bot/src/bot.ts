@@ -1,5 +1,6 @@
 import { Telegraf, Markup, Context } from 'telegraf';
 import { message } from 'telegraf/filters';
+import rateLimit from 'telegraf-ratelimit';
 import dotenv from 'dotenv';
 import logger from './services/logger';
 import { executePortfolioStrategy } from './services/portfolio-service';
@@ -47,6 +48,16 @@ const MINI_APP_URL =
 const PORT = Number(process.env.PORT || 3000);
 
 const bot = new Telegraf(BOT_TOKEN);
+
+// Rate limiting configuration
+const limitConfig = {
+  window: 3000, // 3 seconds
+  limit: 1,     // 1 message per window
+  onLimitExceeded: (ctx: Context) => ctx.reply('⚠️ Rate limit exceeded. Please wait a moment.')
+};
+
+bot.use(rateLimit(limitConfig));
+
 const app = express();
 app.use(express.json());
 
@@ -219,7 +230,7 @@ async function handleTextMessage(
   if (!parsed.success) {
     return ctx.replyWithMarkdown(
       (parsed as any).validationErrors?.join('\n') ||
-        '❌ I didn’t understand.'
+      '❌ I didn’t understand.'
     );
   }
 

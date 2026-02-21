@@ -71,7 +71,6 @@ export default function SwapConfirmation({ quote, confidence = 100, onAmountChan
   const [safetyCheck, setSafetyCheck] = useState<SafetyCheckResult | null>(null);
   const [walletBalance, setWalletBalance] = useState<string | null>(null);
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
-
   const { address, isConnected, chain: connectedChain } = useAccount()
   const { data: hash, error, isPending, isSuccess, sendTransaction } = useSendTransaction()
   const { switchChainAsync } = useSwitchChain()
