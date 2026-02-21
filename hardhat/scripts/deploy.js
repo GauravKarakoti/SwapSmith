@@ -64,7 +64,7 @@ console.log(`    Token name       : ${await token.name()} (SMTH)`);
       `    https://sepolia.etherscan.io/address/${contractAddress}`
     );
     console.log(
-      `\n📋  Add to frontend/.env.local:\n` +
+      `\n📋  Add to frontend/.env:\n` +
       `    NEXT_PUBLIC_REWARD_TOKEN_ADDRESS=${contractAddress}`
     );
   }
