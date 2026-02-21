@@ -1,21 +1,36 @@
-// app/terminal/page.tsx
-
 "use client";
 
-import { useEffect, useState, useRef } from 'react';
-import { useAuth } from '@/hooks/useAuth';
-import { useAccount } from 'wagmi';
-import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
-import Navbar from '@/components/Navbar';
-import ClaudeChatInput from '@/components/ClaudeChatInput';
-import SwapConfirmation from '@/components/SwapConfirmation';
-import IntentConfirmation from '@/components/IntentConfirmation';
-import { ParsedCommand } from '@/utils/groq-client';
-import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
-import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
-import { MessageCircle, Plus, Clock, Settings, Menu, Sparkles, Zap, Activity } from 'lucide-react';
-import Link from 'next/link';
+import { useEffect, useState, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
+import { useAccount } from "wagmi";
+import {
+  MessageCircle,
+  Plus,
+  Clock,
+  Settings,
+  Menu,
+  Zap,
+  Activity,
+  Trash2,
+} from "lucide-react";
+
+import Navbar from "@/components/Navbar";
+import ClaudeChatInput from "@/components/ClaudeChatInput";
+import SwapConfirmation from "@/components/SwapConfirmation";
+import IntentConfirmation from "@/components/IntentConfirmation";
+
+import { useChatHistory, useChatSessions } from "@/hooks/useCachedData";
+import { useErrorHandler, ErrorType } from "@/hooks/useErrorHandler";
+import { useAudioRecorder } from "@/hooks/useAudioRecorder";
+import { trackTerminalUsage, showRewardNotification } from "@/lib/rewards-service";
+
+import { ParsedCommand } from "@/utils/groq-client";
+
+/* -------------------------------------------------------------------------- */
+/* Types                                    */
+/* -------------------------------------------------------------------------- */
 
 interface QuoteData {
   depositAmount: string;
@@ -42,279 +57,165 @@ interface Message {
     | "checkout_link";
   data?:
     | ParsedCommand
-    | { quoteData: unknown; confidence: number }
+    | { quoteData: QuoteData; confidence: number }
     | { url: string }
-    | { parsedCommand: ParsedCommand };
+    | { parsedCommand: ParsedCommand }
+    | Record<string, unknown>;
 }
 
-// Floating particles component
-const FloatingParticle = ({ delay, duration, x, y }: { delay: number; duration: number; x: number; y: number }) => (
-  <motion.div
-    className="absolute w-1 h-1 bg-gradient-to-r from-cyan-400 to-purple-500 rounded-full"
-    style={{ left: `${x}%`, top: `${y}%` }}
-    animate={{
-      y: [-20, 20, -20],
-      x: [-10, 10, -10],
-      opacity: [0.2, 0.8, 0.2],
-      scale: [1, 1.5, 1],
-    }}
-    transition={{
-      duration,
-      delay,
-      repeat: Infinity,
-      ease: "easeInOut",
-    }}
-  />
-);
+/* -------------------------------------------------------------------------- */
+/* UI Components                                */
+/* -------------------------------------------------------------------------- */
 
 const SidebarSkeleton = () => (
   <div className="space-y-4 p-2">
     {[1, 2, 3, 4].map((i) => (
-      <motion.div
-        key={i}
-        className="px-3 py-2 space-y-2"
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: i * 0.1 }}
-      >
-        <div className="h-3 w-3/4 bg-white/5 rounded animate-pulse" />
-        <div className="h-2 w-1/4 bg-white/5 rounded animate-pulse" />
-      </motion.div>
+      <div key={i} className="px-3 py-2 space-y-2">
+        <div className="h-3 w-3/4 bg-[var(--panel-soft)] rounded animate-pulse" />
+        <div className="h-2 w-1/4 bg-[var(--panel-soft)] rounded animate-pulse" />
+      </div>
     ))}
   </div>
 );
 
-const MessageListSkeleton = () => (
-  <div className="space-y-6">
-    {/* Assistant Bubble 1 */}
-    <motion.div
-      className="flex justify-start"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-    >
-      <div className="bg-zinc-900/50 border border-zinc-800 px-5 py-4 rounded-2xl rounded-tl-none w-2/3 max-w-sm backdrop-blur-sm">
-        <div className="space-y-2">
-          <div className="h-2 w-full bg-white/5 rounded-full animate-pulse" />
-          <div className="h-2 w-[80%] bg-white/5 rounded-full animate-pulse delay-75" />
-        </div>
-      </div>
-    </motion.div>
-
-    {/* User Bubble (Right side) */}
-    <motion.div
-      className="flex justify-end"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: 0.2 }}
-    >
-      <div className="bg-gradient-to-r from-cyan-600 to-blue-600 px-5 py-4 rounded-2xl rounded-tr-none w-1/3">
-        <div className="h-2 w-full bg-blue-400/20 rounded-full animate-pulse" />
-      </div>
-    </motion.div>
-
-    {/* Assistant Bubble 2 (Longer) */}
-    <motion.div
-      className="flex justify-start"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: 0.4 }}
-    >
-      <div className="bg-zinc-900/50 border border-zinc-800 px-5 py-4 rounded-2xl rounded-tl-none w-full max-w-md backdrop-blur-sm">
-        <div className="space-y-2">
-          <div className="h-2 w-full bg-white/5 rounded-full animate-pulse" />
-          <div className="h-2 w-full bg-white/5 rounded-full animate-pulse delay-100" />
-          <div className="h-2 w-[60%] bg-white/5 rounded-full animate-pulse delay-150" />
-        </div>
-      </div>
-    </motion.div>
-  </div>
-);
-
-// Live Stats Card Component
 const LiveStatsCard = () => {
   const [stats, setStats] = useState({
-    gasPrice: 0,
-    volume24h: "0",
-    activeSwaps: 0,
+    gasPrice: 20,
+    volume24h: "2.4",
+    activeSwaps: 142,
   });
 
   useEffect(() => {
-    const updateStats = () => {
+    const id = setInterval(() => {
       setStats({
         gasPrice: Math.floor(Math.random() * 20) + 10,
         volume24h: (Math.random() * 5 + 1).toFixed(1),
         activeSwaps: Math.floor(Math.random() * 50) + 100,
       });
-    };
-
-    updateStats();
-    const interval = setInterval(updateStats, 5000);
-    return () => clearInterval(interval);
+    }, 5000);
+    return () => clearInterval(id);
   }, []);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 border border-zinc-700/50 rounded-2xl p-4 backdrop-blur-xl"
-    >
-      <div className="flex items-center gap-2 mb-4">
-        <div className="w-8 h-8 rounded-lg bg-cyan-900/30 flex items-center justify-center border border-cyan-500/30">
-          <Activity className="w-4 h-4 text-cyan-400" />
-        </div>
-        <span className="font-bold text-sm text-zinc-200">Live Network Stats</span>
-        <span className="ml-auto text-xs font-semibold text-emerald-400 bg-emerald-900/20 px-2 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Live
+    <div className="glass rounded-2xl p-4 shadow-sm">
+      <div className="flex items-center gap-2 mb-3">
+        <Activity className="w-4 h-4 text-cyan-400" />
+        <span className="text-sm font-semibold text-[var(--text)]">
+          Live Network
         </span>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        <div className="text-center">
-          <motion.div
-            key={stats.gasPrice}
-            initial={{ scale: 1.2, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="text-lg font-black text-cyan-400 flex items-center justify-center gap-1"
-          >
-            <Zap className="w-3 h-3" />
-            {stats.gasPrice}
-          </motion.div>
-          <div className="text-[10px] text-zinc-500 font-medium">Gwei</div>
+      <div className="grid grid-cols-3 gap-3 text-center">
+        <div>
+          <div className="text-cyan-400 font-bold flex justify-center gap-1">
+            <Zap className="w-3 h-3" /> {stats.gasPrice}
+          </div>
+          <div className="text-[10px] text-[var(--muted)]">Gwei</div>
         </div>
-
-        <div className="text-center">
-          <motion.div
-            key={stats.volume24h}
-            initial={{ scale: 1.2, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="text-lg font-black text-purple-400"
-          >
-            ${stats.volume24h}M
-          </motion.div>
-          <div className="text-[10px] text-zinc-500 font-medium">24h Vol</div>
+        <div>
+          <div className="text-purple-400 font-bold">${stats.volume24h}M</div>
+          <div className="text-[10px] text-[var(--muted)]">24h Vol</div>
         </div>
-
-        <div className="text-center">
-          <motion.div
-            key={stats.activeSwaps}
-            initial={{ scale: 1.2, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="text-lg font-black text-pink-400"
-          >
-            {stats.activeSwaps}
-          </motion.div>
-          <div className="text-[10px] text-zinc-500 font-medium">Active</div>
+        <div>
+          <div className="text-pink-400 font-bold">{stats.activeSwaps}</div>
+          <div className="text-[10px] text-[var(--muted)]">Active</div>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 };
 
+/* -------------------------------------------------------------------------- */
+/* Main Page                                  */
+/* -------------------------------------------------------------------------- */
+
 export default function TerminalPage() {
   const router = useRouter();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { address, isConnected } = useAccount();
+  const { handleError } = useErrorHandler();
 
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
-  const [chatHistory, setChatHistory] = useState([
-    { id: 1, title: "Swap ETH to USDC", timestamp: "2 hours ago" },
-    { id: 2, title: "Check yield opportunities", timestamp: "Yesterday" },
-    { id: 3, title: "Create payment link", timestamp: "2 days ago" },
-    { id: 4, title: "Swap BTC to ETH", timestamp: "1 week ago" },
-  ]);
-
+  // State
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
       content:
-        "Hello! I can help you swap assets, create payment links, or scout yields.\n\n💡 Tip: Try our Telegram Bot for on-the-go access!",
+        "Hello! I can help you swap assets, create payment links, or scout yields.\n\n💡 Tip: Try our Telegram Bot!",
       timestamp: new Date(),
       type: "message",
     },
   ]);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
-  const [particles] = useState(() =>
-    Array.from({ length: 20 }, (_, i) => ({
-      id: i,
-      delay: Math.random() * 3,
-      duration: 4 + Math.random() * 4,
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-    }))
-  );
 
+  // Session Management
+  const [currentSessionId, setCurrentSessionId] = useState(crypto.randomUUID());
+  const sessionIdRef = useRef(currentSessionId);
+  const loadedSessionRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { address, isConnected } = useAccount();
-  const { handleError } = useErrorHandler();
 
+  // Data Fetching
+  const { data: chatSessions, refetch: refetchSessions } = useChatSessions(
+    undefined,
+  );
+  const { data: dbChatHistory } = useChatHistory(undefined, currentSessionId);
+
+  // Speech Recognition
   const {
-    isListening: isRecording,
-    transcript,
+    isRecording,
     isSupported: isAudioSupported,
     startRecording,
     stopRecording,
-    error: audioError,
-  } = useSpeechRecognition();
+  } = useAudioRecorder();
 
-  // Handle voice result processing
+  /* ------------------------------------------------------------------------ */
+  /* Effects                                  */
+  /* ------------------------------------------------------------------------ */
+
   useEffect(() => {
-    if (!isRecording && transcript) {
-      handleSendMessage({
-        message: transcript,
-        files: [],
-        pastedContent: [],
-        model: 'sonnet-4.5',
-        isThinkingEnabled: false
+    sessionIdRef.current = currentSessionId;
+    loadedSessionRef.current = null;
+  }, [currentSessionId]);
+
+  // Load chat history
+  useEffect(() => {
+    if (loadedSessionRef.current === currentSessionId) return;
+
+    if (dbChatHistory?.history?.length) {
+      const loadedMessages = dbChatHistory.history.map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+        timestamp: new Date(m.createdAt),
+        type: "message" as const,
+      }));
+      queueMicrotask(() => {
+        setMessages(loadedMessages);
+        setIsHistoryLoading(false);
       });
+      loadedSessionRef.current = currentSessionId;
+    } else {
+      queueMicrotask(() => setIsHistoryLoading(false));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRecording, transcript]);
-
-  // Protect route - redirect to login if not authenticated
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      router.push('/login');
-    }
-  }, [authLoading, isAuthenticated, router]);
-
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setIsHistoryLoading(false), 1000);
-    return () => clearTimeout(timer);
-  }, []);
+  }, [dbChatHistory, currentSessionId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  useEffect(() => {
-    if (audioError) {
-      addMessage({ role: "assistant", content: audioError, type: "message" });
-    }
-  }, [audioError]);
 
-  const formatTime = (date: Date) => {
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-    const ampm = hours >= 12 ? "PM" : "AM";
-    const displayHours = hours % 12 || 12;
-    return `${displayHours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")} ${ampm}`;
-  };
+  /* ------------------------------------------------------------------------ */
+  /* Handlers                                   */
+  /* ------------------------------------------------------------------------ */
 
-  const addMessage = (message: Omit<Message, "timestamp">) => {
-    setMessages((prev) => [...prev, { ...message, timestamp: new Date() }]);
-  };
+  const addMessage = useCallback((msg: Omit<Message, "timestamp">) => {
+    setMessages((prev) => [...prev, { ...msg, timestamp: new Date() }]);
+  }, []);
 
   const handleStartRecording = () => {
     if (!isAudioSupported) {
       addMessage({
         role: "assistant",
-        content: `Voice input is not supported in this browser. Please use text input instead.`,
+        content: "Voice input is not supported in this browser.",
         type: "message",
       });
       return;
@@ -322,12 +223,112 @@ export default function TerminalPage() {
     startRecording();
   };
 
-  const handleStopRecording = () => {
-    stopRecording();
+  const handleStopRecording = async () => {
+    setIsLoading(true);
+    try {
+      const audioBlob = await stopRecording();
+      if (audioBlob) {
+        const audioFile = new File([audioBlob], "voice_command.wav", { type: audioBlob.type || 'audio/wav' });
+
+        const formData = new FormData();
+        formData.append("file", audioFile);
+
+        const response = await fetch("/api/transcribe", { method: "POST", body: formData });
+        const data = await response.json();
+
+        if (data.error) throw new Error(data.error);
+
+        if (data.text) {
+          processCommand(data.text);
+        }
+      }
+    } catch (err) {
+      console.error("Voice processing failed:", err);
+      addMessage({
+        role: "assistant",
+        content: "Sorry, I couldn't process your voice command. Please try again.",
+        type: "message",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleNewChat = () => {
+    const id = crypto.randomUUID();
+    setCurrentSessionId(id);
+    setMessages([
+      {
+        role: "assistant",
+        content:
+          "Hello! I can help you swap assets, create payment links, or scout yields.",
+        timestamp: new Date(),
+        type: "message",
+      },
+    ]);
+  };
+
+  const handleSwitchSession = (id: string) => setCurrentSessionId(id);
+
+  const handleDeleteSession = async (
+    sessionId: string,
+    e: React.MouseEvent,
+  ) => {
+    e.stopPropagation();
+    // Skip deletion without user ID (demo mode)
+    // In production, would use real user ID
+
+    if (sessionId === currentSessionId) handleNewChat();
+    refetchSessions();
+  };
+
+  /* ------------------------------------------------------------------------ */
+  /* Core Logic                                   */
+  /* ------------------------------------------------------------------------ */
+
+  const executeSwap = async (command: ParsedCommand) => {
+    try {
+      const quoteResponse = await fetch("/api/create-swap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fromAsset: command.fromAsset,
+          toAsset: command.toAsset,
+          amount: command.amount,
+          fromChain: command.fromChain,
+          toChain: command.toChain,
+        }),
+      });
+      const quote = await quoteResponse.json();
+      if (quote.error) throw new Error(quote.error);
+      
+      addMessage({
+        role: "assistant",
+        content: `Swap Prepared: ${quote.depositAmount} ${quote.depositCoin} → ${quote.settleAmount} ${quote.settleCoin}`,
+        type: "swap_confirmation",
+        data: { quoteData: quote, confidence: command.confidence },
+      });
+    } catch (error: unknown) {
+      const errorMessage = handleError(error, ErrorType.API_FAILURE, {
+        operation: "swap_quote",
+        retryable: true,
+      });
+      addMessage({ role: "assistant", content: errorMessage, type: "message" });
+    }
   };
 
   const processCommand = async (text: string) => {
+    if (!text.trim()) return;
+    
+    // Add user message first
+    addMessage({
+        role: "user",
+        content: text,
+        type: "message",
+    });
+
     if (!isLoading) setIsLoading(true);
+    
     try {
       const response = await fetch("/api/parse-command", {
         method: "POST",
@@ -339,7 +340,7 @@ export default function TerminalPage() {
       if (!command.success && command.intent !== "yield_scout") {
         addMessage({
           role: "assistant",
-          content: `I couldn't understand. ${command.validationErrors.join(", ")}`,
+          content: `I couldn't understand. ${command.validationErrors?.join(", ") || "Please try again."}`,
           type: "message",
         });
         setIsLoading(false);
@@ -351,7 +352,7 @@ export default function TerminalPage() {
         const yieldData = await yieldRes.json();
         addMessage({
           role: "assistant",
-          content: yieldData.message,
+          content: yieldData.message || "Here are the top yields:",
           type: "yield_info",
         });
         setIsLoading(false);
@@ -419,7 +420,6 @@ export default function TerminalPage() {
       }
 
       if (command.requiresConfirmation || command.confidence < 80) {
-        setPendingCommand(command);
         addMessage({
           role: "assistant",
           content: "",
@@ -440,436 +440,195 @@ export default function TerminalPage() {
     }
   };
 
-  const executeSwap = async (command: ParsedCommand) => {
-    try {
-      const quoteResponse = await fetch("/api/create-swap", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fromAsset: command.fromAsset,
-          toAsset: command.toAsset,
-          amount: command.amount,
-          fromChain: command.fromChain,
-          toChain: command.toChain,
-        }),
-      });
-      const quote = await quoteResponse.json();
-      if (quote.error) throw new Error(quote.error);
-      addMessage({
-        role: "assistant",
-        content: `Swap Prepared: ${quote.depositAmount} ${quote.depositCoin} → ${quote.settleAmount} ${quote.settleCoin}`,
-        type: "swap_confirmation",
-        data: { quoteData: quote, confidence: command.confidence },
-      });
-    } catch (error: unknown) {
-      const errorMessage = handleError(error, ErrorType.API_FAILURE, {
-        operation: "swap_quote",
-        retryable: true,
-      });
-      addMessage({ role: "assistant", content: errorMessage, type: "message" });
-    }
-  };
-
-  const handleIntentConfirm = async (confirmed: boolean) => {
-    if (confirmed && pendingCommand) {
-      if (pendingCommand.intent === "portfolio") {
-        const confirmedCmd = {
-          ...pendingCommand,
-          requiresConfirmation: false,
-          confidence: 100,
-        };
-        addMessage({
-          role: "assistant",
-          content: "Executing Portfolio Strategy...",
-          type: "message",
-        });
-        if (confirmedCmd.portfolio) {
-          for (const item of confirmedCmd.portfolio) {
-            const splitAmount = (confirmedCmd.amount! * item.percentage) / 100;
-            await executeSwap({
-              ...confirmedCmd,
-              intent: "swap",
-              amount: splitAmount,
-              toAsset: item.toAsset,
-              toChain: item.toChain,
-            });
-          }
-        }
-      } else {
-        await executeSwap(pendingCommand);
-      }
-    } else if (!confirmed) {
-      addMessage({ role: "assistant", content: "Cancelled.", type: "message" });
-    }
-    setPendingCommand(null);
-  };
-
-  const handleSendMessage = (data: {
-    message: string;
-    files: Array<{
-      id: string;
-      file: File;
-      type: string;
-      preview: string | null;
-      uploadStatus: string;
-      content?: string;
-    }>;
-    pastedContent: Array<{
-      id: string;
-      file: File;
-      type: string;
-      preview: string | null;
-      uploadStatus: string;
-      content?: string;
-    }>;
-    model: string;
-    isThinkingEnabled: boolean;
-  }) => {
-    if (data.message.trim()) {
-      addMessage({ role: "user", content: data.message, type: "message" });
-      processCommand(data.message);
-      setChatHistory([
-        {
-          id: Date.now(),
-          title: data.message.slice(0, 50),
-          timestamp: "Just now",
-        },
-        ...chatHistory,
-      ]);
-    }
-  };
-
-  // Show loading state while checking authentication
-  if (authLoading) {
-    return (
-      <div className="flex h-screen bg-[#050505] items-center justify-center">
-        <div className="text-center">
-          <motion.div
-            className="mx-auto mb-4 w-12 h-12 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          />
-          <p className="text-zinc-400">Authenticating...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Don't render if not authenticated (will redirect)
-  if (!isAuthenticated) {
-    return null;
-  }
+  /* ------------------------------------------------------------------------ */
+  /* Render                                   */
+  /* ------------------------------------------------------------------------ */
 
   return (
     <>
       <Navbar />
 
-      <div className="flex h-screen bg-[#030308] text-white overflow-hidden pt-16 relative">
-        {/* Animated background gradient */}
-        <div className="fixed inset-0 pointer-events-none">
-          <motion.div
-            className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-gradient-to-r from-cyan-500/5 via-purple-500/5 to-pink-500/5 rounded-full blur-[150px]"
-            animate={{
-              x: [0, 100, 0],
-              y: [0, 50, 0],
-              scale: [1, 1.2, 1],
-            }}
-            transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
-          />
-          <motion.div
-            className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-gradient-to-r from-purple-500/5 via-pink-500/5 to-cyan-500/5 rounded-full blur-[150px]"
-            animate={{
-              x: [0, -80, 0],
-              y: [0, -60, 0],
-              scale: [1.2, 1, 1.2],
-            }}
-            transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-          />
-
-          {/* Floating particles */}
-          {particles.map((p) => (
-            <FloatingParticle key={p.id} {...p} />
-          ))}
-        </div>
-
-        {/* Grid overlay */}
-        <div
-          className="fixed inset-0 pointer-events-none opacity-[0.015]"
-          style={{
-            backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
-            backgroundSize: '60px 60px',
-          }}
-        />
-
+      <div className="flex h-screen pt-16 app-bg overflow-hidden">
         {/* Sidebar */}
         <AnimatePresence>
           {isSidebarOpen && (
             <motion.aside
-              initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 320, opacity: 1 }}
-              exit={{ width: 0, opacity: 0 }}
-              transition={{ duration: 0.3, ease: "easeInOut" }}
-              className="bg-gradient-to-b from-zinc-900/50 to-zinc-900/30 border-r border-zinc-800/50 flex flex-col overflow-hidden backdrop-blur-xl relative z-10"
+              initial={{ width: 0 }}
+              animate={{ width: 320 }}
+              exit={{ width: 0 }}
+              className="glass border-r flex flex-col"
             >
-              <div className="p-4 border-b border-zinc-800/50">
-                <motion.button
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 rounded-xl transition-all duration-300 text-sm font-bold shadow-lg shadow-cyan-900/20"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+              <div className="p-4">
+                <button
+                  onClick={handleNewChat}
+                  className="w-full flex gap-2 justify-center items-center bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg rounded-xl py-3 font-semibold hover:brightness-110 transition"
                 >
-                  <Plus className="w-4 h-4" />
-                  New Chat
-                </motion.button>
+                  <Plus className="w-4 h-4" /> New Chat
+                </button>
               </div>
 
-              {/* Live Stats Card */}
-              <div className="px-4 pt-4">
+              <div className="px-4">
                 <LiveStatsCard />
               </div>
 
-              {/* Chat History */}
               <div className="flex-1 overflow-y-auto p-2 mt-4">
-                <div className="mb-4">
-                  <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                    <Clock className="w-3 h-3" />
-                    Recent Chats
-                  </div>
-                  <div className="space-y-1">
-                    {isHistoryLoading ? (
-                      <SidebarSkeleton />
-                    ) : (
-                      chatHistory.map((chat, index) => (
-                        <motion.button
-                          key={chat.id}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.1 }}
-                          className="w-full text-left px-3 py-3 rounded-xl hover:bg-white/5 transition-all duration-200 group border border-transparent hover:border-cyan-500/20"
-                          whileHover={{ x: 4 }}
-                        >
-                          <p className="text-sm text-zinc-300 truncate group-hover:text-white transition-colors font-medium">
-                            {chat.title}
-                          </p>
-                          <p className="text-xs text-zinc-600 mt-0.5">
-                            {chat.timestamp}
-                          </p>
-                        </motion.button>
-                      ))
-                    )}
-                  </div>
+                <div className="text-xs uppercase text-[var(--muted)] px-3 mb-2 flex items-center gap-2">
+                  <Clock className="w-3 h-3" /> Recent
                 </div>
+
+                {isHistoryLoading ? (
+                  <SidebarSkeleton />
+                ) : chatSessions?.sessions?.length ? (
+                  chatSessions.sessions.map((chat) => (
+                    <div
+                      key={chat.sessionId}
+                      onClick={() => handleSwitchSession(chat.sessionId)}
+                      className="group px-3 py-2 rounded-xl hover:bg-[var(--panel-soft)]/70 cursor-pointer relative transition-colors"
+                    >
+                      <p className="text-sm truncate text-[var(--text)]">
+                        {chat.title}
+                      </p>
+                      <button
+                        onClick={(e) => handleDeleteSession(chat.sessionId, e)}
+                        className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Trash2 className="w-3 h-3 text-red-400" />
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center text-sm text-[var(--muted)] py-6">
+                    No chats yet
+                  </div>
+                )}
               </div>
 
-              {/* Sidebar Footer */}
-              <div className="p-3 border-t border-zinc-800/50 space-y-1 bg-zinc-900/30">
-                <motion.a
+              <div className="p-3 border-t border-[var(--border)] bg-[var(--panel-soft)]/70 backdrop-blur">
+                <a
                   href="https://t.me/SwapSmithBot"
                   target="_blank"
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 transition-all duration-200 text-sm text-zinc-400 hover:text-cyan-400 group"
-                  whileHover={{ x: 4 }}
+                  className="flex gap-2 items-center text-sm text-[var(--muted)] hover:text-[var(--accent)] transition-colors"
                 >
-                  <MessageCircle className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                  Support
-                </motion.a>
-                <Link href="/profile">
-                  <motion.button
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 transition-all duration-200 text-sm text-zinc-400 hover:text-purple-400 group"
-                    whileHover={{ x: 4 }}
-                  >
-                    <Settings className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
-                    Settings
-                  </motion.button>
+                  <MessageCircle className="w-4 h-4" /> Support
+                </a>
+
+                <Link
+                  href="/profile"
+                  className="flex gap-2 items-center text-sm text-[var(--muted)] hover:text-purple-400 mt-2 transition-colors"
+                >
+                  <Settings className="w-4 h-4" /> Settings
                 </Link>
               </div>
             </motion.aside>
           )}
         </AnimatePresence>
 
-        {/* Main Content */}
-        <div className="flex-1 flex flex-col overflow-hidden relative z-10">
-          {/* Chat Area */}
-          <main className="flex-1 overflow-y-auto flex flex-col">
+        {/* Main */}
+        <div className="relative flex-1 flex flex-col">
+          <button
+            onClick={() => setIsSidebarOpen((s) => !s)}
+            className="absolute top-4 left-4 z-40 p-2 glass rounded-xl shadow-sm"
+          >
+            <Menu className="w-5 h-5 text-[var(--muted)]" />
+          </button>
 
-            {/* Sidebar Toggle Button */}
-            <motion.button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="fixed top-20 left-4 z-40 p-2.5 bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700/50 rounded-xl transition-all duration-300 shadow-lg backdrop-blur-sm group"
-              title={isSidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <Menu className="w-5 h-5 text-zinc-300 group-hover:text-cyan-400 transition-colors" />
-            </motion.button>
-
-            {/* Header Section */}
-            <div className="flex-shrink-0 pt-16 pb-8 px-4">
-              <motion.div
-                className="max-w-3xl mx-auto text-center space-y-4"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
-              >
-                <motion.div
-                  className="flex justify-center mb-4"
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.2 }}
-                >
-                  <motion.div
-                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500/10 to-purple-500/10 border border-cyan-500/20 rounded-full"
-                    animate={{
-                      boxShadow: [
-                        "0 0 20px rgba(34,211,238,0.1)",
-                        "0 0 40px rgba(34,211,238,0.2)",
-                        "0 0 20px rgba(34,211,238,0.1)"
-                      ]
-                    }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                  >
-                    <Sparkles className="w-4 h-4 text-cyan-400" />
-                    <span className="text-xs font-semibold text-cyan-300 tracking-wider uppercase">AI Trading Assistant</span>
-                  </motion.div>
-                </motion.div>
-
-                <h1 className="text-5xl md:text-7xl font-black tracking-tighter leading-[0.9]">
-                  <span className="bg-gradient-to-b from-white via-white to-white/40 bg-clip-text text-transparent">
-                    Terminal
-                  </span>
-                  <br />
-                  <motion.span
-                    className="bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent"
-                    animate={{
-                      backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
-                    }}
-                    transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
-                    style={{ backgroundSize: "200% 200%" }}
-                  >
-                    Alpha.
-                  </motion.span>
+          <div className="flex-1 overflow-y-auto px-4 py-8">
+            <div className="max-w-3xl mx-auto space-y-4">
+              {/* Header / Hero */}
+              <div className="mb-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--panel-soft)]/80 border border-[var(--border)] text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]" />
+                  AI Trading Assistant
+                </div>
+                <h1 className="mt-3 text-2xl font-semibold text-[var(--text)]">
+                  Terminal Alpha
                 </h1>
-
-                <p className="text-zinc-500 text-sm max-w-xl mx-auto">
-                  Swap assets, create payment links, or scout yields with AI assistance
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  Chat-native swaps, yield scouting and payment links – from one
+                  unified terminal.
                 </p>
-              </motion.div>
-            </div>
+              </div>
 
-            {/* Chat Messages Container */}
-            <div className="flex-1 px-4 pb-8 overflow-y-auto">
-              <div className="max-w-3xl mx-auto space-y-6">
-                {/* SHOW SKELETON LIST IF INITIAL DATA IS LOADING */}
-                {isHistoryLoading ? (
-                  <MessageListSkeleton />
-                ) : (
-                  <>
-                    {/* Render Real Messages */}
-                    <AnimatePresence mode="popLayout">
-                      {messages.map((msg, index) => (
-                        <motion.div
-                          key={index}
-                          initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.95 }}
-                          transition={{ duration: 0.3, ease: "easeOut" }}
-                          className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              {/* Messages */}
+              {messages.map((msg, i) => (
+                <div
+                  key={i}
+                  className={`flex ${
+                    msg.role === "user" ? "justify-end" : "justify-start"
+                  }`}
+                >
+                  <div className="max-w-[80%]">
+                    <div
+                      className={`px-4 py-3 rounded-2xl text-sm ${
+                        msg.role === "user"
+                          ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg"
+                          : "panel"
+                      }`}
+                    >
+                      {msg.type === "swap_confirmation" &&
+                      msg.data &&
+                      "quoteData" in msg.data ? (
+                        <SwapConfirmation
+                          quote={(msg.data as { quoteData: QuoteData }).quoteData}
+                          confidence={(msg.data as { confidence: number }).confidence}
+                          onAmountChange={(newAmount) => {
+                            // Update the quote with the new amount
+                            const quoteData = (msg.data as { quoteData?: QuoteData })?.quoteData;
+                            if (quoteData) {
+                              const updatedQuote = { ...quoteData, depositAmount: newAmount };
+                              addMessage({
+                                role: 'assistant',
+                                content: `Amount updated to ${newAmount} ${quoteData.depositCoin}. Please review the new swap details.`,
+                                type: 'message'
+                              });
+                            }
+                          }}
+                        />
+                      ) : msg.type === "intent_confirmation" &&
+                        msg.data &&
+                        "parsedCommand" in msg.data ? (
+                        <IntentConfirmation
+                          command={(msg.data as { parsedCommand: ParsedCommand }).parsedCommand}
+                          onConfirm={() => executeSwap((msg.data as { parsedCommand: ParsedCommand }).parsedCommand)}
+                        />
+                      ) : msg.type === "yield_info" ? (
+                        <pre className="whitespace-pre-wrap text-xs text-cyan-400">
+                          {msg.content}
+                        </pre>
+                      ) : msg.type === "checkout_link" &&
+                        msg.data &&
+                        "url" in msg.data ? (
+                        <a
+                          href={(msg.data as { url: string }).url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline underline-offset-2 text-cyan-400"
                         >
-                          <div className={`max-w-[85%]`}>
-                            {msg.role === 'user' ? (
-                              <motion.div
-                                className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white px-5 py-3.5 rounded-2xl rounded-tr-none shadow-lg shadow-cyan-900/20 text-sm font-medium relative overflow-hidden"
-                                whileHover={{ scale: 1.02 }}
-                                transition={{ duration: 0.2 }}
-                              >
-                                <motion.div
-                                  className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-blue-400"
-                                  initial={{ x: "-100%" }}
-                                  animate={{ x: "100%" }}
-                                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                                  style={{ opacity: 0.1 }}
-                                />
-                                <span className="relative z-10">{msg.content}</span>
-                              </motion.div>
-                            ) : (
-                              <div className="space-y-3">
-                                <motion.div
-                                  className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 border border-zinc-700/50 text-gray-200 px-5 py-4 rounded-2xl rounded-tl-none text-sm leading-relaxed backdrop-blur-xl relative overflow-hidden group"
-                                  whileHover={{ scale: 1.01 }}
-                                  transition={{ duration: 0.2 }}
-                                >
-                                  {/* Subtle glow effect on hover */}
-                                  <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/0 via-purple-500/0 to-pink-500/0 group-hover:from-cyan-500/5 group-hover:via-purple-500/5 group-hover:to-pink-500/5 transition-all duration-500 rounded-2xl" />
-
-                                  <div className="relative z-10">
-                                    {msg.type === 'message' && <div className="whitespace-pre-line">{msg.content}</div>}
-                                    {msg.type === 'yield_info' && <div className="font-mono text-xs text-cyan-300 bg-cyan-950/30 p-3 rounded-lg border border-cyan-800/30">{msg.content}</div>}
-                                    {msg.type === 'intent_confirmation' && msg.data && 'parsedCommand' in msg.data && (
-                                      <IntentConfirmation command={msg.data.parsedCommand} onConfirm={handleIntentConfirm} />
-                                    )}
-                                    {msg.type === 'swap_confirmation' && msg.data && 'quoteData' in msg.data && (
-                                      <SwapConfirmation quote={msg.data.quoteData as QuoteData} confidence={msg.data.confidence} />
-                                    )}
-                                    {msg.type === 'checkout_link' && msg.data && 'url' in msg.data && (
-                                      <motion.a
-                                        href={msg.data.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2 flex items-center gap-2 group"
-                                        whileHover={{ x: 4 }}
-                                      >
-                                        <span>{msg.data.url}</span>
-                                        <motion.span
-                                          animate={{ x: [0, 4, 0] }}
-                                          transition={{ duration: 1.5, repeat: Infinity }}
-                                        >
-                                          →
-                                        </motion.span>
-                                      </motion.a>
-                                    )}
-                                  </div>
-                                </motion.div>
-                              </div>
-                            )}
-                            <p
-                              className={`text-[10px] text-zinc-600 mt-2 px-1 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}
-                            >
-                              {formatTime(msg.timestamp)}
-                            </p>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </AnimatePresence>
-                  </>
-                )}
-
-                {/* SHOW SINGLE SKELETON BUBBLE IF AI IS CURRENTLY PROCESSING A NEW REQUEST */}
-                {isLoading && !isHistoryLoading && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                  >
-                    <MessageListSkeleton />
-                  </motion.div>
-                )}
-
-                <div ref={messagesEndRef} />
-              </div>
+                          {(msg.data as { url: string }).url}
+                        </a>
+                      ) : (
+                        <pre className="whitespace-pre-wrap text-[var(--text)]">
+                          {msg.content}
+                        </pre>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
             </div>
+          </div>
 
-            {/* Input Area - Fixed at bottom */}
-            <div className="flex-shrink-0 pb-8 px-4 relative z-20">
-              <div className="max-w-3xl mx-auto">
-                <ClaudeChatInput
-                  onSendMessage={handleSendMessage}
-                  isRecording={isRecording}
-                  isAudioSupported={isAudioSupported}
-                  onStartRecording={handleStartRecording}
-                  onStopRecording={handleStopRecording}
-                  isConnected={isConnected}
-                />
-              </div>
-            </div>
-          </main>
+          <div className="p-4 border-t border-[var(--border)] bg-[var(--panel)]/90 backdrop-blur">
+            <ClaudeChatInput
+              onSendMessage={({ message }) => processCommand(message)}
+              isRecording={isRecording}
+              isAudioSupported={isAudioSupported}
+              onStartRecording={handleStartRecording}
+              onStopRecording={handleStopRecording}
+              isConnected={isConnected}
+            />
+          </div>
         </div>
       </div>
     </>

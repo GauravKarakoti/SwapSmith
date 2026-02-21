@@ -1,86 +1,88 @@
-// bot/src/config/address-patterns.ts
+/**
+ * Centralized address validation patterns and utility.
+ *
+ * Every chain-specific regex lives here so that both the bot runtime
+ * and any test / validation scripts share a single source of truth.
+ */
+
+// --- Regex patterns for validating wallet addresses by chain type ---
+
 export const ADDRESS_PATTERNS: Record<string, RegExp> = {
-  // EVM chains
-  ethereum: /^0x[a-fA-F0-9]{40}$/,
-  base: /^0x[a-fA-F0-9]{40}$/,
-  arbitrum: /^0x[a-fA-F0-9]{40}$/,
-  polygon: /^0x[a-fA-F0-9]{40}$/,
-  bsc: /^0x[a-fA-F0-9]{40}$/,
-  optimism: /^0x[a-fA-F0-9]{40}$/,
-  avalanche: /^0x[a-fA-F0-9]{40}$/,
-  fantom: /^0x[a-fA-F0-9]{40}$/,
-  cronos: /^0x[a-fA-F0-9]{40}$/,
-  moonbeam: /^0x[a-fA-F0-9]{40}$/,
-  moonriver: /^0x[a-fA-F0-9]{40}$/,
-  celo: /^0x[a-fA-F0-9]{40}$/,
-  gnosis: /^0x[a-fA-F0-9]{40}$/,
-  harmony: /^0x[a-fA-F0-9]{40}$/,
-  metis: /^0x[a-fA-F0-9]{40}$/,
-  aurora: /^0x[a-fA-F0-9]{40}$/,
-  kava: /^0x[a-fA-F0-9]{40}$/,
-  evmos: /^0x[a-fA-F0-9]{40}$/,
-  boba: /^0x[a-fA-F0-9]{40}$/,
-  okc: /^0x[a-fA-F0-9]{40}$/,
-  heco: /^0x[a-fA-F0-9]{40}$/,
-  iotex: /^0x[a-fA-F0-9]{40}$/,
-  klaytn: /^0x[a-fA-F0-9]{40}$/,
-  conflux: /^0x[a-fA-F0-9]{40}$/,
-  astar: /^0x[a-fA-F0-9]{40}$/,
-  shiden: /^0x[a-fA-F0-9]{40}$/,
-  telos: /^0x[a-fA-F0-9]{40}$/,
-  fuse: /^0x[a-fA-F0-9]{40}$/,
-  velas: /^0x[a-fA-F0-9]{40}$/,
-  thundercore: /^0x[a-fA-F0-9]{40}$/,
-  xdc: /^xdc[a-fA-F0-9]{40}$/,
-  nahmii: /^0x[a-fA-F0-9]{40}$/,
-  callisto: /^0x[a-fA-F0-9]{40}$/,
-  smartbch: /^0x[a-fA-F0-9]{40}$/,
-  energyweb: /^0x[a-fA-F0-9]{40}$/,
-  theta: /^0x[a-fA-F0-9]{40}$/,
-  flare: /^0x[a-fA-F0-9]{40}$/,
-  songbird: /^0x[a-fA-F0-9]{40}$/,
-  coston: /^0x[a-fA-F0-9]{40}$/,
-  coston2: /^0x[a-fA-F0-9]{40}$/,
-  rei: /^0x[a-fA-F0-9]{40}$/,
-  kekchain: /^0x[a-fA-F0-9]{40}$/,
-  tomochain: /^0x[a-fA-F0-9]{40}$/,
-  bitgert: /^0x[a-fA-F0-9]{40}$/,
-  clover: /^0x[a-fA-F0-9]{40}$/,
-  defichain: /^0x[a-fA-F0-9]{40}$/,
-  findora: /^0x[a-fA-F0-9]{40}$/,
-  gatechain: /^0x[a-fA-F0-9]{40}$/,
-  meter: /^0x[a-fA-F0-9]{40}$/,
-  nova: /^0x[a-fA-F0-9]{40}$/,
-  syscoin: /^0x[a-fA-F0-9]{40}$/,
-  zksync: /^0x[a-fA-F0-9]{40}$/,
-  polygonzkevm: /^0x[a-fA-F0-9]{40}$/,
-  linea: /^0x[a-fA-F0-9]{40}$/,
-  mantle: /^0x[a-fA-F0-9]{40}$/,
-  scroll: /^0x[a-fA-F0-9]{40}$/,
-  taiko: /^0x[a-fA-F0-9]{40}$/,
-  bitcoin: /^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$|^bc1[a-z0-9]{39,59}$/,
-  solana: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/,
-  polkadot: /^1[a-zA-Z0-9]{47}$/,
-  cardano: /^addr1[a-z0-9]{98}$|^Ae2tdPwUPEZ[a-zA-Z0-9]{50}$/,
-  monero: /^[48][0-9AB][1-9A-HJ-NP-Za-km-z]{93}$/,
-  litecoin: /^[LM3][a-km-zA-HJ-NP-Z1-9]{26,33}$/,
-  dogecoin: /^D[5-9A-HJ-NP-U][1-9A-HJ-NP-Za-km-z]{24,33}$/,
-  dash: /^X[1-9A-HJ-NP-Za-km-z]{33}$/,
-  zcash: /^t1[a-zA-Z0-9]{33}$|^t3[a-zA-Z0-9]{33}$/,
-  ripple: /^r[1-9A-HJ-NP-Za-km-z]{24,34}$/,
-  stellar: /^G[A-Z0-9]{55}$/,
-  cosmos: /^cosmos1[a-z0-9]{38}$/,
-  osmosis: /^osmo1[a-z0-9]{38}$/,
-  terra: /^terra1[a-z0-9]{38}$/,
-  tron: /^T[1-9A-HJ-NP-Za-km-z]{33}$/,
-  tezos: /^tz[1-3][a-zA-Z0-9]{33}$/,
-  algorand: /^[A-Z0-9]{58}$/,
-  near: /^[a-z0-9_-]{2,64}\.near$|^[a-fA-F0-9]{64}$/,
-  flow: /^0x[a-fA-F0-9]{16}$/,
-  hedera: /^0\.0\.\d+$/,
-  elrond: /^erd1[a-z0-9]{58}$/,
-  kusama: /^[A-Z0-9]{47}$/,
-  rsk: /^0x[a-fA-F0-9]{40}$/,
-  waves: /^3P[a-zA-Z0-9]{33}$/,
-  zilliqa: /^zil1[a-z0-9]{38}$/,
+    // EVM-compatible chains (Ethereum, BSC, Polygon, Arbitrum, Base, Avalanche, etc.)
+    ethereum: /^0x[a-fA-F0-9]{40}$/,
+    bsc: /^0x[a-fA-F0-9]{40}$/,
+    polygon: /^0x[a-fA-F0-9]{40}$/,
+    arbitrum: /^0x[a-fA-F0-9]{40}$/,
+    base: /^0x[a-fA-F0-9]{40}$/,
+    avalanche: /^0x[a-fA-F0-9]{40}$/,
+    optimism: /^0x[a-fA-F0-9]{40}$/,
+    fantom: /^0x[a-fA-F0-9]{40}$/,
+    // Bitcoin (Legacy, SegWit, Native SegWit, Taproot)
+    bitcoin: /^(1[a-km-zA-HJ-NP-Z1-9]{25,34}|3[a-km-zA-HJ-NP-Z1-9]{25,34}|bc1[a-zA-HJ-NP-Z0-9]{39,59}|bc1p[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{58})$/,
+    // Litecoin (Legacy, SegWit)
+    litecoin: /^([LM3][a-km-zA-HJ-NP-Z1-9]{26,33}|ltc1[a-zA-HJ-NP-Z0-9]{39,59})$/,
+    // Solana
+    solana: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/,
+    // Tron
+    tron: /^T[a-zA-HJ-NP-Z0-9]{33}$/,
+    // Ripple (XRP)
+    ripple: /^r[0-9a-zA-Z]{24,34}$/,
+    xrp: /^r[0-9a-zA-Z]{24,34}$/,
+    // Dogecoin
+    dogecoin: /^D[5-9A-HJ-NP-U][1-9A-HJ-NP-Za-km-z]{32}$/,
+    // Cosmos-based chains
+    cosmos: /^cosmos[a-z0-9]{38,45}$/,
+    // Polkadot
+    polkadot: /^1[a-zA-Z0-9]{47}$/,
+    // Cardano
+    cardano: /^addr1[a-zA-Z0-9]{53,}$/,
+    // Monero
+    monero: /^4[0-9AB][1-9A-HJ-NP-Za-km-z]{93}$/,
+    // Zcash (transparent)
+    zcash: /^t1[a-zA-Z0-9]{33}$/,
 };
+
+// Default EVM pattern for unknown chains
+export const DEFAULT_EVM_PATTERN = /^0x[a-fA-F0-9]{40}$/;
+
+/**
+ * Validates a wallet address against the expected format for a given chain.
+ * @param address - The wallet address to validate
+ * @param chain - The blockchain network (e.g., 'ethereum', 'bitcoin', 'solana')
+ * @returns boolean indicating if the address is valid for the specified chain
+ */
+export function isValidAddress(address: string, chain?: string): boolean {
+    if (!address || typeof address !== 'string') {
+        return false;
+    }
+
+    const trimmedAddress = address.trim();
+
+    // If no chain specified, check if it matches any known pattern
+    if (!chain) {
+        // Check EVM first (most common)
+        if (DEFAULT_EVM_PATTERN.test(trimmedAddress)) {
+            return true;
+        }
+        // Check other common patterns
+        for (const pattern of Object.values(ADDRESS_PATTERNS)) {
+            if (pattern.test(trimmedAddress)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Normalize chain name
+    const normalizedChain = chain.toLowerCase().replace(/[^a-z]/g, '');
+
+    // Get the pattern for the specified chain
+    const pattern = ADDRESS_PATTERNS[normalizedChain];
+
+    if (pattern) {
+        return pattern.test(trimmedAddress);
+    }
+
+    // For unknown chains, assume EVM-compatible
+    return DEFAULT_EVM_PATTERN.test(trimmedAddress);
+}

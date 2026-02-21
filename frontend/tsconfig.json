@@ -19,8 +19,13 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
-    }
+      "@/*": ["./*"],
+      "dotenv": ["./node_modules/dotenv"],
+      "drizzle-kit": ["./node_modules/drizzle-kit"],
+      "drizzle-orm": ["./node_modules/drizzle-orm"],
+      "drizzle-orm/*": ["./node_modules/drizzle-orm/*"]
+    },
+    "types": ["jest"]
   },
   "include": [
     "next-env.d.ts",
@@ -28,7 +33,8 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    "**/*.mts",
+    "../shared/**/*.ts"
   ],
   "exclude": ["node_modules"]
 }

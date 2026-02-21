@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1771333996913,
+      "tag": "0001_third_nomad",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1771334928839,
+      "tag": "0002_clear_logan",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1771509429689,
+      "tag": "0003_cute_may_parker",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1771566109120,
+      "tag": "0004_typical_quentin_quire",
+      "breakpoints": true
+    }git,
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1771568443338,
+      "tag": "0005_violet_mulholland_black",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1771651612818,
+      "tag": "0006_productive_franklin_richards",
+      "breakpoints": true
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
+import { SIDESHIFT_CONFIG } from '../../../shared/config/sideshift';
 dotenv.config();
-const SIDESHIFT_BASE_URL = "https://sideshift.ai/api/v2";
 const AFFILIATE_ID = process.env.SIDESHIFT_AFFILIATE_ID || process.env.NEXT_PUBLIC_AFFILIATE_ID || '';
 const API_KEY = process.env.SIDESHIFT_API_KEY || process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
 const DEFAULT_USER_IP = process.env.SIDESHIFT_CLIENT_IP;
@@ -18,7 +18,7 @@ export interface SideShiftPair {
 }
 
 export interface SideShiftQuote {
-  id?: string;
+  id: string;
   depositCoin: string;
   depositNetwork: string;
   settleCoin: string;
@@ -32,16 +32,26 @@ export interface SideShiftQuote {
   expiry?: string;
 }
 
+// FIXED: Expanded definition to include fields returned by /shifts/fixed
 export interface SideShiftOrder {
-    id: string;
-    // Update this field to allow string or object
-    depositAddress: string | {
-        address: string;
-        memo: string;
-    };
+  id: string;
+  createdAt: string;
+  depositCoin: string;
+  depositNetwork: string;
+  depositAddress: string | {
+    address: string;
+    memo: string;
+  };
+  depositAmount: string;
+  settleCoin: string;
+  settleNetwork: string;
+  settleAddress: string;
+  settleAmount: string;
+  rate: string;
+  expiresAt?: string;
+  status?: string;
 }
 
-// --- NEW: Type for Order Status ---
 export interface SideShiftOrderStatus {
   id: string;
   status: string;
@@ -65,10 +75,7 @@ export interface SideShiftOrderStatus {
   updatedAt: string;
   error?: { code: string; message: string; };
 }
-// --- END NEW ---
 
-
-// --- NEW: Types for SideShift Pay API ---
 export interface SideShiftCheckoutRequest {
   settleCoin: string;
   settleNetwork: string;
@@ -81,6 +88,7 @@ export interface SideShiftCheckoutRequest {
 
 export interface SideShiftCheckoutResponse {
   id: string;
+  url: string;
   settleCoin: string;
   settleNetwork: string;
   settleAddress: string;
@@ -92,9 +100,7 @@ export interface SideShiftCheckoutResponse {
   updatedAt: string;
   error?: { code: string; message: string; };
 }
-// --- END NEW ---
 
-// --- NEW: Types and function for Coins API ---
 export interface TokenDetail {
   contractAddress: string;
   decimals: number;
@@ -108,7 +114,7 @@ export interface SideShiftCoin {
   deprecated?: boolean;
   fixedOnly: string[] | boolean;
   variableOnly: string[] | boolean;
-  tokenDetails?: Record<string, TokenDetail>; // Object with network as key
+  tokenDetails?: Record<string, TokenDetail>;
   networksWithMemo: string[];
   depositOffline: string[] | boolean;
   settleOffline: string[] | boolean;
@@ -116,17 +122,15 @@ export interface SideShiftCoin {
 
 export async function getCoins(userIP?: string): Promise<SideShiftCoin[]> {
   try {
-    const headers: Record<string, string | undefined> = { 
-        'x-sideshift-secret': API_KEY,
+    const headers: Record<string, string | undefined> = {
+      'x-sideshift-secret': API_KEY,
     };
     const ip = userIP || DEFAULT_USER_IP;
-    if(ip) headers['x-user-ip'] = ip;
+    if (ip) headers['x-user-ip'] = ip;
 
     const response = await axios.get<SideShiftCoin[]>(
-      `${SIDESHIFT_BASE_URL}/coins`,
-      {
-        headers
-      }
+      `${SIDESHIFT_CONFIG.BASE_URL}/coins`,
+      { headers }
     );
     return response.data;
   } catch (error) {
@@ -136,22 +140,18 @@ export async function getCoins(userIP?: string): Promise<SideShiftCoin[]> {
     throw new Error("Failed to fetch coins");
   }
 }
-// --- END NEW ---
-
 
 export async function getPairs(userIP?: string): Promise<SideShiftPair[]> {
   try {
-    const headers: Record<string, string | undefined> = { 
-        'x-sideshift-secret': API_KEY,
+    const headers: Record<string, string | undefined> = {
+      'x-sideshift-secret': API_KEY,
     };
     const ip = userIP || DEFAULT_USER_IP;
-    if(ip) headers['x-user-ip'] = ip;
+    if (ip) headers['x-user-ip'] = ip;
 
     const response = await axios.get<SideShiftPair[]>(
-      `${SIDESHIFT_BASE_URL}/pairs`,
-      {
-        headers
-      }
+      `${SIDESHIFT_CONFIG.BASE_URL}/pairs`,
+      { headers }
     );
     return response.data;
   } catch (error) {
@@ -163,23 +163,23 @@ export async function getPairs(userIP?: string): Promise<SideShiftPair[]> {
 }
 
 export async function createQuote(
-  fromAsset: string, 
-  fromNetwork: string, 
-  toAsset: string, 
-  toNetwork: string, 
+  fromAsset: string,
+  fromNetwork: string,
+  toAsset: string,
+  toNetwork: string,
   amount: number,
   userIP?: string
 ): Promise<SideShiftQuote> {
   try {
     const headers: Record<string, string | undefined> = {
-        'Content-Type': 'application/json',
-        'x-sideshift-secret': API_KEY
+      'Content-Type': 'application/json',
+      'x-sideshift-secret': API_KEY
     };
     const ip = userIP || DEFAULT_USER_IP;
     if (ip) headers['x-user-ip'] = ip;
 
     const response = await axios.post<SideShiftQuote & { id?: string }>(
-      `${SIDESHIFT_BASE_URL}/quotes`,
+      `${SIDESHIFT_CONFIG.BASE_URL}/quotes`,
       {
         depositCoin: fromAsset,
         depositNetwork: fromNetwork,
@@ -188,9 +188,7 @@ export async function createQuote(
         depositAmount: amount.toString(),
         affiliateId: AFFILIATE_ID,
       },
-      {
-        headers
-      }
+      { headers }
     );
 
     if (response.data.error) {
@@ -199,7 +197,7 @@ export async function createQuote(
 
     return {
       ...response.data,
-      id: response.data.id
+      id: response.data.id || '' // Ensure ID is present
     };
   } catch (error) {
     if (axios.isAxiosError(error)) {
@@ -210,68 +208,60 @@ export async function createQuote(
 }
 
 export async function createOrder(quoteId: string, settleAddress: string, refundAddress: string, userIP?: string): Promise<SideShiftOrder> {
-    try {
-        const payload: any = {
-            quoteId,
-            settleAddress,
-            refundAddress,
-        };
-        
-        // Only include affiliateId if it's defined
-        if (AFFILIATE_ID) {
-            payload.affiliateId = AFFILIATE_ID;
-        }
+  try {
+    const payload: any = {
+      quoteId,
+      settleAddress,
+      refundAddress,
+    };
 
-        const headers: Record<string, string | undefined> = {
-            'Content-Type': 'application/json',
-            'x-sideshift-secret': API_KEY,
-        };
-        const ip = userIP || DEFAULT_USER_IP;
-        if (ip) headers['x-user-ip'] = ip;
-        
-        const response = await axios.post<SideShiftOrder>(
-            `${SIDESHIFT_BASE_URL}/shifts/fixed`,
-            payload,
-            {
-                headers
-            }
-        );
-        return response.data;
-    } catch (error) {
-        if (axios.isAxiosError(error)) {
-            throw new Error(error.response?.data?.error?.message || 'Failed to create order');
-        }
-        throw new Error('Failed to create order');
+    if (AFFILIATE_ID) {
+      payload.affiliateId = AFFILIATE_ID;
     }
+
+    const headers: Record<string, string | undefined> = {
+      'Content-Type': 'application/json',
+      'x-sideshift-secret': API_KEY,
+    };
+    const ip = userIP || DEFAULT_USER_IP;
+    if (ip) headers['x-user-ip'] = ip;
+
+    const response = await axios.post<SideShiftOrder>(
+      `${SIDESHIFT_CONFIG.BASE_URL}/shifts/fixed`,
+      payload,
+      { headers }
+    );
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      throw new Error(error.response?.data?.error?.message || 'Failed to create order');
+    }
+    throw new Error('Failed to create order');
+  }
 }
 
-// --- NEW: Function to get order status ---
 export async function getOrderStatus(orderId: string, userIP?: string): Promise<SideShiftOrderStatus> {
-    try {
-        const headers: Record<string, string | undefined> = {
-            'Accept': 'application/json',
-            'x-sideshift-secret': API_KEY,
-        };
-        const ip = userIP || DEFAULT_USER_IP;
-        if (ip) headers['x-user-ip'] = ip;
+  try {
+    const headers: Record<string, string | undefined> = {
+      'Accept': 'application/json',
+      'x-sideshift-secret': API_KEY,
+    };
+    const ip = userIP || DEFAULT_USER_IP;
+    if (ip) headers['x-user-ip'] = ip;
 
-        const response = await axios.get<SideShiftOrderStatus>(
-            `${SIDESHIFT_BASE_URL}/shifts/${orderId}`,
-            {
-                headers
-            }
-        );
-        return response.data;
-    } catch (error) {
-        if (axios.isAxiosError(error)) {
-            throw new Error(error.response?.data?.error?.message || 'Failed to get order status');
-        }
-        throw new Error('Failed to get order status');
+    const response = await axios.get<SideShiftOrderStatus>(
+      `${SIDESHIFT_CONFIG.BASE_URL}/shifts/${orderId}`,
+      { headers }
+    );
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      throw new Error(error.response?.data?.error?.message || 'Failed to get order status');
     }
+    throw new Error('Failed to get order status');
+  }
 }
-// --- END NEW ---
 
-// --- NEW: Function for SideShift Pay API ---
 export async function createCheckout(
   settleCoin: string,
   settleNetwork: string,
@@ -285,33 +275,33 @@ export async function createCheckout(
     settleAmount: settleAmount.toString(),
     settleAddress,
     affiliateId: AFFILIATE_ID || '',
-    // Using placeholder URLs as this is a bot and we just need the link
-    successUrl: 'https://sideshift.ai/success',
-    cancelUrl: 'https://sideshift.ai/cancel',
+    successUrl: SIDESHIFT_CONFIG.SUCCESS_URL,
+    cancelUrl: SIDESHIFT_CONFIG.CANCEL_URL,
   };
 
   try {
     const headers: Record<string, string | undefined> = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'x-sideshift-secret': API_KEY,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'x-sideshift-secret': API_KEY,
     };
     const ip = userIP || DEFAULT_USER_IP;
     if (ip) headers['x-user-ip'] = ip;
 
     const response = await axios.post<SideShiftCheckoutResponse>(
-      `${SIDESHIFT_BASE_URL}/checkout`,
+      `${SIDESHIFT_CONFIG.BASE_URL}/checkout`,
       payload,
-      {
-        headers,
-      }
+      { headers }
     );
 
     if (response.data.error) {
       throw new Error(response.data.error.message);
     }
 
-    return response.data;
+    return {
+      ...response.data,
+      url: response.data.url || `${SIDESHIFT_CONFIG.CHECKOUT_URL}/${response.data.id}`
+    };
   } catch (error) {
     if (axios.isAxiosError(error)) {
       throw new Error(error.response?.data?.error?.message || 'Failed to create checkout');
@@ -319,4 +309,3 @@ export async function createCheckout(
     throw new Error('Failed to create checkout');
   }
 }
-// --- END NEW ---

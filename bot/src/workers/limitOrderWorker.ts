@@ -3,6 +3,8 @@ import axios from 'axios';
 import { eq, and } from 'drizzle-orm';
 import { db, limitOrders, LimitOrder, updateLimitOrderStatus, getUser } from '../services/database';
 import { getCoins, createQuote, createOrder } from '../services/sideshift-client';
+import logger, { handleError } from '../services/logger';
+
 
 const CHECK_INTERVAL_MS = 60 * 1000; // 60 seconds
 
@@ -30,7 +32,8 @@ export class LimitOrderWorker {
     this.isRunning = true;
     this.bot = bot;
 
-    console.log('🚀 Starting Limit Order Worker...');
+    logger.info('🚀 Starting Limit Order Worker...');
+
 
     // Initial coin map build
     await this.buildCoinMap();
@@ -49,7 +52,8 @@ export class LimitOrderWorker {
       this.intervalId = null;
     }
     this.isRunning = false;
-    console.log('🛑 Limit Order Worker stopped.');
+    logger.info('🛑 Limit Order Worker stopped.');
+
   }
 
   private async buildCoinMap() {
@@ -63,25 +67,32 @@ export class LimitOrderWorker {
           this.symbolToIdMap.set(coin.coin, id);
         }
       }
-      console.log(`✅ Built coin map with ${this.symbolToIdMap.size} entries.`);
+      logger.info(`✅ Built coin map with ${this.symbolToIdMap.size} entries.`);
     } catch (error) {
-      console.error('⚠️ Failed to build coin map from SideShift, using defaults.', error);
+      logger.error('⚠️ Failed to build coin map from SideShift, using defaults.', error);
+
     }
   }
 
   private async checkOrders() {
     try {
-      // 1. Fetch pending orders
-      const pendingOrders = await db.select().from(limitOrders).where(eq(limitOrders.status, 'pending'));
+      // 1. Fetch pending orders using status or isActive
+      const pendingOrders = await db.select().from(limitOrders)
+        .where(and(eq(limitOrders.isActive, 1), eq(limitOrders.status, 'pending')));
 
       if (pendingOrders.length === 0) return;
 
-      console.log(`🔍 Checking ${pendingOrders.length} pending limit orders...`);
+      logger.info(`🔍 Checking ${pendingOrders.length} pending limit orders...`);
+
 
       // 2. Identify unique assets to fetch prices for
       const assetsToFetch = new Set<string>();
       for (const order of pendingOrders) {
-        assetsToFetch.add(order.conditionAsset);
+        if (order.conditionAsset) {
+            assetsToFetch.add(order.conditionAsset);
+        } else if (order.fromAsset) {
+            assetsToFetch.add(order.fromAsset);
+        }
       }
 
       // 3. Fetch prices from CoinGecko
@@ -89,11 +100,14 @@ export class LimitOrderWorker {
 
       // 4. Check conditions and execute
       for (const order of pendingOrders) {
-        const currentPrice = prices.get(order.conditionAsset);
+        // Use conditionAsset or fallback to fromAsset
+        const asset = order.conditionAsset || order.fromAsset;
+        const currentPrice = prices.get(asset);
 
         if (currentPrice === undefined) {
-          console.warn(`⚠️ No price found for ${order.conditionAsset}, skipping order ${order.id}`);
+          logger.warn(`⚠️ No price found for ${asset}, skipping order ${order.id}`);
           continue;
+
         }
 
         if (this.isConditionMet(order, currentPrice)) {
@@ -102,8 +116,9 @@ export class LimitOrderWorker {
       }
 
     } catch (error) {
-      console.error('❌ Error in Limit Order Worker loop:', error);
+      logger.error('❌ Error in Limit Order Worker loop:', error);
     }
+
   }
 
   private async fetchPrices(assets: string[]): Promise<Map<string, number>> {
@@ -117,8 +132,9 @@ export class LimitOrderWorker {
         idsToFetch.push(id);
         idToAssetMap.set(id, asset);
       } else {
-        console.warn(`⚠️ No CoinGecko ID mapping for ${asset}`);
+        logger.warn(`⚠️ No CoinGecko ID mapping for ${asset}`);
       }
+
     }
 
     if (idsToFetch.length === 0) return priceMap;
@@ -144,29 +160,37 @@ export class LimitOrderWorker {
 
     } catch (error) {
         if (axios.isAxiosError(error) && error.response?.status === 429) {
-            console.warn('⏳ CoinGecko rate limit hit, skipping this check cycle.');
+            logger.warn('⏳ CoinGecko rate limit hit, skipping this check cycle.');
         } else {
-            console.error('❌ Failed to fetch prices from CoinGecko:', error instanceof Error ? error.message : String(error));
+            logger.error('❌ Failed to fetch prices from CoinGecko:', error instanceof Error ? error.message : String(error));
         }
+
     }
 
     return priceMap;
   }
 
   private isConditionMet(order: LimitOrder, currentPrice: number): boolean {
-    const { conditionOperator, conditionValue } = order;
+    const { conditionOperator, conditionValue, targetPrice } = order;
+    
+    // Use conditionValue if available, else fallback to targetPrice parsing
+    const target = conditionValue !== null ? conditionValue : parseFloat(targetPrice || '0');
 
     if (conditionOperator === 'gt') {
-      return currentPrice > conditionValue;
+      return currentPrice > target;
     } else if (conditionOperator === 'lt') {
-      return currentPrice < conditionValue;
+      return currentPrice < target;
     }
 
     return false;
   }
 
   private async executeOrder(order: LimitOrder, triggerPrice: number) {
-    console.log(`⚡ Condition met for Order #${order.id}: ${order.conditionAsset} is ${triggerPrice} (Target: ${order.conditionOperator} ${order.conditionValue})`);
+    const asset = order.conditionAsset || order.fromAsset;
+    const target = order.conditionValue || order.targetPrice;
+    
+    logger.info(`⚡ Condition met for Order #${order.id}: ${asset} is ${triggerPrice} (Target: ${order.conditionOperator} ${target})`);
+
 
     try {
         // Mark as executing
@@ -179,8 +203,9 @@ export class LimitOrderWorker {
             .returning();
 
         if (result.length === 0) {
-            console.warn(`⚠️ Order #${order.id} was already picked up or cancelled.`);
+            logger.warn(`⚠️ Order #${order.id} was already picked up or cancelled.`);
             return;
+
         }
 
         // 1. Determine Settle Address
@@ -195,13 +220,16 @@ export class LimitOrderWorker {
         }
 
         // 2. Create Quote
-        console.log(`Creating quote for ${order.amount} ${order.fromAsset} -> ${order.toAsset}`);
+        // Note: order.fromAmount is text, parse it
+        const amount = parseFloat(order.fromAmount);
+        logger.info(`Creating quote for ${amount} ${order.fromAsset} -> ${order.toAsset}`);
+
         const quote = await createQuote(
             order.fromAsset,
-            order.fromChain,
+            order.fromNetwork, // Used schema field name fromNetwork
             order.toAsset,
-            order.toChain,
-            order.amount,
+            order.toNetwork,   // Used schema field name toNetwork
+            amount,
             undefined // IP
         );
 
@@ -210,7 +238,8 @@ export class LimitOrderWorker {
         }
 
         // 3. Create Order
-        console.log(`Creating order with quote ${quote.id}`);
+        logger.info(`Creating order with quote ${quote.id}`);
+
         // Use settleAddress as refundAddress too for simplicity, or user wallet
         const sideshiftOrder = await createOrder(quote.id, settleAddress, settleAddress);
 
@@ -220,7 +249,8 @@ export class LimitOrderWorker {
 
         // 4. Update DB
         await updateLimitOrderStatus(order.id, 'executed', sideshiftOrder.id);
-        console.log(`✅ Order #${order.id} executed via SideShift (Order ID: ${sideshiftOrder.id})`);
+        logger.info(`✅ Order #${order.id} executed via SideShift (Order ID: ${sideshiftOrder.id})`);
+
 
         // 5. Notify User
         if (this.bot) {
@@ -229,32 +259,42 @@ export class LimitOrderWorker {
                 : sideshiftOrder.depositAddress;
 
             const message = `🚀 *Limit Order Triggered!* \n\n` +
-                `Condition: ${order.conditionAsset} reached ${triggerPrice}\n` +
-                `Swap: ${order.amount} ${order.fromAsset} -> ${order.toAsset}\n\n` +
+                `Condition: ${asset} reached ${triggerPrice}\n` +
+                `Swap: ${amount} ${order.fromAsset} -> ${order.toAsset}\n\n` +
                 `*Action Required:*\n` +
-                `Send ${order.amount} ${order.fromAsset} to:\n` +
+                `Send ${amount} ${order.fromAsset} to:\n` +
                 `\`${depositAddress}\`\n\n` +
                 `Order ID: \`${sideshiftOrder.id}\``;
 
             try {
                 await this.bot.telegram.sendMessage(Number(order.telegramId), message, { parse_mode: 'Markdown' });
             } catch (err) {
-                console.error('Failed to send notification to user:', err);
+                logger.error('Failed to send notification to user:', err);
             }
+
         }
 
-    } catch (error) {
-        console.error(`❌ Failed to execute order #${order.id}:`, error);
+  } catch (error) {
+        logger.error(`❌ Failed to execute order #${order.id}:`, error);
         await updateLimitOrderStatus(order.id, 'failed', undefined, error instanceof Error ? error.message : 'Unknown error');
+
 
         // Notify user of failure if possible
          if (this.bot) {
             try {
                 await this.bot.telegram.sendMessage(Number(order.telegramId), `⚠️ Limit Order #${order.id} failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            } catch (e) {}
+            } catch (e) {
+                await handleError('LimitOrderNotificationError', {
+                    error: e instanceof Error ? e.message : 'Unknown error',
+                    stack: e instanceof Error ? e.stack : undefined,
+                    orderId: order.id,
+                    telegramId: order.telegramId,
+                    message: `Failed to send failure notification for order #${order.id}`
+                }, null, true);
+            }
         }
     }
-  }
+}
 }
 
 export const limitOrderWorker = new LimitOrderWorker();
