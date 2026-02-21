@@ -3,7 +3,7 @@ import { message } from 'telegraf/filters';
 import dotenv from 'dotenv';
 import logger from './services/logger';
 import { executePortfolioStrategy } from './services/portfolio-service';
-import { transcribeAudio } from './services/groq-client';
+import { transcribeAudio, ParsedCommand } from './services/groq-client';
 import { parseUserCommand } from './services/parseUserCommand';
 import {
   createQuote,
@@ -613,7 +613,7 @@ bot.action('confirm_portfolio', async (ctx) => {
     return ctx.editMessageText('❌ No portfolio allocation found.');
   }
 
-  const totalPercentage = portfolio.reduce((sum: number, p: any) => sum + p.percentage, 0);
+  const totalPercentage = portfolio.reduce((sum: number, p: NonNullable<ParsedCommand['portfolio']>[number]) => sum + p.percentage, 0);
   if (Math.abs(totalPercentage - 100) > 1) { // Allow 1% tolerance
     return ctx.editMessageText(`❌ Portfolio percentages must sum to 100% (Current: ${totalPercentage}%)`);
   }
