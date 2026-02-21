@@ -128,6 +128,12 @@ export const limitOrders = pgTable('limit_orders', {
   executedAt: timestamp('executed_at'),
 });
 
+export const botRateLimits = pgTable('bot_rate_limits', {
+  id: serial('id').primaryKey(),
+  telegramId: bigint('telegram_id', { mode: 'number' }).notNull().unique(),
+  lastActionAt: timestamp('last_action_at').notNull().defaultNow(),
+});
+
 // --- SHARED SCHEMAS (used by both bot and frontend) ---
 
 export const coinPriceCache = pgTable('coin_price_cache', {
@@ -202,9 +208,9 @@ export const discussions = pgTable('discussions', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at'),
 }, (table) => [
-	index("idx_discussions_category").on(table.category),
-	index("idx_discussions_created_at").on(table.createdAt),
-	index("idx_discussions_user_id").on(table.userId),
+  index("idx_discussions_category").on(table.category),
+  index("idx_discussions_created_at").on(table.createdAt),
+  index("idx_discussions_user_id").on(table.userId),
 ]);
 
 // --- REWARDS SCHEMAS ---
@@ -243,21 +249,21 @@ export const rewardsLog = pgTable('rewards_log', {
 
 // --- RELATIONS ---
 
-export const courseProgressRelations = relations(courseProgress, ({one}) => ({
-	user: one(users, {
-		fields: [courseProgress.userId],
-		references: [users.id]
-	}),
+export const courseProgressRelations = relations(courseProgress, ({ one }) => ({
+  user: one(users, {
+    fields: [courseProgress.userId],
+    references: [users.id]
+  }),
 }));
 
-export const usersRelations = relations(users, ({many}) => ({
-	courseProgresses: many(courseProgress),
-	rewardsLogs: many(rewardsLog),
+export const usersRelations = relations(users, ({ many }) => ({
+  courseProgresses: many(courseProgress),
+  rewardsLogs: many(rewardsLog),
 }));
 
-export const rewardsLogRelations = relations(rewardsLog, ({one}) => ({
-	user: one(users, {
-		fields: [rewardsLog.userId],
-		references: [users.id]
-	}),
+export const rewardsLogRelations = relations(rewardsLog, ({ one }) => ({
+  user: one(users, {
+    fields: [rewardsLog.userId],
+    references: [users.id]
+  }),
 }));

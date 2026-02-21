@@ -1,6 +1,5 @@
 import { Telegraf, Markup, Context } from 'telegraf';
 import { message } from 'telegraf/filters';
-import rateLimit from 'telegraf-ratelimit';
 import dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -48,14 +47,31 @@ const PORT = Number(process.env.PORT || 3000);
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// Rate limiting configuration
-const limitConfig = {
-  window: 3000, // 3 seconds
-  limit: 1,     // 1 message per window
-  onLimitExceeded: (ctx: Context) => ctx.reply('⚠️ Rate limit exceeded. Please wait a moment.')
-};
+// Persistent Rate Limiting Middleware
+bot.use(async (ctx, next) => {
+  if (!ctx.from || !ctx.message || !('text' in ctx.message || 'voice' in ctx.message)) {
+    return next();
+  }
 
-bot.use(rateLimit(limitConfig));
+  const telegramId = ctx.from.id;
+  const now = new Date();
+  const windowMs = 3000; // 3 seconds
+
+  try {
+    const lastAction = await db.getLastBotAction(telegramId);
+    if (lastAction && (now.getTime() - lastAction.getTime()) < windowMs) {
+      if (ctx.chat?.type === 'private') {
+        await ctx.reply('⚠️ Rate limit exceeded. Please wait a moment.');
+      }
+      return;
+    }
+    await db.updateLastBotAction(telegramId);
+  } catch (error) {
+    logger.error('Rate limit check failed:', error);
+  }
+
+  return next();
+});
 
 const app = express();
 app.use(express.json());
