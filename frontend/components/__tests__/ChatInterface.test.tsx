@@ -32,6 +32,14 @@ jest.mock('@/hooks/useAudioRecorder', () => ({
   })),
 }));
 
+jest.mock('@/hooks/useAuth', () => ({
+  useAuth: jest.fn(() => ({
+    user: null,
+    isAuthenticated: false,
+    isLoading: false,
+  })),
+}));
+
 jest.mock('../SwapConfirmation', () => {
   return function MockSwapConfirmation() {
     return <div data-testid="swap-confirmation">Swap Confirmation</div>;
@@ -57,6 +65,7 @@ describe('ChatInterface Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     global.fetch = jest.fn();
+    localStorage.clear();
   });
 
   afterEach(() => {
@@ -137,4 +146,3 @@ describe('ChatInterface Component', () => {
     expect(screen.getByText(/Tip: Try our Telegram Bot/i)).toBeInTheDocument();
   });
 });
-
