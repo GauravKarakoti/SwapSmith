@@ -23,8 +23,11 @@ import {
   Loader2,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { useAccount } from 'wagmi'
 import Navbar from '@/components/Navbar'
 import { authenticatedFetch } from '@/lib/api-client'
+
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_REWARD_TOKEN_ADDRESS ?? ''
 
 // ---------------------------------------------------------------------------
 // Types
@@ -70,6 +73,7 @@ interface LeaderboardEntry {
 export default function RewardsPage() {
   const router = useRouter()
   const { user, isLoading: authLoading } = useAuth()
+  const { address: connectedWallet, isConnected } = useAccount()
   const [activeTab, setActiveTab] = useState<'overview' | 'courses' | 'leaderboard' | 'claim'>('overview')
   const [stats, setStats] = useState<UserStats | null>(null)
   const [courses, setCourses] = useState<CourseProgress[]>([])
@@ -77,6 +81,16 @@ export default function RewardsPage() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [claiming, setClaiming] = useState(false)
+  const [walletAddress, setWalletAddress] = useState('')
+  const [claimTxHash, setClaimTxHash] = useState<string | null>(null)
+  const [claimError, setClaimError] = useState<string | null>(null)
+
+  // Auto-fill wallet from MetaMask when the user connects
+  useEffect(() => {
+    if (connectedWallet && !walletAddress) {
+      setWalletAddress(connectedWallet)
+    }
+  }, [connectedWallet, walletAddress])
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -127,18 +141,34 @@ export default function RewardsPage() {
   const handleClaimTokens = async () => {
     if (!stats || parseFloat(stats.totalTokensPending) === 0) return
 
+    const trimmed = walletAddress.trim()
+    if (!trimmed || !/^0x[0-9a-fA-F]{40}$/.test(trimmed)) {
+      setClaimError('Please enter a valid Ethereum wallet address (0x…)')
+      return
+    }
+
     setClaiming(true)
+    setClaimTxHash(null)
+    setClaimError(null)
+
     try {
-      const res = await authenticatedFetch('/api/rewards/claim', { method: 'POST' })
-      if (res.ok) {
+      const res = await authenticatedFetch('/api/rewards/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress: trimmed }),
+      })
+
+      const data = await res.json()
+
+      if (res.ok && data.success) {
+        setClaimTxHash(data.txHash)
         await loadRewardsData()
-        alert('Tokens claim initiated! You will receive them shortly.')
       } else {
-        alert('Failed to claim tokens. Please try again.')
+        setClaimError(data.error || 'Failed to claim tokens. Please try again.')
       }
     } catch (error) {
       console.error('Error claiming tokens:', error)
-      alert('Error claiming tokens')
+      setClaimError('Network error. Please try again.')
     } finally {
       setClaiming(false)
     }
@@ -509,6 +539,56 @@ export default function RewardsPage() {
               className="bg-zinc-900 border border-zinc-800 rounded-xl p-6"
             >
               <h2 className="text-xl font-bold text-white mb-6">Claim Your Tokens</h2>
+
+              {/* Success banner */}
+              {claimTxHash && (
+                <div className="mb-6 p-5 bg-green-500/10 border border-green-500/30 rounded-xl space-y-3">
+                  <p className="text-green-400 font-semibold text-lg">✅ Tokens sent to your wallet!</p>
+
+                  <a
+                    href={`https://sepolia.etherscan.io/tx/${claimTxHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 underline break-all"
+                  >
+                    <ExternalLink className="w-4 h-4 flex-shrink-0" />
+                    View transaction on Sepolia Etherscan →
+                  </a>
+
+                  <div className="pt-2 border-t border-green-500/20">
+                    <p className="text-sm text-zinc-300 font-medium mb-2">How to see SMTH in MetaMask:</p>
+                    <ol className="text-sm text-zinc-400 space-y-1 list-decimal list-inside">
+                      <li>Open MetaMask → switch to <span className="text-white">Sepolia Testnet</span></li>
+                      <li>Click <span className="text-white">Import tokens</span> at the bottom of the Assets tab</li>
+                      <li>Paste this contract address:</li>
+                    </ol>
+                    {CONTRACT_ADDRESS ? (
+                      <div className="mt-2 flex items-center gap-2 bg-zinc-800 rounded-lg px-3 py-2">
+                        <code className="text-purple-400 text-xs break-all flex-1">{CONTRACT_ADDRESS}</code>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(CONTRACT_ADDRESS)}
+                          className="text-xs text-zinc-400 hover:text-white whitespace-nowrap"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    ) : (
+                      <code className="text-purple-400 text-xs">Set NEXT_PUBLIC_REWARD_TOKEN_ADDRESS in .env.local</code>
+                    )}
+                    <ol className="text-sm text-zinc-400 space-y-1 list-decimal list-inside mt-2" start={4}>
+                      <li>Symbol <span className="text-white">SMTH</span> and decimals <span className="text-white">18</span> will auto-fill</li>
+                      <li>Click <span className="text-white">Next → Import</span> — your SMTH balance appears</li>
+                    </ol>
+                  </div>
+                </div>
+              )}
+
+              {/* Error banner */}
+              {claimError && (
+                <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
+                  <p className="text-red-400 font-semibold">❌ {claimError}</p>
+                </div>
+              )}
               
               <div className="bg-gradient-to-br from-purple-900/20 to-blue-900/20 border border-purple-800/30 rounded-xl p-8 mb-6">
                 <div className="text-center mb-6">
@@ -530,6 +610,40 @@ export default function RewardsPage() {
                     <span className="text-zinc-300">Total Claimed</span>
                     <span className="text-green-400 font-bold">{parseFloat(stats?.totalTokensClaimed || '0').toFixed(2)}</span>
                   </div>
+                </div>
+
+                {/* Wallet address input */}
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm text-zinc-400">
+                      <Wallet className="inline w-4 h-4 mr-1 mb-0.5" />
+                      Your Sepolia wallet address
+                    </label>
+                    {isConnected && connectedWallet && (
+                      <button
+                        onClick={() => { setWalletAddress(connectedWallet); setClaimError(null) }}
+                        className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                      >
+                        ✓ Use connected wallet
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={walletAddress}
+                    onChange={e => { setWalletAddress(e.target.value); setClaimError(null) }}
+                    placeholder="0x…"
+                    className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 font-mono text-sm"
+                  />
+                  {isConnected && connectedWallet?.toLowerCase() === walletAddress.toLowerCase() ? (
+                    <p className="text-xs text-green-400 mt-1">✓ Connected wallet auto-filled — tokens will go here on Sepolia</p>
+                  ) : (
+                    <p className="text-xs text-zinc-500 mt-1">
+                      {isConnected
+                        ? 'Click "Use connected wallet" above or paste any Sepolia address'
+                        : 'Paste your MetaMask wallet address (Sepolia network)'}
+                    </p>
+                  )}
                 </div>
 
                 <button
@@ -554,14 +668,29 @@ export default function RewardsPage() {
               <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-4">
                 <div className="flex gap-3">
                   <ExternalLink className="w-5 h-5 text-blue-400 flex-shrink-0" />
-                  <div>
+                  <div className="w-full">
                     <h4 className="text-white font-medium mb-1">How Token Claims Work</h4>
                     <ul className="text-sm text-zinc-400 space-y-1">
-                      <li>• Tokens accumulate as you earn rewards</li>
-                      <li>• Claim tokens to mint them on the blockchain</li>
-                      <li>• Claimed tokens are sent to your connected wallet</li>
-                      <li>• Transaction fees are covered by SwapSmith</li>
+                      <li>• Earn points by completing courses, daily logins, and swaps</li>
+                      <li>• Connect your MetaMask wallet on Sepolia, or paste your address</li>
+                      <li>• Click <span className="text-white">Claim Tokens</span> — SMTH is sent on-chain in seconds</li>
+                      <li>• View your transaction on Sepolia Etherscan</li>
+                      <li>• Gas fees are covered by SwapSmith</li>
                     </ul>
+                    {CONTRACT_ADDRESS && (
+                      <div className="mt-3 pt-3 border-t border-blue-500/20">
+                        <p className="text-xs text-zinc-400 mb-1">Add SMTH token to MetaMask — contract address:</p>
+                        <div className="flex items-center gap-2 bg-zinc-800/80 rounded-lg px-3 py-2">
+                          <code className="text-purple-400 text-xs break-all flex-1">{CONTRACT_ADDRESS}</code>
+                          <button
+                            onClick={() => navigator.clipboard.writeText(CONTRACT_ADDRESS)}
+                            className="text-xs text-zinc-400 hover:text-white whitespace-nowrap"
+                          >
+                            Copy
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

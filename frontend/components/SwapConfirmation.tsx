@@ -22,6 +22,7 @@ interface QuoteData {
 interface SwapConfirmationProps {
   quote: QuoteData;
   confidence?: number;
+  onAmountChange?: (newAmount: string) => void;
 }
 
 const EXPLORER_URLS: { [key: string]: string } = {
@@ -63,12 +64,13 @@ interface SafetyCheckResult {
 }
 
 // --- Main Component ---
-export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfirmationProps) {
+export default function SwapConfirmation({ quote, confidence = 100, onAmountChange }: SwapConfirmationProps) {
   const [copiedAddress, setCopiedAddress] = useState(false)
   const [copiedMemo, setCopiedMemo] = useState(false)
   const [isSimulating, setIsSimulating] = useState(false);
   const [safetyCheck, setSafetyCheck] = useState<SafetyCheckResult | null>(null);
-
+  const [walletBalance, setWalletBalance] = useState<string | null>(null);
+  const [isLoadingBalance, setIsLoadingBalance] = useState(false);
   const { address, isConnected, chain: connectedChain } = useAccount()
   const { data: hash, error, isPending, isSuccess, sendTransaction } = useSendTransaction()
   const { switchChainAsync } = useSwitchChain()
@@ -119,6 +121,30 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
       } else {
         alert('Failed to switch network. Please try again.');
       }
+    }
+  };
+
+  const handleFetchBalance = async () => {
+    if (!address || !publicClient) {
+      alert('Wallet not connected or network not supported');
+      return;
+    }
+
+    setIsLoadingBalance(true);
+    try {
+      const balance = await publicClient.getBalance({ address });
+      const balanceFormatted = formatEther(balance);
+      setWalletBalance(balanceFormatted);
+
+      // Call the callback to update the parent component with the max amount
+      if (onAmountChange) {
+        onAmountChange(balanceFormatted);
+      }
+    } catch (err) {
+      console.error('Failed to fetch balance:', err);
+      alert('Could not fetch wallet balance. Please try again.');
+    } finally {
+      setIsLoadingBalance(false);
     }
   };
 
@@ -339,9 +365,19 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
       </div>
 
       <div className="space-y-3 text-sm">
-        <div className="flex justify-between">
+        <div className="flex justify-between items-center">
           <span className="text-gray-600">You send:</span>
-          <span className="font-medium text-gray-900">{quote.depositAmount} {quote.depositCoin} on {getNetworkName(quote.depositNetwork)}</span>
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-gray-900">{quote.depositAmount} {quote.depositCoin} on {getNetworkName(quote.depositNetwork)}</span>
+            <button
+              onClick={handleFetchBalance}
+              disabled={!isConnected || isLoadingBalance}
+              className="px-2 py-1 text-xs font-semibold bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              title="Set amount to your full wallet balance"
+            >
+              {isLoadingBalance ? 'Loading...' : 'Max'}
+            </button>
+          </div>
         </div>
         <div className="border-t pt-3">
           <div className="flex justify-between">
