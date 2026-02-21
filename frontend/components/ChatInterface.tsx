@@ -49,6 +49,7 @@ export default function ChatInterface() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
+  const [currentConfidence, setCurrentConfidence] = useState<number | undefined>(undefined);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { address, isConnected } = useAccount();
@@ -114,9 +115,12 @@ export default function ChatInterface() {
           content: `I couldn't understand. ${command.validationErrors.join(', ')}`,
           type: 'message'
         });
+        setCurrentConfidence(0);
         setIsLoading(false);
         return;
       }
+
+      setCurrentConfidence(command.confidence);
 
       // Handle Yield Scout
       if (command.intent === 'yield_scout') {
@@ -302,7 +306,7 @@ return (
             </div>
           </div>
         </div>
-        <TrustIndicators />
+        <TrustIndicators confidence={currentConfidence} />
       </div>
 
       {/* 2. Message Feed */}
