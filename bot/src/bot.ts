@@ -2,6 +2,10 @@ import { Telegraf, Markup, Context } from 'telegraf';
 import { message } from 'telegraf/filters';
 import rateLimit from 'telegraf-ratelimit';
 import dotenv from 'dotenv';
+import logger from './services/logger';
+import { executePortfolioStrategy } from './services/portfolio-service';
+import { transcribeAudio, ParsedCommand } from './services/groq-client';
+import { parseUserCommand } from './services/parseUserCommand';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -254,8 +258,95 @@ async function handleTextMessage(
       Markup.inlineKeyboard([
         Markup.button.webApp('📱 Batch Sign', MINI_APP_URL),
         Markup.button.callback('❌ Cancel', 'cancel_swap'),
-      ])
-    );
+      ]),
+    }
+  );
+});
+
+bot.action(/deposit_(.+)/, async (ctx) => {
+  const poolId = ctx.match[1];
+
+  await ctx.answerCbQuery();
+  ctx.reply(`🚀 Starting deposit flow for pool: ${poolId}`);
+});
+
+
+bot.action('place_order', async (ctx) => {
+  const state = await db.getConversationState(ctx.from.id);
+  if (!state?.quoteId) return;
+
+  const order = await createOrder(
+    state.quoteId,
+    state.parsedCommand.settleAddress,
+    state.parsedCommand.settleAddress
+  );
+
+  await db.createOrderEntry(
+    ctx.from.id,
+    state.parsedCommand,
+    order,
+    state.settleAmount,
+    state.quoteId
+  );
+
+  await db.addWatchedOrder(ctx.from.id, order.id, 'pending');
+
+  ctx.editMessageText(
+    `✅ *Order Created*\n\nSign transaction to complete.`,
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        Markup.button.webApp(
+          '📱 Sign Transaction',
+          `${MINI_APP_URL}?to=${order.depositAddress}`
+        ),
+      ]),
+    }
+  );
+});
+
+bot.action('confirm_checkout', async (ctx) => {
+  const userId = ctx.from.id;
+  const state = await db.getConversationState(userId);
+  if (!state?.parsedCommand || state.parsedCommand.intent !== 'checkout') return ctx.answerCbQuery('Start over.');
+
+  try {
+    await ctx.answerCbQuery('Creating link...');
+    const { settleAsset, settleNetwork, settleAmount, settleAddress } = state.parsedCommand;
+    const checkout = await createCheckout(settleAsset!, settleNetwork!, settleAmount!, settleAddress!);
+    if (!checkout?.id) throw new Error("API Error");
+
+    db.createCheckoutEntry(userId, checkout);
+    ctx.editMessageText(`✅ *Checkout Link Created!*\n💰 *Receive:* ${checkout.settleAmount} ${checkout.settleCoin}\n[Pay Here](https://pay.sideshift.ai/checkout/${checkout.id})`, {
+      parse_mode: 'Markdown',
+      link_preview_options: { is_disabled: true }
+    });
+  } catch (error) {
+    ctx.editMessageText(`Error creating link.`);
+  } finally {
+    db.clearConversationState(userId);
+  }
+});
+
+bot.action('confirm_portfolio', async (ctx) => {
+  const userId = ctx.from.id;
+  const state = await db.getConversationState(userId);
+  if (!state?.parsedCommand || state.parsedCommand.intent !== 'portfolio') return ctx.answerCbQuery('Session expired.');
+
+  const { fromAsset, fromChain, amount, portfolio, settleAddress } = state.parsedCommand;
+
+  // 1. Validate Input
+  if (!portfolio || portfolio.length === 0) {
+    return ctx.editMessageText('❌ No portfolio allocation found.');
+  }
+
+  const totalPercentage = portfolio.reduce((sum: number, p: NonNullable<ParsedCommand['portfolio']>[number]) => sum + p.percentage, 0);
+  if (Math.abs(totalPercentage - 100) > 1) { // Allow 1% tolerance
+    return ctx.editMessageText(`❌ Portfolio percentages must sum to 100% (Current: ${totalPercentage}%)`);
+  }
+
+  if (!amount || amount <= 0) {
+    return ctx.editMessageText('❌ Invalid amount.');
   }
 
   /* ---------------- Limit Order ---------------- */

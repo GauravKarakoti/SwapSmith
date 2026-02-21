@@ -23,6 +23,7 @@ import Image from "next/image";
 import { useAuth } from "@/hooks/useAuth";
 import WalletConnector from "./WalletConnector";
 import ThemeToggle from "@/components/ThemeToggle";
+import MarketSentimentWidget from "@/components/MarketSentimentWidget";
 
 /* ================================================================ */
 /* Navigation Config                                                 */
@@ -124,9 +125,9 @@ export default function Navbar() {
             </span>
           </Link>
 
-          {/* ── Desktop Nav ── */}
-          <div className="hidden md:flex flex-1 justify-center">
-            <div className="flex items-center gap-1">
+          {/* Desktop Nav + Market Sentiment */}
+          <div className="hidden md:flex flex-1 justify-center items-center gap-4">
+            <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800/40 p-1 rounded-xl border border-zinc-200 dark:border-zinc-800">
               <Link
                 href="/"
                 className={`nav-link group ${
@@ -160,6 +161,10 @@ export default function Navbar() {
                 </Link>
               ))}
             </div>
+            {/* Market Sentiment Widget */}
+            <div className="ml-4">
+              <MarketSentimentWidget />
+            </div>
           </div>
 
           {/* ── Right Actions ── */}
@@ -190,7 +195,7 @@ export default function Navbar() {
                     unoptimized
                   />
                 ) : (
-                  <div className="w-8.5 h-8.5 rounded-full bg-linear-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                  <div className="w-9 h-9 rounded-full bg-linear-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
                     <User className="w-4 h-4 text-white" />
                   </div>
                 )}
@@ -260,23 +265,15 @@ export default function Navbar() {
         <>
           {/* Backdrop */}
           <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-60"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-60"
             onClick={() => setMobileMenuOpen(false)}
           />
-
-          {/* Drawer panel */}
-          <div className="fixed inset-y-0 right-0 w-[82%] max-w-xs bg-white dark:bg-zinc-950 border-l border-zinc-200 dark:border-zinc-800/60 shadow-2xl z-70 animate-in slide-in-from-right duration-200">
-            <div className="flex flex-col h-full">
-              {/* Drawer header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 dark:border-zinc-800/60">
-                <div className="flex items-center gap-2">
-                  <div className="bg-linear-to-br from-blue-500 to-indigo-600 p-1.5 rounded-lg">
-                    <Zap className="w-4 h-4 text-white" fill="white" />
-                  </div>
-                  <span className="font-black tracking-tight text-zinc-900 dark:text-white">
-                    SwapSmith
-                  </span>
-                </div>
+          <div className="fixed top-0 right-0 bottom-0 w-[85%] max-w-sm bg-white dark:bg-zinc-900 shadow-2xl z-70 animate-in slide-in-from-right">
+            <div className="p-6 flex flex-col h-full">
+              <div className="flex items-center justify-between mb-8">
+                <span className="font-black tracking-tighter text-xl">
+                  MENU
+                </span>
                 <button
                   onClick={() => setMobileMenuOpen(false)}
                   aria-label="Close menu"
@@ -286,8 +283,12 @@ export default function Navbar() {
                 </button>
               </div>
 
-              {/* Nav links */}
-              <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
+              {/* Market Sentiment Widget for mobile */}
+              <div className="mb-6">
+                <MarketSentimentWidget />
+              </div>
+
+              <div className="space-y-2 flex-1">
                 {[{ href: "/", label: "Home", Icon: Home }, ...NAV_ITEMS].map(
                   ({ href, label, Icon }) => {
                     const active = pathname === href;

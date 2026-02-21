@@ -485,9 +485,6 @@ export default function LandingPage() {
               TRADING ASSISTANT.
             </motion.span>
           </motion.h1>
-          <div className="bg-white/5 border border-white/10 p-4 rounded-2xl max-w-md mx-auto italic text-zinc-400 text-sm md:text-base">
-            &ldquo;Swap half of my MATIC on Polygon for 50 USDC on Arbitrum.&rdquo;
-          </div>
 
           <motion.p
             variants={itemVariants}
