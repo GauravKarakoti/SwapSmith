@@ -5,4 +5,6 @@ export const SIDESHIFT_CONFIG = {
   SUCCESS_URL: 'https://sideshift.ai/success',
   CANCEL_URL: 'https://sideshift.ai/cancel',
   CHECKOUT_URL: 'https://pay.sideshift.ai/checkout',
+  HELP_URL: 'https://help.sideshift.ai/en/',
+  FAQ_URL: 'https://docs.sideshift.ai/faq/',
 };
