@@ -58,8 +58,9 @@ export const orders = pgTable('orders', {
   tx_hash: text('tx_hash'),
   createdAt: timestamp('created_at').defaultNow(),
 }, (table) => [
-  index("idx_orders_telegram_id").on(table.telegramId),
+  index('orders_status_idx').on(table.status),
 ]);
+
 
 export const checkouts = pgTable('checkouts', {
   id: serial('id').primaryKey(),
@@ -126,9 +127,14 @@ export const limitOrders = pgTable('limit_orders', {
   isActive: integer('is_active').notNull().default(1),
   createdAt: timestamp('created_at').defaultNow(),
   lastCheckedAt: timestamp('last_checked_at'),
-}, (table) => [
-  index("idx_limit_orders_telegram_id").on(table.telegramId),
-]);
+  conditionOperator: text('condition_operator'), // 'gt' or 'lt'
+  conditionValue: real('condition_value'),
+  conditionAsset: text('condition_asset'),
+  status: text('status').notNull().default('pending'),
+  sideshiftOrderId: text('sideshift_order_id'),
+  error: text('error'),
+  executedAt: timestamp('executed_at'),
+});
 
 // --- SHARED SCHEMAS (used by both bot and frontend) ---
 
