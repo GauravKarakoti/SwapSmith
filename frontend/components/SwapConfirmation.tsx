@@ -106,7 +106,11 @@ export default function SwapConfirmation({ quote, confidence = 100, onRequote }:
     fetchTokenAddress();
   }, [quote.depositCoin, quote.depositNetwork]);
 
-  const { data: balanceData } = useBalance({
+  const {
+    data: balanceData,
+    isLoading: isBalanceLoading,
+    isError: isBalanceError
+  } = useBalance({
     address: address,
     chainId: depositChainId,
     token: tokenAddress as `0x${string}` | undefined,
@@ -121,8 +125,9 @@ export default function SwapConfirmation({ quote, confidence = 100, onRequote }:
 
       // If native token, leave a gas buffer
       if (!tokenAddress) {
-        // 0.01 Native Token Buffer
-        const buffer = parseUnits("0.01", balanceData.decimals);
+        // Use a more dynamic buffer or a safe constant
+        // For most L2s/Mainnet, 0.005 - 0.01 is safe for a simple transfer
+        const buffer = parseUnits("0.008", balanceData.decimals);
         if (balanceData.value > buffer) {
           amount = formatUnits(balanceData.value - buffer, balanceData.decimals);
         } else {
@@ -131,8 +136,11 @@ export default function SwapConfirmation({ quote, confidence = 100, onRequote }:
       }
 
       onRequote(amount, quote);
+    } catch (err) {
+      console.error('Failed to calculate max amount:', err);
     } finally {
-      setIsMaxLoading(false);
+      setIsMaxLoading(true); // Keep loading state until requote happens (callback will trigger re-render)
+      setTimeout(() => setIsMaxLoading(false), 2000);
     }
   };
 
@@ -401,13 +409,24 @@ export default function SwapConfirmation({ quote, confidence = 100, onRequote }:
           <div className='flex items-center gap-2'>
             <span className="font-medium text-gray-900">{quote.depositAmount} {quote.depositCoin} on {getNetworkName(quote.depositNetwork)}</span>
             {onRequote && isConnected && (
-              <button
-                onClick={handleMaxClick}
-                disabled={isMaxLoading}
-                className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200 hover:bg-blue-200 transition-colors"
-              >
-                {isMaxLoading ? '...' : 'MAX'}
-              </button>
+              <div className="flex items-center gap-2">
+                {isBalanceLoading ? (
+                  <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                ) : isBalanceError ? (
+                  <span className="text-[10px] text-red-500">Error loading balance</span>
+                ) : (
+                  <div className="flex items-center gap-1.5 bg-blue-50/50 px-2 py-0.5 rounded-md border border-blue-100">
+                    <span className="text-[10px] text-gray-500">Bal: {balanceData?.formatted.substring(0, 6)}</span>
+                    <button
+                      onClick={handleMaxClick}
+                      disabled={isMaxLoading || isBalanceLoading}
+                      className="text-[10px] font-bold text-blue-600 hover:text-blue-800 transition-colors uppercase"
+                    >
+                      {isMaxLoading ? '...' : 'Max'}
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -492,10 +511,10 @@ export default function SwapConfirmation({ quote, confidence = 100, onRequote }:
           <div className="space-y-3">
             {/* Overall Status Banner */}
             <div className={`flex items-center gap-2 p-3 rounded-lg border ${safetyCheck.riskLevel === 'safe'
-                ? 'bg-green-50 border-green-200 text-green-700'
-                : safetyCheck.riskLevel === 'warning'
-                  ? 'bg-yellow-50 border-yellow-200 text-yellow-700'
-                  : 'bg-red-50 border-red-200 text-red-700'
+              ? 'bg-green-50 border-green-200 text-green-700'
+              : safetyCheck.riskLevel === 'warning'
+                ? 'bg-yellow-50 border-yellow-200 text-yellow-700'
+                : 'bg-red-50 border-red-200 text-red-700'
               }`}>
               {safetyCheck.riskLevel === 'safe' && <Shield className="w-5 h-5" />}
               {safetyCheck.riskLevel === 'warning' && <AlertTriangle className="w-5 h-5" />}
@@ -591,10 +610,10 @@ export default function SwapConfirmation({ quote, confidence = 100, onRequote }:
           onClick={handleConfirm}
           disabled={!isConnected || isPending || !address || (safetyCheck?.riskLevel === 'unsafe') || false}
           className={`w-full py-3 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${safetyCheck?.riskLevel === 'safe'
-              ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700'
-              : safetyCheck?.riskLevel === 'warning'
-                ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white hover:from-yellow-600 hover:to-yellow-700'
-                : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700'
+            ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700'
+            : safetyCheck?.riskLevel === 'warning'
+              ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white hover:from-yellow-600 hover:to-yellow-700'
+              : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700'
             }`}
         >
           {isPending ? 'Check Your Wallet...' : safetyCheck?.riskLevel === 'unsafe' ? 'Transaction Blocked (Unsafe)' : 'Confirm and Send'}
