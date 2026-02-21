@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { X, Check, Zap, TrendingUp, Sparkles, Bot, Star, Link2 } from 'lucide-react'
+import { X, Check, Zap, TrendingUp, Sparkles, Bot, Star, Link2, Wallet, BookOpen, Gift } from 'lucide-react'
 import Link from 'next/link'
 
 /* ------------------------------------------------------------------ */
@@ -46,6 +46,48 @@ const PLANS = [
     features: ['Everything in Pro', 'AI swap routing', 'Live yield alerts', 'Early access features'],
     cta: '/rewards',
     ctaLabel: 'Get Started',
+    popular: false,
+  },
+]
+
+const PROMO_CARDS = [
+  {
+    Icon: Wallet,
+    iconBg: '#dbeafe',
+    iconColor: '#1d4ed8',
+    name: 'Connect Wallet',
+    tagline: 'Connect your wallet in seconds',
+    statNum: '8+',
+    statLabel: 'wallets supported',
+    cards: ['MetaMask & injected', 'WalletConnect v2', 'Hardware wallets', 'One-click connect'],
+    cta: '/terminal',
+    ctaLabel: 'Connect Now',
+    popular: false,
+  },
+  {
+    Icon: BookOpen,
+    iconBg: '#dcfce7',
+    iconColor: '#15803d',
+    name: 'Learning Hub',
+    tagline: 'Master DeFi with SwapSmith Learn',
+    statNum: 'Free',
+    statLabel: 'forever',
+    cards: ['Beginner DeFi guides', 'Swap strategy playbooks', 'Yield farming basics', 'Live quizzes & badges'],
+    cta: '/learn',
+    ctaLabel: 'Start Learning',
+    popular: true,
+  },
+  {
+    Icon: Gift,
+    iconBg: '#fce7f3',
+    iconColor: '#be185d',
+    name: 'Rewards',
+    tagline: 'Earn SwapSmith tokens daily',
+    statNum: 'Daily',
+    statLabel: 'token drops',
+    cards: ['Login streak rewards', 'Swap-to-earn bonuses', 'Referral payouts', 'Airdrop eligibility'],
+    cta: '/rewards',
+    ctaLabel: 'Claim Rewards',
     popular: false,
   },
 ]
@@ -96,7 +138,7 @@ const SITE_FEATURES = [
 /* Types                                                                 */
 /* ------------------------------------------------------------------ */
 
-export type FullPageAdVariant = 'plans' | 'features'
+export type FullPageAdVariant = 'plans' | 'features' | 'promo'
 
 interface FullPageAdProps {
   variant?: FullPageAdVariant
@@ -275,6 +317,70 @@ export default function FullPageAd({
                     style={feat.popular ? { background: '#f59e0b', color: '#fff' } : { background: '#f8fafc', color: '#374151', border: '1px solid #e2e8f0' }}
                   >
                     {feat.ctaLabel}
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* PROMO VARIANT */}
+        {variant === 'promo' && (
+          <div className="px-8 pt-10 pb-8">
+            <span className="absolute top-10 left-10 text-2xl select-none pointer-events-none">🎁</span>
+            <span className="absolute top-8 right-20 text-xl select-none pointer-events-none">✨</span>
+
+            <div className="text-center mb-7">
+              <p className="text-sm font-bold text-blue-500 mb-2 tracking-wide">Discover SwapSmith</p>
+              <h2 className="text-3xl font-black text-gray-900 tracking-tight mb-2">
+                More ways to <span className="text-blue-600">earn &amp; learn</span>
+              </h2>
+              <p className="text-sm text-gray-500">Connect your wallet, level up your DeFi knowledge, and earn rewards every day.</p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4 items-start">
+              {PROMO_CARDS.map((card) => (
+                <div
+                  key={card.name}
+                  className={`relative flex flex-col rounded-2xl p-5 border ${
+                    card.popular ? 'border-gray-800 shadow-xl' : 'border-gray-200'
+                  }`}
+                  style={card.popular ? { transform: 'translateY(-6px) scale(1.02)' } : {}}
+                >
+                  {card.popular && (
+                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-xs font-black text-white whitespace-nowrap" style={{ background: '#f59e0b' }}>
+                      Popular!
+                    </div>
+                  )}
+                  <div className="w-11 h-11 rounded-full border-2 border-gray-200 flex items-center justify-center mb-3" style={{ background: card.iconBg }}>
+                    <card.Icon className="w-5 h-5" style={{ color: card.iconColor }} />
+                  </div>
+                  <h3 className="text-base font-black text-gray-900 mb-0.5">{card.name}</h3>
+                  <p className="text-[11px] text-gray-500 mb-3 leading-snug">{card.tagline}</p>
+                  <div className="flex items-baseline gap-1 mb-4">
+                    <span className="text-3xl font-black text-gray-900">{card.statNum}</span>
+                    <span className="text-sm text-gray-400">{card.statLabel}</span>
+                  </div>
+                  <ul className="flex flex-col gap-2 flex-1 mb-5">
+                    {card.cards.map((c) => (
+                      <li key={c} className="flex items-center gap-2 text-xs text-gray-700 leading-snug">
+                        <div className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: '#dcfce7' }}>
+                          <Check className="w-2.5 h-2.5 text-green-600" />
+                        </div>
+                        {c}
+                      </li>
+                    ))}
+                  </ul>
+                  <Link
+                    href={card.cta}
+                    onClick={dismiss}
+                    className="block text-center py-3 rounded-xl text-sm font-bold transition-all hover:opacity-90"
+                    style={card.popular
+                      ? { background: '#f59e0b', color: '#fff' }
+                      : { background: '#f8fafc', color: '#374151', border: '1px solid #e2e8f0' }
+                    }
+                  >
+                    {card.ctaLabel}
                   </Link>
                 </div>
               ))}

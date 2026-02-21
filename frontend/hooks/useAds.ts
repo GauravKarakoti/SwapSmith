@@ -209,3 +209,35 @@ export function useLearnFullPageAd() {
   return { showAd, dismiss: () => setShowAd(false) }
 }
 
+/**
+ * Global promo ad — Connect Wallet / Learning Hub / Rewards
+ * Shows on ALL pages except /terminal (which has its own plans ad).
+ * Shared 5-minute cooldown across all pages via a single localStorage key.
+ * Pass the current pathname so it can skip the terminal route.
+ */
+export function useGlobalPromoAd(pathname: string | null) {
+  const [showAd, setShowAd] = useState(false)
+  const PROMO_KEY = 'swapsmith_ad_promo_global'
+  const PROMO_COOLDOWN = 5 * 60 * 1000 // 5 minutes
+
+  useEffect(() => {
+    // Never show on terminal page (it has its own plans ad)
+    if (!pathname || pathname.startsWith('/terminal')) return
+
+    const timer = setTimeout(() => {
+      try {
+        const now = Date.now()
+        const lastShown = Number(localStorage.getItem(PROMO_KEY) ?? 0)
+        if (now - lastShown < PROMO_COOLDOWN) return
+        localStorage.setItem(PROMO_KEY, String(now))
+        setShowAd(true)
+      } catch { /* noop */ }
+    }, 4000) // 4s delay so page content loads first
+
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname])
+
+  return { showAd, dismiss: () => setShowAd(false) }
+}
+

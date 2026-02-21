@@ -8,6 +8,7 @@ import { ThemeProvider } from '@/contexts/ThemeContext'
 import { useEffect } from 'react'
 import { initializeRewards } from '@/lib/rewards-service'
 import { useAuth } from '@/hooks/useAuth'
+import GlobalPromoAdProvider from '@/components/GlobalPromoAdProvider'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -69,6 +70,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <WagmiProvider config={config}>
         <QueryClientProvider client={queryClient}>
           <RewardsInitializer />
+          <GlobalPromoAdProvider />
           {children}
         </QueryClientProvider>
       </WagmiProvider>
