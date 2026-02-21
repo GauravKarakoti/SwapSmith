@@ -1,6 +1,12 @@
 import React from "react";
 
-export default function SentimentDetailsModal({ open, onClose, sentiment }) {
+interface SentimentDetailsModalProps {
+  open: boolean;
+  onClose: () => void;
+  sentiment: any; // Replace 'any' with a specific type if available
+}
+
+export default function SentimentDetailsModal({ open, onClose, sentiment }: SentimentDetailsModalProps) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">

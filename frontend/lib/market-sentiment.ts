@@ -10,7 +10,11 @@ export async function fetchMarketSentiment() {
 
     // Calculate sentiment based on price and volume change
     let bullish = 0, bearish = 0, neutral = 0;
-    coins.forEach((coin) => {
+    coins.forEach((coin: {
+      price_change_percentage_24h: number;
+      total_volume: number;
+      market_cap: number;
+    }) => {
       const priceChange = coin.price_change_percentage_24h;
       const volumeChange = coin.total_volume / coin.market_cap;
       // Bullish: price up >2% and volume up
