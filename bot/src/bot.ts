@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import axios from 'axios';
-import { spawn } from 'child_process';
+import { spawn, exec } from 'child_process';
 import express from 'express';
 import { sql } from 'drizzle-orm';
 
