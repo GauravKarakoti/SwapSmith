@@ -8,7 +8,7 @@ import TrustIndicators from './TrustIndicators';
 import IntentConfirmation from './IntentConfirmation';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
-import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
+import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 
 // Import QuoteData type from SwapConfirmation
 interface QuoteData {
@@ -54,23 +54,13 @@ export default function ChatInterface() {
   const { address, isConnected } = useAccount();
   const { handleError } = useErrorHandler();
 
-  // Use cross-browser audio recorder with simplified approach
-<<<<<<< HEAD
   const {
     isRecording,
     isSupported: isAudioSupported,
     startRecording,
     stopRecording,
-=======
-  const { 
-    isListening: isRecording,
-    transcript,
-    isSupported: isAudioSupported, 
-    startRecording, 
-    stopRecording, 
->>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
     error: audioError
-  } = useSpeechRecognition();
+  } = useAudioRecorder();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -83,14 +73,6 @@ export default function ChatInterface() {
     }
   }, [audioError]);
 
-  // Handle voice result
-  useEffect(() => {
-    if (!isRecording && transcript) {
-        addMessage({ role: 'user', content: transcript, type: 'message' });
-        processCommand(transcript);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRecording, transcript]);
 
   const formatTime = (date: Date) => {
     const hours = date.getHours();
@@ -104,10 +86,8 @@ export default function ChatInterface() {
     setMessages(prev => [...prev, { ...message, timestamp: new Date() }]);
   };
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-  // Voice recording handlers (reserved for future UI integration)
-  const _handleStartRecording = async () => {
+  // Voice recording handlers
+  const handleStartRecording = async () => {
     if (!isAudioSupported) {
       addMessage({
         role: 'assistant',
@@ -128,11 +108,18 @@ export default function ChatInterface() {
     }
   };
 
-  const _handleStopRecording = async () => {
+  const handleStopRecording = async () => {
     try {
-      const audioBlob = await stopRecording();
-      if (audioBlob) {
-        await handleVoiceInput(audioBlob);
+      const result = await stopRecording();
+      if (result) {
+        if (typeof result === 'string') {
+          // Direct text from SpeechRecognition fallback
+          addMessage({ role: 'user', content: `🎤 "${result}"`, type: 'message' });
+          await processCommand(result);
+        } else {
+          // Audio blob from MediaRecorder
+          await handleVoiceInput(result);
+        }
       }
     } catch (err) {
       const errorMessage = handleError(err, ErrorType.VOICE_ERROR, {
@@ -201,10 +188,6 @@ export default function ChatInterface() {
     }
   };
 
-=======
->>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
-=======
->>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
   const processCommand = async (text: string) => {
     if (!isLoading) setIsLoading(true);
 
@@ -332,30 +315,6 @@ export default function ChatInterface() {
         return;
       }
 
-      // Handle DCA (Dollar Cost Averaging)
-      if (command.intent === 'dca') {
-        if (command.requiresConfirmation || command.confidence < 80) {
-          setPendingCommand(command);
-          addMessage({ role: 'assistant', content: '', type: 'intent_confirmation', data: { parsedCommand: command } });
-        } else {
-          await executeDCA(command);
-        }
-        setIsLoading(false);
-        return;
-      }
-
-      // Handle Limit Orders (have conditions on swap intent)
-      if (command.intent === 'swap' && command.conditionOperator && command.conditionValue) {
-        if (command.requiresConfirmation || command.confidence < 80) {
-          setPendingCommand(command);
-          addMessage({ role: 'assistant', content: '', type: 'intent_confirmation', data: { parsedCommand: command } });
-        } else {
-          await executeLimitOrder(command);
-        }
-        setIsLoading(false);
-        return;
-      }
-
       // Handle Swap (Standard Flow)
       if (command.requiresConfirmation || command.confidence < 80) {
         setPendingCommand(command);
@@ -432,19 +391,19 @@ export default function ChatInterface() {
           settleAddress: address // Use connected wallet address
         }),
       });
-      
+
       const result = await dcaResponse.json();
       if (result.error) throw new Error(result.error);
-      
+
       addMessage({
         role: 'assistant',
         content: `✅ DCA Schedule Created!\n\n📊 Details:\n• ${command.amount} ${command.fromAsset} → ${command.toAsset}\n• Frequency: ${command.frequency}\n${command.dayOfWeek ? `• Day: ${command.dayOfWeek}` : ''}\n${command.dayOfMonth ? `• Date: ${command.dayOfMonth}` : ''}\n\nYour recurring swap is now active!`,
         type: 'message'
       });
     } catch (error: unknown) {
-      const errorMessage = handleError(error, ErrorType.API_FAILURE, { 
+      const errorMessage = handleError(error, ErrorType.API_FAILURE, {
         operation: 'dca_creation',
-        retryable: true 
+        retryable: true
       });
       addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
     }
@@ -467,10 +426,10 @@ export default function ChatInterface() {
           settleAddress: address // Use connected wallet address
         }),
       });
-      
+
       const result = await limitOrderResponse.json();
       if (result.error) throw new Error(result.error);
-      
+
       const operatorText = command.conditionOperator === 'gt' ? 'above' : 'below';
       addMessage({
         role: 'assistant',
@@ -478,80 +437,9 @@ export default function ChatInterface() {
         type: 'message'
       });
     } catch (error: unknown) {
-      const errorMessage = handleError(error, ErrorType.API_FAILURE, { 
+      const errorMessage = handleError(error, ErrorType.API_FAILURE, {
         operation: 'limit_order_creation',
-        retryable: true 
-      });
-      addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
-    }
-  };
-
-  const executeDCA = async (command: ParsedCommand) => {
-    try {
-      const dcaResponse = await fetch('/api/create-dca', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fromAsset: command.fromAsset,
-          fromChain: command.fromChain,
-          toAsset: command.toAsset,
-          toChain: command.toChain,
-          amount: command.amount,
-          frequency: command.frequency,
-          dayOfWeek: command.dayOfWeek,
-          dayOfMonth: command.dayOfMonth,
-          settleAddress: address // Use connected wallet address
-        }),
-      });
-      
-      const result = await dcaResponse.json();
-      if (result.error) throw new Error(result.error);
-      
-      addMessage({
-        role: 'assistant',
-        content: `✅ DCA Schedule Created!\n\n📊 Details:\n• ${command.amount} ${command.fromAsset} → ${command.toAsset}\n• Frequency: ${command.frequency}\n${command.dayOfWeek ? `• Day: ${command.dayOfWeek}` : ''}\n${command.dayOfMonth ? `• Date: ${command.dayOfMonth}` : ''}\n\nYour recurring swap is now active!`,
-        type: 'message'
-      });
-    } catch (error: unknown) {
-      const errorMessage = handleError(error, ErrorType.API_FAILURE, { 
-        operation: 'dca_creation',
-        retryable: true 
-      });
-      addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
-    }
-  };
-
-  const executeLimitOrder = async (command: ParsedCommand) => {
-    try {
-      const limitOrderResponse = await fetch('/api/create-limit-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fromAsset: command.fromAsset,
-          fromChain: command.fromChain,
-          toAsset: command.toAsset,
-          toChain: command.toChain,
-          amount: command.amount,
-          conditionOperator: command.conditionOperator,
-          conditionValue: command.conditionValue,
-          conditionAsset: command.conditionAsset,
-          settleAddress: address // Use connected wallet address
-        }),
-      });
-      
-      const result = await limitOrderResponse.json();
-      if (result.error) throw new Error(result.error);
-      
-      const operatorText = command.conditionOperator === 'gt' ? 'above' : 'below';
-      addMessage({
-        role: 'assistant',
-        content: `✅ Limit Order Created!\n\n🎯 Order Details:\n• Swap: ${command.amount} ${command.fromAsset} → ${command.toAsset}\n• Trigger: When ${command.conditionAsset} is ${operatorText} $${command.conditionValue}\n\nYour limit order is now monitoring the market!`,
-        type: 'message'
-      });
-    } catch (error: unknown) {
-      const errorMessage = handleError(error, ErrorType.API_FAILURE, { 
-        operation: 'limit_order_creation',
-        retryable: true 
+        retryable: true
       });
       addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
     }
@@ -559,7 +447,6 @@ export default function ChatInterface() {
 
   const handleIntentConfirm = async (confirmed: boolean) => {
     if (confirmed && pendingCommand) {
-<<<<<<< HEAD
       if (pendingCommand.intent === 'portfolio') {
         const confirmedCmd = { ...pendingCommand, requiresConfirmation: false, confidence: 100 };
         addMessage({ role: 'assistant', content: "Executing Portfolio Strategy...", type: 'message' });
@@ -575,32 +462,12 @@ export default function ChatInterface() {
               toChain: item.toChain
             });
           }
-=======
-        if (pendingCommand.intent === 'portfolio') {
-             const confirmedCmd = { ...pendingCommand, requiresConfirmation: false, confidence: 100 };
-             addMessage({ role: 'assistant', content: "Executing Portfolio Strategy...", type: 'message' });
-             
-             if (confirmedCmd.portfolio) {
-                for (const item of confirmedCmd.portfolio) {
-                    const splitAmount = (confirmedCmd.amount! * item.percentage) / 100;
-                    await executeSwap({
-                        ...confirmedCmd,
-                        intent: 'swap',
-                        amount: splitAmount,
-                        toAsset: item.toAsset,
-                        toChain: item.toChain
-                    });
-                }
-             }
-        } else if (pendingCommand.intent === 'dca') {
-             await executeDCA(pendingCommand);
-        } else if (pendingCommand.conditionOperator && pendingCommand.conditionValue) {
-             // Limit Order (swap with conditions)
-             await executeLimitOrder(pendingCommand);
-        } else {
-            await executeSwap(pendingCommand);
->>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
         }
+      } else if (pendingCommand.intent === 'dca') {
+        await executeDCA(pendingCommand);
+      } else if (pendingCommand.conditionOperator && pendingCommand.conditionValue) {
+        // Limit Order (swap with conditions)
+        await executeLimitOrder(pendingCommand);
       } else {
         await executeSwap(pendingCommand);
       }
@@ -619,7 +486,9 @@ export default function ChatInterface() {
       fromChain: oldQuote.depositNetwork,
       toChain: oldQuote.settleNetwork,
       confidence: 100, // High confidence as it comes from a button click
-      requiresConfirmation: false
+      requiresConfirmation: false,
+      success: true,
+      validationErrors: []
     };
 
     addMessage({
@@ -700,24 +569,15 @@ export default function ChatInterface() {
             <button
               onClick={() => {
                 if (isRecording) {
-                  stopRecording();
+                  handleStopRecording();
                 } else {
-                  startRecording();
+                  handleStartRecording();
                 }
               }}
-<<<<<<< HEAD
-<<<<<<< HEAD
-              className={`p-3 rounded-xl transition-all ${isRecording ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/40' : 'bg-white/5 text-gray-400 hover:bg-white/10'
-                }`}
-=======
-=======
->>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
               disabled={!isAudioSupported}
-              className={`p-3 rounded-xl transition-all ${
-                !isAudioSupported ? 'bg-white/5 text-gray-600 cursor-not-allowed' :
+              className={`p-3 rounded-xl transition-all ${!isAudioSupported ? 'bg-white/5 text-gray-600 cursor-not-allowed' :
                 isRecording ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/40' : 'bg-white/5 text-gray-400 hover:bg-white/10'
-              }`}
->>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
+                }`}
             >
               {isRecording ? <StopCircle className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
             </button>
@@ -742,19 +602,6 @@ export default function ChatInterface() {
             </div>
           </div>
         </div>
-<<<<<<< HEAD
-=======
-        
-        {/* Voice Fallback */}
-        {!isAudioSupported && (
-            <div className="text-red-500 text-xs mt-2 px-1 text-center font-medium">
-                🎤 Voice input is not supported in your browser. Please use Chrome or type your command.
-            </div>
-        )}
-<<<<<<< HEAD
->>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
-=======
->>>>>>> c5d084631228a04f2746db4475bc9a9b158820fd
 
         {/* Footer Warning */}
         {!isConnected && (
