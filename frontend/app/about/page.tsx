@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import Image from 'next/image';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import {
@@ -31,15 +30,6 @@ import {
 /* ================================================================ */
 /*  Static Data                                                      */
 /* ================================================================ */
-
-const CONTRIBUTORS = [
-  { login: 'GauravKarakoti', contributions: 242, avatar: 'https://avatars.githubusercontent.com/u/180496085?v=4' },
-  { login: 'deekshithgowda85', contributions: 39, avatar: 'https://avatars.githubusercontent.com/u/152056807?v=4' },
-  { login: 'Omkarop0808', contributions: 36, avatar: 'https://avatars.githubusercontent.com/u/194948962?v=4' },
-  { login: 'Aditya8369', contributions: 28, avatar: 'https://avatars.githubusercontent.com/u/178887069?v=4' },
-  { login: 'ayonpaul8906', contributions: 25, avatar: 'https://avatars.githubusercontent.com/u/179435490?v=4' },
-  { login: 'navin-oss', contributions: 20, avatar: 'https://avatars.githubusercontent.com/u/181780004?v=4' },
-];
 
 const REPO_STATS = {
   stars: 3,
@@ -109,29 +99,6 @@ function FeatureList({ items }: { items: string[] }) {
   );
 }
 
-function ContributorCard({
-  login,
-  avatar,
-  contributions,
-}: {
-  login: string;
-  avatar: string;
-  contributions: number;
-}) {
-  return (
-    <a
-      href={`https://github.com/${login}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex flex-col items-center gap-2 p-4 bg-white/5 border border-white/10 rounded-xl hover:border-cyan-400/40 transition"
-    >
-      <Image src={avatar} alt={login} width={48} height={48} className="rounded-full" unoptimized />
-      <span className="text-sm text-white font-semibold">{login}</span>
-      <span className="text-xs text-gray-400">{contributions} commits</span>
-    </a>
-  );
-}
-
 /* ================================================================ */
 /*  Page                                                             */
 /* ================================================================ */
@@ -140,7 +107,7 @@ export default function AboutPage() {
   const [totalCommits, setTotalCommits] = useState(0);
 
   useEffect(() => {
-    setTotalCommits(CONTRIBUTORS.reduce((sum, c) => sum + c.contributions, 0));
+    setTotalCommits(390); // approximate total
   }, []);
 
   return (
@@ -161,12 +128,11 @@ export default function AboutPage() {
           </section>
 
           {/* Stats */}
-          <section className="grid grid-cols-2 md:grid-cols-6 gap-4">
+          <section className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <GlassCard title="Stars" icon={<Star />}>{REPO_STATS.stars}</GlassCard>
             <GlassCard title="Forks" icon={<GitFork />}>{REPO_STATS.forks}</GlassCard>
             <GlassCard title="Issues" icon={<AlertCircle />}>{REPO_STATS.openIssues}</GlassCard>
             <GlassCard title="Lang" icon={<Code2 />}>{REPO_STATS.language}</GlassCard>
-            <GlassCard title="Contributors" icon={<Users />}>{CONTRIBUTORS.length}</GlassCard>
             <GlassCard title="Commits" icon={<Github />}>{totalCommits}</GlassCard>
           </section>
 
@@ -191,14 +157,16 @@ export default function AboutPage() {
             </GlassCard>
           </section>
 
-          {/* Contributors */}
-          <section>
-            <h2 className="text-3xl font-bold text-white mb-6">Contributors</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
-              {CONTRIBUTORS.map(c => (
-                <ContributorCard key={c.login} {...c} />
-              ))}
-            </div>
+          {/* Contributors Link */}
+          <section className="text-center">
+            <Link
+              href="/contributors"
+              className="inline-flex items-center gap-3 px-8 py-4 bg-white/5 border border-white/10 rounded-2xl hover:border-cyan-400/40 transition group"
+            >
+              <Users className="w-5 h-5 text-cyan-400" />
+              <span className="text-white font-bold">View All Contributors</span>
+              <ArrowRight className="w-4 h-4 text-gray-400 group-hover:translate-x-1 transition-transform" />
+            </Link>
           </section>
 
         </motion.main>

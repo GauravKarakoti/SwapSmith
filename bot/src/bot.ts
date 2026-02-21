@@ -5,24 +5,20 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import axios from 'axios';
-import { exec } from 'child_process';
+import { spawn } from 'child_process';
 import express from 'express';
 import { sql } from 'drizzle-orm';
 
 // Services
 import { transcribeAudio } from './services/groq-client';
-import logger from './services/logger';
+import logger, { Sentry } from './services/logger';
 
 import {
-  createQuote,
-  createOrder,
-  createCheckout,
   getOrderStatus,
 } from './services/sideshift-client';
 
 import {
   getTopStablecoinYields,
-  getTopYieldPools,
   formatYieldPools,
 } from './services/yield-client';
 
@@ -33,6 +29,7 @@ import { limitOrderWorker } from './workers/limitOrderWorker';
 import { OrderMonitor } from './services/order-monitor';
 import { parseUserCommand } from './services/parseUserCommand';
 import { isValidAddress } from './config/address-patterns';
+import { expressIntegration } from '@sentry/node';
 
 dotenv.config();
 
@@ -310,7 +307,11 @@ async function start() {
   try {
     // Add Sentry request handler for Express
     if (process.env.SENTRY_DSN) {
-      app.use(Sentry.Handlers.requestHandler() as any);
+      Sentry.init({
+        dsn: process.env.SENTRY_DSN,
+        integrations: [expressIntegration()],
+        tracesSampleRate: 1.0,
+      });
     }
 
     if (process.env.DATABASE_URL) {
