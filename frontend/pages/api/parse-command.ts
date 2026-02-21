@@ -1,9 +1,15 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { parseUserCommand } from '@/utils/groq-client';
+import { csrfGuard } from '@/lib/csrf';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // CSRF Protection
+  if (!csrfGuard(req, res)) {
+    return;
   }
 
   const { message } = req.body;

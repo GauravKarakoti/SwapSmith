@@ -1,8 +1,8 @@
+// app/profile/page.tsx - Theme-Aware Profile Page (Part 1 of 2)
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 import { useAccount, useDisconnect } from 'wagmi'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -30,29 +30,51 @@ import {
   EyeOff,
   History,
   ArrowUpRight,
-  ArrowDownLeft,
   Clock,
   Calendar,
   TrendingUp,
+  Download,
 } from 'lucide-react'
+import Image from 'next/image'
 import { useAuth } from '@/hooks/useAuth'
 import Navbar from '@/components/Navbar'
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
-import type { EmailNotificationPrefs } from '@/types/profile';
 
-// ---------------------------------------------------------------------------
 // Types
-// ---------------------------------------------------------------------------
+interface SwapHistoryItem {
+  id: string;
+  userId: string;
+  walletAddress?: string;
+  depositCoin?: string;
+  settleCoin?: string;
+  depositAmount?: string;
+  settleAmount?: string;
+  status?: string;
+  createdAt: string;
+  fromAsset: string;
+  toAsset: string;
+  fromAmount: string;
+  fromNetwork?: string;
+  toNetwork?: string;
+  sideshiftOrderId?: string;
+}
+
 interface Preferences {
   soundEnabled: boolean
   autoConfirmSwaps: boolean
   currency: string
 }
 
-// ---------------------------------------------------------------------------
+interface EmailNotificationPrefs {
+  enabled: boolean
+  walletReminders: boolean
+  priceAlerts: boolean
+  generalUpdates: boolean
+  frequency: 'daily' | 'weekly'
+}
+
 // Animated toggle switch
-// ---------------------------------------------------------------------------
 function ToggleSwitch({
   enabled,
   onToggle,
@@ -66,7 +88,7 @@ function ToggleSwitch({
     <button
       onClick={onToggle}
       className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-300 focus:outline-none ${
-        enabled ? activeColor : 'bg-zinc-700'
+        enabled ? activeColor : 'toggle-bg'
       }`}
     >
       <motion.span
@@ -79,9 +101,7 @@ function ToggleSwitch({
   )
 }
 
-// ---------------------------------------------------------------------------
 // Glow card wrapper
-// ---------------------------------------------------------------------------
 function GlowCard({
   children,
   className = '',
@@ -99,7 +119,7 @@ function GlowCard({
       initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay }}
-      className={`relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/60 backdrop-blur-xl ${className}`}
+      className={`glow-card relative overflow-hidden rounded-2xl border backdrop-blur-xl ${className}`}
       onMouseMove={(e) => {
         const r = e.currentTarget.getBoundingClientRect()
         setMousePos({ x: e.clientX - r.left, y: e.clientY - r.top })
@@ -125,21 +145,17 @@ function GlowCard({
   )
 }
 
-// ---------------------------------------------------------------------------
 // Section header
-// ---------------------------------------------------------------------------
 function SectionHeader({ icon: Icon, label }: { icon: React.ElementType; label: string }) {
   return (
     <div className="flex items-center gap-2 mb-4 px-1">
       <Icon className="w-4 h-4 text-blue-400" />
-      <span className="text-xs font-bold uppercase tracking-widest text-zinc-400">{label}</span>
+      <span className="text-xs font-bold uppercase tracking-widest text-tertiary">{label}</span>
     </div>
   )
 }
 
-// ---------------------------------------------------------------------------
 // Row component
-// ---------------------------------------------------------------------------
 function SettingRow({
   icon: Icon,
   label,
@@ -154,22 +170,22 @@ function SettingRow({
   danger?: boolean
 }) {
   return (
-    <div className="group flex items-center justify-between px-5 py-4 hover:bg-white/2 transition-colors">
+    <div className="group flex items-center justify-between px-5 py-4 bg-profile-card-hover transition-colors">
       <div className="flex items-center gap-4 min-w-0">
         <div
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
             danger
-              ? 'bg-red-500/10 text-red-400'
-              : 'bg-zinc-800 text-zinc-300 group-hover:bg-blue-500/10 group-hover:text-blue-400'
+              ? 'bg-icon-danger text-error'
+              : 'bg-icon text-secondary group-hover:bg-icon-hover group-hover:text-blue-400'
           } transition-colors`}
         >
           <Icon className="w-[18px] h-[18px]" />
         </div>
         <div className="min-w-0">
-          <p className={`text-sm font-semibold ${danger ? 'text-red-400' : 'text-zinc-100'}`}>
+          <p className={`text-sm font-semibold ${danger ? 'text-error' : 'text-primary'}`}>
             {label}
           </p>
-          {description && <p className="text-xs text-zinc-500 mt-0.5 truncate">{description}</p>}
+          {description && <p className="text-xs text-tertiary mt-0.5 truncate">{description}</p>}
         </div>
       </div>
       <div className="shrink-0 ml-4">{action}</div>
@@ -177,16 +193,14 @@ function SettingRow({
   )
 }
 
-// ---------------------------------------------------------------------------
-// Main Profile Page
-// ---------------------------------------------------------------------------
+// Main Profile Page Component
 export default function ProfilePage() {
   const router = useRouter()
   const { logout, user, isAuthenticated, isLoading: authLoading } = useAuth()
   const { address, isConnected, chain } = useAccount()
   const { disconnect } = useDisconnect()
 
-  // Preferences (persisted to localStorage)
+  // Preferences
   const [preferences, setPreferences] = useState<Preferences>(() => {
     try {
       const saved = localStorage.getItem('swapsmith_preferences')
@@ -205,7 +219,8 @@ export default function ProfilePage() {
     }
   })
 
-  const [copied, setCopied] = useState(false)
+  const [copiedEmail, setCopiedEmail] = useState(false)
+  const [copiedAddress, setCopiedAddress] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [showPasswordChange, setShowPasswordChange] = useState(false)
   const [passwordData, setPasswordData] = useState({
@@ -241,13 +256,15 @@ export default function ProfilePage() {
     }
   })
 
-  // Mock wallet history (replace with real data)
-  const [walletHistory] = useState([
-    { id: 1, type: 'swap', from: 'ETH', to: 'USDC', amount: '0.5', date: '2 hours ago', status: 'completed' },
-    { id: 2, type: 'swap', from: 'BTC', to: 'ETH', amount: '0.02', date: 'Yesterday', status: 'completed' },
-    { id: 3, type: 'payment', from: '', to: '', amount: '100 USDC', date: '2 days ago', status: 'completed' },
-    { id: 4, type: 'swap', from: 'USDT', to: 'DAI', amount: '500', date: '1 week ago', status: 'completed' },
-  ])
+  // Real wallet history from database
+  const [walletHistory, setWalletHistory] = useState<SwapHistoryItem[]>([])
+  const [loadingHistory, setLoadingHistory] = useState(true)
+  const [portfolioStats, setPortfolioStats] = useState({
+    totalSwaps: 0,
+    totalVolume: 0,
+    successRate: 100,
+    favoriteAsset: 'N/A'
+  })
 
   // Protect route
   useEffect(() => {
@@ -256,7 +273,7 @@ export default function ProfilePage() {
     }
   }, [authLoading, isAuthenticated, router])
 
-  // Load profile image from localStorage
+  // Load profile image
   useEffect(() => {
     if (user?.uid) {
       const savedImage = localStorage.getItem(`profile-image-${user.uid}`);
@@ -264,55 +281,151 @@ export default function ProfilePage() {
     }
   }, [user])
 
-  // Save preferences on change
+  // Save preferences
   useEffect(() => {
     localStorage.setItem('swapsmith_preferences', JSON.stringify(preferences))
   }, [preferences])
 
-  // Save email notification preferences on change
+  const calculatePortfolioStats = (history: SwapHistoryItem[]) => {
+    if (!history || history.length === 0) {
+      return { totalSwaps: 0, totalVolume: 0, successRate: 100, favoriteAsset: 'N/A' }
+    }
+
+    const totalSwaps = history.length
+    const completedSwaps = history.filter(h => h.status === 'settled' || h.status === 'completed').length
+    const successRate = totalSwaps > 0 ? Math.round((completedSwaps / totalSwaps) * 100) : 100
+    const totalVolume = history.reduce((sum, h) => sum + (parseFloat(h.fromAmount) || 0), 0)
+
+    const assetCount: Record<string, number> = {}
+    history.forEach(h => {
+      assetCount[h.fromAsset] = (assetCount[h.fromAsset] || 0) + 1
+      assetCount[h.toAsset] = (assetCount[h.toAsset] || 0) + 1
+    })
+    const favoriteAsset = Object.keys(assetCount).length > 0
+      ? Object.entries(assetCount).sort((a, b) => b[1] - a[1])[0][0]
+      : 'N/A'
+
+    return { totalSwaps, totalVolume, successRate, favoriteAsset }
+  }
+
+  const formatDate = (dateString: string | Date) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+
+    if (diffMins < 60) return `${diffMins} min${diffMins !== 1 ? 's' : ''} ago`
+    if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`
+    if (diffDays === 1) return 'Yesterday'
+    if (diffDays < 7) return `${diffDays} days ago`
+    return date.toLocaleDateString()
+  }
+
+  const exportTransactionHistory = () => {
+    if (walletHistory.length === 0) {
+      alert('No transaction history to export')
+      return
+    }
+
+    const csvContent = [
+      ['Date', 'From Asset', 'From Network', 'From Amount', 'To Asset', 'To Network', 'Settle Amount', 'Status', 'Order ID'].join(','),
+      ...walletHistory.map(h => [
+        new Date(h.createdAt).toISOString(),
+        h.fromAsset,
+        h.fromNetwork,
+        h.fromAmount,
+        h.toAsset,
+        h.toNetwork,
+        h.settleAmount,
+        h.status,
+        h.sideshiftOrderId
+      ].join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `swapsmith-history-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    window.URL.revokeObjectURL(url)
+  }
+
+  // Load swap history
   useEffect(() => {
-    localStorage.setItem('swapsmith_email_notifications', JSON.stringify(emailNotificationPrefs))
-    
-    // Schedule/unschedule notifications based on preferences
-    if (emailNotificationPrefs.enabled && user?.uid && user?.email) {
-      // Schedule notifications
-      if (emailNotificationPrefs.walletReminders) {
-        fetch('/api/schedule-notification', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'schedule',
-            userId: user.uid,
-            userEmail: user.email,
-            userName: user.email.split('@')[0],
-            type: 'wallet',
-            frequency: emailNotificationPrefs.frequency
-          })
-        }).catch(err => console.error('Failed to schedule wallet reminder:', err))
-      }
+    if (user?.uid) {
+      setLoadingHistory(true)
+      fetch(`/api/swap-history?userId=${user.uid}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.history) {
+            setWalletHistory(data.history)
+            const stats = calculatePortfolioStats(data.history)
+            setPortfolioStats(stats)
+          }
+        })
+        .catch(err => console.error('Failed to load swap history:', err))
+        .finally(() => setLoadingHistory(false))
+    }
+  }, [user])
+
+  // Save preferences and email notifications
+  useEffect(() => {
+    if (user?.uid) {
+      localStorage.setItem('swapsmith_preferences', JSON.stringify(preferences))
+      localStorage.setItem('swapsmith_email_notifications', JSON.stringify(emailNotificationPrefs))
       
-      if (emailNotificationPrefs.priceAlerts) {
-        fetch('/api/schedule-notification', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'schedule',
-            userId: user.uid,
-            userEmail: user.email,
-            userName: user.email.split('@')[0],
-            type: 'price',
-            frequency: emailNotificationPrefs.frequency
-          })
-        }).catch(err => console.error('Failed to schedule price alert:', err))
+      fetch('/api/user/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.uid,
+          walletAddress: address,
+          preferences: JSON.stringify(preferences),
+          emailNotifications: JSON.stringify(emailNotificationPrefs)
+        })
+      }).catch(err => console.error('Failed to sync settings:', err))
+      
+      if (emailNotificationPrefs.enabled && user?.email) {
+        if (emailNotificationPrefs.walletReminders) {
+          fetch('/api/schedule-notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'schedule',
+              userId: user.uid,
+              userEmail: user.email,
+              userName: user.email.split('@')[0],
+              type: 'wallet',
+              frequency: emailNotificationPrefs.frequency
+            })
+          }).catch(err => console.error('Failed to schedule wallet reminder:', err))
+        }
+        
+        if (emailNotificationPrefs.priceAlerts) {
+          fetch('/api/schedule-notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'schedule',
+              userId: user.uid,
+              userEmail: user.email,
+              userName: user.email.split('@')[0],
+              type: 'price',
+              frequency: emailNotificationPrefs.frequency
+            })
+          }).catch(err => console.error('Failed to schedule price alert:', err))
+        }
       }
     }
-  }, [emailNotificationPrefs, user])
+  }, [preferences, emailNotificationPrefs, user, address])
 
-  // Send welcome email when wallet is connected
+  // Send welcome email
   useEffect(() => {
     const hasSeenWalletWelcome = localStorage.getItem('swapsmith_wallet_welcome_sent')
     if (isConnected && address && user?.email && emailNotificationPrefs.enabled && !hasSeenWalletWelcome) {
-      // Send welcome email for wallet connection
       fetch('/api/send-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -321,7 +434,7 @@ export default function ProfilePage() {
           userEmail: user.email,
           userName: user.email.split('@')[0],
           title: 'Wallet Connected Successfully! 🎉',
-          message: `Congratulations! Your wallet ${address.slice(0, 6)}...${address.slice(-4)} has been successfully connected to SwapSmith. You can now execute AI-powered swaps, track your portfolio, and access all premium features.`,
+          message: `Congratulations! Your wallet ${address.slice(0, 6)}...${address.slice(-4)} has been successfully connected to SwapSmith.`,
           ctaText: 'Start Trading',
           ctaUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/terminal`
         })
@@ -334,16 +447,15 @@ export default function ProfilePage() {
   // Show loading state
   if (authLoading) {
     return (
-      <div className="flex h-screen bg-[#050505] items-center justify-center">
+      <div className="flex h-screen bg-profile items-center justify-center transition-colors">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-zinc-400">Loading...</p>
+          <p className="text-tertiary">Loading...</p>
         </div>
       </div>
     )
   }
 
-  // Don't render if not authenticated
   if (!isAuthenticated) {
     return null
   }
@@ -351,16 +463,16 @@ export default function ProfilePage() {
   const copyAddress = () => {
     if (address) {
       navigator.clipboard.writeText(address)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      setCopiedAddress(true)
+      setTimeout(() => setCopiedAddress(false), 2000)
     }
   }
 
   const copyEmail = () => {
     if (user?.email) {
       navigator.clipboard.writeText(user.email)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      setCopiedEmail(true)
+      setTimeout(() => setCopiedEmail(false), 2000)
     }
   }
 
@@ -376,13 +488,11 @@ export default function ProfilePage() {
     const file = e.target.files?.[0]
     if (!file || !user?.uid) return
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       alert('Please upload an image file')
       return
     }
 
-    // Validate file size (max 2MB for localStorage)
     if (file.size > 2 * 1024 * 1024) {
       alert('Image size should be less than 2MB')
       return
@@ -391,13 +501,11 @@ export default function ProfilePage() {
     try {
       setUploadingImage(true)
       
-      // Convert image to base64 and store in localStorage
       const reader = new FileReader()
       reader.onloadend = () => {
         const base64String = reader.result as string
         localStorage.setItem(`profile-image-${user.uid}`, base64String)
         setProfileImageUrl(base64String)
-        // Notify other components (like Navbar) that the profile image changed
         window.dispatchEvent(new Event('profileImageChanged'))
         setUploadingImage(false)
       }
@@ -420,7 +528,6 @@ export default function ProfilePage() {
       setUploadingImage(true)
       localStorage.removeItem(`profile-image-${user.uid}`)
       setProfileImageUrl(null)
-      // Notify other components that the profile image was removed
       window.dispatchEvent(new Event('profileImageChanged'))
     } catch (error) {
       console.error('Error removing image:', error)
@@ -434,7 +541,6 @@ export default function ProfilePage() {
     setPasswordError('')
     setPasswordSuccess(false)
 
-    // Validation
     if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
       setPasswordError('All fields are required')
       return
@@ -451,20 +557,22 @@ export default function ProfilePage() {
     }
 
     try {
+      if (!auth) {
+        setPasswordError('Firebase authentication is not configured')
+        return
+      }
+      
       const currentUser = auth.currentUser
       if (!currentUser || !currentUser.email) {
         setPasswordError('User not found')
         return
       }
 
-      // Re-authenticate user before changing password
       const credential = EmailAuthProvider.credential(
         currentUser.email,
         passwordData.currentPassword
       )
       await reauthenticateWithCredential(currentUser, credential)
-
-      // Update password
       await updatePassword(currentUser, passwordData.newPassword)
       
       setPasswordSuccess(true)
@@ -476,7 +584,7 @@ export default function ProfilePage() {
     } catch (error) {
       console.error('Password change error:', error)
       const err = error as { code?: string }
-      if (err.code === 'auth/wrong-password') {
+      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
         setPasswordError('Current password is incorrect')
       } else if (err.code === 'auth/weak-password') {
         setPasswordError('New password is too weak')
@@ -486,22 +594,22 @@ export default function ProfilePage() {
     }
   }
 
-  // -----------------------------------------------------------------------
+  // RENDER
   return (
     <>
       <Navbar />
 
       {/* Ambient backgrounds */}
       <div className="fixed inset-0 z-[-1] overflow-hidden pointer-events-none">
-        <div className="absolute top-[-15%] left-[-10%] w-[45%] h-[45%] rounded-full bg-blue-600/6 blur-[140px]" />
-        <div className="absolute bottom-[-15%] right-[-10%] w-[45%] h-[45%] rounded-full bg-purple-600/6 blur-[140px]" />
-        <div className="absolute top-[50%] left-[50%] -translate-x-1/2 -translate-y-1/2 w-[30%] h-[30%] rounded-full bg-cyan-500/3 blur-[120px]" />
+        <div className="absolute top-[-15%] left-[-10%] w-[45%] h-[45%] rounded-full ambient-gradient-blue blur-[140px]" />
+        <div className="absolute bottom-[-15%] right-[-10%] w-[45%] h-[45%] rounded-full ambient-gradient-purple blur-[140px]" />
+        <div className="absolute top-[50%] left-[50%] -translate-x-1/2 -translate-y-1/2 w-[30%] h-[30%] rounded-full ambient-gradient-cyan blur-[120px]" />
       </div>
 
-      <div className="min-h-screen bg-[#050505] text-white pt-20 sm:pt-24 pb-20">
+      <div className="min-h-screen bg-profile text-primary pt-20 sm:pt-24 pb-20 transition-colors">
         <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto">
-          {/* ───────── Page Header ───────── */}
+          {/* Page Header */}
           <motion.div
             initial={{ opacity: 0, y: -12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -510,7 +618,7 @@ export default function ProfilePage() {
           >
             <button
               onClick={() => router.back()}
-              className="group flex items-center gap-2 text-sm text-zinc-500 hover:text-white mb-6 transition-colors"
+              className="group flex items-center gap-2 text-sm text-tertiary hover:text-primary mb-6 transition-colors"
             >
               <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
               Back
@@ -518,7 +626,7 @@ export default function ProfilePage() {
 
             <div className="flex items-center gap-4">
               <div className="relative group">
-                <div className="relative h-20 w-20 rounded-2xl overflow-hidden shadow-lg shadow-blue-500/20 border-2 border-zinc-800 group-hover:border-blue-500 transition-colors">
+                <div className="relative h-20 w-20 rounded-2xl overflow-hidden shadow-lg shadow-blue-500/20 border-2 border-profile group-hover:border-blue-500 transition-colors">
                   {profileImageUrl ? (
                     <Image
                       src={profileImageUrl}
@@ -536,7 +644,7 @@ export default function ProfilePage() {
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploadingImage}
-                  className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-blue-600 hover:bg-blue-500 border-2 border-[#050505] flex items-center justify-center transition-colors disabled:opacity-50"
+                  className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-blue-600 hover:bg-blue-500 border-2 border-profile flex items-center justify-center transition-colors disabled:opacity-50"
                   title="Change profile picture"
                 >
                   {uploadingImage ? (
@@ -554,13 +662,13 @@ export default function ProfilePage() {
                 />
               </div>
               <div>
-                <h1 className="text-2xl sm:text-3xl font-black tracking-tight">Profile</h1>
-                <p className="text-sm text-zinc-500 mt-0.5">Manage your account & preferences</p>
+                <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-primary">Profile</h1>
+                <p className="text-sm text-tertiary mt-0.5">Manage your account & preferences</p>
                 {profileImageUrl && (
                   <button
                     onClick={handleRemoveImage}
                     disabled={uploadingImage}
-                    className="text-xs text-red-400 hover:text-red-300 mt-1 disabled:opacity-50"
+                    className="text-xs text-error hover:opacity-80 mt-1 disabled:opacity-50 transition-opacity"
                   >
                     Remove photo
                   </button>
@@ -569,13 +677,13 @@ export default function ProfilePage() {
             </div>
           </motion.div>
 
-          {/* ───────── Two Column Layout for larger screens ───────── */}
+          {/* Two Column Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-6">
             {/* Left Column */}
             <div className="space-y-6">
-          {/* ───────── Account Section ───────── */}
+          {/* Account Section */}
           <SectionHeader icon={User} label="Account" />
-          <GlowCard className="divide-y divide-zinc-800/60" delay={0.05}>
+          <GlowCard className="divide-y divide-y-profile" delay={0.05}>
             <SettingRow
               icon={Mail}
               label={user?.email || 'No email'}
@@ -583,12 +691,12 @@ export default function ProfilePage() {
               action={
                 <button
                   onClick={copyEmail}
-                  className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-blue-400 transition-colors"
+                  className="flex items-center gap-1.5 text-xs text-tertiary hover:text-blue-400 transition-colors"
                 >
-                  {copied ? (
+                  {copiedEmail ? (
                     <>
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      <span className="text-emerald-400">Copied</span>
+                      <Check className="w-3.5 h-3.5 text-success" />
+                      <span className="text-success">Copied</span>
                     </>
                   ) : (
                     <>
@@ -609,7 +717,7 @@ export default function ProfilePage() {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     onClick={() => setShowPasswordChange(true)}
-                    className="w-full py-2.5 rounded-xl border border-zinc-700 text-zinc-300 text-xs font-bold uppercase tracking-widest hover:bg-zinc-800 transition-colors active:scale-[0.98] flex items-center justify-center gap-2"
+                    className="w-full py-2.5 rounded-xl border border-profile text-secondary text-xs font-bold uppercase tracking-widest hover:bg-section-hover transition-colors active:scale-[0.98] flex items-center justify-center gap-2"
                   >
                     <Lock className="w-3.5 h-3.5" />
                     Change Password
@@ -623,12 +731,12 @@ export default function ProfilePage() {
                     className="space-y-3"
                   >
                     {passwordError && (
-                      <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs">
+                      <div className="p-3 bg-error border border-error/20 rounded-xl text-error text-xs">
                         {passwordError}
                       </div>
                     )}
                     {passwordSuccess && (
-                      <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs flex items-center gap-2">
+                      <div className="p-3 bg-success border border-success/20 rounded-xl text-success text-xs flex items-center gap-2">
                         <Check className="w-4 h-4" />
                         Password changed successfully!
                       </div>
@@ -640,12 +748,12 @@ export default function ProfilePage() {
                         placeholder="Current Password"
                         value={passwordData.currentPassword}
                         onChange={(e) => setPasswordData({...passwordData, currentPassword: e.target.value})}
-                        className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                        className="profile-input w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPasswords({...showPasswords, current: !showPasswords.current})}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-tertiary hover:text-secondary"
                       >
                         {showPasswords.current ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -657,12 +765,12 @@ export default function ProfilePage() {
                         placeholder="New Password (min 6 characters)"
                         value={passwordData.newPassword}
                         onChange={(e) => setPasswordData({...passwordData, newPassword: e.target.value})}
-                        className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                        className="profile-input w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPasswords({...showPasswords, new: !showPasswords.new})}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-tertiary hover:text-secondary"
                       >
                         {showPasswords.new ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -674,12 +782,12 @@ export default function ProfilePage() {
                         placeholder="Confirm New Password"
                         value={passwordData.confirmPassword}
                         onChange={(e) => setPasswordData({...passwordData, confirmPassword: e.target.value})}
-                        className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                        className="profile-input w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPasswords({...showPasswords, confirm: !showPasswords.confirm})}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-tertiary hover:text-secondary"
                       >
                         {showPasswords.confirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -692,7 +800,7 @@ export default function ProfilePage() {
                           setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' })
                           setPasswordError('')
                         }}
-                        className="flex-1 py-2.5 rounded-xl border border-zinc-700 text-zinc-300 text-xs font-bold uppercase tracking-widest hover:bg-zinc-800 transition-colors"
+                        className="flex-1 py-2.5 rounded-xl border border-profile text-secondary text-xs font-bold uppercase tracking-widest hover:bg-section-hover transition-colors"
                       >
                         Cancel
                       </button>
@@ -709,19 +817,19 @@ export default function ProfilePage() {
             </div>
           </GlowCard>
 
-          {/* ───────── Wallet Section ───────── */}
+          {/* Wallet Section */}
           <SectionHeader icon={Wallet} label="Wallet" />
           <GlowCard className="" delay={0.1}>
             {isConnected && address ? (
               <>
                 <div className="p-5 pb-0">
                   <div className="flex items-center gap-3 mb-4">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-[11px] font-bold uppercase tracking-widest">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-success text-success text-[11px] font-bold uppercase tracking-widest">
+                      <span className="w-1.5 h-1.5 rounded-full success-indicator animate-pulse" />
                       Connected
                     </span>
                     {chain && (
-                      <span className="text-[11px] text-zinc-500 font-medium">
+                      <span className="text-[11px] text-tertiary font-medium">
                         {chain.name}
                       </span>
                     )}
@@ -735,12 +843,12 @@ export default function ProfilePage() {
                   action={
                     <button
                       onClick={copyAddress}
-                      className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-blue-400 transition-colors"
+                      className="flex items-center gap-1.5 text-xs text-tertiary hover:text-blue-400 transition-colors"
                     >
-                      {copied ? (
+                      {copiedAddress ? (
                         <>
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          <span className="text-emerald-400">Copied</span>
+                          <Check className="w-3.5 h-3.5 text-success" />
+                          <span className="text-success">Copied</span>
                         </>
                       ) : (
                         <>
@@ -755,7 +863,7 @@ export default function ProfilePage() {
                 <div className="px-5 pb-4 pt-1">
                   <button
                     onClick={() => disconnect()}
-                    className="w-full py-2.5 rounded-xl border border-red-500/20 text-red-400 text-xs font-bold uppercase tracking-widest hover:bg-red-500/10 transition-colors active:scale-[0.98]"
+                    className="w-full py-2.5 rounded-xl border border-error/20 text-error text-xs font-bold uppercase tracking-widest hover:bg-error/10 transition-colors active:scale-[0.98]"
                   >
                     Disconnect Wallet
                   </button>
@@ -763,16 +871,16 @@ export default function ProfilePage() {
               </>
             ) : (
               <div className="p-5 text-center">
-                <div className="h-12 w-12 mx-auto rounded-2xl bg-zinc-800 flex items-center justify-center mb-3">
-                  <Wallet className="w-6 h-6 text-zinc-500" />
+                <div className="h-12 w-12 mx-auto rounded-2xl bg-icon flex items-center justify-center mb-3">
+                  <Wallet className="w-6 h-6 text-tertiary" />
                 </div>
-                <p className="text-sm text-zinc-400 mb-1 font-medium">No wallet connected</p>
-                <p className="text-xs text-zinc-600 mb-4">
+                <p className="text-sm text-secondary mb-1 font-medium">No wallet connected</p>
+                <p className="text-xs text-muted mb-4">
                   Connect a wallet from the terminal to enable on-chain features.
                 </p>
                 <button
                   onClick={() => router.push('/terminal')}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors active:scale-[0.98]"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors active:scale-[0.98] text-white"
                 >
                   <Zap className="w-3.5 h-3.5" />
                   Go to Terminal
@@ -781,63 +889,113 @@ export default function ProfilePage() {
             )}
           </GlowCard>
 
-          {/* ───────── Wallet History ───────── */}
+          {/* Wallet History */}
           <SectionHeader icon={History} label="Recent Activity" />
           <GlowCard className="" delay={0.15}>
-            <div className="p-5 space-y-3">
-              {walletHistory.length > 0 ? (
-                walletHistory.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/30 hover:bg-zinc-800/50 transition-colors"
+            <div className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-primary">Transaction History</h3>
+                {walletHistory.length > 0 && (
+                  <button
+                    onClick={exportTransactionHistory}
+                    className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg ${
-                        item.type === 'swap' ? 'bg-blue-500/10' : 'bg-purple-500/10'
-                      }`}>
-                        {item.type === 'swap' ? (
+                    <Download className="w-3 h-3" />
+                    Export CSV
+                  </button>
+                )}
+              </div>
+              
+              {loadingHistory ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-3"></div>
+                  <p className="text-sm text-tertiary">Loading history...</p>
+                </div>
+              ) : walletHistory.length > 0 ? (
+                <div className="space-y-3">
+                  {walletHistory.slice(0, 5).map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between p-3 rounded-xl bg-stats-item hover:bg-section-hover transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-blue-500/10">
                           <ArrowUpRight className="w-4 h-4 text-blue-400" />
-                        ) : (
-                          <ArrowDownLeft className="w-4 h-4 text-purple-400" />
-                        )}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-primary">
+                            {item.fromAsset} → {item.toAsset}
+                          </p>
+                          <p className="text-xs text-tertiary flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {formatDate(item.createdAt)}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold text-white">
-                          {item.type === 'swap' 
-                            ? `${item.from} → ${item.to}` 
-                            : `Payment ${item.amount}`
-                          }
-                        </p>
-                        <p className="text-xs text-zinc-500 flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {item.date}
-                        </p>
+                      <div className="text-right">
+                        <p className="text-sm font-mono text-secondary">{parseFloat(item.fromAmount).toFixed(4)}</p>
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase ${
+                          item.status === 'settled' || item.status === 'completed' 
+                            ? 'text-success' 
+                            : item.status === 'pending' 
+                            ? 'text-warning' 
+                            : 'text-error'
+                        }`}>
+                          <Check className="w-3 h-3" />
+                          {item.status}
+                        </span>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-mono text-zinc-300">{item.amount}</p>
-                      <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-bold uppercase">
-                        <Check className="w-3 h-3" />
-                        {item.status}
-                      </span>
-                    </div>
-                  </div>
-                ))
+                  ))}
+                  {walletHistory.length > 5 && (
+                    <button
+                      onClick={() => router.push('/terminal')}
+                      className="w-full py-2 text-xs text-tertiary hover:text-blue-400 transition-colors"
+                    >
+                      View all {walletHistory.length} transactions →
+                    </button>
+                  )}
+                </div>
               ) : (
                 <div className="text-center py-8">
-                  <History className="w-12 h-12 text-zinc-700 mx-auto mb-3" />
-                  <p className="text-sm text-zinc-500">No recent activity</p>
+                  <History className="w-12 h-12 text-muted mx-auto mb-3" />
+                  <p className="text-sm text-tertiary">No recent activity</p>
+                  <p className="text-xs text-muted mt-1">Your swap history will appear here</p>
                 </div>
               )}
             </div>
           </GlowCard>
             </div>
 
+            {/* Right Column - CONTINUE IN NEXT FILE */}
             {/* Right Column */}
             <div className="space-y-6">
-          {/* ───────── Preferences Section ───────── */}
+          {/* Portfolio Stats */}
+          <SectionHeader icon={TrendingUp} label="Portfolio Stats" />
+          <GlowCard className="p-5" delay={0.18}>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-3 rounded-xl bg-stats-item border border-profile">
+                <p className="text-xs text-tertiary mb-1">Total Swaps</p>
+                <p className="text-2xl font-bold text-primary">{portfolioStats.totalSwaps}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-stats-item border border-profile">
+                <p className="text-xs text-tertiary mb-1">Success Rate</p>
+                <p className="text-2xl font-bold text-success">{portfolioStats.successRate}%</p>
+              </div>
+              <div className="p-3 rounded-xl bg-stats-item border border-profile">
+                <p className="text-xs text-tertiary mb-1">Total Volume</p>
+                <p className="text-lg font-bold text-primary">${portfolioStats.totalVolume.toFixed(2)}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-stats-item border border-profile">
+                <p className="text-xs text-tertiary mb-1">Top Asset</p>
+                <p className="text-lg font-bold text-blue-400">{portfolioStats.favoriteAsset}</p>
+              </div>
+            </div>
+          </GlowCard>
+
+          {/* Preferences Section */}
           <SectionHeader icon={Palette} label="Preferences" />
-          <GlowCard className="divide-y divide-zinc-800/60" delay={0.2}>
+          <GlowCard className="divide-y divide-profile" delay={0.2}>
             <SettingRow
               icon={preferences.soundEnabled ? Volume2 : VolumeX}
               label="Sound Effects"
@@ -869,7 +1027,7 @@ export default function ProfilePage() {
                 <select
                   value={preferences.currency}
                   onChange={(e) => setPreferences((p: Preferences) => ({ ...p, currency: e.target.value }))}
-                  className="bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/40 cursor-pointer"
+                  className="profile-select border text-sm rounded-lg px-3 py-1.5 focus:outline-none cursor-pointer"
                 >
                   <option value="USD">USD</option>
                   <option value="EUR">EUR</option>
@@ -883,14 +1041,14 @@ export default function ProfilePage() {
             />
           </GlowCard>
 
-          {/* ───────── Email Notifications ───────── */}
+          {/* Email Notifications */}
           <SectionHeader icon={Mail} label="Email Notifications" />
-          <GlowCard className="divide-y divide-zinc-800/60" delay={0.25}>
+          <GlowCard className="divide-y divide-profile" delay={0.25}>
             <div className="p-5 space-y-4">
-              <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+              <div className="flex items-center justify-between pb-4 border-b border-profile">
                 <div>
-                  <h3 className="text-sm font-semibold text-white mb-1">Enable Email Notifications</h3>
-                  <p className="text-xs text-zinc-500">Receive updates and alerts via email</p>
+                  <h3 className="text-sm font-semibold text-primary mb-1">Enable Email Notifications</h3>
+                  <p className="text-xs text-tertiary">Receive updates and alerts via email</p>
                 </div>
                 <ToggleSwitch
                   enabled={emailNotificationPrefs.enabled}
@@ -910,8 +1068,8 @@ export default function ProfilePage() {
                       <div className="flex items-center gap-3">
                         <Wallet className="w-4 h-4 text-blue-400" />
                         <div>
-                          <p className="text-sm font-medium text-white">Wallet Reminders</p>
-                          <p className="text-xs text-zinc-500">Connect wallet notifications</p>
+                          <p className="text-sm font-medium text-primary">Wallet Reminders</p>
+                          <p className="text-xs text-tertiary">Connect wallet notifications</p>
                         </div>
                       </div>
                       <ToggleSwitch
@@ -924,8 +1082,8 @@ export default function ProfilePage() {
                       <div className="flex items-center gap-3">
                         <TrendingUp className="w-4 h-4 text-emerald-400" />
                         <div>
-                          <p className="text-sm font-medium text-white">Price Alerts</p>
-                          <p className="text-xs text-zinc-500">Daily crypto price updates</p>
+                          <p className="text-sm font-medium text-primary">Price Alerts</p>
+                          <p className="text-xs text-tertiary">Daily crypto price updates</p>
                         </div>
                       </div>
                       <ToggleSwitch
@@ -938,8 +1096,8 @@ export default function ProfilePage() {
                       <div className="flex items-center gap-3">
                         <Bell className="w-4 h-4 text-purple-400" />
                         <div>
-                          <p className="text-sm font-medium text-white">General Updates</p>
-                          <p className="text-xs text-zinc-500">Platform news & features</p>
+                          <p className="text-sm font-medium text-primary">General Updates</p>
+                          <p className="text-xs text-tertiary">Platform news & features</p>
                         </div>
                       </div>
                       <ToggleSwitch
@@ -948,18 +1106,18 @@ export default function ProfilePage() {
                       />
                     </div>
 
-                    <div className="flex items-center justify-between py-2 border-t border-zinc-800 pt-4">
+                    <div className="flex items-center justify-between py-2 border-t border-profile pt-4">
                       <div className="flex items-center gap-3">
                         <Calendar className="w-4 h-4 text-amber-400" />
                         <div>
-                          <p className="text-sm font-medium text-white">Frequency</p>
-                          <p className="text-xs text-zinc-500">How often to send emails</p>
+                          <p className="text-sm font-medium text-primary">Frequency</p>
+                          <p className="text-xs text-tertiary">How often to send emails</p>
                         </div>
                       </div>
                       <select
                         value={emailNotificationPrefs.frequency}
                         onChange={(e) => setEmailNotificationPrefs(p => ({ ...p, frequency: e.target.value as 'daily' | 'weekly' }))}
-                        className="bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/40 cursor-pointer"
+                        className="profile-select border text-sm rounded-lg px-3 py-1.5 focus:outline-none cursor-pointer"
                       >
                         <option value="daily">Daily</option>
                         <option value="weekly">Weekly</option>
@@ -973,16 +1131,17 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* ───────── Full Width Sections ───────── */}
-          {/* ───────── About Section ───────── */}
+          {/* Full Width Sections */}
+          <div className="space-y-6 mt-6">
+          {/* About Section */}
           <SectionHeader icon={Info} label="About" />
-          <GlowCard className="divide-y divide-zinc-800/60" delay={0.25}>
+          <GlowCard className="divide-y divide-profile" delay={0.25}>
             <SettingRow
               icon={Zap}
               label="SwapSmith"
               description="AI-powered crypto swap terminal"
               action={
-                <span className="text-xs text-zinc-500 font-mono">v0.1.0-alpha</span>
+                <span className="text-xs text-tertiary font-mono">v0.1.0-alpha</span>
               }
             />
             <SettingRow
@@ -991,8 +1150,8 @@ export default function ProfilePage() {
               description="Groq LLM + SideShift.ai"
               action={
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest">
+                  <span className="w-1.5 h-1.5 rounded-full success-indicator animate-pulse" />
+                  <span className="text-[10px] text-success font-bold uppercase tracking-widest">
                     Online
                   </span>
                 </span>
@@ -1007,7 +1166,7 @@ export default function ProfilePage() {
                   href="https://github.com"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-zinc-500 hover:text-blue-400 transition-colors"
+                  className="text-tertiary hover:text-blue-400 transition-colors"
                 >
                   <ExternalLink className="w-4 h-4" />
                 </a>
@@ -1018,14 +1177,14 @@ export default function ProfilePage() {
               label="Made with love"
               description="Open-source & community driven"
               action={
-                <span className="text-xs text-zinc-500">
+                <span className="text-xs text-tertiary">
                   MIT License
                 </span>
               }
             />
           </GlowCard>
 
-          {/* ───────── Danger Zone ───────── */}
+          {/* Danger Zone */}
           <SectionHeader icon={LogOut} label="Sign Out" />
           <GlowCard className="" delay={0.3}>
             <AnimatePresence mode="wait">
@@ -1044,7 +1203,7 @@ export default function ProfilePage() {
                     action={
                       <button
                         onClick={() => setShowLogoutConfirm(true)}
-                        className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold uppercase tracking-widest hover:bg-red-500/20 transition-colors active:scale-[0.97]"
+                        className="px-4 py-2 rounded-xl bg-error/10 border border-error/20 text-error text-xs font-bold uppercase tracking-widest hover:bg-error/20 transition-colors active:scale-[0.97]"
                       >
                         Log Out
                       </button>
@@ -1060,17 +1219,17 @@ export default function ProfilePage() {
                   className="p-5"
                 >
                   <div className="text-center">
-                    <div className="h-14 w-14 mx-auto rounded-2xl bg-red-500/10 flex items-center justify-center mb-4">
-                      <LogOut className="w-7 h-7 text-red-400" />
+                    <div className="h-14 w-14 mx-auto rounded-2xl bg-error/10 flex items-center justify-center mb-4">
+                      <LogOut className="w-7 h-7 text-error" />
                     </div>
-                    <h3 className="text-lg font-bold text-white mb-1">Confirm Logout</h3>
-                    <p className="text-sm text-zinc-500 mb-6">
+                    <h3 className="text-lg font-bold text-primary mb-1">Confirm Logout</h3>
+                    <p className="text-sm text-tertiary mb-6">
                       You will be signed out and redirected to the login page.
                     </p>
                     <div className="flex items-center gap-3">
                       <button
                         onClick={() => setShowLogoutConfirm(false)}
-                        className="flex-1 py-2.5 rounded-xl border border-zinc-700 text-zinc-300 text-xs font-bold uppercase tracking-widest hover:bg-zinc-800 transition-colors active:scale-[0.97]"
+                        className="flex-1 py-2.5 rounded-xl border border-profile text-secondary text-xs font-bold uppercase tracking-widest hover:bg-section-hover transition-colors active:scale-[0.97]"
                       >
                         Cancel
                       </button>
@@ -1085,7 +1244,10 @@ export default function ProfilePage() {
                 </motion.div>
               )}
             </AnimatePresence>
-          </GlowCard>          </div>        </div>
+          </GlowCard>
+          </div>
+          </div>        
+        </div>
       </div>
     </>
   )

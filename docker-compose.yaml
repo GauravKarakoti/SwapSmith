@@ -3,14 +3,14 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      args:
-        GROQ_API_KEY: ${GROQ_API_KEY:-}
     container_name: swapsmith-frontend
     ports:
       - "3002:3000"
     env_file:
       - ./frontend/.env
     restart: unless-stopped
+    networks:
+      - swapsmith-net
   
   bot:
     build:
@@ -26,6 +26,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - swapsmith-net
 
   db:
     image: postgres:15
@@ -43,7 +45,13 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - swapsmith-net
 
 
 volumes:
   postgres_data:
+
+networks:
+  swapsmith-net:
+    driver: bridge

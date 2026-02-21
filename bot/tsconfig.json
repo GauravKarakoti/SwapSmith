@@ -2,11 +2,12 @@
   "compilerOptions": {
     "target": "ES2020",
     "module": "commonjs",
-    "rootDir": "./src",
+    "moduleResolution": "node",
     "outDir": "./dist",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "exclude": ["drizzle.config.ts"]
+  "include": ["src/**/*", "../shared/schema.ts"],
+  "exclude": ["drizzle.config.ts", "src/workers/limitOrderWorker.ts"]
 }
