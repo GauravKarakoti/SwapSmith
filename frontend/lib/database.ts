@@ -12,6 +12,7 @@ import {
   users,
   courseProgress,
   rewardsLog,
+  watchlist,
 } from '../../shared/schema';
 
 const sql = neon(process.env.DATABASE_URL!);
@@ -27,6 +28,7 @@ export {
   users,
   courseProgress,
   rewardsLog,
+  watchlist,
 };
 
 export type User = typeof users.$inferSelect;
@@ -37,6 +39,7 @@ export type UserSettings = typeof userSettings.$inferSelect;
 export type SwapHistory = typeof swapHistory.$inferSelect;
 export type ChatHistory = typeof chatHistory.$inferSelect;
 export type Discussion = typeof discussions.$inferSelect;
+export type Watchlist = typeof watchlist.$inferSelect;
 
 // --- COIN PRICE CACHE FUNCTIONS ---
 
@@ -751,6 +754,94 @@ export async function getLeaderboard(limit: number = 100): Promise<Array<{
     totalPoints: entry.totalPoints,
     totalTokensClaimed: entry.totalTokensClaimed,
   }));
+}
+
+// --- WATCHLIST FUNCTIONS ---
+
+export async function getWatchlist(userId: string): Promise<Watchlist[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
+  return await db.select().from(watchlist)
+    .where(eq(watchlist.userId, userId))
+    .orderBy(desc(watchlist.addedAt));
+}
+
+export async function addToWatchlist(
+  userId: string,
+  coin: string,
+  network: string,
+  name: string
+): Promise<Watchlist | null> {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  // Check if already in watchlist
+  const existing = await db.select().from(watchlist)
+    .where(and(
+      eq(watchlist.userId, userId),
+      eq(watchlist.coin, coin),
+      eq(watchlist.network, network)
+    ))
+    .limit(1);
+  
+  if (existing.length > 0) {
+    return existing[0]; // Already in watchlist
+  }
+  
+  const result = await db.insert(watchlist).values({
+    userId,
+    coin,
+    network,
+    name,
+  }).returning();
+  
+  return result[0];
+}
+
+export async function removeFromWatchlist(
+  userId: string,
+  coin: string,
+  network: string
+): Promise<boolean> {
+  if (!db) {
+    console.warn('Database not configured');
+    return false;
+  }
+  
+  const result = await db.delete(watchlist)
+    .where(and(
+      eq(watchlist.userId, userId),
+      eq(watchlist.coin, coin),
+      eq(watchlist.network, network)
+    ));
+  
+  return true;
+}
+
+export async function isInWatchlist(
+  userId: string,
+  coin: string,
+  network: string
+): Promise<boolean> {
+  if (!db) {
+    console.warn('Database not configured');
+    return false;
+  }
+  
+  const result = await db.select().from(watchlist)
+    .where(and(
+      eq(watchlist.userId, userId),
+      eq(watchlist.coin, coin),
+      eq(watchlist.network, network)
+    ))
+    .limit(1);
+  
+  return result.length > 0;
 }
 
 export default db;

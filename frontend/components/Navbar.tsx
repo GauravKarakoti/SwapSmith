@@ -16,6 +16,7 @@ import {
   Menu,
   X,
   Info,
+  Star,
 } from "lucide-react";
 import Image from "next/image";
 import { useAuth } from "@/hooks/useAuth";
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
   { href: "/prices", label: "Live Prices", Icon: TrendingUp },
   { href: "/discussions", label: "Discussions", Icon: MessageSquare },
   { href: "/terminal", label: "Terminal", Icon: TerminalIcon },
+  { href: "/watchlist", label: "Watchlist", Icon: Star },
 ];
 
 export default function Navbar() {
@@ -200,6 +202,13 @@ export default function Navbar() {
                       onClick={() => setShowProfileMenu(false)}
                     >
                       <Info className="w-4 h-4" /> About
+                    </Link>
+                    <Link
+                      href="/watchlist"
+                      className="menu-item"
+                      onClick={() => setShowProfileMenu(false)}
+                    >
+                      <Star className="w-4 h-4" /> Watchlist
                     </Link>
                     <div className="h-px bg-zinc-800" />
                     <button

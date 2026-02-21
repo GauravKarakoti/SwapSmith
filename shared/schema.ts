@@ -162,6 +162,20 @@ export const userSettings = pgTable('user_settings', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// --- WATCHLIST SCHEMA ---
+
+export const watchlist = pgTable('watchlist', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  coin: text('coin').notNull(),
+  network: text('network').notNull(),
+  name: text('name').notNull(),
+  addedAt: timestamp('added_at').defaultNow(),
+}, (table) => [
+  index("idx_watchlist_user_id").on(table.userId),
+  index("idx_watchlist_user_coin_network").on(table.userId, table.coin, table.network),
+]);
+
 // --- FRONTEND SCHEMAS ---
 
 export const swapHistory = pgTable('swap_history', {
