@@ -221,8 +221,9 @@ export function useGlobalPromoAd(pathname: string | null) {
   const PROMO_COOLDOWN = 5 * 60 * 1000 // 5 minutes
 
   useEffect(() => {
-    // Never show on terminal page (it has its own plans ad)
-    if (!pathname || pathname.startsWith('/terminal')) return
+    // Never show on terminal/login/register pages
+    if (!pathname) return
+    if (pathname.startsWith('/terminal') || pathname.startsWith('/login') || pathname.startsWith('/register')) return
 
     const timer = setTimeout(() => {
       try {

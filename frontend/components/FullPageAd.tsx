@@ -187,7 +187,7 @@ export default function FullPageAd({
       className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       style={{ background: 'rgba(15,23,42,0.80)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
     >
-      <div className="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl overflow-hidden">
 
         {/* Dismiss */}
         <button
@@ -219,11 +219,11 @@ export default function FullPageAd({
             </div>
 
             <div className="grid grid-cols-3 gap-4 items-start">
-              {PLANS.map((plan) => (
+              {PLANS.map((plan, i) => (
                 <div
                   key={plan.name}
-                  className={`relative flex flex-col rounded-2xl p-5 border ${plan.popular ? 'border-gray-800 shadow-xl' : 'border-gray-200'}`}
-                  style={plan.popular ? { transform: 'translateY(-6px) scale(1.02)' } : {}}
+                  className={`ad-card-enter ad-card-hover relative flex flex-col rounded-2xl p-5 border ${plan.popular ? 'border-gray-800 shadow-xl' : 'border-gray-200'}`}
+                  style={plan.popular ? { transform: 'translateY(-6px) scale(1.02)', animationDelay: `${i * 0.12}s` } : { animationDelay: `${i * 0.12}s` }}
                 >
                   {plan.popular && (
                     <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-xs font-black text-white whitespace-nowrap" style={{ background: '#f59e0b' }}>
@@ -278,11 +278,11 @@ export default function FullPageAd({
             </div>
 
             <div className="grid grid-cols-3 gap-4 items-start">
-              {SITE_FEATURES.map((feat) => (
+              {SITE_FEATURES.map((feat, i) => (
                 <div
                   key={feat.name}
-                  className={`relative flex flex-col rounded-2xl p-5 border ${feat.popular ? 'border-gray-800 shadow-xl' : 'border-gray-200'}`}
-                  style={feat.popular ? { transform: 'translateY(-6px) scale(1.02)' } : {}}
+                  className={`ad-card-enter ad-card-hover relative flex flex-col rounded-2xl p-5 border ${feat.popular ? 'border-gray-800 shadow-xl' : 'border-gray-200'}`}
+                  style={feat.popular ? { transform: 'translateY(-6px) scale(1.02)', animationDelay: `${i * 0.12}s` } : { animationDelay: `${i * 0.12}s` }}
                 >
                   {feat.popular && (
                     <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-xs font-black text-white whitespace-nowrap" style={{ background: '#f59e0b' }}>
@@ -339,13 +339,13 @@ export default function FullPageAd({
             </div>
 
             <div className="grid grid-cols-3 gap-4 items-start">
-              {PROMO_CARDS.map((card) => (
+              {PROMO_CARDS.map((card, i) => (
                 <div
                   key={card.name}
-                  className={`relative flex flex-col rounded-2xl p-5 border ${
+                  className={`ad-card-enter ad-card-hover relative flex flex-col rounded-2xl p-5 border ${
                     card.popular ? 'border-gray-800 shadow-xl' : 'border-gray-200'
                   }`}
-                  style={card.popular ? { transform: 'translateY(-6px) scale(1.02)' } : {}}
+                  style={card.popular ? { transform: 'translateY(-6px) scale(1.02)', animationDelay: `${i * 0.12}s` } : { animationDelay: `${i * 0.12}s` }}
                 >
                   {card.popular && (
                     <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-xs font-black text-white whitespace-nowrap" style={{ background: '#f59e0b' }}>

@@ -1,9 +1,10 @@
 ﻿'use client'
 
-import { useState } from 'react'
-import { Eye, EyeOff, Zap, User, Mail, Lock, Check, AlertCircle, Loader2, Bot, Star, Link2, ShieldCheck, ArrowRight } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { Eye, EyeOff, Zap, User, Mail, Lock, Check, AlertCircle, Loader2, ShieldCheck, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
 import { useAuth } from '@/hooks/useAuth'
+import AuroraBackground from '@/components/AuroraBackground'
 
 /* ------------------------------------------------------------------ */
 /* Data (same as login for consistent branding)                          */
@@ -51,13 +52,6 @@ const PLANS = [
   },
 ]
 
-const FEATURES = [
-  { icon: Bot,         label: 'Telegram Bot',           desc: 'Swap without leaving Telegram', color: '#22d3ee' },
-  { icon: Star,        label: 'Yield Scout',             desc: 'Best DeFi APY in real-time',    color: '#fbbf24' },
-  { icon: Link2,       label: 'Payment Links',           desc: 'Request any crypto instantly',  color: '#f472b6' },
-  { icon: ShieldCheck, label: 'Non-custodial Security',  desc: 'Your keys, always',             color: '#34d399' },
-]
-
 /* ------------------------------------------------------------------ */
 /* Page                                                                  */
 /* ------------------------------------------------------------------ */
@@ -68,6 +62,11 @@ export default function RegisterPage() {
   const [showPw, setShowPw]     = useState(false)
   const [error, setError]       = useState('')
   const { register, isLoading } = useAuth()
+
+  // Carousel state for plan cards
+  const [carouselIdx, setCarouselIdx] = useState(1) // start on Pro
+  const carouselNext = useCallback(() => setCarouselIdx((p) => (p + 1) % PLANS.length), [])
+  useEffect(() => { const t = setInterval(carouselNext, 4000); return () => clearInterval(t) }, [carouselNext])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -218,7 +217,7 @@ export default function RegisterPage() {
             </div>
 
             {/* Submit */}
-            <div className="animate-element animate-delay-700 pt-1">
+            <div className="animate-element animate-delay-700 pt-1 flex justify-center">
               <button
                 type="submit"
                 disabled={isLoading}
@@ -257,106 +256,110 @@ export default function RegisterPage() {
         </div>
       </section>
 
-      {/*  */}
-      {/* RIGHT — plans showcase (identical to login)                   */}
-      {/*  */}
-      <section className="animate-slide-right animate-delay-300 hidden md:flex flex-1 relative overflow-y-auto overflow-x-hidden flex-col">
+      {/* RIGHT — plans carousel */}
+      <section className="animate-slide-right animate-delay-300 hidden md:flex flex-1 relative overflow-hidden flex-col">
 
-        {/* Background */}
-        <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(145deg, #07071a 0%, #0a0a1e 40%, #080d22 70%, #090716 100%)' }} />
-        {/* Ambient glows */}
-        <div className="absolute pointer-events-none" style={{ top: '-10%', right: '-5%', width: '650px', height: '650px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(79,70,229,0.11) 0%, transparent 70%)' }} />
-        <div className="absolute pointer-events-none" style={{ bottom: '-15%', left: '10%', width: '500px', height: '500px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(124,58,237,0.07) 0%, transparent 70%)' }} />
-        {/* Dot grid */}
-        <div className="absolute inset-0 pointer-events-none" style={{ opacity: 0.022, backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.9) 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
+        {/* Aurora shader background (renders its own deep-black background) */}
+        <AuroraBackground />
 
-        {/*  Partition 1: header  */}
-        <div className="relative z-10 px-12 xl:px-16 pt-14 pb-10" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-          <div className="animate-element animate-delay-400 inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-5 text-[10px] font-black uppercase tracking-[0.18em]" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)', color: '#6b7280' }}>
+        {/* Dot grid overlay */}
+        <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 2, opacity: 0.025, backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.9) 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
+
+        {/* ── Header ─────────────────────────────────────────────────── */}
+        <div className="relative px-10 xl:px-14 pt-6 pb-5" style={{ zIndex: 3, borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+          <div className="animate-element animate-delay-400 inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-3 text-[10px] font-black uppercase tracking-[0.18em]" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)', color: '#6b7280' }}>
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             SwapSmith Plans
           </div>
-          <h2 className="animate-element animate-delay-500 text-4xl xl:text-5xl font-black tracking-tighter leading-[1.08] mb-3" style={{ color: '#f1f5f9' }}>
-            Upgrade your<br />
+          <h2 className="animate-element animate-delay-500 text-3xl xl:text-4xl font-black tracking-tighter leading-[1.08] mb-2" style={{ color: '#f1f5f9' }}>
+            Upgrade your{' '}
             <span style={{ background: 'linear-gradient(90deg, #60a5fa, #a78bfa, #818cf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
               trading stack.
             </span>
           </h2>
-          <p className="animate-element animate-delay-600 text-sm leading-relaxed" style={{ color: '#4b5563', maxWidth: '380px' }}>
+          <p className="animate-element animate-delay-600 text-xs leading-relaxed" style={{ color: '#4b5563', maxWidth: '300px' }}>
             AI-powered routing, yield scouting, Telegram swaps &amp; multi-chain support.
           </p>
         </div>
 
-        {/*  Partition 2: plan cards  */}
-        <div className="relative z-10 flex-1 flex flex-col justify-center px-12 xl:px-16 py-8" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-          <div className="max-w-2xl w-full">
-            <div className="animate-element animate-delay-700 grid grid-cols-3 gap-3">
-              {PLANS.map((plan) => (
+        {/* 3D Carousel */}
+        <div className="relative flex-1 flex items-center justify-center" style={{ zIndex: 3, minHeight: 0, padding: '20px 0 44px' }}>
+          <div className="relative w-full h-full flex items-center justify-center" style={{ perspective: '1200px' }}>
+            {PLANS.map((plan, index) => {
+              const total = PLANS.length
+              let pos = (index - carouselIdx + total) % total
+              if (pos > Math.floor(total / 2)) pos -= total
+              const isCenter   = pos === 0
+              const isAdjacent = Math.abs(pos) === 1
+              return (
                 <div
                   key={plan.name}
-                  className="relative flex flex-col rounded-2xl p-4 overflow-hidden"
-                  style={{ background: plan.gradient, border: plan.border }}
+                  className="absolute flex flex-col rounded-3xl overflow-hidden"
+                  style={{
+                    width: '280px',
+                    height: '430px',
+                    padding: '24px',
+                    background: plan.gradient,
+                    border: isCenter ? '1px solid rgba(255,255,255,0.13)' : '1px solid rgba(255,255,255,0.04)',
+                    transform: `translateX(${pos * 58}%) scale(${isCenter ? 1 : isAdjacent ? 0.8 : 0.6}) rotateY(${pos * -14}deg)`,
+                    zIndex: isCenter ? 10 : isAdjacent ? 5 : 1,
+                    opacity: isCenter ? 1 : isAdjacent ? 0.5 : 0,
+                    filter: isCenter ? 'none' : 'blur(4px)',
+                    visibility: Math.abs(pos) > 1 ? 'hidden' : 'visible',
+                    transition: 'all 0.6s cubic-bezier(0.22,1,0.36,1)',
+                  }}
                 >
                   {plan.popular && (
-                    <div className="absolute top-0 right-0 rounded-bl-xl rounded-tr-2xl px-2.5 py-1 text-[9px] font-black uppercase tracking-widest" style={{ background: '#2563eb', color: '#fff' }}>
+                    <div className="absolute top-0 right-0 rounded-bl-xl rounded-tr-3xl px-3 py-1.5 text-[9px] font-black uppercase tracking-widest" style={{ background: '#2563eb', color: '#fff' }}>
                       Popular
                     </div>
                   )}
-                  <div className="mb-3">
-                    <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg mb-2.5 text-[10px] font-black uppercase tracking-wider" style={{ background: `${plan.accent}18`, color: plan.accent }}>
-                      <span>{plan.icon}</span>
-                      <span>{plan.name}</span>
+                  <div className="mb-5">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg mb-4 text-[11px] font-black uppercase tracking-wider" style={{ background: `${plan.accent}18`, color: plan.accent }}>
+                      {plan.name}
                     </div>
                     <div className="flex items-baseline gap-1">
-                      <span className="text-2xl font-black leading-none" style={{ color: '#f1f5f9' }}>{plan.price}</span>
-                      <span className="text-xs" style={{ color: '#4b5563' }}>{plan.period}</span>
+                      <span className="text-4xl font-black leading-none" style={{ color: '#f1f5f9' }}>{plan.price}</span>
+                      <span className="text-sm" style={{ color: '#6b7280' }}>{plan.period}</span>
                     </div>
                   </div>
-                  <ul className="flex flex-col gap-1.5 flex-1 mb-4">
+                  <ul className="flex flex-col gap-3 flex-1 mb-6">
                     {plan.features.map((f) => (
-                      <li key={f} className="flex items-start gap-2 text-[11px] leading-snug" style={{ color: '#9ca3af' }}>
-                        <Check className="w-3 h-3 shrink-0 mt-px" style={{ color: plan.accent }} />
+                      <li key={f} className="flex items-start gap-2.5 text-[13px] leading-snug" style={{ color: '#9ca3af' }}>
+                        <Check className="w-4 h-4 shrink-0 mt-px" style={{ color: plan.accent }} />
                         {f}
                       </li>
                     ))}
                   </ul>
                   <Link
                     href={plan.cta}
-                    className="block text-center text-xs font-bold py-2 rounded-xl transition-all duration-200"
+                    className="block text-center text-sm font-bold py-3 rounded-xl transition-all duration-200 hover:opacity-90"
                     style={plan.ctaStyle}
                   >
                     {plan.ctaLabel}
                   </Link>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/*  Partition 3: feature cards  */}
-        <div className="relative z-10 px-12 xl:px-16 py-6">
-          <div className="grid grid-cols-4 gap-2.5">
-            {FEATURES.map((feat, i) => {
-              const Icon = feat.icon
-              const delays = ['animate-delay-1000', 'animate-delay-1200', 'animate-delay-1400', 'animate-delay-1400'] as const
-              return (
-                <div
-                  key={feat.label}
-                  className={`animate-testimonial ${delays[i]} flex flex-col gap-2.5 rounded-2xl p-3.5 transition-all duration-200`}
-                  style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)' }}
-                >
-                  <div className="flex items-center justify-center w-8 h-8 rounded-xl" style={{ background: `${feat.color}14`, color: feat.color }}>
-                    <Icon className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-bold leading-tight mb-0.5" style={{ color: '#f1f5f9' }}>{feat.label}</p>
-                    <p className="text-[10px] leading-snug" style={{ color: '#4b5563' }}>{feat.desc}</p>
-                  </div>
-                </div>
               )
             })}
           </div>
+
+          {/* Dots */}
+          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+            {PLANS.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setCarouselIdx(i)}
+                className="rounded-full transition-all duration-300"
+                style={{
+                  width: i === carouselIdx ? '22px' : '6px',
+                  height: '6px',
+                  background: i === carouselIdx ? PLANS[i].accent : 'rgba(255,255,255,0.18)',
+                }}
+              />
+            ))}
+          </div>
         </div>
+
       </section>
     </div>
   )
