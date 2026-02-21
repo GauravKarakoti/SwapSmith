@@ -1,11 +1,11 @@
 import axios from 'axios';
-
-const SIDESHIFT_BASE_URL = "https://sideshift.ai/api/v2";
+import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift';
+import { SideShiftQuoteSchema, SideShiftCheckoutResponseSchema, CoinSchema } from '../../shared/schemas/sideshift';
 const AFFILIATE_ID = process.env.NEXT_PUBLIC_AFFILIATE_ID;
 const API_KEY = process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
 
 export interface SideShiftQuote {
-  id?: string; 
+  id?: string;
   depositCoin: string;
   depositNetwork: string;
   settleCoin: string;
@@ -16,7 +16,7 @@ export interface SideShiftQuote {
   affiliateId: string;
   error?: { code: string; message: string; };
   memo?: string;
-  expiry?: string; 
+  expiry?: string;
 }
 
 export interface SideShiftCheckoutResponse {
@@ -54,16 +54,16 @@ export interface CoinPrice {
 }
 
 export async function createQuote(
-  fromAsset: string, 
-  fromNetwork: string, 
-  toAsset: string, 
-  toNetwork: string, 
+  fromAsset: string,
+  fromNetwork: string,
+  toAsset: string,
+  toNetwork: string,
   amount: number,
   userIP: string
 ): Promise<SideShiftQuote> {
   try {
     const response = await axios.post(
-      `${SIDESHIFT_BASE_URL}/quotes`,
+      `${SIDESHIFT_CONFIG.BASE_URL}/quotes`,
       {
         depositCoin: fromAsset,
         depositNetwork: fromNetwork,
@@ -80,7 +80,7 @@ export async function createQuote(
         }
       }
     );
-    return { ...response.data, id: response.data.id };
+    return SideShiftQuoteSchema.parse(response.data);
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: { message?: string } } } };
     throw new Error(err.response?.data?.error?.message || 'Failed to create quote');
@@ -96,15 +96,15 @@ export async function createCheckout(
 ): Promise<SideShiftCheckoutResponse> {
   try {
     const response = await axios.post(
-      `${SIDESHIFT_BASE_URL}/checkout`,
+      `${SIDESHIFT_CONFIG.BASE_URL}/checkout`,
       {
         settleCoin,
         settleNetwork,
         settleAmount: settleAmount.toString(),
         affiliateId: AFFILIATE_ID,
         settleAddress: settleAddress,
-        successUrl: 'https://sideshift.ai/success', // Added required field
-        cancelUrl: 'https://sideshift.ai/cancel',   // Added required field
+        successUrl: SIDESHIFT_CONFIG.SUCCESS_URL,
+        cancelUrl: SIDESHIFT_CONFIG.CANCEL_URL,
       },
       {
         headers: {
@@ -114,12 +114,14 @@ export async function createCheckout(
         },
       }
     );
-    
+
+    const validatedData = SideShiftCheckoutResponseSchema.parse(response.data);
+
     return {
-        id: response.data.id,
-        url: `https://pay.sideshift.ai/checkout/${response.data.id}`,
-        settleAmount: response.data.settleAmount,
-        settleCoin: response.data.settleCoin
+      id: validatedData.id,
+      url: `${SIDESHIFT_CONFIG.CHECKOUT_URL}/${validatedData.id}`,
+      settleAmount: validatedData.settleAmount,
+      settleCoin: validatedData.settleCoin
     };
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: { message?: string } } } };
@@ -130,10 +132,10 @@ export async function createCheckout(
 /**
  * Fetches all available coins from SideShift API
  */
-export async function getCoins(): Promise<Coin[]> {
+export async function getCoins(): Promise<any[]> {
   try {
-    const response = await axios.get(`${SIDESHIFT_BASE_URL}/coins`);
-    return response.data;
+    const response = await axios.get(`${SIDESHIFT_CONFIG.BASE_URL}/coins`);
+    return CoinSchema.array().parse(response.data);
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: { message?: string } } } };
     throw new Error(err.response?.data?.error?.message || 'Failed to fetch coins');
@@ -171,7 +173,7 @@ export async function getCoinPrices(): Promise<CoinPrice[]> {
     };
 
     const coinIds = Object.values(coinGeckoMap).map(c => c.id).join(',');
-    
+
     // Fetch prices from CoinGecko free API
     const response = await axios.get(
       `https://api.coingecko.com/api/v3/simple/price`,
@@ -210,16 +212,16 @@ export async function getCoinPrices(): Promise<CoinPrice[]> {
     return results;
   } catch (error: unknown) {
     console.error('CoinGecko API error:', error);
-    
+
     // Fallback: Try to fetch from SideShift with corrected calculation
     try {
       const coins = await getCoins();
       const popularCoins = ['btc', 'eth', 'usdt', 'bnb', 'usdc', 'xrp', 'ada', 'doge', 'sol', 'trx', 'ltc', 'matic', 'dot', 'dai', 'avax'];
-      
+
       const filteredCoins = coins
         .filter(c => popularCoins.includes(c.coin.toLowerCase()))
         .slice(0, 15);
-      
+
       const pricesPromises = filteredCoins.map(async (coin): Promise<CoinPrice | null> => {
         try {
           const network = coin.networks[0];
@@ -235,7 +237,7 @@ export async function getCoinPrices(): Promise<CoinPrice[]> {
           }
 
           const quoteResponse = await axios.post(
-            `${SIDESHIFT_BASE_URL}/quotes`,
+            `${SIDESHIFT_CONFIG.BASE_URL}/quotes`,
             {
               depositCoin: coin.coin,
               depositNetwork: network.network,
@@ -251,7 +253,7 @@ export async function getCoinPrices(): Promise<CoinPrice[]> {
 
           // Rate is settleAmount / depositAmount, so for 1 unit it's the direct price
           const settleAmount = parseFloat(quoteResponse.data.settleAmount || quoteResponse.data.rate);
-          
+
           if (settleAmount > 0) {
             return {
               coin: coin.coin,
@@ -281,7 +283,7 @@ export async function getCoinPrices(): Promise<CoinPrice[]> {
 export async function getCoinPrice(coin: string, network: string): Promise<string | null> {
   try {
     const quoteResponse = await axios.post(
-      `${SIDESHIFT_BASE_URL}/quotes`,
+      `${SIDESHIFT_CONFIG.BASE_URL}/quotes`,
       {
         depositCoin: coin,
         depositNetwork: network,

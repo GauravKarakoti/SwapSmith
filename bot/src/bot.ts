@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import axios from 'axios';
-import { spawn } from 'child_process';
+import { spawn, exec } from 'child_process';
 import express from 'express';
 import { sql } from 'drizzle-orm';
 
@@ -43,6 +43,33 @@ const MINI_APP_URL =
 const PORT = Number(process.env.PORT || 3000);
 
 const bot = new Telegraf(BOT_TOKEN);
+
+// Persistent Rate Limiting Middleware
+bot.use(async (ctx, next) => {
+  if (!ctx.from || !ctx.message || !('text' in ctx.message || 'voice' in ctx.message)) {
+    return next();
+  }
+
+  const telegramId = ctx.from.id;
+  const now = new Date();
+  const windowMs = 3000; // 3 seconds
+
+  try {
+    const lastAction = await db.getLastBotAction(telegramId);
+    if (lastAction && (now.getTime() - lastAction.getTime()) < windowMs) {
+      if (ctx.chat?.type === 'private') {
+        await ctx.reply('⚠️ Rate limit exceeded. Please wait a moment.');
+      }
+      return;
+    }
+    await db.updateLastBotAction(telegramId);
+  } catch (error) {
+    logger.error('Rate limit check failed:', error);
+  }
+
+  return next();
+});
+
 const app = express();
 app.use(express.json());
 
@@ -215,7 +242,7 @@ async function handleTextMessage(
   if (!parsed.success) {
     return ctx.replyWithMarkdown(
       (parsed as any).validationErrors?.join('\n') ||
-        '❌ I didn’t understand.'
+      '❌ I didn’t understand.'
     );
   }
 
