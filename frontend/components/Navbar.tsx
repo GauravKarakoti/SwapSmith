@@ -107,9 +107,6 @@ export default function Navbar() {
             : "bg-white/85 dark:bg-[#08080f]/85"
         } border-b border-zinc-200/80 dark:border-zinc-800/50`}
       >
-        {/* Accent gradient line */}
-        <div className="absolute top-0 inset-x-0 h-0.5 bg-linear-to-r from-blue-500 via-indigo-500 to-purple-500 opacity-75" />
-
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-full flex items-center justify-between gap-3">
 
           {/* ── Logo ── */}
