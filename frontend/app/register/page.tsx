@@ -12,42 +12,42 @@ import AuroraBackground from '@/components/AuroraBackground'
 const PLANS = [
   {
     name: 'Free',
-    price: '$0',
-    period: 'forever',
+    price: '0',
+    period: 'coins · forever',
     gradient: 'linear-gradient(135deg, #052212 0%, #061a10 100%)',
     border: '1px solid rgba(52,211,153,0.22)',
     accent: '#34d399',
     icon: '',
-    features: ['Unlimited swaps', 'Real-time prices', '50+ chains', 'AI chat terminal'],
+    features: ['20 AI chats / day', '5 terminal commands / day', 'Real-time prices', '50+ chains'],
     cta: '/register',
     ctaLabel: 'Get Started',
     ctaStyle: { background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.28)', color: '#34d399' },
   },
   {
-    name: 'Pro',
-    price: '$12',
-    period: '/mo',
+    name: 'Premium',
+    price: '500',
+    period: 'coins · 30 days',
     gradient: 'linear-gradient(135deg, #050d2a 0%, #080d22 100%)',
     border: '1px solid rgba(96,165,250,0.35)',
     accent: '#60a5fa',
     icon: '',
-    features: ['Everything in Free', 'Swap history export', 'Priority execution', 'Telegram bot access'],
-    cta: '/rewards',
-    ctaLabel: 'Upgrade to Pro',
+    features: ['200 AI chats / day', '50 terminal commands / day', 'Ad-free experience', 'All Free features'],
+    cta: '/checkout',
+    ctaLabel: 'Activate Premium',
     ctaStyle: { background: '#2563eb', border: 'none', color: '#fff' },
     popular: true,
   },
   {
-    name: 'Premium',
-    price: '$29',
-    period: '/mo',
+    name: 'Pro',
+    price: '1,500',
+    period: 'coins · 30 days',
     gradient: 'linear-gradient(135deg, #0f0520 0%, #0a0318 100%)',
     border: '1px solid rgba(167,139,250,0.28)',
     accent: '#a78bfa',
     icon: '',
-    features: ['Everything in Pro', 'AI swap routing', 'Live yield alerts', 'Early access features'],
-    cta: '/rewards',
-    ctaLabel: 'Unlock Premium',
+    features: ['Unlimited AI chats', 'Unlimited terminal', 'Ad-free experience', 'Priority access'],
+    cta: '/checkout',
+    ctaLabel: 'Activate Pro',
     ctaStyle: { background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.28)', color: '#a78bfa' },
   },
 ]
@@ -64,7 +64,7 @@ export default function RegisterPage() {
   const { register, isLoading } = useAuth()
 
   // Carousel state for plan cards
-  const [carouselIdx, setCarouselIdx] = useState(1) // start on Pro
+  const [carouselIdx, setCarouselIdx] = useState(1) // start on Premium
   const carouselNext = useCallback(() => setCarouselIdx((p) => (p + 1) % PLANS.length), [])
   useEffect(() => { const t = setInterval(carouselNext, 4000); return () => clearInterval(t) }, [carouselNext])
 
