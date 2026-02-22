@@ -16,7 +16,7 @@ declare global {
 function getGroqClient(): Groq {
   if (!global._groqClient) {
     global._groqClient = new Groq({
-      apiKey: process.env.NEXT_PUBLIC_GROQ_API_KEY || process.env.GROQ_API_KEY,
+      apiKey: process.env.GROQ_API_KEY,
     });
   }
   return global._groqClient;
