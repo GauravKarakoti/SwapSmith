@@ -29,6 +29,7 @@
     "groq-sdk": "^0.33.0",
     "node-cron": "^3.0.3",
     "telegraf": "^4.16.3",
+    "telegraf-ratelimit": "^2.0.0",
     "winston": "^3.19.0"
   },
   "devDependencies": {
