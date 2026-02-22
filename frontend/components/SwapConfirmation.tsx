@@ -3,6 +3,7 @@ import { CheckCircle, AlertCircle, ExternalLink, Copy, Check, ShieldCheck, Shiel
 import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi' // Added usePublicClient
 import { parseEther, formatEther, type Chain } from 'viem'
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
+import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift'
 
 // --- Interface and Constants ---
 interface QuoteData {
@@ -21,6 +22,7 @@ interface QuoteData {
 interface SwapConfirmationProps {
   quote: QuoteData;
   confidence?: number;
+  onAmountChange?: (newAmount: string) => void;
 }
 
 const EXPLORER_URLS: { [key: string]: string } = {
@@ -35,10 +37,10 @@ const EXPLORER_URLS: { [key: string]: string } = {
   solana: 'https://solscan.io',
 }
 
-const SIDESHIFT_TRACKING_URL = 'https://sideshift.ai/transactions'
+const SIDESHIFT_TRACKING_URL = SIDESHIFT_CONFIG.TRACKING_URL
 
 // Map network names from your API to wagmi chain objects
-const CHAIN_MAP: { [key: string]: Chain } = { 
+const CHAIN_MAP: { [key: string]: Chain } = {
   ethereum: mainnet,
   polygon: polygon,
   arbitrum: arbitrum,
@@ -62,26 +64,28 @@ interface SafetyCheckResult {
 }
 
 // --- Main Component ---
-export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfirmationProps) {
+export default function SwapConfirmation({ quote, confidence = 100, onAmountChange }: SwapConfirmationProps) {
   const [copiedAddress, setCopiedAddress] = useState(false)
   const [copiedMemo, setCopiedMemo] = useState(false)
   const [isSimulating, setIsSimulating] = useState(false);
   const [safetyCheck, setSafetyCheck] = useState<SafetyCheckResult | null>(null);
-  
+  const [walletBalance, setWalletBalance] = useState<string | null>(null);
+  const [isLoadingBalance, setIsLoadingBalance] = useState(false);
+
   const { address, isConnected, chain: connectedChain } = useAccount()
   const { data: hash, error, isPending, isSuccess, sendTransaction } = useSendTransaction()
   const { switchChainAsync } = useSwitchChain()
 
   // Get Chain ID for the deposit network
   const depositChainId = CHAIN_MAP[quote.depositNetwork.toLowerCase()]?.id;
-  
+
   // Get a public client specifically for the target chain to run simulations
   const publicClient = usePublicClient({ chainId: depositChainId });
 
   const handleConfirm = async () => {
     if (!quote) {
-        alert("Error: Deposit address is missing. Cannot proceed.");
-        return;
+      alert("Error: Deposit address is missing. Cannot proceed.");
+      return;
     }
 
     if (!depositChainId) {
@@ -121,6 +125,30 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
     }
   };
 
+  const handleFetchBalance = async () => {
+    if (!address || !publicClient) {
+      alert('Wallet not connected or network not supported');
+      return;
+    }
+
+    setIsLoadingBalance(true);
+    try {
+      const balance = await publicClient.getBalance({ address });
+      const balanceFormatted = formatEther(balance);
+      setWalletBalance(balanceFormatted);
+
+      // Call the callback to update the parent component with the max amount
+      if (onAmountChange) {
+        onAmountChange(balanceFormatted);
+      }
+    } catch (err) {
+      console.error('Failed to fetch balance:', err);
+      alert('Could not fetch wallet balance. Please try again.');
+    } finally {
+      setIsLoadingBalance(false);
+    }
+  };
+
   const handleSimulate = async () => {
     setIsSimulating(true);
     setSafetyCheck(null);
@@ -133,138 +161,138 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
     };
 
     try {
-        if (!address) throw new Error("Wallet not connected");
+      if (!address) throw new Error("Wallet not connected");
 
-        // 1. Address Validation Check
-        if (address && address.startsWith('0x') && address.length === 42) {
-          checks.address = { passed: true, message: 'Valid Ethereum address format' };
-        } else {
-          checks.address = { passed: false, message: 'Invalid address format' };
-        }
+      // 1. Address Validation Check
+      if (address && address.startsWith('0x') && address.length === 42) {
+        checks.address = { passed: true, message: 'Valid Ethereum address format' };
+      } else {
+        checks.address = { passed: false, message: 'Invalid address format' };
+      }
 
-        // 2. Check if chain is supported for simulation
-        if (!depositChainId || !publicClient) {
-            // Fallback for non-EVM chains (e.g. Bitcoin) where we can't easily simulate via wagmi
-            console.log("Skipping detailed simulation for non-EVM chain");
-            checks.network = { passed: true, message: 'Non-EVM chain (limited validation)' };
-            checks.balance = { passed: true, message: 'Cannot verify balance on non-EVM chain' };
-            checks.gas = { passed: true, message: 'Gas estimation not available' };
-            
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            const result: SafetyCheckResult = {
-              passed: true,
-              checks,
-              riskLevel: 'warning',
-              overallMessage: 'Limited safety checks for non-EVM chain'
-            };
-            setSafetyCheck(result);
-            return;
-        }
+      // 2. Check if chain is supported for simulation
+      if (!depositChainId || !publicClient) {
+        // Fallback for non-EVM chains (e.g. Bitcoin) where we can't easily simulate via wagmi
+        console.log("Skipping detailed simulation for non-EVM chain");
+        checks.network = { passed: true, message: 'Non-EVM chain (limited validation)' };
+        checks.balance = { passed: true, message: 'Cannot verify balance on non-EVM chain' };
+        checks.gas = { passed: true, message: 'Gas estimation not available' };
 
-        // 3. Network Check
-        if (connectedChain?.id === depositChainId) {
-          checks.network = { passed: true, message: `Connected to ${getNetworkName(quote.depositNetwork)}` };
-        } else {
-          checks.network = { passed: false, message: `Need to switch to ${getNetworkName(quote.depositNetwork)}` };
-        }
-
-        // 4. Balance Check
-        const balance = await publicClient.getBalance({ address });
-        const requiredAmount = parseEther(quote.depositAmount);
-        
-        if (balance >= requiredAmount) {
-          checks.balance = { 
-            passed: true, 
-            message: `Sufficient balance: ${formatEther(balance).substring(0, 8)} ${quote.depositCoin}` 
-          };
-        } else {
-          checks.balance = { 
-            passed: false, 
-            message: `Insufficient balance. Need ${quote.depositAmount} ${quote.depositCoin}, have ${formatEther(balance).substring(0, 8)}` 
-          };
-        }
-
-        // 5. Gas Estimation Check
-        try {
-          const gasEstimate = await publicClient.estimateGas({
-              account: address,
-              to: address, 
-              value: requiredAmount
-          });
-          
-          const gasPrice = await publicClient.getGasPrice();
-          const estimatedGasCost = gasEstimate * gasPrice;
-          const totalCost = requiredAmount + estimatedGasCost;
-          
-          if (balance >= totalCost) {
-            checks.gas = { 
-              passed: true, 
-              message: `Gas estimated: ~${formatEther(estimatedGasCost).substring(0, 8)} ${quote.depositCoin}`,
-              estimatedGas: formatEther(estimatedGasCost).substring(0, 8)
-            };
-          } else {
-            checks.gas = { 
-              passed: false, 
-              message: `Insufficient funds for gas. Need ${formatEther(totalCost).substring(0, 8)} total`,
-              estimatedGas: formatEther(estimatedGasCost).substring(0, 8)
-            };
-          }
-        } catch {
-          checks.gas = { 
-            passed: false, 
-            message: 'Gas estimation failed - transaction may fail' 
-          };
-        }
-
-        // Add a small delay so the user sees the checking state
-        await new Promise(resolve => setTimeout(resolve, 800));
-
-        // Determine overall risk level
-        const allPassed = Object.values(checks).every(check => check.passed);
-        const criticalFailed = !checks.balance.passed || !checks.gas.passed;
-        
-        let riskLevel: 'safe' | 'warning' | 'unsafe';
-        let overallMessage: string;
-        
-        if (allPassed) {
-          riskLevel = 'safe';
-          overallMessage = 'All safety checks passed. Transaction should succeed.';
-        } else if (criticalFailed) {
-          riskLevel = 'unsafe';
-          overallMessage = 'Critical issues detected. Transaction will likely fail.';
-        } else {
-          riskLevel = 'warning';
-          overallMessage = 'Some checks failed. Proceed with caution.';
-        }
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         const result: SafetyCheckResult = {
-          passed: allPassed,
+          passed: true,
           checks,
-          riskLevel,
-          overallMessage
+          riskLevel: 'warning',
+          overallMessage: 'Limited safety checks for non-EVM chain'
         };
-
         setSafetyCheck(result);
+        return;
+      }
+
+      // 3. Network Check
+      if (connectedChain?.id === depositChainId) {
+        checks.network = { passed: true, message: `Connected to ${getNetworkName(quote.depositNetwork)}` };
+      } else {
+        checks.network = { passed: false, message: `Need to switch to ${getNetworkName(quote.depositNetwork)}` };
+      }
+
+      // 4. Balance Check
+      const balance = await publicClient.getBalance({ address });
+      const requiredAmount = parseEther(quote.depositAmount);
+
+      if (balance >= requiredAmount) {
+        checks.balance = {
+          passed: true,
+          message: `Sufficient balance: ${formatEther(balance).substring(0, 8)} ${quote.depositCoin}`
+        };
+      } else {
+        checks.balance = {
+          passed: false,
+          message: `Insufficient balance. Need ${quote.depositAmount} ${quote.depositCoin}, have ${formatEther(balance).substring(0, 8)}`
+        };
+      }
+
+      // 5. Gas Estimation Check
+      try {
+        const gasEstimate = await publicClient.estimateGas({
+          account: address,
+          to: address,
+          value: requiredAmount
+        });
+
+        const gasPrice = await publicClient.getGasPrice();
+        const estimatedGasCost = gasEstimate * gasPrice;
+        const totalCost = requiredAmount + estimatedGasCost;
+
+        if (balance >= totalCost) {
+          checks.gas = {
+            passed: true,
+            message: `Gas estimated: ~${formatEther(estimatedGasCost).substring(0, 8)} ${quote.depositCoin}`,
+            estimatedGas: formatEther(estimatedGasCost).substring(0, 8)
+          };
+        } else {
+          checks.gas = {
+            passed: false,
+            message: `Insufficient funds for gas. Need ${formatEther(totalCost).substring(0, 8)} total`,
+            estimatedGas: formatEther(estimatedGasCost).substring(0, 8)
+          };
+        }
+      } catch {
+        checks.gas = {
+          passed: false,
+          message: 'Gas estimation failed - transaction may fail'
+        };
+      }
+
+      // Add a small delay so the user sees the checking state
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      // Determine overall risk level
+      const allPassed = Object.values(checks).every(check => check.passed);
+      const criticalFailed = !checks.balance.passed || !checks.gas.passed;
+
+      let riskLevel: 'safe' | 'warning' | 'unsafe';
+      let overallMessage: string;
+
+      if (allPassed) {
+        riskLevel = 'safe';
+        overallMessage = 'All safety checks passed. Transaction should succeed.';
+      } else if (criticalFailed) {
+        riskLevel = 'unsafe';
+        overallMessage = 'Critical issues detected. Transaction will likely fail.';
+      } else {
+        riskLevel = 'warning';
+        overallMessage = 'Some checks failed. Proceed with caution.';
+      }
+
+      const result: SafetyCheckResult = {
+        passed: allPassed,
+        checks,
+        riskLevel,
+        overallMessage
+      };
+
+      setSafetyCheck(result);
 
     } catch (error: unknown) {
-        console.error("Simulation failed:", error);
-        const errorObj = error as Error;
-        const msg = errorObj.message || "Transaction likely to fail";
-        
-        checks.balance = { passed: false, message: 'Could not verify balance' };
-        checks.gas = { passed: false, message: 'Gas estimation failed' };
-        
-        const result: SafetyCheckResult = {
-          passed: false,
-          checks,
-          riskLevel: 'unsafe',
-          overallMessage: `Simulation error: ${msg}`
-        };
-        
-        setSafetyCheck(result);
+      console.error("Simulation failed:", error);
+      const errorObj = error as Error;
+      const msg = errorObj.message || "Transaction likely to fail";
+
+      checks.balance = { passed: false, message: 'Could not verify balance' };
+      checks.gas = { passed: false, message: 'Gas estimation failed' };
+
+      const result: SafetyCheckResult = {
+        passed: false,
+        checks,
+        riskLevel: 'unsafe',
+        overallMessage: `Simulation error: ${msg}`
+      };
+
+      setSafetyCheck(result);
     } finally {
-        setIsSimulating(false);
+      setIsSimulating(false);
     }
   };
 
@@ -288,7 +316,7 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
     const baseUrl = EXPLORER_URLS[networkKey];
 
     if (hash && baseUrl) {
-        return `${baseUrl}/tx/${hash}`;
+      return `${baseUrl}/tx/${hash}`;
     }
     if (quote.id) {
       return `${SIDESHIFT_TRACKING_URL}/${address}`
@@ -301,13 +329,13 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
     }
     return null
   }
-  
+
   const getNetworkName = (network: string) => {
     return CHAIN_MAP[network.toLowerCase()]?.name || network;
   }
 
   const explorerUrl = getExplorerUrl()
-  
+
   if (isSuccess) {
     return (
       <div className="mt-4 bg-white border border-green-300 rounded-lg p-6 shadow-sm text-center">
@@ -338,9 +366,19 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
       </div>
 
       <div className="space-y-3 text-sm">
-        <div className="flex justify-between">
+        <div className="flex justify-between items-center">
           <span className="text-gray-600">You send:</span>
-          <span className="font-medium text-gray-900">{quote.depositAmount} {quote.depositCoin} on {getNetworkName(quote.depositNetwork)}</span>
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-gray-900">{quote.depositAmount} {quote.depositCoin} on {getNetworkName(quote.depositNetwork)}</span>
+            <button
+              onClick={handleFetchBalance}
+              disabled={!isConnected || isLoadingBalance}
+              className="px-2 py-1 text-xs font-semibold bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              title="Set amount to your full wallet balance"
+            >
+              {isLoadingBalance ? 'Loading...' : 'Max'}
+            </button>
+          </div>
         </div>
         <div className="border-t pt-3">
           <div className="flex justify-between">
@@ -401,134 +439,132 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
       </div>
 
       <div className="mt-3 mb-3">
-         {!safetyCheck ? (
-             <button 
-                onClick={handleSimulate}
-                disabled={isSimulating}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors disabled:opacity-50"
-             >
-                {isSimulating ? (
-                    <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-700 border-t-transparent"></div>
-                        <span>Running Safety Checks...</span>
-                    </>
+        {!safetyCheck ? (
+          <button
+            onClick={handleSimulate}
+            disabled={isSimulating}
+            className="w-full flex items-center justify-center gap-2 py-3 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors disabled:opacity-50"
+          >
+            {isSimulating ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-700 border-t-transparent"></div>
+                <span>Running Safety Checks...</span>
+              </>
+            ) : (
+              <>
+                <ShieldCheck className="w-4 h-4" />
+                Run Safety Simulation
+              </>
+            )}
+          </button>
+        ) : (
+          <div className="space-y-3">
+            {/* Overall Status Banner */}
+            <div className={`flex items-center gap-2 p-3 rounded-lg border ${safetyCheck.riskLevel === 'safe'
+              ? 'bg-green-50 border-green-200 text-green-700'
+              : safetyCheck.riskLevel === 'warning'
+                ? 'bg-yellow-50 border-yellow-200 text-yellow-700'
+                : 'bg-red-50 border-red-200 text-red-700'
+              }`}>
+              {safetyCheck.riskLevel === 'safe' && <Shield className="w-5 h-5" />}
+              {safetyCheck.riskLevel === 'warning' && <AlertTriangle className="w-5 h-5" />}
+              {safetyCheck.riskLevel === 'unsafe' && <AlertCircle className="w-5 h-5" />}
+              <div className="flex-1">
+                <div className="font-semibold text-sm">
+                  {safetyCheck.riskLevel === 'safe' && '✅ Safe to Proceed'}
+                  {safetyCheck.riskLevel === 'warning' && '⚠️ Proceed with Caution'}
+                  {safetyCheck.riskLevel === 'unsafe' && '❌ Unsafe Transaction'}
+                </div>
+                <div className="text-xs mt-0.5">{safetyCheck.overallMessage}</div>
+              </div>
+            </div>
+
+            {/* Detailed Checks */}
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
+              <div className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
+                <Info className="w-3 h-3" />
+                Safety Check Details
+              </div>
+
+              {/* Address Check */}
+              <div className="flex items-start gap-2 text-xs">
+                {safetyCheck.checks.address.passed ? (
+                  <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
                 ) : (
-                    <>
-                        <ShieldCheck className="w-4 h-4" />
-                        Run Safety Simulation
-                    </>
+                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
                 )}
-             </button>
-         ) : (
-             <div className="space-y-3">
-                 {/* Overall Status Banner */}
-                 <div className={`flex items-center gap-2 p-3 rounded-lg border ${
-                   safetyCheck.riskLevel === 'safe' 
-                     ? 'bg-green-50 border-green-200 text-green-700' 
-                     : safetyCheck.riskLevel === 'warning'
-                     ? 'bg-yellow-50 border-yellow-200 text-yellow-700'
-                     : 'bg-red-50 border-red-200 text-red-700'
-                 }`}>
-                     {safetyCheck.riskLevel === 'safe' && <Shield className="w-5 h-5" />}
-                     {safetyCheck.riskLevel === 'warning' && <AlertTriangle className="w-5 h-5" />}
-                     {safetyCheck.riskLevel === 'unsafe' && <AlertCircle className="w-5 h-5" />}
-                     <div className="flex-1">
-                         <div className="font-semibold text-sm">
-                             {safetyCheck.riskLevel === 'safe' && '✅ Safe to Proceed'}
-                             {safetyCheck.riskLevel === 'warning' && '⚠️ Proceed with Caution'}
-                             {safetyCheck.riskLevel === 'unsafe' && '❌ Unsafe Transaction'}
-                         </div>
-                         <div className="text-xs mt-0.5">{safetyCheck.overallMessage}</div>
-                     </div>
-                 </div>
+                <div className="flex-1">
+                  <div className="font-medium text-gray-900">Address Validation</div>
+                  <div className="text-gray-600">{safetyCheck.checks.address.message}</div>
+                </div>
+              </div>
 
-                 {/* Detailed Checks */}
-                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
-                     <div className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
-                         <Info className="w-3 h-3" />
-                         Safety Check Details
-                     </div>
-                     
-                     {/* Address Check */}
-                     <div className="flex items-start gap-2 text-xs">
-                         {safetyCheck.checks.address.passed ? (
-                             <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                         ) : (
-                             <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-                         )}
-                         <div className="flex-1">
-                             <div className="font-medium text-gray-900">Address Validation</div>
-                             <div className="text-gray-600">{safetyCheck.checks.address.message}</div>
-                         </div>
-                     </div>
+              {/* Network Check */}
+              <div className="flex items-start gap-2 text-xs">
+                {safetyCheck.checks.network.passed ? (
+                  <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-yellow-500 flex-shrink-0 mt-0.5" />
+                )}
+                <div className="flex-1">
+                  <div className="font-medium text-gray-900">Network Status</div>
+                  <div className="text-gray-600">{safetyCheck.checks.network.message}</div>
+                </div>
+              </div>
 
-                     {/* Network Check */}
-                     <div className="flex items-start gap-2 text-xs">
-                         {safetyCheck.checks.network.passed ? (
-                             <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                         ) : (
-                             <AlertCircle className="w-4 h-4 text-yellow-500 flex-shrink-0 mt-0.5" />
-                         )}
-                         <div className="flex-1">
-                             <div className="font-medium text-gray-900">Network Status</div>
-                             <div className="text-gray-600">{safetyCheck.checks.network.message}</div>
-                         </div>
-                     </div>
+              {/* Balance Check */}
+              <div className="flex items-start gap-2 text-xs">
+                {safetyCheck.checks.balance.passed ? (
+                  <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                )}
+                <div className="flex-1">
+                  <div className="font-medium text-gray-900">Balance Check</div>
+                  <div className="text-gray-600">{safetyCheck.checks.balance.message}</div>
+                </div>
+              </div>
 
-                     {/* Balance Check */}
-                     <div className="flex items-start gap-2 text-xs">
-                         {safetyCheck.checks.balance.passed ? (
-                             <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                         ) : (
-                             <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-                         )}
-                         <div className="flex-1">
-                             <div className="font-medium text-gray-900">Balance Check</div>
-                             <div className="text-gray-600">{safetyCheck.checks.balance.message}</div>
-                         </div>
-                     </div>
+              {/* Gas Check */}
+              <div className="flex items-start gap-2 text-xs">
+                {safetyCheck.checks.gas.passed ? (
+                  <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                )}
+                <div className="flex-1">
+                  <div className="font-medium text-gray-900 flex items-center gap-1">
+                    <Zap className="w-3 h-3" />
+                    Gas Estimation
+                  </div>
+                  <div className="text-gray-600">{safetyCheck.checks.gas.message}</div>
+                </div>
+              </div>
+            </div>
 
-                     {/* Gas Check */}
-                     <div className="flex items-start gap-2 text-xs">
-                         {safetyCheck.checks.gas.passed ? (
-                             <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                         ) : (
-                             <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-                         )}
-                         <div className="flex-1">
-                             <div className="font-medium text-gray-900 flex items-center gap-1">
-                                 <Zap className="w-3 h-3" />
-                                 Gas Estimation
-                             </div>
-                             <div className="text-gray-600">{safetyCheck.checks.gas.message}</div>
-                         </div>
-                     </div>
-                 </div>
-
-                 {/* Re-run button */}
-                 <button 
-                    onClick={handleSimulate}
-                    disabled={isSimulating}
-                    className="w-full flex items-center justify-center gap-2 py-2 text-gray-600 hover:text-gray-800 transition-colors text-xs border border-gray-300 rounded-lg hover:border-gray-400"
-                 >
-                    <TrendingUp className="w-3 h-3" />
-                    Re-run Safety Check
-                 </button>
-             </div>
-         )}
+            {/* Re-run button */}
+            <button
+              onClick={handleSimulate}
+              disabled={isSimulating}
+              className="w-full flex items-center justify-center gap-2 py-2 text-gray-600 hover:text-gray-800 transition-colors text-xs border border-gray-300 rounded-lg hover:border-gray-400"
+            >
+              <TrendingUp className="w-3 h-3" />
+              Re-run Safety Check
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="mt-4 space-y-2">
         <button
           onClick={handleConfirm}
-          disabled={!isConnected || isPending || !address || (safetyCheck?.riskLevel === 'unsafe') || false} 
-          className={`w-full py-3 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-            safetyCheck?.riskLevel === 'safe' 
-              ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700'
-              : safetyCheck?.riskLevel === 'warning'
+          disabled={!isConnected || isPending || !address || (safetyCheck?.riskLevel === 'unsafe') || false}
+          className={`w-full py-3 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${safetyCheck?.riskLevel === 'safe'
+            ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700'
+            : safetyCheck?.riskLevel === 'warning'
               ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white hover:from-yellow-600 hover:to-yellow-700'
               : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700'
-          }`}
+            }`}
         >
           {isPending ? 'Check Your Wallet...' : safetyCheck?.riskLevel === 'unsafe' ? 'Transaction Blocked (Unsafe)' : 'Confirm and Send'}
         </button>
@@ -544,14 +580,14 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
 
         <div className="flex gap-2 text-xs">
           <button
-            onClick={() => window.open('https://help.sideshift.ai/en/', '_blank')}
+            onClick={() => window.open(SIDESHIFT_CONFIG.HELP_URL, '_blank')}
             className="text-blue-600 hover:text-blue-800"
           >
             Need help?
           </button>
           <span className="text-gray-400">•</span>
           <button
-            onClick={() => window.open('https://docs.sideshift.ai/faq/', '_blank')}
+            onClick={() => window.open(SIDESHIFT_CONFIG.FAQ_URL, '_blank')}
             className="text-blue-600 hover:text-blue-800"
           >
             FAQ
@@ -560,9 +596,9 @@ export default function SwapConfirmation({ quote, confidence = 100 }: SwapConfir
       </div>
 
       {error && (
-          <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
-              Transaction Error: {error.message}
-          </div>
+        <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+          Transaction Error: {error.message}
+        </div>
       )}
 
       <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
