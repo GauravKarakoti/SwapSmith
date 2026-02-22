@@ -1,6 +1,6 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { eq, desc, and, sql as drizzleSql } from 'drizzle-orm';
+import { eq, desc, and, inArray, sql as drizzleSql } from 'drizzle-orm';
 
 // Import all table schemas from shared schema file
 import {
@@ -12,6 +12,8 @@ import {
   users,
   courseProgress,
   rewardsLog,
+  watchlist,
+  priceAlerts,
 } from '../../shared/schema';
 
 const sql = neon(process.env.DATABASE_URL!);
@@ -27,6 +29,8 @@ export {
   users,
   courseProgress,
   rewardsLog,
+  watchlist,
+  priceAlerts,
 };
 
 export type User = typeof users.$inferSelect;
@@ -37,6 +41,8 @@ export type UserSettings = typeof userSettings.$inferSelect;
 export type SwapHistory = typeof swapHistory.$inferSelect;
 export type ChatHistory = typeof chatHistory.$inferSelect;
 export type Discussion = typeof discussions.$inferSelect;
+export type Watchlist = typeof watchlist.$inferSelect;
+export type PriceAlert = typeof priceAlerts.$inferSelect;
 
 // --- COIN PRICE CACHE FUNCTIONS ---
 
@@ -576,7 +582,7 @@ export async function updateCourseProgress(
 
 export async function addRewardActivity(
   userId: number,
-  actionType: 'course_complete' | 'module_complete' | 'daily_login' | 'swap_complete' | 'referral',
+  actionType: 'course_complete' | 'module_complete' | 'daily_login' | 'swap_complete' | 'referral' | 'wallet_connected' | 'terminal_used' | 'notification_enabled',
   pointsEarned: number,
   tokensPending: string = '0',
   metadata?: Record<string, unknown>
@@ -620,104 +626,106 @@ export async function getUserRewardActivities(userId: number, limit: number = 50
     .limit(limit);
 }
 
-export async function claimPendingTokens(userId: number) {
+export async function claimPendingTokens(userId: number, walletAddressOverride?: string) {
   if (!db) {
     console.warn('Database not configured');
     return null;
   }
-  
-  // Get all pending rewards
+
+  // Pick up both 'pending' and previously-failed rewards so the user can retry
   const pendingRewards = await db.select().from(rewardsLog)
     .where(and(
       eq(rewardsLog.userId, userId),
-      eq(rewardsLog.mintStatus, 'pending')
+      inArray(rewardsLog.mintStatus, ['pending', 'failed'])
     ));
-  
+
   if (pendingRewards.length === 0) return null;
-  
-  // Calculate total pending tokens
+
+  // Total tokens to send
   const totalPending = pendingRewards.reduce(
     (sum, r) => sum + parseFloat(r.tokensPending as string),
     0
   );
-  
-  // Update rewards to processing status
+
   const rewardIds = pendingRewards.map(r => r.id);
-  await db.update(rewardsLog)
-    .set({
-      mintStatus: 'processing',
-      claimedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(drizzleSql`${rewardsLog.id} = ANY(${rewardIds})`);
-  
-  // Import token service and mint tokens
-  const { mintTokens } = await import('./token-service');
-  
-  try {
-    // Get user wallet address
+
+  // ── Step 1: Resolve wallet address BEFORE touching the DB status ──────────
+  let resolvedWallet = walletAddressOverride;
+
+  if (!resolvedWallet) {
     const user = await db.select().from(users)
       .where(eq(users.id, userId))
       .limit(1);
-    
-    if (!user[0]?.walletAddress) {
-      // Use a default mock address if no wallet connected
-      const mockAddress = `0x${userId.toString().padStart(40, '0')}`;
-      console.warn('No wallet address found, using mock address:', mockAddress);
-      
-      const result = await mintTokens(mockAddress, totalPending.toString());
-      
-      // Update rewards with tx hash
-      await db.update(rewardsLog)
-        .set({
-          mintStatus: 'minted',
-          txHash: result.txHash,
-          blockchainNetwork: 'mock-testnet',
-          updatedAt: new Date(),
-        })
-        .where(drizzleSql`${rewardsLog.id} = ANY(${rewardIds})`);
-      
-      // Update user total claimed
-      await db.update(users)
-        .set({
-          totalTokensClaimed: drizzleSql`${users.totalTokensClaimed} + ${totalPending}`,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, userId));
-      
-      return { totalPending, rewardCount: pendingRewards.length, txHash: result.txHash };
+    resolvedWallet = user[0]?.walletAddress ?? undefined;
+  }
+
+  if (!resolvedWallet) {
+    // Don't change status – user just needs to supply a wallet address
+    throw new Error('No wallet address found. Please enter your wallet address to claim tokens.');
+  }
+
+  // ── Step 2: Validate env config BEFORE touching the DB status ────────────
+  // Import here so the config check happens before we mark rows as 'processing'
+  const { mintTokens } = await import('./token-service');
+
+  // ── Step 3: Mark as processing (we're committed to attempting the tx) ─────
+  await db.update(rewardsLog)
+    .set({ mintStatus: 'processing', claimedAt: new Date(), updatedAt: new Date() })
+    .where(inArray(rewardsLog.id, rewardIds));
+
+  // ── Step 4: Send the on-chain transaction ─────────────────────────────────
+  try {
+    const result = await mintTokens(resolvedWallet, totalPending.toString());
+
+    if (!result.success) {
+      throw new Error(`Transaction reverted on-chain (tx: ${result.txHash})`);
     }
-    
-    const result = await mintTokens(user[0].walletAddress, totalPending.toString());
-    
-    // Update rewards with actual tx hash
+
+    // Mark as minted
     await db.update(rewardsLog)
       .set({
         mintStatus: 'minted',
         txHash: result.txHash,
-        blockchainNetwork: process.env.BLOCKCHAIN_NETWORK || 'mock-testnet',
+        blockchainNetwork: 'sepolia',
+        errorMessage: null,
         updatedAt: new Date(),
       })
-      .where(drizzleSql`${rewardsLog.id} = ANY(${rewardIds})`);
-    
-    // Update user total claimed
+      .where(inArray(rewardsLog.id, rewardIds));
+
+    // Update user totals
     await db.update(users)
       .set({
         totalTokensClaimed: drizzleSql`${users.totalTokensClaimed} + ${totalPending}`,
         updatedAt: new Date(),
       })
       .where(eq(users.id, userId));
-    
+
+    // Save wallet address to profile so future claims don't need it re-entered
+    await db.update(users)
+      .set({ walletAddress: resolvedWallet, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+
     return { totalPending, rewardCount: pendingRewards.length, txHash: result.txHash };
+
   } catch (error) {
-    // Mark as failed on error
-    await db.update(rewardsLog)
-      .set({
-        mintStatus: 'failed',
-        errorMessage: (error as Error).message,
-        updatedAt: new Date(),
-      })
-      .where(drizzleSql`${rewardsLog.id} = ANY(${rewardIds})`);
+    const msg = (error as Error).message ?? 'Unknown error';
+    const isConfigError =
+      msg.includes('Missing required env vars') ||
+      msg.includes('REWARD_TOKEN') ||
+      msg.includes('Invalid recipient') ||
+      msg.includes('Invalid token amount');
+
+    if (isConfigError) {
+      // Config problem – reset to 'pending' so the user can retry once fixed
+      await db.update(rewardsLog)
+        .set({ mintStatus: 'pending', errorMessage: msg, updatedAt: new Date() })
+        .where(inArray(rewardsLog.id, rewardIds));
+    } else {
+      // Actual blockchain failure – mark as failed with the error
+      await db.update(rewardsLog)
+        .set({ mintStatus: 'failed', errorMessage: msg, updatedAt: new Date() })
+        .where(inArray(rewardsLog.id, rewardIds));
+    }
     throw error;
   }
 }
@@ -751,6 +759,232 @@ export async function getLeaderboard(limit: number = 100): Promise<Array<{
     totalPoints: entry.totalPoints,
     totalTokensClaimed: entry.totalTokensClaimed,
   }));
+}
+
+// --- WATCHLIST FUNCTIONS ---
+
+export async function getWatchlist(userId: string): Promise<Watchlist[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
+  return await db.select().from(watchlist)
+    .where(eq(watchlist.userId, userId))
+    .orderBy(desc(watchlist.addedAt));
+}
+
+export async function addToWatchlist(
+  userId: string,
+  coin: string,
+  network: string,
+  name: string
+): Promise<Watchlist | null> {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  // Check if already in watchlist
+  const existing = await db.select().from(watchlist)
+    .where(and(
+      eq(watchlist.userId, userId),
+      eq(watchlist.coin, coin),
+      eq(watchlist.network, network)
+    ))
+    .limit(1);
+  
+  if (existing.length > 0) {
+    return existing[0]; // Already in watchlist
+  }
+  
+  const result = await db.insert(watchlist).values({
+    userId,
+    coin,
+    network,
+    name,
+  }).returning();
+  
+  return result[0];
+}
+
+export async function removeFromWatchlist(
+  userId: string,
+  coin: string,
+  network: string
+): Promise<boolean> {
+  if (!db) {
+    console.warn('Database not configured');
+    return false;
+  }
+  
+  const result = await db.delete(watchlist)
+    .where(and(
+      eq(watchlist.userId, userId),
+      eq(watchlist.coin, coin),
+      eq(watchlist.network, network)
+    ));
+  
+  return true;
+}
+
+export async function isInWatchlist(
+  userId: string,
+  coin: string,
+  network: string
+): Promise<boolean> {
+  if (!db) {
+    console.warn('Database not configured');
+    return false;
+  }
+  
+  const result = await db.select().from(watchlist)
+    .where(and(
+      eq(watchlist.userId, userId),
+      eq(watchlist.coin, coin),
+      eq(watchlist.network, network)
+    ))
+    .limit(1);
+  
+  return result.length > 0;
+}
+
+// --- PRICE ALERT FUNCTIONS ---
+
+export async function getPriceAlerts(userId: string): Promise<PriceAlert[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
+  return await db.select().from(priceAlerts)
+    .where(eq(priceAlerts.userId, userId))
+    .orderBy(desc(priceAlerts.createdAt));
+}
+
+export async function getActivePriceAlerts(userId: string): Promise<PriceAlert[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
+  return await db.select().from(priceAlerts)
+    .where(and(
+      eq(priceAlerts.userId, userId),
+      eq(priceAlerts.isActive, true)
+    ))
+    .orderBy(desc(priceAlerts.createdAt));
+}
+
+export async function createPriceAlert(
+  userId: string,
+  coin: string,
+  network: string,
+  name: string,
+  targetPrice: string,
+  condition: 'gt' | 'lt',
+  telegramId?: number
+): Promise<PriceAlert | null> {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  const result = await db.insert(priceAlerts).values({
+    userId,
+    telegramId: telegramId || null,
+    coin,
+    network,
+    name,
+    targetPrice,
+    condition,
+    isActive: true,
+  }).returning();
+  
+  return result[0];
+}
+
+export async function updatePriceAlert(
+  alertId: number,
+  userId: string,
+  updates: {
+    targetPrice?: string;
+    condition?: 'gt' | 'lt';
+    isActive?: boolean;
+  }
+): Promise<PriceAlert | null> {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  const result = await db.update(priceAlerts)
+    .set(updates)
+    .where(and(
+      eq(priceAlerts.id, alertId),
+      eq(priceAlerts.userId, userId)
+    ))
+    .returning();
+  
+  return result[0] || null;
+}
+
+export async function deletePriceAlert(alertId: number, userId: string): Promise<boolean> {
+  if (!db) {
+    console.warn('Database not configured');
+    return false;
+  }
+  
+  await db.delete(priceAlerts)
+    .where(and(
+      eq(priceAlerts.id, alertId),
+      eq(priceAlerts.userId, userId)
+    ));
+  
+  return true;
+}
+
+export async function togglePriceAlert(alertId: number, userId: string, isActive: boolean): Promise<PriceAlert | null> {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  const result = await db.update(priceAlerts)
+    .set({ isActive })
+    .where(and(
+      eq(priceAlerts.id, alertId),
+      eq(priceAlerts.userId, userId)
+    ))
+    .returning();
+  
+  return result[0] || null;
+}
+
+export async function markPriceAlertTriggered(alertId: number): Promise<boolean> {
+  if (!db) {
+    console.warn('Database not configured');
+    return false;
+  }
+  
+  await db.update(priceAlerts)
+    .set({ 
+      isActive: false,
+      triggeredAt: new Date()
+    })
+    .where(eq(priceAlerts.id, alertId));
+  
+  return true;
+}
+
+export async function getAllActivePriceAlerts(): Promise<PriceAlert[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
+  return await db.select().from(priceAlerts)
+    .where(eq(priceAlerts.isActive, true));
 }
 
 export default db;

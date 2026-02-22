@@ -1,17 +1,20 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react';
-import { AlertCircle, RefreshCw, TrendingUp } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { AlertCircle, RefreshCw, TrendingUp, Info, Activity } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import CoinCard from '@/components/CoinCard';
 import SearchBar from '@/components/SearchBar';
 import CoinCardSkeleton from '@/components/CoinCardSkeleton';
 import Navbar from '@/components/Navbar';
 import TopCryptoSection from '@/components/TopCryptoSection';
 import { getCoinPrices, CoinPrice } from '@/utils/sideshift-client';
-import Footer from '@/components/Footer';
+import Footer from '@/components/Footer'
+import FullPageAd from '@/components/FullPageAd'
+import { usePricesFullPageAd } from '@/hooks/useAds';
 
 export default function PricesPage() {
+  const { showAd, dismiss: dismissAd } = usePricesFullPageAd()
   const [coins, setCoins] = useState<CoinPrice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,23 +26,17 @@ export default function PricesPage() {
 
   const fetchPrices = async (isRefresh = false) => {
     try {
-      if (isRefresh) {
-        setIsRefreshing(true);
-      } else {
-        setLoading(true);
-      }
+      if (isRefresh) setIsRefreshing(true);
+      else setLoading(true);
       setError(null);
 
       const prices = await getCoinPrices();
-      
-      // Generate mock 24h changes for each coin
       const changes = new Map<string, number>();
       prices.forEach(coin => {
         const key = `${coin.coin}-${coin.network}`;
         changes.set(key, Math.random() * 20 - 10);
       });
       setMockChanges(changes);
-      
       setCoins(prices);
       setLastUpdated(new Date());
     } catch (err) {
@@ -50,230 +47,187 @@ export default function PricesPage() {
     }
   };
 
-  useEffect(() => {
-    fetchPrices();
-  }, []);
+  useEffect(() => { fetchPrices(); }, []);
 
-  // Auto-refresh every 5 minutes
   useEffect(() => {
-    const interval = setInterval(() => {
-      fetchPrices(true);
-    }, 5 * 60 * 1000);
-
+    const interval = setInterval(() => { fetchPrices(true); }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // Filter and sort coins
   const filteredAndSortedCoins = useMemo(() => {
     let filtered = coins;
-
-    // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      filtered = coins.filter(
-        (coin) =>
-          coin.name.toLowerCase().includes(query) ||
-          coin.coin.toLowerCase().includes(query) ||
-          coin.network.toLowerCase().includes(query)
+      filtered = coins.filter(coin =>
+        coin.name.toLowerCase().includes(query) ||
+        coin.coin.toLowerCase().includes(query) ||
+        coin.network.toLowerCase().includes(query)
       );
     }
-
-    // Apply sorting
-    const sorted = [...filtered].sort((a, b) => {
+    return [...filtered].sort((a, b) => {
       switch (sortBy) {
-        case 'name':
-          return a.name.localeCompare(b.name);
-        case 'symbol':
-          return a.coin.localeCompare(b.coin);
-        case 'price':
-          const priceA = parseFloat(a.usdPrice || '0');
-          const priceB = parseFloat(b.usdPrice || '0');
-          return priceB - priceA;
-        default:
-          return 0;
+        case 'name': return a.name.localeCompare(b.name);
+        case 'symbol': return a.coin.localeCompare(b.coin);
+        case 'price': return parseFloat(b.usdPrice || '0') - parseFloat(a.usdPrice || '0');
+        default: return 0;
       }
     });
-
-    return sorted;
   }, [coins, searchQuery, sortBy]);
 
   const formatLastUpdated = () => {
     if (!lastUpdated) return '';
-    const now = new Date();
-    const diff = Math.floor((now.getTime() - lastUpdated.getTime()) / 1000);
-    
+    const diff = Math.floor((new Date().getTime() - lastUpdated.getTime()) / 1000);
     if (diff < 60) return 'Just now';
-    if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
     return lastUpdated.toLocaleTimeString();
   };
 
   return (
     <>
+      {showAd && <FullPageAd variant="features" duration={10000} onDismiss={dismissAd} />}
       <Navbar />
-      <div className="min-h-screen bg-[#050505] pt-16 sm:pt-20">
-        <div className="w-full max-w-[1800px] mx-auto px-6 lg:px-12">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <TrendingUp className="w-8 h-8 text-blue-600" />
-              <motion.h1
-                initial={{ scale: 0.95, opacity: 0.7 }}
-                animate={{ scale: 1, opacity: 1 }}
-                whileHover={{ scale: 1.08, color: '#22d3ee', textShadow: '0 2px 20px #22d3ee' }}
-                transition={{ type: 'spring', stiffness: 120, damping: 10 }}
-                className="text-4xl font-bold text-white cursor-pointer transition-colors duration-300"
-              >
-                Live Crypto Prices
-              </motion.h1>
-              
-            </div>
-            <button
-              onClick={() => fetchPrices(true)}
-              disabled={isRefreshing}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors duration-200"
-            >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">Refresh</span>
-            </button>
-          </div>
-          <p className="text-gray-600 dark:text-gray-400">
-            Real-time cryptocurrency prices powered by CoinGecko
-          </p>
-          {lastUpdated && (
-            <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
-              Last updated: {formatLastUpdated()}
-            </p>
-          )}
+      <div className="min-h-screen bg-primary pt-24 sm:pt-32 pb-20 transition-colors duration-500">
+        
+        {/* Ambient Decorative Glows */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-[5%] right-[5%] w-[30%] h-[30%] rounded-full bg-ambient-blue blur-[120px] opacity-20 dark:opacity-10" />
+          <div className="absolute bottom-[10%] left-[5%] w-[25%] h-[25%] rounded-full bg-ambient-cyan blur-[120px] opacity-10" />
         </div>
 
-        {/* Featured Cryptocurrencies Section Motion */}
-        <motion.div
-          initial={{ y: 40, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ type: 'spring', stiffness: 80, damping: 14 }}
-        >
-          <h2 className="text-2xl font-bold text-blue-500 dark:text-cyan-300 mb-2 mt-2 hover:text-pink-500 transition-colors duration-300 cursor-pointer">
-            Featured Cryptocurrencies
-          </h2>
-          <p className="text-gray-500 dark:text-gray-400 mb-4">
-            Top performing assets with 100-day price history
-          </p>
-          {!loading && !error && coins.length > 0 && (
-            <TopCryptoSection 
-              coins={filteredAndSortedCoins.filter(c => c.usdPrice).map(coin => {
-                const key = `${coin.coin}-${coin.network}`;
-                return {
-                  ...coin,
-                  usdPrice: coin.usdPrice!,
-                  change24h: mockChanges.get(key) ?? 0,
-                };
-              })} 
-            />
-          )}
-        </motion.div>
-
-        {/* Search Bar */}
-        {!loading && !error && (
-          <SearchBar
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            sortBy={sortBy}
-            onSortChange={setSortBy}
-            totalCoins={coins.length}
-            filteredCount={filteredAndSortedCoins.length}
-          />
-        )}
-
-        {/* Error State */}
-        {error && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 mb-6">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-6 h-6 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <h3 className="text-lg font-semibold text-red-900 dark:text-red-200 mb-1">
-                  Error Loading Prices
-                </h3>
-                <p className="text-red-700 dark:text-red-300 mb-4">{error}</p>
-                <button
-                  onClick={() => fetchPrices()}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors duration-200"
-                >
-                  Try Again
-                </button>
+        <div className="relative z-10 w-full max-w-[1600px] mx-auto px-6 lg:px-12">
+          
+          {/* Header Section */}
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-600 rounded-xl shadow-lg shadow-blue-500/20">
+                  <TrendingUp className="w-6 h-6 text-white" />
+                </div>
+                <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-primary">
+                  Market <span className="gradient-text">Pulse</span>
+                </h1>
               </div>
+              <p className="text-secondary font-medium max-w-lg">
+                Real-time cryptocurrency valuation and asset tracking. Powered by industrial-grade API feeds.
+              </p>
             </div>
-          </div>
-        )}
 
-        {/* Loading State */}
-        {loading && !error && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {[...Array(12)].map((_, i) => (
-              <CoinCardSkeleton key={i} />
-            ))}
-          </div>
-        )}
-
-        {/* Coins Grid */}
-        {!loading && !error && filteredAndSortedCoins.length > 0 && (
-          <motion.div
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6 }}
-          >
-            {filteredAndSortedCoins.map((coin, index) => (
-              <motion.div
-                key={`${coin.coin}-${coin.network}-${index}`}
-                whileHover={{ scale: 1.04, boxShadow: '0 4px 24px #38bdf8' }}
-                transition={{ type: 'spring', stiffness: 120, damping: 12 }}
+            <div className="flex flex-col items-end gap-3">
+              <button
+                onClick={() => fetchPrices(true)}
+                disabled={isRefreshing}
+                className="btn-primary px-6 py-3 rounded-2xl flex items-center gap-2 font-bold disabled:opacity-50 transition-all active:scale-95"
               >
-                <CoinCard
-                  coin={coin.coin}
-                  name={coin.name}
-                  network={coin.network}
-                  usdPrice={coin.usdPrice}
-                  available={coin.available}
-                />
-              </motion.div>
-            ))}
-          </motion.div>
-        )}
-
-        {/* No Results */}
-        {!loading && !error && filteredAndSortedCoins.length === 0 && coins.length > 0 && (
-          <div className="text-center py-12">
-            <div className="inline-block p-4 bg-gray-100 dark:bg-gray-800 rounded-full mb-4">
-              <AlertCircle className="w-12 h-12 text-gray-400" />
+                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                {isRefreshing ? 'Syncing...' : 'Refresh Market'}
+              </button>
+              {lastUpdated && (
+                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-muted">
+                  <Activity className="w-3 h-3 text-emerald-500" />
+                  Synced {formatLastUpdated()}
+                </div>
+              )}
             </div>
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-              No coins found
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Try adjusting your search query
-            </p>
-            <button
-              onClick={() => setSearchQuery('')}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors duration-200"
-            >
-              Clear Search
-            </button>
           </div>
-        )}
 
-        {/* Footer Note */}
-        {!loading && !error && coins.length > 0 && (
-          <div className="mt-8 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-            <p className="text-sm text-blue-800 dark:text-blue-200">
-              💡 <strong>Note:</strong> Real-time prices from CoinGecko API. 
-              Prices auto-refresh every 5 minutes. Click the refresh button for instant updates.
+          {/* Featured/Top Assets Section */}
+          <motion.section 
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="mb-16"
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <h2 className="text-xl font-bold text-primary uppercase tracking-wider">Top Performing</h2>
+              <div className="h-px flex-1 bg-border-primary opacity-50" />
+            </div>
+            
+            {!loading && !error && coins.length > 0 && (
+              <TopCryptoSection 
+                coins={filteredAndSortedCoins.filter(c => c.usdPrice).map(coin => {
+                  const key = `${coin.coin}-${coin.network}`;
+                  return {
+                    ...coin,
+                    usdPrice: coin.usdPrice!,
+                    change24h: mockChanges.get(key) ?? 0,
+                  };
+                })} 
+              />
+            )}
+          </motion.section>
+
+          {/* Controls: Search & Sort */}
+          <div className="mb-10">
+            {!loading && !error && (
+              <SearchBar
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                sortBy={sortBy}
+                onSortChange={setSortBy}
+                totalCoins={coins.length}
+                filteredCount={filteredAndSortedCoins.length}
+              />
+            )}
+          </div>
+
+          {/* Main Grid / States */}
+          <div className="relative">
+            <AnimatePresence mode="wait">
+              {error ? (
+                <motion.div 
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="bg-error border border-error rounded-3xl p-10 text-center space-y-4"
+                >
+                  <AlertCircle className="w-12 h-12 text-error mx-auto" />
+                  <h3 className="text-xl font-bold text-error">Market Feed Interrupted</h3>
+                  <p className="text-secondary max-w-md mx-auto">{error}</p>
+                  <button onClick={() => fetchPrices()} className="btn-primary px-8 py-3 rounded-xl font-bold">Retry Connection</button>
+                </motion.div>
+              ) : loading ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {[...Array(8)].map((_, i) => <CoinCardSkeleton key={i} />)}
+                </div>
+              ) : filteredAndSortedCoins.length === 0 ? (
+                <div className="text-center py-20 bg-secondary rounded-3xl border border-dashed border-primary">
+                  <AlertCircle className="w-16 h-16 text-muted mx-auto mb-4" />
+                  <h3 className="text-2xl font-bold text-primary">No Assets Found</h3>
+                  <p className="text-muted mb-6">The specified node or asset symbol does not exist in our current index.</p>
+                  <button onClick={() => setSearchQuery('')} className="text-accent-primary font-bold hover:underline">Reset Search Filters</button>
+                </div>
+              ) : (
+                <motion.div 
+                  layout
+                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+                >
+                  {filteredAndSortedCoins.map((coin, index) => (
+                    <motion.div
+                      layout
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: index * 0.02 }}
+                      key={`${coin.coin}-${coin.network}`}
+                    >
+                      <CoinCard {...coin} />
+                    </motion.div>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Footnote Information */}
+          <div className="mt-16 p-6 glass rounded-3xl flex flex-col md:flex-row items-center gap-6">
+            <div className="p-3 bg-blue-500/10 rounded-2xl">
+              <Info className="w-6 h-6 text-blue-500" />
+            </div>
+            <p className="text-sm text-secondary leading-relaxed">
+              <strong>Institutional Disclosure:</strong> All pricing data is aggregated from secondary markets via the CoinGecko API. 
+              Values are indicative and may vary from final settlement rates. The terminal auto-syncs every 300 seconds to maintain data integrity.
             </p>
           </div>
-        )}
+
         </div>
       </div>
-     <Footer />
+      <Footer />
     </>
   );
 }

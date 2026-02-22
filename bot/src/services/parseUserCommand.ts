@@ -36,6 +36,10 @@ const REGEX_QUOTE = /(?:([A-Z]+)\s+)?(?:worth|value|valued\s+at)\s*(?:of)?\s*(\$
 // New Regex for Multiple Source Assets
 const REGEX_MULTI_SOURCE = /([A-Z]+)\s+(?:and|&)\s+([A-Z]+)\s+(?:to|into|for)/i;
 
+// New Regex for Swap and Stake / Zap intents
+const REGEX_SWAP_STAKE = /(?:swap\s+and\s+stake|zap\s+(?:into|to)|stake\s+(?:my|after|then)|swap\s+(?:to|into)\s+(?:stake|yield))/i;
+const REGEX_STAKE_PROTOCOL = /(?:to\s+)?(aave|compound|yearn|lido|morpho|euler|spark)/i;
+
 function normalizeNumber(val: string): number {
     val = val.toLowerCase().replace(/[\$,]/g, '');
 
@@ -253,7 +257,11 @@ export async function parseUserCommand(
                 };
             }
 
-            confidence += 30;
+        // Logic fix: "drops below" -> lt, "rises above" -> gt
+        if (operatorStr.includes('below') || operatorStr.includes('less') || operatorStr.includes('under') || operatorStr.includes('<') || operatorStr.includes('drops') || operatorStr.includes('falls')) {
+            conditionOperator = 'lt';
+        } else {
+            conditionOperator = 'gt';
         }
 
         if (conditionOperator && conditionValue) {

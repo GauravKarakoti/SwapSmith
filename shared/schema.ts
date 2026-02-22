@@ -7,7 +7,10 @@ export const rewardActionType = pgEnum('reward_action_type', [
   'module_complete',
   'daily_login',
   'swap_complete',
-  'referral'
+  'referral',
+  'wallet_connected',
+  'terminal_used',
+  'notification_enabled'
 ]);
 
 export const mintStatusType = pgEnum('mint_status_type', [
@@ -54,7 +57,10 @@ export const orders = pgTable('orders', {
   status: text('status').notNull().default('pending'),
   tx_hash: text('tx_hash'),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => [
+  index('orders_status_idx').on(table.status),
+]);
+
 
 export const checkouts = pgTable('checkouts', {
   id: serial('id').primaryKey(),
@@ -66,7 +72,9 @@ export const checkouts = pgTable('checkouts', {
   settleAddress: text('settle_address').notNull(),
   status: text('status').notNull().default('pending'),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => [
+  index("idx_checkouts_telegram_id").on(table.telegramId),
+]);
 
 export const addressBook = pgTable('address_book', {
   id: serial('id').primaryKey(),
@@ -74,7 +82,9 @@ export const addressBook = pgTable('address_book', {
   label: text('label').notNull(),
   address: text('address').notNull(),
   chain: text('chain').notNull(),
-});
+}, (table) => [
+  index("idx_address_book_telegram_id").on(table.telegramId),
+]);
 
 export const watchedOrders = pgTable('watched_orders', {
   id: serial('id').primaryKey(),
@@ -82,7 +92,9 @@ export const watchedOrders = pgTable('watched_orders', {
   sideshiftOrderId: text('sideshift_order_id').notNull().unique(),
   lastStatus: text('last_status').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => [
+  index("idx_watched_orders_telegram_id").on(table.telegramId),
+]);
 
 export const dcaSchedules = pgTable('dca_schedules', {
   id: serial('id').primaryKey(),
@@ -98,7 +110,9 @@ export const dcaSchedules = pgTable('dca_schedules', {
   isActive: integer('is_active').notNull().default(1),
   nextExecutionAt: timestamp('next_execution_at').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => [
+  index("idx_dca_schedules_telegram_id").on(table.telegramId),
+]);
 
 export const limitOrders = pgTable('limit_orders', {
   id: serial('id').primaryKey(),
@@ -113,6 +127,13 @@ export const limitOrders = pgTable('limit_orders', {
   isActive: integer('is_active').notNull().default(1),
   createdAt: timestamp('created_at').defaultNow(),
   lastCheckedAt: timestamp('last_checked_at'),
+  conditionOperator: text('condition_operator'), // 'gt' or 'lt'
+  conditionValue: real('condition_value'),
+  conditionAsset: text('condition_asset'),
+  status: text('status').notNull().default('pending'),
+  sideshiftOrderId: text('sideshift_order_id'),
+  error: text('error'),
+  executedAt: timestamp('executed_at'),
 });
 
 // --- SHARED SCHEMAS (used by both bot and frontend) ---
@@ -145,6 +166,41 @@ export const userSettings = pgTable('user_settings', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
   createdAt: timestamp('created_at').defaultNow(),
 });
+
+// --- WATCHLIST SCHEMA ---
+
+export const watchlist = pgTable('watchlist', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  coin: text('coin').notNull(),
+  network: text('network').notNull(),
+  name: text('name').notNull(),
+  addedAt: timestamp('added_at').defaultNow(),
+}, (table) => [
+  index("idx_watchlist_user_id").on(table.userId),
+  index("idx_watchlist_user_coin_network").on(table.userId, table.coin, table.network),
+]);
+
+// --- PRICE ALERTS SCHEMA ---
+
+export const priceAlerts = pgTable('price_alerts', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  telegramId: bigint('telegram_id', { mode: 'number' }),
+  coin: text('coin').notNull(),
+  network: text('network').notNull(),
+  name: text('name').notNull(),
+  targetPrice: numeric('target_price', { precision: 20, scale: 8 }).notNull(),
+  condition: text('condition').notNull(), // 'gt' (greater than) or 'lt' (less than)
+  isActive: boolean('is_active').notNull().default(true),
+  triggeredAt: timestamp('triggered_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => [
+  index("idx_price_alerts_user_id").on(table.userId),
+  index("idx_price_alerts_telegram_id").on(table.telegramId),
+  index("idx_price_alerts_is_active").on(table.isActive),
+  index("idx_price_alerts_coin_network").on(table.coin, table.network),
+]);
 
 // --- FRONTEND SCHEMAS ---
 

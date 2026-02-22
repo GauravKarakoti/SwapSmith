@@ -10,3 +10,5 @@ bot\test_debug_output_2.txt
 junit.xml
 coverage/
 
+
+frontend/public/ad-preview.js

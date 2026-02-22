@@ -4,14 +4,16 @@ import { useState, useRef, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { Mic, Send, StopCircle, Zap } from 'lucide-react';
 import SwapConfirmation from './SwapConfirmation';
+import PortfolioSummary, { PortfolioItem } from './PortfolioSummary'; // Added Import
 import TrustIndicators from './TrustIndicators';
 import IntentConfirmation from './IntentConfirmation';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
+import { useAuth } from '@/hooks/useAuth';
 
-// Import QuoteData type from SwapConfirmation
-interface QuoteData {
+// Export QuoteData to be used in PortfolioSummary
+export interface QuoteData {
   depositAmount: string;
   depositCoin: string;
   depositNetwork: string;
@@ -34,18 +36,40 @@ interface Message {
     quoteData?: QuoteData;
     confidence?: number;
     url?: string;
+    portfolioItems?: PortfolioItem[];
   };
 }
 
+const CHAT_LOCAL_STORAGE_KEY = 'swapsmith-chatinterface-messages-v1';
+const CHAT_SESSION_ID = 'chat-interface-default';
+const DEFAULT_ASSISTANT_MESSAGE: Message = {
+  role: 'assistant',
+  content: "Hello! I can help you swap assets, create payment links, or scout yields.\n\n💡 Tip: Try our Telegram Bot for on-the-go access!",
+  timestamp: new Date(),
+  type: 'message'
+};
+
+const normalizeLoadedMessages = (messages: Partial<Message>[] | undefined): Message[] => {
+  if (!Array.isArray(messages)) return [];
+
+  return messages
+    .filter((msg): msg is Partial<Message> & Pick<Message, 'role' | 'content'> =>
+      !!msg &&
+      (msg.role === 'user' || msg.role === 'assistant') &&
+      typeof msg.content === 'string'
+    )
+    .map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+      timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
+      type: msg.type || 'message',
+      data: msg.data
+    }))
+    .filter((msg) => !Number.isNaN(msg.timestamp.getTime()));
+};
+
 export default function ChatInterface() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: 'assistant',
-      content: "Hello! I can help you swap assets, create payment links, or scout yields.\n\n💡 Tip: Try our Telegram Bot for on-the-go access!",
-      timestamp: new Date(),
-      type: 'message'
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([DEFAULT_ASSISTANT_MESSAGE]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
@@ -53,6 +77,7 @@ export default function ChatInterface() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { address, isConnected } = useAccount();
+  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const { handleError } = useErrorHandler();
 
   const {
@@ -67,14 +92,165 @@ export default function ChatInterface() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Show audio error if any, and refocus text input so the user can type
+  useEffect(() => {
+    let isCancelled = false;
+    hasLoadedPersistenceRef.current = false;
+
+    const loadLocalMessages = (): Message[] => {
+      try {
+        const raw = localStorage.getItem(CHAT_LOCAL_STORAGE_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw) as Partial<Message>[];
+        return normalizeLoadedMessages(parsed);
+      } catch (error) {
+        console.error('Failed to load local chat history:', error);
+        return [];
+      }
+    };
+
+    const loadPersistedMessages = async () => {
+      if (isAuthLoading) return;
+
+      // Guest flow: load from localStorage
+      if (!isAuthenticated || !user?.uid) {
+        const localMessages = loadLocalMessages();
+        if (!isCancelled) {
+          setMessages(localMessages.length ? localMessages : [DEFAULT_ASSISTANT_MESSAGE]);
+          hasLoadedPersistenceRef.current = true;
+        }
+        return;
+      }
+
+      // Authenticated flow: load from PostgreSQL (via API)
+      try {
+        const response = await fetch(
+          `/api/chat/history?userId=${encodeURIComponent(user.uid)}&sessionId=${encodeURIComponent(CHAT_SESSION_ID)}&limit=200`
+        );
+
+        if (!response.ok) {
+          throw new Error(`Failed to load chat history: ${response.status}`);
+        }
+
+        const payload = await response.json();
+        const dbHistory = Array.isArray(payload.history) ? payload.history : [];
+        const normalizedDbMessages: Message[] = dbHistory
+          .slice()
+          .reverse()
+          .map((item: { role: Message['role']; content: string; createdAt: string; metadata?: { type?: Message['type']; data?: Message['data']; timestamp?: string } | null }) => ({
+            role: item.role,
+            content: item.content,
+            timestamp: item.metadata?.timestamp ? new Date(item.metadata.timestamp) : new Date(item.createdAt),
+            type: item.metadata?.type || 'message',
+            data: item.metadata?.data
+          }))
+          .filter((msg: Message) => !Number.isNaN(msg.timestamp.getTime()));
+
+        if (!isCancelled && normalizedDbMessages.length) {
+          setMessages(normalizedDbMessages);
+          hasLoadedPersistenceRef.current = true;
+          return;
+        }
+
+        // If DB is empty, hydrate from local guest messages once (migration path)
+        const localMessages = loadLocalMessages();
+        if (!isCancelled) {
+          setMessages(localMessages.length ? localMessages : [DEFAULT_ASSISTANT_MESSAGE]);
+          hasLoadedPersistenceRef.current = true;
+        }
+      } catch (error) {
+        console.error('Failed to load persisted chat history:', error);
+        const localMessages = loadLocalMessages();
+        if (!isCancelled) {
+          setMessages(localMessages.length ? localMessages : [DEFAULT_ASSISTANT_MESSAGE]);
+          hasLoadedPersistenceRef.current = true;
+        }
+      }
+    };
+
+    void loadPersistedMessages();
+
+    return () => {
+      isCancelled = true;
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [isAuthenticated, isAuthLoading, user?.uid]);
+
+  useEffect(() => {
+    if (!hasLoadedPersistenceRef.current || isAuthLoading) return;
+    const sequence = ++saveSequenceRef.current;
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(async () => {
+      if (sequence !== saveSequenceRef.current) return;
+
+      const normalizedForSave = messages.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp.toISOString(),
+        type: msg.type || 'message',
+        data: msg.data
+      }));
+
+      // Guest flow persistence
+      if (!isAuthenticated || !user?.uid) {
+        localStorage.setItem(CHAT_LOCAL_STORAGE_KEY, JSON.stringify(normalizedForSave));
+        return;
+      }
+
+      // Authenticated flow persistence to PostgreSQL (snapshot strategy)
+      try {
+        if (sequence !== saveSequenceRef.current) return;
+        await fetch(`/api/chat/history?userId=${encodeURIComponent(user.uid)}&sessionId=${encodeURIComponent(CHAT_SESSION_ID)}`, {
+          method: 'DELETE'
+        });
+
+        for (const msg of normalizedForSave) {
+          if (sequence !== saveSequenceRef.current) return;
+          await fetch('/api/chat/history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: user.uid,
+              walletAddress: address,
+              role: msg.role,
+              content: msg.content,
+              sessionId: CHAT_SESSION_ID,
+              metadata: {
+                type: msg.type,
+                data: msg.data,
+                timestamp: msg.timestamp
+              }
+            })
+          });
+        }
+
+        // Keep local cache as fallback for temporary API/DB outages
+        localStorage.setItem(CHAT_LOCAL_STORAGE_KEY, JSON.stringify(normalizedForSave));
+      } catch (error) {
+        console.error('Failed to save chat history to database:', error);
+        localStorage.setItem(CHAT_LOCAL_STORAGE_KEY, JSON.stringify(normalizedForSave));
+      }
+    }, 400);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [messages, isAuthenticated, isAuthLoading, user?.uid, address]);
+
+  // Show audio error if any
   useEffect(() => {
     if (audioError) {
       addMessage({ role: 'assistant', content: audioError, type: 'message' });
       inputRef.current?.focus();
     }
   }, [audioError]);
-
 
   const formatTime = (date: Date) => {
     const hours = date.getHours();
@@ -212,9 +388,12 @@ export default function ChatInterface() {
           content: `I couldn't understand. ${command.validationErrors.join(', ')}`,
           type: 'message'
         });
+        setCurrentConfidence(0);
         setIsLoading(false);
         return;
       }
+
+      setCurrentConfidence(command.confidence);
 
       // Handle Yield Scout
       if (command.intent === 'yield_scout') {
@@ -523,7 +702,7 @@ export default function ChatInterface() {
             </div>
           </div>
         </div>
-        <TrustIndicators />
+        <TrustIndicators confidence={currentConfidence} />
       </div>
 
       {/* 2. Message Feed */}
@@ -541,6 +720,17 @@ export default function ChatInterface() {
                 <div className="space-y-3">
                   <div className="bg-white/[0.04] border border-white/10 text-gray-200 px-5 py-4 rounded-2xl rounded-tl-none text-sm leading-relaxed backdrop-blur-sm">
                     {msg.type === 'message' && <div className="whitespace-pre-line">{msg.content}</div>}
+                    {msg.type === 'portfolio_summary' && (
+                        <div>
+                          <div className="whitespace-pre-line mb-3">{msg.content}</div>
+                          {msg.data?.portfolioItems && msg.data?.parsedCommand && (
+                            <PortfolioSummary 
+                                items={msg.data.portfolioItems} 
+                                onRetry={(failedItems) => handlePortfolioRetry(failedItems, msg.data!.parsedCommand!)} 
+                            />
+                          )}
+                        </div>
+                    )}
                     {msg.type === 'yield_info' && <div className="font-mono text-xs text-blue-300">{msg.content}</div>}
 
                     {/* Inject your Custom Components (SwapConfirmation etc) here */}

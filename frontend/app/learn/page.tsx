@@ -7,7 +7,6 @@ import { motion } from 'framer-motion'
 import {
   BookOpen,
   FileText,
-  ChevronRight,
   TrendingUp,
   Zap,
   Shield,
@@ -22,6 +21,8 @@ import {
 import { useAuth } from '@/hooks/useAuth'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
+import FullPageAd from '@/components/FullPageAd'
+import { useLearnFullPageAd } from '@/hooks/useAds'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -940,6 +941,7 @@ SwapSmith shows you:
 // Main Component
 // ---------------------------------------------------------------------------
 export default function LearnPage() {
+  const { showAd: showFeatureAd, dismiss: dismissFeatureAd } = useLearnFullPageAd()
   const router = useRouter()
   const { user, isLoading } = useAuth()
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
@@ -1047,24 +1049,26 @@ export default function LearnPage() {
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col">
+      {showFeatureAd && <FullPageAd variant="features" duration={10000} onDismiss={dismissFeatureAd} />}
       <Navbar />
       <div className="pt-24 pb-16 px-4 sm:px-6 lg:px-8 flex-1 w-full">
         {/* Header */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: -30 }}
           animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, type: 'spring' }}
           className="text-center mb-12"
         >
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-full mb-4">
-            <BookOpen className="w-4 h-4 text-blue-400" />
-            <span className="text-sm font-semibold text-blue-400">Learning Center</span>
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 border border-blue-500/20 rounded-full mb-4 shadow-lg animate-pulse">
+            <BookOpen className="w-4 h-4 text-white drop-shadow" />
+            <span className="text-sm font-semibold text-white tracking-wide">Learning Center</span>
           </div>
 
-          <h1 className="text-4xl sm:text-5xl font-black mb-4 bg-gradient-to-r from-white via-blue-100 to-white bg-clip-text text-transparent">
+          <h1 className="text-5xl sm:text-6xl font-black mb-4 bg-gradient-to-r from-cyan-400 via-blue-300 to-purple-400 bg-clip-text text-transparent drop-shadow-lg animate-gradient-x">
             Master Crypto & SwapSmith
           </h1>
 
-          <p className="text-lg text-zinc-400 max-w-2xl mx-auto">
+          <p className="text-lg text-zinc-300 max-w-2xl mx-auto animate-fade-in">
             Comprehensive guides, tutorials, and resources to help you become a crypto expert
           </p>
 
@@ -1075,28 +1079,35 @@ export default function LearnPage() {
               placeholder="Search learning modules..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 transition-colors"
+              className="w-full px-4 py-3 bg-zinc-900 border border-cyan-500/40 rounded-lg text-white placeholder-zinc-400 focus:outline-none focus:border-cyan-400 transition-colors shadow-md"
             />
           </div>
         </motion.div>
 
         {/* Category Filter */}
-        <div className="flex flex-wrap gap-3 mb-8 justify-center">
-          {categories.map((category) => (
-            <button
-              key={category.id}
-              onClick={() => setSelectedCategory(category.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all ${
-                selectedCategory === category.id
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
-                  : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800 border border-zinc-800'
-              }`}
-            >
-              <category.icon className="w-4 h-4" />
-              <span className="text-sm">{category.label}</span>
-            </button>
-          ))}
-        </div>
+<div className="flex flex-wrap gap-4 mb-12 justify-center">
+  {categories.map((category) => (
+    <button
+      key={category.id}
+      onClick={() => setSelectedCategory(category.id)}
+      className={`relative px-6 py-2 rounded-full font-medium text-sm transition-all duration-300 border
+      ${
+        selectedCategory === category.id
+          ? "bg-gradient-to-r from-indigo-500 to-cyan-500 text-white border-transparent shadow-lg shadow-indigo-500/30 scale-105"
+          : "bg-white/5 text-zinc-400 border-white/10 hover:border-indigo-500/40 hover:text-white hover:bg-indigo-500/10 hover:scale-105"
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <category.icon className="w-4 h-4" />
+        {category.label}
+      </div>
+    </button>
+  ))}
+</div>
+
+
+
+
 
         {/* Learning Modules Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 mb-12 max-w-[1800px] mx-auto">
@@ -1106,79 +1117,90 @@ export default function LearnPage() {
 
             return (
               <motion.div
-                key={module.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="bg-zinc-900/50 border border-zinc-800 rounded-xl overflow-hidden hover:border-zinc-700 transition-all group"
-              >
-                {/* Module Image */}
-                {module.image && (
-                  <div className="relative h-48 w-full overflow-hidden bg-zinc-800">
-                    <Image
-                      src={module.image}
-                      alt={module.title}
-                      fill
-                      className="object-cover transition-transform duration-300 group-hover:scale-105"
-                      sizes="(max-width: 1024px) 100vw, 50vw"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 to-transparent opacity-60" />
-                  </div>
-                )}
+  key={module.id}
+  initial={{ opacity: 0, y: 30 }}
+  animate={{ opacity: 1, y: 0 }}
+  transition={{ delay: index * 0.1 }}
+  whileHover={{ y: -8 }}
+  className="relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden transition-all duration-500 hover:border-indigo-500/60 hover:shadow-[0_0_40px_rgba(99,102,241,0.25)] group"
+>
+  {/* Glow Overlay */}
+  <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/0 via-transparent to-cyan-500/0 group-hover:from-indigo-500/10 group-hover:to-cyan-500/10 transition-all duration-500 pointer-events-none"></div>
 
-                {/* Module Header */}
-                <div className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3 flex-1">
-                      <div className="p-3 bg-blue-500/10 rounded-lg">
-                        <Icon className="w-6 h-6 text-blue-400" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-xl font-bold text-white mb-1">{module.title}</h3>
-                        <p className="text-sm text-zinc-400">{module.description}</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => router.push(`/learn/${module.id}`)}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 flex-shrink-0"
-                    >
-                      Start Course
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
+  {/* Module Image */}
+  {module.image && (
+    <div className="relative h-52 w-full overflow-hidden">
+      <Image
+        src={module.image}
+        alt={module.title}
+        fill
+        className="object-cover transition-transform duration-700 group-hover:scale-110"
+        sizes="(max-width: 1024px) 100vw, 50vw"
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+    </div>
+  )}
 
-                  {/* Module Meta */}
-                  <div className="flex flex-wrap items-center gap-3 mb-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getDifficultyColor(module.difficulty)}`}>
-                      {module.difficulty}
-                    </span>
-                    <span className="flex items-center gap-1 text-xs text-zinc-500">
-                      <Clock className="w-3 h-3" />
-                      {module.duration}
-                    </span>
-                    <span className="flex items-center gap-1 text-xs text-zinc-500">
-                      <FileText className="w-3 h-3" />
-                      {module.topics.length} topics
-                    </span>
-                  </div>
+  {/* Content */}
+  <div className="relative p-6">
+    <div className="flex items-start justify-between mb-4">
+      <div className="flex items-center gap-3">
+        <div className="p-3 bg-indigo-500/10 rounded-xl group-hover:bg-indigo-500/20 transition">
+          <Icon className="w-6 h-6 text-indigo-400 group-hover:text-cyan-400 transition" />
+        </div>
+        <div>
+          <h3 className="text-xl font-bold text-white group-hover:text-indigo-300 transition">
+            {module.title}
+          </h3>
+          <p className="text-sm text-zinc-400">
+            {module.description}
+          </p>
+        </div>
+      </div>
 
-                  {/* Progress Bar */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-zinc-500">Progress</span>
-                      <span className="text-blue-400 font-semibold">{progress}%</span>
-                    </div>
-                    <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${progress}%` }}
-                        transition={{ duration: 0.5, delay: index * 0.1 }}
-                        className="h-full bg-gradient-to-r from-blue-500 to-blue-600"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
+      <button
+        onClick={() => router.push(`/learn/${module.id}`)}
+        className="relative px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-500 to-cyan-500 text-white text-sm font-semibold transition-all duration-300 hover:shadow-[0_0_20px_rgba(99,102,241,0.6)] active:scale-95"
+      >
+        Start
+      </button>
+    </div>
+
+    {/* Meta */}
+    <div className="flex flex-wrap items-center gap-3 mb-5">
+      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getDifficultyColor(module.difficulty)}`}>
+        {module.difficulty}
+      </span>
+
+      <span className="flex items-center gap-1 text-xs text-zinc-400">
+        <Clock className="w-3 h-3" />
+        {module.duration}
+      </span>
+
+      <span className="flex items-center gap-1 text-xs text-zinc-400">
+        <FileText className="w-3 h-3" />
+        {module.topics.length} topics
+      </span>
+    </div>
+
+    {/* Progress */}
+    <div>
+      <div className="flex justify-between text-xs mb-2">
+        <span className="text-zinc-500">Progress</span>
+        <span className="text-indigo-400 font-semibold">{progress}%</span>
+      </div>
+
+      <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${progress}%` }}
+          transition={{ duration: 0.8 }}
+          className="h-full bg-gradient-to-r from-indigo-500 via-blue-500 to-cyan-400 shadow-[0_0_10px_rgba(99,102,241,0.6)]"
+        />
+      </div>
+    </div>
+  </div>
+</motion.div>
             )
           })}
         </div>

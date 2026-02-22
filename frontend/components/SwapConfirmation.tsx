@@ -22,7 +22,7 @@ interface QuoteData {
 interface SwapConfirmationProps {
   quote: QuoteData;
   confidence?: number;
-  onRequote?: (newAmount: string, quote: QuoteData) => void;
+  onAmountChange?: (newAmount: string) => void;
 }
 
 const EXPLORER_URLS: { [key: string]: string } = {
@@ -37,7 +37,7 @@ const EXPLORER_URLS: { [key: string]: string } = {
   solana: 'https://solscan.io',
 }
 
-const SIDESHIFT_TRACKING_URL = 'https://sideshift.ai/transactions'
+const SIDESHIFT_TRACKING_URL = SIDESHIFT_CONFIG.TRACKING_URL
 
 // Map network names from your API to wagmi chain objects
 const CHAIN_MAP: { [key: string]: Chain } = {
@@ -64,7 +64,7 @@ interface SafetyCheckResult {
 }
 
 // --- Main Component ---
-export default function SwapConfirmation({ quote, confidence = 100, onRequote }: SwapConfirmationProps) {
+export default function SwapConfirmation({ quote, confidence = 100, onAmountChange }: SwapConfirmationProps) {
   const [copiedAddress, setCopiedAddress] = useState(false)
   const [copiedMemo, setCopiedMemo] = useState(false)
   const [isSimulating, setIsSimulating] = useState(false);
@@ -184,6 +184,30 @@ export default function SwapConfirmation({ quote, confidence = 100, onRequote }:
       } else {
         alert('Failed to switch network. Please try again.');
       }
+    }
+  };
+
+  const handleFetchBalance = async () => {
+    if (!address || !publicClient) {
+      alert('Wallet not connected or network not supported');
+      return;
+    }
+
+    setIsLoadingBalance(true);
+    try {
+      const balance = await publicClient.getBalance({ address });
+      const balanceFormatted = formatEther(balance);
+      setWalletBalance(balanceFormatted);
+
+      // Call the callback to update the parent component with the max amount
+      if (onAmountChange) {
+        onAmountChange(balanceFormatted);
+      }
+    } catch (err) {
+      console.error('Failed to fetch balance:', err);
+      alert('Could not fetch wallet balance. Please try again.');
+    } finally {
+      setIsLoadingBalance(false);
     }
   };
 
@@ -404,7 +428,7 @@ export default function SwapConfirmation({ quote, confidence = 100, onRequote }:
       </div>
 
       <div className="space-y-3 text-sm">
-        <div className="flex justify-between">
+        <div className="flex justify-between items-center">
           <span className="text-gray-600">You send:</span>
           <div className='flex items-center gap-2'>
             <span className="font-medium text-gray-900">{quote.depositAmount} {quote.depositCoin} on {getNetworkName(quote.depositNetwork)}</span>
@@ -630,14 +654,14 @@ export default function SwapConfirmation({ quote, confidence = 100, onRequote }:
 
         <div className="flex gap-2 text-xs">
           <button
-            onClick={() => window.open('https://help.sideshift.ai/en/', '_blank')}
+            onClick={() => window.open(SIDESHIFT_CONFIG.HELP_URL, '_blank')}
             className="text-blue-600 hover:text-blue-800"
           >
             Need help?
           </button>
           <span className="text-gray-400">•</span>
           <button
-            onClick={() => window.open('https://docs.sideshift.ai/faq/', '_blank')}
+            onClick={() => window.open(SIDESHIFT_CONFIG.FAQ_URL, '_blank')}
             className="text-blue-600 hover:text-blue-800"
           >
             FAQ

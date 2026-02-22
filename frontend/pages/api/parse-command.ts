@@ -1,9 +1,16 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { parseUserCommand } from '@/utils/groq-client';
+import { csrfGuard } from '@/lib/csrf';
+import logger from '@/lib/logger';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // CSRF Protection
+  if (!csrfGuard(req, res)) {
+    return;
   }
 
   const { message } = req.body;
@@ -29,7 +36,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const parsedCommand = await parseUserCommand(message);
     
     // Log for monitoring and improvement
-    console.log('Command parsed:', {
+    logger.info('Command parsed:', {
       input: message,
       output: parsedCommand,
       timestamp: new Date().toISOString()
@@ -37,7 +44,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     res.status(200).json(parsedCommand);
   } catch (error: unknown) {
-    console.error('Error parsing command:', error);
+    logger.error('Error parsing command:', { error });
     
     // Differentiate between Groq API errors and other errors
     const errorMessage = error instanceof Error ? error.message : 'Internal server error';

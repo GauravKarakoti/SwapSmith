@@ -24,7 +24,8 @@
       "drizzle-kit": ["./node_modules/drizzle-kit"],
       "drizzle-orm": ["./node_modules/drizzle-orm"],
       "drizzle-orm/*": ["./node_modules/drizzle-orm/*"]
-    }
+    },
+    "types": ["jest"]
   },
   "include": [
     "next-env.d.ts",
