@@ -40,7 +40,7 @@ export default async function handler(
       .json({ error: 'Unauthorized: No user ID in token' });
   }
 
-  // 📥 GET — Fetch watchlist with cached prices
+  // 📥 GET — Fetch user's watchlist with cached prices
   if (req.method === 'GET') {
     try {
       const watchlist = await getWatchlist(userId);

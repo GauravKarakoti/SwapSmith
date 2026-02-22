@@ -1,5 +1,6 @@
 import { Telegraf, Markup, Context } from 'telegraf';
 import { message } from 'telegraf/filters';
+import rateLimit from 'telegraf-ratelimit';
 import dotenv from 'dotenv';
 import logger from './services/logger';
 import { executePortfolioStrategy } from './services/portfolio-service';
@@ -47,6 +48,22 @@ const MINI_APP_URL =
 const PORT = Number(process.env.PORT || 3000);
 
 const bot = new Telegraf(BOT_TOKEN);
+
+// Configure rate limiting middleware
+const limit = rateLimit({
+  window: 60000, // 1 minute window
+  limit: 20, // Maximum 20 messages per window per user
+  keyGenerator: (ctx) => {
+    return ctx.from?.id.toString() || 'unknown';
+  },
+  onLimitExceeded: async (ctx) => {
+    await ctx.reply('⚠️ Too many requests! Please slow down. Rate limit: 20 messages per minute.');
+  },
+});
+
+// Apply rate limiting middleware
+bot.use(limit);
+
 const app = express();
 app.use(express.json());
 
