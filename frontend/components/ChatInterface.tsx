@@ -7,7 +7,7 @@ import SwapConfirmation from './SwapConfirmation';
 import PortfolioSummary, { PortfolioItem } from './PortfolioSummary'; // Added Import
 import TrustIndicators from './TrustIndicators';
 import IntentConfirmation from './IntentConfirmation';
-import { ParsedCommand } from '@/utils/groq-client';
+import type { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { useAuth } from '@/hooks/useAuth';
