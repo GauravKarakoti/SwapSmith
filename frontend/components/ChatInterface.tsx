@@ -4,14 +4,16 @@ import { useState, useRef, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { Mic, Send, StopCircle, Zap } from 'lucide-react';
 import SwapConfirmation from './SwapConfirmation';
+import PortfolioSummary, { PortfolioItem } from './PortfolioSummary'; // Added Import
 import TrustIndicators from './TrustIndicators';
 import IntentConfirmation from './IntentConfirmation';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
-import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
+import { useAudioRecorder } from '@/hooks/useAudioRecorder';
+import { useAuth } from '@/hooks/useAuth';
 
-// Import QuoteData type from SwapConfirmation
-interface QuoteData {
+// Export QuoteData to be used in PortfolioSummary
+export interface QuoteData {
   depositAmount: string;
   depositCoin: string;
   depositNetwork: string;
@@ -28,45 +30,223 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  type?: 'message' | 'intent_confirmation' | 'swap_confirmation' | 'yield_info' | 'checkout_link';
+  type?: 'message' | 'intent_confirmation' | 'swap_confirmation' | 'yield_info' | 'checkout_link' | 'portfolio_summary';
   data?: { 
     parsedCommand?: ParsedCommand; 
     quoteData?: QuoteData; 
     confidence?: number;
     url?: string;
+    portfolioItems?: PortfolioItem[];
   };
 }
 
+const CHAT_LOCAL_STORAGE_KEY = 'swapsmith-chatinterface-messages-v1';
+const CHAT_SESSION_ID = 'chat-interface-default';
+const DEFAULT_ASSISTANT_MESSAGE: Message = {
+  role: 'assistant',
+  content: "Hello! I can help you swap assets, create payment links, or scout yields.\n\n💡 Tip: Try our Telegram Bot for on-the-go access!",
+  timestamp: new Date(),
+  type: 'message'
+};
+
+const normalizeLoadedMessages = (messages: Partial<Message>[] | undefined): Message[] => {
+  if (!Array.isArray(messages)) return [];
+
+  return messages
+    .filter((msg): msg is Partial<Message> & Pick<Message, 'role' | 'content'> =>
+      !!msg &&
+      (msg.role === 'user' || msg.role === 'assistant') &&
+      typeof msg.content === 'string'
+    )
+    .map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+      timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
+      type: msg.type || 'message',
+      data: msg.data
+    }))
+    .filter((msg) => !Number.isNaN(msg.timestamp.getTime()));
+};
+
 export default function ChatInterface() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: 'assistant',
-      content: "Hello! I can help you swap assets, create payment links, or scout yields.\n\n💡 Tip: Try our Telegram Bot for on-the-go access!",
-      timestamp: new Date(),
-      type: 'message'
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([DEFAULT_ASSISTANT_MESSAGE]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
+  const [currentConfidence, setCurrentConfidence] = useState<number | undefined>(undefined);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { address, isConnected } = useAccount();
+  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const { handleError } = useErrorHandler();
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasLoadedPersistenceRef = useRef(false);
+  const saveSequenceRef = useRef(0);
   
-  // Use cross-browser audio recorder with simplified approach
+  // Use cross-browser audio recorder
   const { 
-    isListening: isRecording,
-    transcript,
+    isRecording,
     isSupported: isAudioSupported, 
     startRecording, 
     stopRecording, 
     error: audioError
-  } = useSpeechRecognition();
+  } = useAudioRecorder();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    let isCancelled = false;
+    hasLoadedPersistenceRef.current = false;
+
+    const loadLocalMessages = (): Message[] => {
+      try {
+        const raw = localStorage.getItem(CHAT_LOCAL_STORAGE_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw) as Partial<Message>[];
+        return normalizeLoadedMessages(parsed);
+      } catch (error) {
+        console.error('Failed to load local chat history:', error);
+        return [];
+      }
+    };
+
+    const loadPersistedMessages = async () => {
+      if (isAuthLoading) return;
+
+      // Guest flow: load from localStorage
+      if (!isAuthenticated || !user?.uid) {
+        const localMessages = loadLocalMessages();
+        if (!isCancelled) {
+          setMessages(localMessages.length ? localMessages : [DEFAULT_ASSISTANT_MESSAGE]);
+          hasLoadedPersistenceRef.current = true;
+        }
+        return;
+      }
+
+      // Authenticated flow: load from PostgreSQL (via API)
+      try {
+        const response = await fetch(
+          `/api/chat/history?userId=${encodeURIComponent(user.uid)}&sessionId=${encodeURIComponent(CHAT_SESSION_ID)}&limit=200`
+        );
+
+        if (!response.ok) {
+          throw new Error(`Failed to load chat history: ${response.status}`);
+        }
+
+        const payload = await response.json();
+        const dbHistory = Array.isArray(payload.history) ? payload.history : [];
+        const normalizedDbMessages: Message[] = dbHistory
+          .slice()
+          .reverse()
+          .map((item: { role: Message['role']; content: string; createdAt: string; metadata?: { type?: Message['type']; data?: Message['data']; timestamp?: string } | null }) => ({
+            role: item.role,
+            content: item.content,
+            timestamp: item.metadata?.timestamp ? new Date(item.metadata.timestamp) : new Date(item.createdAt),
+            type: item.metadata?.type || 'message',
+            data: item.metadata?.data
+          }))
+          .filter((msg: Message) => !Number.isNaN(msg.timestamp.getTime()));
+
+        if (!isCancelled && normalizedDbMessages.length) {
+          setMessages(normalizedDbMessages);
+          hasLoadedPersistenceRef.current = true;
+          return;
+        }
+
+        // If DB is empty, hydrate from local guest messages once (migration path)
+        const localMessages = loadLocalMessages();
+        if (!isCancelled) {
+          setMessages(localMessages.length ? localMessages : [DEFAULT_ASSISTANT_MESSAGE]);
+          hasLoadedPersistenceRef.current = true;
+        }
+      } catch (error) {
+        console.error('Failed to load persisted chat history:', error);
+        const localMessages = loadLocalMessages();
+        if (!isCancelled) {
+          setMessages(localMessages.length ? localMessages : [DEFAULT_ASSISTANT_MESSAGE]);
+          hasLoadedPersistenceRef.current = true;
+        }
+      }
+    };
+
+    void loadPersistedMessages();
+
+    return () => {
+      isCancelled = true;
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [isAuthenticated, isAuthLoading, user?.uid]);
+
+  useEffect(() => {
+    if (!hasLoadedPersistenceRef.current || isAuthLoading) return;
+    const sequence = ++saveSequenceRef.current;
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(async () => {
+      if (sequence !== saveSequenceRef.current) return;
+
+      const normalizedForSave = messages.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp.toISOString(),
+        type: msg.type || 'message',
+        data: msg.data
+      }));
+
+      // Guest flow persistence
+      if (!isAuthenticated || !user?.uid) {
+        localStorage.setItem(CHAT_LOCAL_STORAGE_KEY, JSON.stringify(normalizedForSave));
+        return;
+      }
+
+      // Authenticated flow persistence to PostgreSQL (snapshot strategy)
+      try {
+        if (sequence !== saveSequenceRef.current) return;
+        await fetch(`/api/chat/history?userId=${encodeURIComponent(user.uid)}&sessionId=${encodeURIComponent(CHAT_SESSION_ID)}`, {
+          method: 'DELETE'
+        });
+
+        for (const msg of normalizedForSave) {
+          if (sequence !== saveSequenceRef.current) return;
+          await fetch('/api/chat/history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: user.uid,
+              walletAddress: address,
+              role: msg.role,
+              content: msg.content,
+              sessionId: CHAT_SESSION_ID,
+              metadata: {
+                type: msg.type,
+                data: msg.data,
+                timestamp: msg.timestamp
+              }
+            })
+          });
+        }
+
+        // Keep local cache as fallback for temporary API/DB outages
+        localStorage.setItem(CHAT_LOCAL_STORAGE_KEY, JSON.stringify(normalizedForSave));
+      } catch (error) {
+        console.error('Failed to save chat history to database:', error);
+        localStorage.setItem(CHAT_LOCAL_STORAGE_KEY, JSON.stringify(normalizedForSave));
+      }
+    }, 400);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [messages, isAuthenticated, isAuthLoading, user?.uid, address]);
 
   // Show audio error if any
   useEffect(() => {
@@ -74,15 +254,6 @@ export default function ChatInterface() {
       addMessage({ role: 'assistant', content: audioError, type: 'message' });
     }
   }, [audioError]);
-
-  // Handle voice result
-  useEffect(() => {
-    if (!isRecording && transcript) {
-        addMessage({ role: 'user', content: transcript, type: 'message' });
-        processCommand(transcript);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRecording, transcript]);
 
   const formatTime = (date: Date) => {
     const hours = date.getHours();
@@ -94,6 +265,101 @@ export default function ChatInterface() {
 
   const addMessage = (message: Omit<Message, 'timestamp'>) => {
     setMessages(prev => [...prev, { ...message, timestamp: new Date() }]);
+  };
+
+
+  const executeSwapAsync = async (
+    fromAsset: string, 
+    toAsset: string, 
+    amount: number, 
+    fromChain: string, 
+    toChain: string
+  ): Promise<QuoteData> => {
+     const quoteResponse = await fetch('/api/create-swap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fromAsset, toAsset, amount, fromChain, toChain }),
+      });
+      const quote = await quoteResponse.json();
+      if (quote.error) throw new Error(quote.error);
+      return quote;
+  };
+
+  const handlePortfolioRetry = (failedItems: PortfolioItem[], originalCommand: ParsedCommand) => {
+      // 1. Reset failed items to pending in UI
+      setMessages(prev => {
+        const msgIndex = prev.findLastIndex(m => m.type === 'portfolio_summary');
+        if (msgIndex === -1) return prev;
+        
+        const msg = prev[msgIndex];
+        if (!msg.data?.portfolioItems) return prev;
+
+        const newItems = msg.data.portfolioItems.map(item => {
+            if (failedItems.some(f => f.id === item.id)) {
+                return { ...item, status: 'pending' as const, error: undefined };
+            }
+            return item;
+        });
+
+        const newMsg = { ...msg, data: { ...msg.data, portfolioItems: newItems } };
+        const newMessages = [...prev];
+        newMessages[msgIndex] = newMsg;
+        return newMessages;
+      });
+
+      // 2. Trigger execution
+      processPortfolioBatch(failedItems, originalCommand);
+  };
+
+  const processPortfolioBatch = async (itemsToProcess: PortfolioItem[], command: ParsedCommand) => {
+      for (const item of itemsToProcess) {
+          try {
+             const fromChain = command.fromChain || 'ethereum';
+             const toChain = item.toChain || command.toChain || 'ethereum';
+
+             const quote = await executeSwapAsync(
+                 item.fromAsset,
+                 item.toAsset,
+                 item.amount,
+                 fromChain,
+                 toChain
+             );
+             
+             // Update Success
+             setMessages(prev => {
+                 const msgIndex = prev.findLastIndex(m => m.type === 'portfolio_summary');
+                 if (msgIndex === -1) return prev;
+                 const msg = prev[msgIndex];
+                 if (!msg.data?.portfolioItems) return prev;
+                 
+                 const newItems = msg.data.portfolioItems.map(i => 
+                     i.id === item.id ? { ...i, status: 'success' as const, quote } : i
+                 );
+                 
+                 const newMessages = [...prev];
+                 newMessages[msgIndex] = { ...msg, data: { ...msg.data, portfolioItems: newItems } };
+                 return newMessages;
+             });
+
+          } catch (error: unknown) {
+             const errorMessage = error instanceof Error ? error.message : "Unknown error";
+             // Update Error
+             setMessages(prev => {
+                 const msgIndex = prev.findLastIndex(m => m.type === 'portfolio_summary');
+                 if (msgIndex === -1) return prev;
+                 const msg = prev[msgIndex];
+                 if (!msg.data?.portfolioItems) return prev;
+                 
+                 const newItems = msg.data.portfolioItems.map(i => 
+                     i.id === item.id ? { ...i, status: 'error' as const, error: errorMessage } : i
+                 );
+                 
+                 const newMessages = [...prev];
+                 newMessages[msgIndex] = { ...msg, data: { ...msg.data, portfolioItems: newItems } };
+                 return newMessages;
+             });
+          }
+      }
   };
 
   const processCommand = async (text: string) => {
@@ -114,9 +380,12 @@ export default function ChatInterface() {
           content: `I couldn't understand. ${command.validationErrors.join(', ')}`,
           type: 'message'
         });
+        setCurrentConfidence(0);
         setIsLoading(false);
         return;
       }
+
+      setCurrentConfidence(command.confidence);
 
       // Handle Yield Scout
       if (command.intent === 'yield_scout') {
@@ -174,26 +443,31 @@ export default function ChatInterface() {
 
       // Handle Portfolio
       if (command.intent === 'portfolio' && command.portfolio) {
+         if (command.requiresConfirmation || command.confidence < 80) {
+             setPendingCommand(command);
+             addMessage({ role: 'assistant', content: '', type: 'intent_confirmation', data: { parsedCommand: command } });
+             setIsLoading(false);
+             return;
+         }
+
+         // Prepare Portfolio Items
+         const items: PortfolioItem[] = command.portfolio.map((item, index) => ({
+             id: `${item.toAsset}-${index}`,
+             fromAsset: command.fromAsset || 'ETH',
+             toAsset: item.toAsset,
+             amount: (command.amount! * item.percentage) / 100,
+             status: 'pending',
+             toChain: item.toChain 
+         }));
+
          addMessage({ 
              role: 'assistant', 
-             content: `📊 **Portfolio Strategy Detected**\nSplitting ${command.amount} ${command.fromAsset} into multiple assets. Generating orders...`, 
-             type: 'message' 
+             content: `📊 **Portfolio Strategy Detected**\nSplitting ${command.amount} ${command.fromAsset}...`, 
+             type: 'portfolio_summary',
+             data: { portfolioItems: items, parsedCommand: command } 
          });
 
-         for (const item of command.portfolio) {
-             const splitAmount = (command.amount! * item.percentage) / 100;
-             const subCommand: ParsedCommand = {
-                 ...command,
-                 intent: 'swap',
-                 amount: splitAmount,
-                 toAsset: item.toAsset,
-                 toChain: item.toChain,
-                 portfolio: undefined, 
-                 confidence: 100 
-             };
-             
-             await executeSwap(subCommand);
-         }
+         await processPortfolioBatch(items, command);
          
          setIsLoading(false);
          return;
@@ -357,19 +631,25 @@ export default function ChatInterface() {
     if (confirmed && pendingCommand) {
         if (pendingCommand.intent === 'portfolio') {
              const confirmedCmd = { ...pendingCommand, requiresConfirmation: false, confidence: 100 };
-             addMessage({ role: 'assistant', content: "Executing Portfolio Strategy...", type: 'message' });
              
              if (confirmedCmd.portfolio) {
-                for (const item of confirmedCmd.portfolio) {
-                    const splitAmount = (confirmedCmd.amount! * item.percentage) / 100;
-                    await executeSwap({
-                        ...confirmedCmd,
-                        intent: 'swap',
-                        amount: splitAmount,
-                        toAsset: item.toAsset,
-                        toChain: item.toChain
-                    });
-                }
+                 const items: PortfolioItem[] = confirmedCmd.portfolio.map((item, index) => ({
+                     id: `${item.toAsset}-${index}`,
+                     fromAsset: confirmedCmd.fromAsset || 'ETH',
+                     toAsset: item.toAsset,
+                     amount: (confirmedCmd.amount! * item.percentage) / 100,
+                     status: 'pending',
+                     toChain: item.toChain 
+                 }));
+
+                 addMessage({ 
+                     role: 'assistant', 
+                     content: `📊 **Portfolio Strategy Executing**\nSplitting ${confirmedCmd.amount} ${confirmedCmd.fromAsset}...`, 
+                     type: 'portfolio_summary',
+                     data: { portfolioItems: items, parsedCommand: confirmedCmd } 
+                 });
+
+                 await processPortfolioBatch(items, confirmedCmd);
              }
         } else if (pendingCommand.intent === 'dca') {
              await executeDCA(pendingCommand);
@@ -383,6 +663,46 @@ export default function ChatInterface() {
         addMessage({ role: 'assistant', content: 'Cancelled.', type: 'message' });
     }
     setPendingCommand(null);
+  };
+
+  const handleVoiceRecording = async () => {
+    if (isRecording) {
+      setIsLoading(true);
+      try {
+        const audioBlob = await stopRecording();
+        if (audioBlob) {
+            const audioFile = new File([audioBlob], "voice_command.wav", { type: audioBlob.type || 'audio/wav' });
+            
+            const formData = new FormData();
+            formData.append('file', audioFile);
+
+            const response = await fetch('/api/transcribe', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+            
+            if (data.error) throw new Error(data.error);
+
+            if (data.text) {
+                addMessage({ role: 'user', content: data.text, type: 'message' });
+                processCommand(data.text);
+            }
+        }
+      } catch (err) {
+        console.error("Voice processing failed:", err);
+        addMessage({ 
+            role: 'assistant', 
+            content: "Sorry, I couldn't process your voice command. Please try again.", 
+            type: 'message' 
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      await startRecording();
+    }
   };
 
 return (
@@ -402,7 +722,7 @@ return (
             </div>
           </div>
         </div>
-        <TrustIndicators />
+        <TrustIndicators confidence={currentConfidence} />
       </div>
 
       {/* 2. Message Feed */}
@@ -420,11 +740,39 @@ return (
                 <div className="space-y-3">
                   <div className="bg-white/[0.04] border border-white/10 text-gray-200 px-5 py-4 rounded-2xl rounded-tl-none text-sm leading-relaxed backdrop-blur-sm">
                     {msg.type === 'message' && <div className="whitespace-pre-line">{msg.content}</div>}
+                    {msg.type === 'portfolio_summary' && (
+                        <div>
+                          <div className="whitespace-pre-line mb-3">{msg.content}</div>
+                          {msg.data?.portfolioItems && msg.data?.parsedCommand && (
+                            <PortfolioSummary 
+                                items={msg.data.portfolioItems} 
+                                onRetry={(failedItems) => handlePortfolioRetry(failedItems, msg.data!.parsedCommand!)} 
+                            />
+                          )}
+                        </div>
+                    )}
                     {msg.type === 'yield_info' && <div className="font-mono text-xs text-blue-300">{msg.content}</div>}
                     
                     {/* Inject your Custom Components (SwapConfirmation etc) here */}
                     {msg.type === 'intent_confirmation' && <IntentConfirmation command={msg.data?.parsedCommand} onConfirm={handleIntentConfirm} />}
-                    {msg.type === 'swap_confirmation' && msg.data?.quoteData && <SwapConfirmation quote={msg.data.quoteData} confidence={msg.data.confidence} />}
+                    {msg.type === 'swap_confirmation' && msg.data?.quoteData && (
+                      <SwapConfirmation 
+                        quote={msg.data.quoteData} 
+                        confidence={msg.data.confidence}
+                        onAmountChange={(newAmount) => {
+                          // Update the quote with the new amount
+                          const quoteData = msg.data?.quoteData;
+                          if (quoteData) {
+                            const updatedQuote = { ...quoteData, depositAmount: newAmount };
+                            addMessage({
+                              role: 'assistant',
+                              content: `Amount updated to ${newAmount} ${quoteData.depositCoin}. Please review the new swap details.`,
+                              type: 'message'
+                            });
+                          }
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
               )}
@@ -446,13 +794,7 @@ return (
           
           <div className="relative flex items-center gap-3 bg-[#161A1E] border border-white/10 p-2 rounded-2xl group-focus-within:border-blue-500/50 transition-all">
             <button 
-              onClick={() => {
-                if (isRecording) {
-                  stopRecording();
-                } else {
-                  startRecording();
-                }
-              }}
+              onClick={handleVoiceRecording}
               disabled={!isAudioSupported}
               className={`p-3 rounded-xl transition-all ${
                 !isAudioSupported ? 'bg-white/5 text-gray-600 cursor-not-allowed' :

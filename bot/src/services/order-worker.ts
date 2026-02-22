@@ -18,7 +18,7 @@ let bot: Telegraf | null = null;
  */
 export function initializeWorker(telegrafBot: Telegraf) {
   bot = telegrafBot;
-  
+
   // Schedule limit order checks every 5 minutes
   cron.schedule(WORKER_INTERVAL, async () => {
     console.log('[OrderWorker] Checking limit orders...');
@@ -81,7 +81,7 @@ async function executeLimitOrder(order: DelayedOrder): Promise<void> {
       order.toAsset,
       toChain,
       order.amount,
-      '1.1.1.1' // IP address placeholder
+      process.env.SIDESHIFT_CLIENT_IP || '127.0.0.1' // Use configured IP or localhost placeholder
     );
 
     if (quote.error) {
@@ -99,7 +99,7 @@ async function executeLimitOrder(order: DelayedOrder): Promise<void> {
     await db.updateDelayedOrderStatus(order.id, 'completed');
 
     // Notify user
-    await notifyUser(order.telegramId, 
+    await notifyUser(order.telegramId,
       `✅ *Limit Order Executed!*\n\n` +
       `Your limit order to buy ${order.amount} ${order.toAsset} at $${order.targetPrice} has been executed.\n\n` +
       `Order ID: \`${sideshiftOrder.id}\`\n` +
@@ -246,7 +246,7 @@ async function executeDCAPurchase(order: DelayedOrder): Promise<void> {
  */
 function calculateNextExecution(frequency: string, currentDate: Date | undefined | null): Date {
   const baseDate = currentDate ? new Date(currentDate) : new Date();
-  
+
   switch (frequency.toLowerCase()) {
     case 'daily':
       baseDate.setDate(baseDate.getDate() + 1);

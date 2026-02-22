@@ -21,10 +21,9 @@ import ClaudeChatInput from "@/components/ClaudeChatInput";
 import SwapConfirmation from "@/components/SwapConfirmation";
 import IntentConfirmation from "@/components/IntentConfirmation";
 
-import { useAuth } from "@/hooks/useAuth";
 import { useChatHistory, useChatSessions } from "@/hooks/useCachedData";
 import { useErrorHandler, ErrorType } from "@/hooks/useErrorHandler";
-import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { useAudioRecorder } from "@/hooks/useAudioRecorder";
 import { trackTerminalUsage, showRewardNotification } from "@/lib/rewards-service";
 
 import { ParsedCommand } from "@/utils/groq-client";
@@ -133,7 +132,6 @@ const LiveStatsCard = () => {
 export default function TerminalPage() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
-  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
   const { handleError } = useErrorHandler();
 
   // State
@@ -158,37 +156,21 @@ export default function TerminalPage() {
 
   // Data Fetching
   const { data: chatSessions, refetch: refetchSessions } = useChatSessions(
-    user?.uid,
+    undefined,
   );
-  const { data: dbChatHistory } = useChatHistory(user?.uid, currentSessionId);
+  const { data: dbChatHistory } = useChatHistory(undefined, currentSessionId);
 
   // Speech Recognition
   const {
-    isListening: isRecording,
-    transcript,
+    isRecording,
     isSupported: isAudioSupported,
     startRecording,
     stopRecording,
-  } = useSpeechRecognition();
+  } = useAudioRecorder();
 
   /* ------------------------------------------------------------------------ */
   /* Effects                                  */
   /* ------------------------------------------------------------------------ */
-
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) router.push("/login");
-  }, [authLoading, isAuthenticated, router]);
-
-  // Track terminal usage for rewards
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      trackTerminalUsage().then((result) => {
-        if (result.success && !result.alreadyClaimed) {
-          showRewardNotification(result);
-        }
-      });
-    }
-  }, [isAuthenticated, user]);
 
   useEffect(() => {
     sessionIdRef.current = currentSessionId;
@@ -220,13 +202,6 @@ export default function TerminalPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Handle voice transcript
-  useEffect(() => {
-    if (!isRecording && transcript) {
-      processCommand(transcript);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRecording, transcript]);
 
   /* ------------------------------------------------------------------------ */
   /* Handlers                                   */
@@ -248,8 +223,35 @@ export default function TerminalPage() {
     startRecording();
   };
 
-  const handleStopRecording = () => {
-    stopRecording();
+  const handleStopRecording = async () => {
+    setIsLoading(true);
+    try {
+      const audioBlob = await stopRecording();
+      if (audioBlob) {
+        const audioFile = new File([audioBlob], "voice_command.wav", { type: audioBlob.type || 'audio/wav' });
+
+        const formData = new FormData();
+        formData.append("file", audioFile);
+
+        const response = await fetch("/api/transcribe", { method: "POST", body: formData });
+        const data = await response.json();
+
+        if (data.error) throw new Error(data.error);
+
+        if (data.text) {
+          processCommand(data.text);
+        }
+      }
+    } catch (err) {
+      console.error("Voice processing failed:", err);
+      addMessage({
+        role: "assistant",
+        content: "Sorry, I couldn't process your voice command. Please try again.",
+        type: "message",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleNewChat = () => {
@@ -273,11 +275,8 @@ export default function TerminalPage() {
     e: React.MouseEvent,
   ) => {
     e.stopPropagation();
-    if (!user?.uid) return;
-
-    await fetch(`/api/chat/history?userId=${user.uid}&sessionId=${sessionId}`, {
-      method: "DELETE",
-    });
+    // Skip deletion without user ID (demo mode)
+    // In production, would use real user ID
 
     if (sessionId === currentSessionId) handleNewChat();
     refetchSessions();
@@ -445,16 +444,6 @@ export default function TerminalPage() {
   /* Render                                   */
   /* ------------------------------------------------------------------------ */
 
-  if (authLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center app-bg">
-        <div className="animate-spin h-8 w-8 border-2 border-cyan-500 border-t-transparent rounded-full" />
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) return null;
-
   return (
     <>
       <Navbar />
@@ -582,6 +571,18 @@ export default function TerminalPage() {
                         <SwapConfirmation
                           quote={(msg.data as { quoteData: QuoteData }).quoteData}
                           confidence={(msg.data as { confidence: number }).confidence}
+                          onAmountChange={(newAmount) => {
+                            // Update the quote with the new amount
+                            const quoteData = (msg.data as { quoteData?: QuoteData })?.quoteData;
+                            if (quoteData) {
+                              const updatedQuote = { ...quoteData, depositAmount: newAmount };
+                              addMessage({
+                                role: 'assistant',
+                                content: `Amount updated to ${newAmount} ${quoteData.depositCoin}. Please review the new swap details.`,
+                                type: 'message'
+                              });
+                            }
+                          }}
                         />
                       ) : msg.type === "intent_confirmation" &&
                         msg.data &&
