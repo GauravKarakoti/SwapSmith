@@ -20,6 +20,8 @@ import Navbar from "@/components/Navbar";
 import ClaudeChatInput from "@/components/ClaudeChatInput";
 import SwapConfirmation from "@/components/SwapConfirmation";
 import IntentConfirmation from "@/components/IntentConfirmation";
+import FullPageAd from "@/components/FullPageAd";
+import { useTerminalFullPageAd } from "@/hooks/useAds";
 
 import { useChatHistory, useChatSessions } from "@/hooks/useCachedData";
 import { useErrorHandler, ErrorType } from "@/hooks/useErrorHandler";
@@ -133,6 +135,9 @@ export default function TerminalPage() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
   const { handleError } = useErrorHandler();
+
+  // Ads — full-page plans overlay shown on login arrival + periodic visits
+  const { showAd, dismiss: dismissAd } = useTerminalFullPageAd();
 
   // State
   const [messages, setMessages] = useState<Message[]>([
@@ -447,6 +452,11 @@ export default function TerminalPage() {
   return (
     <>
       <Navbar />
+
+      {/* Full-page plans interstitial — shown on login arrival or periodic visits */}
+      {showAd && (
+        <FullPageAd variant="plans" duration={12000} onDismiss={dismissAd} />
+      )}
 
       <div className="flex h-screen pt-16 app-bg overflow-hidden">
         {/* Sidebar */}

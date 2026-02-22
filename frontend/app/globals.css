@@ -21,6 +21,120 @@
 
 @import "tailwindcss";
 
+/* ── Morphing card animation ─────────────────────────────────────── */
+@keyframes morphing {
+  0% {
+    border-radius: 24px;
+    box-shadow: 0 8px 32px 0 rgba(31,38,135,0.15);
+    transform: scale(1);
+  }
+  20% {
+    border-radius: 40px 24px 24px 40px;
+    box-shadow: 0 16px 48px 0 rgba(52,211,153,0.18);
+    transform: scale(1.03);
+  }
+  40% {
+    border-radius: 24px 40px 40px 24px;
+    box-shadow: 0 24px 64px 0 rgba(96,165,250,0.18);
+    transform: scale(1.06);
+  }
+  60% {
+    border-radius: 40px 24px 24px 40px;
+    box-shadow: 0 16px 48px 0 rgba(124,58,237,0.18);
+    transform: scale(1.03);
+  }
+  80% {
+    border-radius: 24px;
+    box-shadow: 0 8px 32px 0 rgba(31,38,135,0.15);
+    transform: scale(1);
+  }
+  100% {
+    border-radius: 24px;
+    box-shadow: 0 8px 32px 0 rgba(31,38,135,0.15);
+    transform: scale(1);
+  }
+}
+
+.animate-morphing-card {
+  animation: morphing 3.5s infinite cubic-bezier(.4,0,.2,1);
+}
+
+/* ── Login page animations ─────────────────────────────────────────── */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideRight {
+  from { opacity: 0; transform: translateX(28px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes testimonialIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.animate-element       { animation: fadeSlideUp 0.55s cubic-bezier(0.22,1,0.36,1) both; }
+.animate-slide-right   { animation: slideRight  0.65s cubic-bezier(0.22,1,0.36,1) both; }
+.animate-testimonial   { animation: testimonialIn 0.6s cubic-bezier(0.22,1,0.36,1) both; }
+
+.animate-delay-100  { animation-delay: 0.05s; }
+.animate-delay-200  { animation-delay: 0.10s; }
+.animate-delay-300  { animation-delay: 0.15s; }
+.animate-delay-400  { animation-delay: 0.20s; }
+.animate-delay-500  { animation-delay: 0.26s; }
+.animate-delay-600  { animation-delay: 0.32s; }
+.animate-delay-700  { animation-delay: 0.38s; }
+.animate-delay-800  { animation-delay: 0.44s; }
+.animate-delay-900  { animation-delay: 0.50s; }
+.animate-delay-1000 { animation-delay: 0.58s; }
+.animate-delay-1200 { animation-delay: 0.68s; }
+.animate-delay-1400 { animation-delay: 0.78s; }
+
+/* ── Auth plan card animations ─────────────────────────────────── */
+@keyframes planFloat {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-10px); }
+}
+@keyframes planFloatPop {
+  0%, 100% { transform: translateY(0px) scale(1.05); }
+  50%       { transform: translateY(-13px) scale(1.05); }
+}
+@keyframes glowGreen {
+  0%, 100% { box-shadow: 0 0 20px rgba(52,211,153,0.12), 0 8px 36px rgba(0,0,0,0.5); }
+  50%       { box-shadow: 0 0 56px rgba(52,211,153,0.42), 0 22px 64px rgba(0,0,0,0.68); }
+}
+@keyframes glowBlue {
+  0%, 100% { box-shadow: 0 0 24px rgba(96,165,250,0.18), 0 8px 36px rgba(0,0,0,0.5); }
+  50%       { box-shadow: 0 0 72px rgba(96,165,250,0.58), 0 28px 80px rgba(0,0,0,0.78); }
+}
+@keyframes glowPurple {
+  0%, 100% { box-shadow: 0 0 20px rgba(167,139,250,0.12), 0 8px 36px rgba(0,0,0,0.5); }
+  50%       { box-shadow: 0 0 56px rgba(167,139,250,0.42), 0 22px 64px rgba(0,0,0,0.68); }
+}
+@keyframes shimmerSweep {
+  0%   { transform: translateX(-220%) skewX(-22deg); }
+  100% { transform: translateX(480%) skewX(-22deg); }
+}
+.plan-glow-green  { animation: planFloat    5.5s ease-in-out infinite,       glowGreen  4.5s ease-in-out infinite; }
+.plan-glow-blue   { animation: planFloatPop 5.5s ease-in-out infinite 0.45s, glowBlue   4.5s ease-in-out infinite 0.45s; }
+.plan-glow-purple { animation: planFloat    5.5s ease-in-out infinite 0.9s,  glowPurple 4.5s ease-in-out infinite 0.9s; }
+.plan-shimmer {
+  position: absolute;
+  top: 0; bottom: 0; left: 0;
+  width: 55%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.08) 50%, transparent 100%);
+  pointer-events: none;
+  animation: shimmerSweep 5s ease-in-out infinite;
+}
+/* ── FullPageAd card entrance + hover ──────────────────────────── */
+@keyframes adCardIn {
+  from { opacity: 0; transform: translateY(22px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+.ad-card-enter        { animation: adCardIn 0.5s cubic-bezier(0.22,1,0.36,1) both; }
+.ad-card-hover        { transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), box-shadow 0.3s ease; }
+.ad-card-hover:hover  { transform: translateY(-7px) scale(1.025) !important; box-shadow: 0 20px 60px rgba(0,0,0,0.18); }
+
 body {
   overflow-x: hidden;
 }
