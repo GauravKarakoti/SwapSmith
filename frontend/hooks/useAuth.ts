@@ -9,6 +9,7 @@ import {
   signOut,
   User 
 } from 'firebase/auth';
+import { setJustLoggedIn } from '@/hooks/useAds';
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -73,6 +74,8 @@ export function useAuth() {
     setIsLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, pass);
+      // Signal the terminal page to force-show a post-login ad
+      setJustLoggedIn();
       router.push('/terminal');
     } catch (error) {
       console.error('Login error:', error);
