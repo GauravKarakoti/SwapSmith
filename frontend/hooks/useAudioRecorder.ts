@@ -340,7 +340,7 @@ class AudioRecorderPolyfill {
     const hasAudioContext = !!(typeof window !== 'undefined' && (window.AudioContext || (window as any).webkitAudioContext));
     const hasSpeech = !!(typeof window !== 'undefined' && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition));
 
-    return hasMedia || hasSpeech;
+    return (hasMedia && (hasMediaRecorder || hasAudioContext)) || hasSpeech;
   }
 
   getBrowserInfo() {
