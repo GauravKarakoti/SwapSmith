@@ -1,6 +1,6 @@
 import { Telegraf } from 'telegraf';
 import { getOrderStatus } from './sideshift-client';
-import * as db from './database';
+import * as db from 'shared';
 import { handleError } from './logger';
 
 const POLL_INTERVAL = 60000; // Check every 60 seconds

@@ -1,14 +1,10 @@
 import { Telegraf } from 'telegraf';
 import axios from 'axios';
-import { eq, and } from 'drizzle-orm';
-import { db, limitOrders, LimitOrder, updateLimitOrderStatus, getUser } from '../services/database';
-import { getCoins, createQuote, createOrder } from '../services/sideshift-client';
+import { eq, and } from 'shared';
+import { db, limitOrders, LimitOrder, updateLimitOrderStatus, getUser } from 'shared';
+import { getCoins, createQuote, createOrder } from './sideshift-client';
 
-const CHECK_INTERVAL_MS = 60 * 1000; // 60 seconds
-
-export class LimitOrderWorker {
-  private intervalId: NodeJS.Timeout | null = null;
-  private isRunning: boolean = false;
+export class PriceMonitor {
   private symbolToIdMap: Map<string, string> = new Map();
   private bot: Telegraf | null = null;
 
@@ -25,31 +21,12 @@ export class LimitOrderWorker {
     this.symbolToIdMap.set('USDT', 'tether');
   }
 
-  public async start(bot: Telegraf) {
-    if (this.isRunning) return;
-    this.isRunning = true;
-    this.bot = bot;
-
-    console.log('🚀 Starting Limit Order Worker...');
-
-    // Initial coin map build
-    await this.buildCoinMap();
-
-    // Run immediately
-    this.checkOrders();
-
-    this.intervalId = setInterval(() => {
-      this.checkOrders();
-    }, CHECK_INTERVAL_MS);
+  public setBot(bot: Telegraf) {
+      this.bot = bot;
   }
 
-  public stop() {
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
-    }
-    this.isRunning = false;
-    console.log('🛑 Limit Order Worker stopped.');
+  public async init() {
+      await this.buildCoinMap();
   }
 
   private async buildCoinMap() {
@@ -69,7 +46,7 @@ export class LimitOrderWorker {
     }
   }
 
-  private async checkOrders() {
+  public async checkPendingLimitOrders() {
     try {
       // 1. Fetch pending orders
       const pendingOrders = await db.select().from(limitOrders).where(eq(limitOrders.status, 'pending'));
@@ -257,4 +234,4 @@ export class LimitOrderWorker {
   }
 }
 
-export const limitOrderWorker = new LimitOrderWorker();
+export const priceMonitor = new PriceMonitor();

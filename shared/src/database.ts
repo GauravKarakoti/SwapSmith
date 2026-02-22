@@ -1,11 +1,11 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import { pgTable, serial, text, real, timestamp, bigint, integer } from 'drizzle-orm/pg-core';
-import { eq, desc, and, sql } from 'drizzle-orm'; // Added 'and', 'sql'
+import { eq, desc, and, sql } from 'drizzle-orm';
+export { eq, desc, and, sql };
 import dotenv from 'dotenv';
-import { safeParseJSON } from '../utils/safeParse';
-import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
-import type { ParsedCommand } from './groq-client';
+import { safeParseJSON } from './utils/safeParse';
+import type { SideShiftOrder, SideShiftCheckoutResponse, ParsedCommand } from './types';
 
 dotenv.config();
 const memoryAddressBook = new Map<number, Map<string, { address: string; chain: string }>>();
@@ -117,6 +117,7 @@ export const limitOrders = pgTable('limit_orders', {
   executedAt: timestamp('executed_at'),
 });
 
+// Export inferred types
 export type User = typeof users.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Checkout = typeof checkouts.$inferSelect;
@@ -287,7 +288,7 @@ export async function resolveNickname(telegramId: number, nickname: string): Pro
         eq(addressBook.telegramId, telegramId), 
         eq(addressBook.nickname, nickname)
       )
-    ) // Corrected multi-where syntax
+    )
     .limit(1);
     return result[0]?.address || null;
   }catch(err){

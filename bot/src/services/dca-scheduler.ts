@@ -4,7 +4,7 @@
  */
 
 import { Telegraf } from 'telegraf';
-import * as db from './database';
+import * as db from 'shared';
 import { createQuote, createOrder } from './sideshift-client';
 import { handleError } from './logger';
 

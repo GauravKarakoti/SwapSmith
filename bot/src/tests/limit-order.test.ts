@@ -1,6 +1,5 @@
 import { parseUserCommand } from '../services/parseUserCommand';
-import { limitOrderWorker } from '../workers/limitOrderWorker';
-import { db, updateLimitOrderStatus } from '../services/database';
+import { db, updateLimitOrderStatus } from 'shared';
 import axios from 'axios';
 import { createQuote, createOrder } from '../services/sideshift-client';
 
@@ -17,7 +16,7 @@ jest.mock('groq-sdk', () => {
 
 // Mock dependencies
 jest.mock('axios');
-jest.mock('../services/database', () => ({
+jest.mock('shared', () => ({
   db: {
     select: jest.fn(),
     update: jest.fn(),

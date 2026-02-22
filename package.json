@@ -1,0 +1,13 @@
+{
+  "name": "swapsmith-root",
+  "private": true,
+  "workspaces": [
+    "bot",
+    "frontend",
+    "shared"
+  ],
+  "scripts": {
+    "db:migrate": "npm run db:migrate --workspace=shared",
+    "db:gen": "npm run db:gen --workspace=shared"
+  }
+}

@@ -4,69 +4,11 @@ import fs from 'fs';
 import { handleError } from './logger';
 import { analyzeCommand, generateContextualHelp } from './contextual-help';
 import { safeParseLLMJson } from "../utils/safe-json";
+import { ParsedCommand } from "shared";
 
 dotenv.config();
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-
-// Enhanced Interface to support Portfolio and Yield
-export interface ParsedCommand {
-  success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "unknown";
-  
-  // Single Swap Fields
-  fromAsset: string | null;
-  fromChain: string | null;
-  toAsset: string | null;
-  toChain: string | null;
-  amount: number | null;
-  amountType?: "exact" | "absolute" | "percentage" | "all" | "exclude" | null; // Extended with 'absolute'
-
-  excludeAmount?: number;
-  excludeToken?: string;
-  quoteAmount?: number;
-
-  // Conditional Fields
-  conditions?: {
-    type: "price_above" | "price_below";
-    asset: string;
-    value: number;
-  };
-  
-  // Portfolio Fields (Array of outputs)
-  portfolio?: {
-    toAsset: string;
-    toChain: string;
-    percentage: number; // e.g., 50 for 50%
-  }[];
-
-  // DCA Fields
-  frequency?: "daily" | "weekly" | "monthly" | null;
-  dayOfWeek?: string | null; // For weekly: "monday", "tuesday", etc.
-  dayOfMonth?: string | null; // For monthly: "1", "15", etc.
-
-  // Checkout Fields
-  settleAsset: string | null;
-  settleNetwork: string | null;
-  settleAmount: number | null;
-  settleAddress: string | null;
-
-  fromProject: string | null;
-  fromYield: number | null;
-  toProject: string | null;
-  toYield: number | null;
-
-  // Limit Order Fields (Legacy - kept for compatibility, prefer 'conditions')
-  conditionOperator?: 'gt' | 'lt';
-  conditionValue?: number;
-  conditionAsset?: string;
-
-  confidence: number;
-  validationErrors: string[];
-  parsedMessage: string;
-  requiresConfirmation?: boolean; // Added back for compatibility
-  originalInput?: string;         // Added back for compatibility
-}
 
 const systemPrompt = `
 You are SwapSmith, an advanced DeFi AI agent.

@@ -14,15 +14,16 @@ services:
   
   bot:
     build:
-      context: ./bot
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: bot/Dockerfile
     container_name: swapsmith-bot
     restart: unless-stopped
     env_file:
       - ./bot/.env
     environment:
       - DATABASE_URL=postgres://postgres:postgres@db:5432/swapsmith
-    command: sh -c "npm run db:migrate && npm run start"
+    # Run migration from shared workspace, then start bot
+    command: sh -c "cd ../shared && npm run db:migrate && cd ../bot && npm run start"
     depends_on:
       db:
         condition: service_healthy

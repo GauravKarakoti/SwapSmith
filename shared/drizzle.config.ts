@@ -5,7 +5,7 @@ dotenv.config();
 
 export default defineConfig({
   // Point to the file where your tables (users, orders, etc.) are defined
-  schema: "./src/services/database.ts", 
+  schema: "./src/database.ts",
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {

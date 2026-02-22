@@ -1,118 +1,23 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
+import {
+    SideShiftPair,
+    SideShiftQuote,
+    SideShiftOrder,
+    SideShiftOrderStatus,
+    SideShiftCheckoutRequest,
+    SideShiftCheckoutResponse,
+    TokenDetail,
+    SideShiftCoin
+} from 'shared';
+
 dotenv.config();
 const SIDESHIFT_BASE_URL = "https://sideshift.ai/api/v2";
 const AFFILIATE_ID = process.env.SIDESHIFT_AFFILIATE_ID || process.env.NEXT_PUBLIC_AFFILIATE_ID || '';
 const API_KEY = process.env.SIDESHIFT_API_KEY || process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
 const DEFAULT_USER_IP = process.env.SIDESHIFT_CLIENT_IP;
 
-export interface SideShiftPair {
-  depositCoin: string;
-  settleCoin: string;
-  depositNetwork: string;
-  settleNetwork: string;
-  min: string;
-  max: string;
-  rate: string;
-  hasMemo: boolean;
-}
-
-export interface SideShiftQuote {
-  id?: string;
-  depositCoin: string;
-  depositNetwork: string;
-  settleCoin: string;
-  settleNetwork: string;
-  depositAmount: string;
-  settleAmount: string;
-  rate: string;
-  affiliateId: string;
-  error?: { code: string; message: string; };
-  memo?: string;
-  expiry?: string;
-}
-
-export interface SideShiftOrder {
-    id: string;
-    // Update this field to allow string or object
-    depositAddress: string | {
-        address: string;
-        memo: string;
-    };
-}
-
-// --- NEW: Type for Order Status ---
-export interface SideShiftOrderStatus {
-  id: string;
-  status: string;
-  depositCoin: string;
-  depositNetwork: string;
-  settleCoin: string;
-  settleNetwork: string;
-  depositAddress: {
-    address: string;
-    memo: string | null;
-  };
-  settleAddress: {
-    address: string;
-    memo: string | null;
-  };
-  depositAmount: string | null;
-  settleAmount: string | null;
-  depositHash: string | null;
-  settleHash: string | null;
-  createdAt: string;
-  updatedAt: string;
-  error?: { code: string; message: string; };
-}
-// --- END NEW ---
-
-
-// --- NEW: Types for SideShift Pay API ---
-export interface SideShiftCheckoutRequest {
-  settleCoin: string;
-  settleNetwork: string;
-  settleAmount: string;
-  settleAddress: string;
-  affiliateId: string;
-  successUrl: string;
-  cancelUrl: string;
-}
-
-export interface SideShiftCheckoutResponse {
-  id: string;
-  settleCoin: string;
-  settleNetwork: string;
-  settleAddress: string;
-  settleAmount: string;
-  affiliateId: string;
-  successUrl: string;
-  cancelUrl: string;
-  createdAt: string;
-  updatedAt: string;
-  error?: { code: string; message: string; };
-}
-// --- END NEW ---
-
 // --- NEW: Types and function for Coins API ---
-export interface TokenDetail {
-  contractAddress: string;
-  decimals: number;
-}
-
-export interface SideShiftCoin {
-  networks: string[];
-  coin: string;
-  name: string;
-  hasMemo: boolean;
-  deprecated?: boolean;
-  fixedOnly: string[] | boolean;
-  variableOnly: string[] | boolean;
-  tokenDetails?: Record<string, TokenDetail>; // Object with network as key
-  networksWithMemo: string[];
-  depositOffline: string[] | boolean;
-  settleOffline: string[] | boolean;
-}
 
 export async function getCoins(userIP?: string): Promise<SideShiftCoin[]> {
   try {

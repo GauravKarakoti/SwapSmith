@@ -3,7 +3,7 @@ import { message } from 'telegraf/filters';
 import dotenv from 'dotenv';
 import logger from './services/logger';
 import { executePortfolioStrategy } from './services/portfolio-service';
-import { transcribeAudio, ParsedCommand } from './services/groq-client';
+import { transcribeAudio } from './services/groq-client';
 import { parseUserCommand } from './services/parseUserCommand';
 import {
   createQuote,
@@ -16,7 +16,8 @@ import {
   suggestMigration,
   findHigherYieldPools,
 } from './services/yield-client';
-import * as db from './services/database';
+import * as db from 'shared';
+import { ParsedCommand } from 'shared';
 import { ethers } from 'ethers';
 import axios from 'axios';
 import fs from 'fs';
@@ -27,10 +28,10 @@ import { tokenResolver } from './services/token-resolver';
 import { DCAScheduler } from './services/dca-scheduler';
 import { resolveAddress, isNamingService } from './services/address-resolver';
 import { ADDRESS_PATTERNS } from './config/address-patterns';
-import { limitOrderWorker } from './workers/limitOrderWorker';
+import { orderWorker } from './workers/order-worker';
 import * as os from 'os';
 import express from 'express';
-import { sql } from 'drizzle-orm';
+import { sql } from 'shared';
 
 // --- GLOBAL ERROR HANDLERS ---
 process.on("unhandledRejection", (err) => {
@@ -880,7 +881,7 @@ const startServer = async () => {
         dcaScheduler.start();
         dcaStarted = true;
 
-        limitOrderWorker.start(bot);
+        orderWorker.start(bot);
         limitOrderStarted = true;
     }
 
@@ -907,7 +908,7 @@ const startServer = async () => {
     const stop = (signal: string) => {
         console.log(`Received ${signal}. Shutting down...`);
         if (dcaStarted) dcaScheduler.stop();
-        if (limitOrderStarted) limitOrderWorker.stop();
+        if (limitOrderStarted) orderWorker.stop();
         bot.stop(signal);
         server.close(() => {
             console.log("Server closed");

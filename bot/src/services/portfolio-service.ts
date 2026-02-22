@@ -1,5 +1,5 @@
 import { createQuote, createOrder } from './sideshift-client';
-import * as db from './database';
+import * as db from 'shared';
 import logger from './logger';
 
 interface PortfolioExecutionResult {

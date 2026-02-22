@@ -1,4 +1,5 @@
-import { parseWithLLM, ParsedCommand } from './groq-client';
+import { parseWithLLM } from './groq-client';
+import { ParsedCommand } from 'shared';
 
 export { ParsedCommand };
 

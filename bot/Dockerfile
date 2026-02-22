@@ -12,17 +12,28 @@ RUN apt-get update && apt-get install -y \
 # Set the working directory in the container
 WORKDIR /usr/src/app
 
-# Copy package.json and package-lock.json
-COPY package*.json ./
+# Copy root package files
+COPY package.json package-lock.json ./
+
+# Copy workspace package files (to allow npm ci to work)
+COPY shared/package.json ./shared/
+COPY bot/package.json ./bot/
+COPY frontend/package.json ./frontend/
 
 # Install app dependencies
 RUN npm ci
 
-# Copy the rest of your app's source code
-COPY . .
+# Copy source code
+COPY shared ./shared
+COPY bot ./bot
 
-# Run the build script to compile TypeScript to JavaScript
+# Build shared workspace
+WORKDIR /usr/src/app/shared
 RUN npm run build
 
-# Your app's start command (from package.json)
+# Build bot workspace
+WORKDIR /usr/src/app/bot
+RUN npm run build
+
+# Your app's start command (from bot package.json)
 CMD [ "npm", "run", "start" ]

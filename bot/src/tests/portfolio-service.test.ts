@@ -7,7 +7,7 @@ jest.mock('../services/sideshift-client', () => ({
   createOrder: jest.fn(),
 }));
 
-jest.mock('../services/database', () => ({
+jest.mock('shared', () => ({
   createOrderEntry: jest.fn(),
   addWatchedOrder: jest.fn(),
 }));
@@ -19,7 +19,7 @@ jest.mock('../services/logger', () => ({
 
 const mockCreateQuote = require('../services/sideshift-client').createQuote;
 const mockCreateOrder = require('../services/sideshift-client').createOrder;
-const mockDb = require('../services/database');
+const mockDb = require('shared');
 
 describe('executePortfolioStrategy', () => {
   const userId = 12345;

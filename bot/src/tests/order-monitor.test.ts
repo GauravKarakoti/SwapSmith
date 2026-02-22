@@ -1,10 +1,10 @@
 import { OrderMonitor } from '../services/order-monitor';
-import * as db from '../services/database';
+import * as db from 'shared';
 import { getOrderStatus } from '../services/sideshift-client';
 import { Telegraf } from 'telegraf';
 
 // Mock dependencies
-jest.mock('../services/database');
+jest.mock('shared');
 jest.mock('../services/sideshift-client');
 jest.mock('../services/logger');
 
