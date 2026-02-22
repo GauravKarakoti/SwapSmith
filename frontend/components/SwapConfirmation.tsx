@@ -114,6 +114,7 @@ export default function SwapConfirmation({ quote, confidence = 100, onAmountChan
     address: address,
     chainId: depositChainId,
     token: tokenAddress as `0x${string}` | undefined,
+    query: { enabled: Boolean(address && depositChainId) },
   });
 
   const handleMaxClick = async () => {
