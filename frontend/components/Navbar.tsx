@@ -18,6 +18,7 @@ import {
   X,
   Info,
   ChevronRight,
+  Star,
 } from "lucide-react";
 import Image from "next/image";
 import { useAuth } from "@/hooks/useAuth";
@@ -34,6 +35,7 @@ const NAV_ITEMS = [
   { href: "/discussions", label: "Discussions", Icon: MessageSquare },
   { href: "/terminal", label: "Terminal", Icon: TerminalIcon },
   { href: "/contributors", label: "Contributors", Icon: Users },
+  { href: "/watchlist", label: "Watchlist", Icon: Star },
 ];
 
 const PROFILE_MENU = [
@@ -107,9 +109,6 @@ export default function Navbar() {
             : "bg-white/85 dark:bg-[#08080f]/85"
         } border-b border-zinc-200/80 dark:border-zinc-800/50`}
       >
-        {/* Accent gradient line */}
-        <div className="absolute top-0 inset-x-0 h-0.5 bg-linear-to-r from-blue-500 via-indigo-500 to-purple-500 opacity-75" />
-
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-full flex items-center justify-between gap-3">
 
           {/* ── Logo ── */}
