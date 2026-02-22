@@ -42,7 +42,8 @@
     "svg-path-commander": "^2.1.11",
     "three": "^0.183.1",
     "viem": "^2.37.3",
-    "wagmi": "^2.16.9"
+    "wagmi": "^2.16.9",
+    "winston": "^3.19.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

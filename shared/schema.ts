@@ -2,6 +2,8 @@ import { pgTable, serial, text, bigint, timestamp, integer, real, unique, pgEnum
 import { relations, sql } from 'drizzle-orm';
 
 // --- ENUMS ---
+export const planType = pgEnum('plan_type', ['free', 'premium', 'pro']);
+
 export const rewardActionType = pgEnum('reward_action_type', [
   'course_complete',
   'module_complete',
@@ -30,6 +32,14 @@ export const users = pgTable('users', {
   sessionTopic: text('session_topic'),
   totalPoints: integer('total_points').notNull().default(0),
   totalTokensClaimed: numeric('total_tokens_claimed', { precision: 20, scale: 8 }).notNull().default('0'),
+  // Plan & subscription fields
+  plan: planType('plan').notNull().default('free'),
+  planPurchasedAt: timestamp('plan_purchased_at'),
+  planExpiresAt: timestamp('plan_expires_at'),
+  // Daily usage counters
+  dailyChatCount: integer('daily_chat_count').notNull().default(0),
+  dailyTerminalCount: integer('daily_terminal_count').notNull().default(0),
+  usageResetAt: timestamp('usage_reset_at').defaultNow(),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -304,3 +314,26 @@ export const rewardsLogRelations = relations(rewardsLog, ({one}) => ({
 		references: [users.id]
 	}),
 }));
+
+// --- PLAN PURCHASES TABLE ---
+
+export const planPurchases = pgTable('plan_purchases', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  plan: planType('plan').notNull(),
+  coinsSpent: integer('coins_spent').notNull(),
+  durationDays: integer('duration_days').notNull(),
+  activatedAt: timestamp('activated_at').notNull().defaultNow(),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => [
+  index("idx_plan_purchases_user_id").on(table.userId),
+]);
+
+export const planPurchasesRelations = relations(planPurchases, ({one}) => ({
+  user: one(users, {
+    fields: [planPurchases.userId],
+    references: [users.id],
+  }),
+}));
+

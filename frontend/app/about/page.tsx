@@ -6,21 +6,11 @@ import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import {
-  Shield,
-  Rocket,
   Layers,
   Sparkles,
-  Trophy,
   Star,
   GitFork,
   AlertCircle,
-  ExternalLink,
-  Gift,
-  Zap,
-  BookOpen,
-  MessageSquare,
-  Wallet,
-  Clock,
   ArrowRight,
   Github,
   Code2,
@@ -38,14 +28,7 @@ const REPO_STATS = {
   language: 'TypeScript',
 };
 
-const REWARD_ACTIONS = [
-  { icon: <Trophy className="w-5 h-5" />, label: 'Daily Login', points: '+10 pts', desc: 'Show up daily.' },
-  { icon: <Zap className="w-5 h-5" />, label: 'Execute Swap', points: '+25 pts', desc: 'Swap any asset.' },
-  { icon: <BookOpen className="w-5 h-5" />, label: 'Complete Course', points: '+50 pts', desc: 'Finish learning modules.' },
-  { icon: <MessageSquare className="w-5 h-5" />, label: 'Use AI Terminal', points: '+15 pts', desc: 'Ask SwapSmith AI.' },
-  { icon: <Wallet className="w-5 h-5" />, label: 'Connect Wallet', points: '+20 pts', desc: 'Unlock Web3 features.' },
-  { icon: <Clock className="w-5 h-5" />, label: 'Setup DCA', points: '+30 pts', desc: 'Automate investments.' },
-];
+// ...existing code...
 
 /* ================================================================ */
 /*  Helpers                                                          */

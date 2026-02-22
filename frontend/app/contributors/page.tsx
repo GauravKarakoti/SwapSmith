@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { motion, AnimatePresence, type Variants } from 'framer-motion';
+import { motion, type Variants } from 'framer-motion';
 import Image from 'next/image';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -16,7 +16,7 @@ import {
   Crown,
   Medal,
   Award,
-  TrendingUp,
+  // ...existing code...
   Code2,
   Heart,
   ArrowUpRight,
