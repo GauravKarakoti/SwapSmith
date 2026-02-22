@@ -21,8 +21,8 @@
     "@neondatabase/serverless": "^1.0.2",
     "dotenv": "^17.3.1",
     "drizzle-kit": "^0.31.7",
-    "esbuild": "^0.27.3",
     "drizzle-orm": "^0.45.1",
+    "esbuild": "^0.27.3",
     "winston": "^3.19.0"
   },
   "devDependencies": {
