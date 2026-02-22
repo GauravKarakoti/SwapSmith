@@ -18,6 +18,7 @@ import {
   X,
   Info,
   ChevronRight,
+  Star,
 } from "lucide-react";
 import Image from "next/image";
 import { useAuth } from "@/hooks/useAuth";
@@ -34,6 +35,7 @@ const NAV_ITEMS = [
   { href: "/discussions", label: "Discussions", Icon: MessageSquare },
   { href: "/terminal", label: "Terminal", Icon: TerminalIcon },
   { href: "/contributors", label: "Contributors", Icon: Users },
+  { href: "/watchlist", label: "Watchlist", Icon: Star },
 ];
 
 const PROFILE_MENU = [
