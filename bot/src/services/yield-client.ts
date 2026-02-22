@@ -89,8 +89,8 @@ export async function findHigherYieldPools(
   ).sort((a, b) => b.apy - a.apy);
 }
 
-export function calculateYieldMigration(relevantPools: YieldPool[], amount: number, chain?: string, fromAsset?: string): MigrationSuggestion | null {
-  let fromPool = relevantPools.find(p => p.symbol === fromAsset);
+export function calculateYieldMigration(relevantPools: YieldPool[], amount: number, chain?: string, sourceAsset?: string): MigrationSuggestion | null {
+  let fromPool = relevantPools.find(p => p.symbol === sourceAsset);
 
   if (!fromPool && chain) {
     fromPool = relevantPools.find(p => p.chain.toLowerCase() === chain.toLowerCase());
