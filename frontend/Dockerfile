@@ -6,7 +6,11 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
-COPY . . 
+RUN apk add --no-cache ffmpeg
+COPY . .
+
+ARG GROQ_API_KEY
+ENV GROQ_API_KEY=$GROQ_API_KEY
 
 
 RUN npm run build
@@ -18,6 +22,7 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+RUN apk add --no-cache ffmpeg
 
 # copy standalone output
 COPY --from=builder /app/.next/standalone ./

@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { CheckCircle, AlertCircle, ExternalLink, Copy, Check, ShieldCheck, Shield, AlertTriangle, Info, TrendingUp, Zap } from 'lucide-react'
-import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi' // Added usePublicClient
-import { parseEther, formatEther, type Chain } from 'viem'
+import { useAccount, useSendTransaction, useSwitchChain, usePublicClient, useBalance } from 'wagmi' // Added usePublicClient, useBalance
+import { parseEther, formatEther, type Chain, formatUnits, parseUnits } from 'viem'
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
-import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift'
+import { getCoins } from '../utils/sideshift-client'
 
 // --- Interface and Constants ---
 interface QuoteData {
@@ -69,8 +69,8 @@ export default function SwapConfirmation({ quote, confidence = 100, onAmountChan
   const [copiedMemo, setCopiedMemo] = useState(false)
   const [isSimulating, setIsSimulating] = useState(false);
   const [safetyCheck, setSafetyCheck] = useState<SafetyCheckResult | null>(null);
-  const [walletBalance, setWalletBalance] = useState<string | null>(null);
-  const [isLoadingBalance, setIsLoadingBalance] = useState(false);
+  const [tokenAddress, setTokenAddress] = useState<string | undefined>(undefined);
+  const [isMaxLoading, setIsMaxLoading] = useState(false);
 
   const { address, isConnected, chain: connectedChain } = useAccount()
   const { data: hash, error, isPending, isSuccess, sendTransaction } = useSendTransaction()
@@ -81,6 +81,68 @@ export default function SwapConfirmation({ quote, confidence = 100, onAmountChan
 
   // Get a public client specifically for the target chain to run simulations
   const publicClient = usePublicClient({ chainId: depositChainId });
+
+  // Fetch token address for non-native tokens
+  useEffect(() => {
+    const fetchTokenAddress = async () => {
+      if (!quote.depositNetwork || !quote.depositCoin) return;
+      const chain = CHAIN_MAP[quote.depositNetwork.toLowerCase()];
+
+      // If it looks like a native token match, skip fetch
+      if (chain && chain.nativeCurrency.symbol.toUpperCase() === quote.depositCoin.toUpperCase()) {
+        setTokenAddress(undefined);
+        return;
+      }
+
+      try {
+        const coins = await getCoins();
+        const coinDef = coins.find(c => c.coin === quote.depositCoin);
+        const networkDef = coinDef?.networks.find(n => n.network === quote.depositNetwork);
+        if (networkDef?.tokenContract) {
+          setTokenAddress(networkDef.tokenContract);
+        }
+      } catch (e) { console.error('Failed to fetch token address', e) }
+    };
+    fetchTokenAddress();
+  }, [quote.depositCoin, quote.depositNetwork]);
+
+  const {
+    data: balanceData,
+    isLoading: isBalanceLoading,
+    isError: isBalanceError
+  } = useBalance({
+    address: address,
+    chainId: depositChainId,
+    token: tokenAddress as `0x${string}` | undefined,
+    query: { enabled: Boolean(address && depositChainId) },
+  });
+
+  const handleMaxClick = async () => {
+    if (!balanceData || !onRequote) return;
+    setIsMaxLoading(true);
+
+    try {
+      let amount = balanceData.formatted;
+
+      // If native token, leave a gas buffer
+      if (!tokenAddress) {
+        // Use a more dynamic buffer or a safe constant
+        // For most L2s/Mainnet, 0.005 - 0.01 is safe for a simple transfer
+        const buffer = parseUnits("0.008", balanceData.decimals);
+        if (balanceData.value > buffer) {
+          amount = formatUnits(balanceData.value - buffer, balanceData.decimals);
+        } else {
+          amount = "0";
+        }
+      }
+
+      onRequote(amount, quote);
+    } catch (err) {
+      console.error('Failed to calculate max amount:', err);
+    } finally {
+      setIsMaxLoading(false);
+    }
+  };
 
   const handleConfirm = async () => {
     if (!quote) {
@@ -368,16 +430,28 @@ export default function SwapConfirmation({ quote, confidence = 100, onAmountChan
       <div className="space-y-3 text-sm">
         <div className="flex justify-between items-center">
           <span className="text-gray-600">You send:</span>
-          <div className="flex items-center gap-2">
+          <div className='flex items-center gap-2'>
             <span className="font-medium text-gray-900">{quote.depositAmount} {quote.depositCoin} on {getNetworkName(quote.depositNetwork)}</span>
-            <button
-              onClick={handleFetchBalance}
-              disabled={!isConnected || isLoadingBalance}
-              className="px-2 py-1 text-xs font-semibold bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-              title="Set amount to your full wallet balance"
-            >
-              {isLoadingBalance ? 'Loading...' : 'Max'}
-            </button>
+            {onRequote && isConnected && (
+              <div className="flex items-center gap-2">
+                {isBalanceLoading ? (
+                  <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                ) : isBalanceError ? (
+                  <span className="text-[10px] text-red-500">Error loading balance</span>
+                ) : (
+                  <div className="flex items-center gap-1.5 bg-blue-50/50 px-2 py-0.5 rounded-md border border-blue-100">
+                    <span className="text-[10px] text-gray-500">Bal: {balanceData?.formatted.substring(0, 6)}</span>
+                    <button
+                      onClick={handleMaxClick}
+                      disabled={isMaxLoading || isBalanceLoading}
+                      className="text-[10px] font-bold text-blue-600 hover:text-blue-800 transition-colors uppercase"
+                    >
+                      {isMaxLoading ? '...' : 'Max'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
         <div className="border-t pt-3">
