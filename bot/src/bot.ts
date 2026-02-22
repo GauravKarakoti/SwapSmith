@@ -9,7 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import axios from 'axios';
-import { spawn } from 'child_process';
+import { execFile } from 'child_process';
 import express from 'express';
 import { sql } from 'drizzle-orm';
 
@@ -148,7 +148,7 @@ bot.on(message('voice'), async (ctx) => {
     fs.writeFileSync(oga, res.data);
 
     await new Promise<void>((resolve, reject) =>
-      exec(`ffmpeg -i "${oga}" "${mp3}" -y`, (e) => (e ? reject(e) : resolve()))
+      execFile('ffmpeg', ['-i', oga, mp3, '-y'], (e) => (e ? reject(e) : resolve()))
     );
 
     const text = await transcribeAudio(mp3);
