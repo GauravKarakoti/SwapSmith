@@ -243,7 +243,7 @@ class AudioRecorderPolyfill {
       this.speechResult = '';
 
       // If no MediaRecorder and no AudioContext, try SpeechRecognition (iOS fallback)
-      if (this.useFallback && !(window.AudioContext || (window as any).webkitAudioContext)) {
+      if (this.useFallback && !(window.AudioContext || window.webkitAudioContext)) {
         if (this.recognition) {
           this.isSpeechToText = true;
           this.recognition.start();
