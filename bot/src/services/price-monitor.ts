@@ -1,6 +1,6 @@
 import axios from 'axios';
 import * as db from './database';
-import { handleError } from './logger';
+import { handleError, default as logger } from './logger';
 
 // CoinGecko API base URL
 const COINGECKO_API_URL = 'https://api.coingecko.com/api/v3';
@@ -101,7 +101,7 @@ export async function getCurrentPrice(asset: string): Promise<number | null> {
   const coinId = getCoinGeckoId(asset);
   
   if (!coinId) {
-    console.warn(`No CoinGecko mapping found for asset: ${asset}`);
+    logger.warn(`No CoinGecko mapping found for asset: ${asset}`);
     return null;
   }
 

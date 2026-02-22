@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from 'next-auth';
 import { getWatchlist, addToWatchlist, removeFromWatchlist } from '@/lib/database';
 import { getCachedPrice } from '@/lib/database';
+import logger from '@/lib/logger';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Get user session for authentication
@@ -34,7 +35,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       return res.status(200).json(watchlistWithPrices);
     } catch (error) {
-      console.error('Error fetching watchlist:', error);
+      logger.error('Error fetching watchlist:', { error });
       return res.status(500).json({ error: 'Failed to fetch watchlist' });
     }
   }
@@ -63,7 +64,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         btcPrice: priceData?.btcPrice || null,
       });
     } catch (error) {
-      console.error('Error adding to watchlist:', error);
+      logger.error('Error adding to watchlist:', { error });
       return res.status(500).json({ error: 'Failed to add to watchlist' });
     }
   }
@@ -85,7 +86,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       return res.status(200).json({ success: true, message: 'Token removed from watchlist' });
     } catch (error) {
-      console.error('Error removing from watchlist:', error);
+      logger.error('Error removing from watchlist:', { error });
       return res.status(500).json({ error: 'Failed to remove from watchlist' });
     }
   }
