@@ -12,6 +12,8 @@ import {
   users,
   courseProgress,
   rewardsLog,
+  watchlist,
+  priceAlerts,
 } from '../../shared/schema';
 
 const sql = neon(process.env.DATABASE_URL!);
@@ -27,6 +29,8 @@ export {
   users,
   courseProgress,
   rewardsLog,
+  watchlist,
+  priceAlerts,
 };
 
 export type User = typeof users.$inferSelect;
@@ -37,6 +41,8 @@ export type UserSettings = typeof userSettings.$inferSelect;
 export type SwapHistory = typeof swapHistory.$inferSelect;
 export type ChatHistory = typeof chatHistory.$inferSelect;
 export type Discussion = typeof discussions.$inferSelect;
+export type Watchlist = typeof watchlist.$inferSelect;
+export type PriceAlert = typeof priceAlerts.$inferSelect;
 
 // --- COIN PRICE CACHE FUNCTIONS ---
 
@@ -753,6 +759,232 @@ export async function getLeaderboard(limit: number = 100): Promise<Array<{
     totalPoints: entry.totalPoints,
     totalTokensClaimed: entry.totalTokensClaimed,
   }));
+}
+
+// --- WATCHLIST FUNCTIONS ---
+
+export async function getWatchlist(userId: string): Promise<Watchlist[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
+  return await db.select().from(watchlist)
+    .where(eq(watchlist.userId, userId))
+    .orderBy(desc(watchlist.addedAt));
+}
+
+export async function addToWatchlist(
+  userId: string,
+  coin: string,
+  network: string,
+  name: string
+): Promise<Watchlist | null> {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  // Check if already in watchlist
+  const existing = await db.select().from(watchlist)
+    .where(and(
+      eq(watchlist.userId, userId),
+      eq(watchlist.coin, coin),
+      eq(watchlist.network, network)
+    ))
+    .limit(1);
+  
+  if (existing.length > 0) {
+    return existing[0]; // Already in watchlist
+  }
+  
+  const result = await db.insert(watchlist).values({
+    userId,
+    coin,
+    network,
+    name,
+  }).returning();
+  
+  return result[0];
+}
+
+export async function removeFromWatchlist(
+  userId: string,
+  coin: string,
+  network: string
+): Promise<boolean> {
+  if (!db) {
+    console.warn('Database not configured');
+    return false;
+  }
+  
+  const result = await db.delete(watchlist)
+    .where(and(
+      eq(watchlist.userId, userId),
+      eq(watchlist.coin, coin),
+      eq(watchlist.network, network)
+    ));
+  
+  return true;
+}
+
+export async function isInWatchlist(
+  userId: string,
+  coin: string,
+  network: string
+): Promise<boolean> {
+  if (!db) {
+    console.warn('Database not configured');
+    return false;
+  }
+  
+  const result = await db.select().from(watchlist)
+    .where(and(
+      eq(watchlist.userId, userId),
+      eq(watchlist.coin, coin),
+      eq(watchlist.network, network)
+    ))
+    .limit(1);
+  
+  return result.length > 0;
+}
+
+// --- PRICE ALERT FUNCTIONS ---
+
+export async function getPriceAlerts(userId: string): Promise<PriceAlert[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
+  return await db.select().from(priceAlerts)
+    .where(eq(priceAlerts.userId, userId))
+    .orderBy(desc(priceAlerts.createdAt));
+}
+
+export async function getActivePriceAlerts(userId: string): Promise<PriceAlert[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
+  return await db.select().from(priceAlerts)
+    .where(and(
+      eq(priceAlerts.userId, userId),
+      eq(priceAlerts.isActive, true)
+    ))
+    .orderBy(desc(priceAlerts.createdAt));
+}
+
+export async function createPriceAlert(
+  userId: string,
+  coin: string,
+  network: string,
+  name: string,
+  targetPrice: string,
+  condition: 'gt' | 'lt',
+  telegramId?: number
+): Promise<PriceAlert | null> {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  const result = await db.insert(priceAlerts).values({
+    userId,
+    telegramId: telegramId || null,
+    coin,
+    network,
+    name,
+    targetPrice,
+    condition,
+    isActive: true,
+  }).returning();
+  
+  return result[0];
+}
+
+export async function updatePriceAlert(
+  alertId: number,
+  userId: string,
+  updates: {
+    targetPrice?: string;
+    condition?: 'gt' | 'lt';
+    isActive?: boolean;
+  }
+): Promise<PriceAlert | null> {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  const result = await db.update(priceAlerts)
+    .set(updates)
+    .where(and(
+      eq(priceAlerts.id, alertId),
+      eq(priceAlerts.userId, userId)
+    ))
+    .returning();
+  
+  return result[0] || null;
+}
+
+export async function deletePriceAlert(alertId: number, userId: string): Promise<boolean> {
+  if (!db) {
+    console.warn('Database not configured');
+    return false;
+  }
+  
+  await db.delete(priceAlerts)
+    .where(and(
+      eq(priceAlerts.id, alertId),
+      eq(priceAlerts.userId, userId)
+    ));
+  
+  return true;
+}
+
+export async function togglePriceAlert(alertId: number, userId: string, isActive: boolean): Promise<PriceAlert | null> {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  const result = await db.update(priceAlerts)
+    .set({ isActive })
+    .where(and(
+      eq(priceAlerts.id, alertId),
+      eq(priceAlerts.userId, userId)
+    ))
+    .returning();
+  
+  return result[0] || null;
+}
+
+export async function markPriceAlertTriggered(alertId: number): Promise<boolean> {
+  if (!db) {
+    console.warn('Database not configured');
+    return false;
+  }
+  
+  await db.update(priceAlerts)
+    .set({ 
+      isActive: false,
+      triggeredAt: new Date()
+    })
+    .where(eq(priceAlerts.id, alertId));
+  
+  return true;
+}
+
+export async function getAllActivePriceAlerts(): Promise<PriceAlert[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
+  return await db.select().from(priceAlerts)
+    .where(eq(priceAlerts.isActive, true));
 }
 
 export default db;

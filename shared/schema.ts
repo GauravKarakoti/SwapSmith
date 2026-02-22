@@ -177,6 +177,41 @@ export const userSettings = pgTable('user_settings', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// --- WATCHLIST SCHEMA ---
+
+export const watchlist = pgTable('watchlist', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  coin: text('coin').notNull(),
+  network: text('network').notNull(),
+  name: text('name').notNull(),
+  addedAt: timestamp('added_at').defaultNow(),
+}, (table) => [
+  index("idx_watchlist_user_id").on(table.userId),
+  index("idx_watchlist_user_coin_network").on(table.userId, table.coin, table.network),
+]);
+
+// --- PRICE ALERTS SCHEMA ---
+
+export const priceAlerts = pgTable('price_alerts', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  telegramId: bigint('telegram_id', { mode: 'number' }),
+  coin: text('coin').notNull(),
+  network: text('network').notNull(),
+  name: text('name').notNull(),
+  targetPrice: numeric('target_price', { precision: 20, scale: 8 }).notNull(),
+  condition: text('condition').notNull(), // 'gt' (greater than) or 'lt' (less than)
+  isActive: boolean('is_active').notNull().default(true),
+  triggeredAt: timestamp('triggered_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => [
+  index("idx_price_alerts_user_id").on(table.userId),
+  index("idx_price_alerts_telegram_id").on(table.telegramId),
+  index("idx_price_alerts_is_active").on(table.isActive),
+  index("idx_price_alerts_coin_network").on(table.coin, table.network),
+]);
+
 // --- FRONTEND SCHEMAS ---
 
 export const swapHistory = pgTable('swap_history', {

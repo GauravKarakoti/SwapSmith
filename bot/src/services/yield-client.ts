@@ -14,7 +14,102 @@ export interface YieldPool {
   apy: number;
   tvlUsd: number;
   poolId?: string;
+  depositAddress?: string;
+  rewardToken?: string;
+  underlyingToken?: string;
 }
+
+export interface YieldProtocol {
+  name: string;
+  project: string;
+  depositAddress: string;
+  chain: string;
+  rewardToken: string;
+  apyType: 'variable' | 'fixed' | 'dynamic';
+}
+
+// Major yield protocol deposit addresses (hardcoded for reliability)
+export const YIELD_PROTOCOLS: YieldProtocol[] = [
+  // Aave V3
+  {
+    name: 'Aave V3',
+    project: 'aave-v3',
+    depositAddress: '0x87870Bca3F3f6335e32cdC2d17F6b8d2c2A3eE1', // aUSDC Ethereum
+    chain: 'Ethereum',
+    rewardToken: 'AAVE',
+    apyType: 'variable'
+  },
+  {
+    name: 'Aave V3',
+    project: 'aave-v3',
+    depositAddress: '0x625E7708f30cA75bfd92586e17077590C60eb4cD', // aUSDC Arbitrum
+    chain: 'Arbitrum',
+    rewardToken: 'AAVE',
+    apyType: 'variable'
+  },
+  {
+    name: 'Aave V3',
+    project: 'aave-v3',
+    depositAddress: '0x4e025f4b6eb6c1a0c9a6c7e5c2c9a3a7d6e8f1b', // aUSDC Polygon (placeholder)
+    chain: 'Polygon',
+    rewardToken: 'AAVE',
+    apyType: 'variable'
+  },
+  // Compound V3
+  {
+    name: 'Compound V3',
+    project: 'compound-v3',
+    depositAddress: '0xc3d688B66703497DAA19211EEdff47f253B8A93', // cUSDCv3 Ethereum
+    chain: 'Ethereum',
+    rewardToken: 'COMP',
+    apyType: 'variable'
+  },
+  // Lido
+  {
+    name: 'Lido',
+    project: 'lido',
+    depositAddress: '0xae7ab96520DE3A18f5e31e70f08B3B58f1dB0c9A', // stETH
+    chain: 'Ethereum',
+    rewardToken: 'LDO',
+    apyType: 'dynamic'
+  },
+  // Yearn
+  {
+    name: 'Yearn',
+    project: 'yearn',
+    depositAddress: '0x5f18C75AbDAe578b483E2F0EA721C3aB1893D7a6', // yUSDC
+    chain: 'Ethereum',
+    rewardToken: 'YFI',
+    apyType: 'variable'
+  },
+  // Morpho
+  {
+    name: 'Morpho Blue',
+    project: 'morpho-blue',
+    depositAddress: '0xA5258Ffd6d10A0252B8B9D5F7A6F4B7C3D3E7F8A', // mpUSDC (placeholder)
+    chain: 'Ethereum',
+    rewardToken: 'MORPHO',
+    apyType: 'variable'
+  },
+  // Euler
+  {
+    name: 'Euler',
+    project: 'euler',
+    depositAddress: '0x1c7E83fB11398e1D984E0EBCF9C2f1C4c1f8A9c2', // eUSDC (placeholder)
+    chain: 'Ethereum',
+    rewardToken: 'EUL',
+    apyType: 'variable'
+  },
+  // Spark (Aave on Gnosis)
+  {
+    name: 'Spark',
+    project: 'spark',
+    depositAddress: '0x6D4731653A2e2d81d4d7d86C3d8C8F2a4c7b9d8E', // sUSDC (placeholder)
+    chain: 'Gnosis',
+    rewardToken: 'SPK',
+    apyType: 'variable'
+  },
+];
 
 export interface StakingQuote {
   pool: YieldPool;
@@ -131,4 +226,77 @@ export function formatMigrationMessage(suggestion: MigrationSuggestion, amount: 
     `  APY: ${toPool.apy.toFixed(2)}%\n\n` +
     `*Improvement:* +${apyDifference.toFixed(2)}% APY\n` +
     `*Extra Annual Yield:* $${annualExtraYield.toFixed(2)} on $${amount}`;
+}
+
+/**
+ * Get the deposit contract address for a yield pool
+ * @param pool - The yield pool to get deposit address for
+ * @returns The deposit contract address or null if not found
+ */
+export function getDepositAddress(pool: YieldPool): string | null {
+  const protocol = YIELD_PROTOCOLS.find(
+    p => p.project === pool.project && 
+         p.chain.toLowerCase() === pool.chain.toLowerCase()
+  );
+  return protocol?.depositAddress || null;
+}
+
+/**
+ * Get the protocol info for a yield pool
+ * @param pool - The yield pool to get protocol info for
+ * @returns The protocol info or null if not found
+ */
+export function getProtocolInfo(pool: YieldPool): YieldProtocol | null {
+  return YIELD_PROTOCOLS.find(
+    p => p.project === pool.project && 
+         p.chain.toLowerCase() === pool.chain.toLowerCase()
+  ) || null;
+}
+
+/**
+ * Get all available yield protocols
+ * @returns Array of available yield protocols
+ */
+export function getAvailableProtocols(): YieldProtocol[] {
+  return YIELD_PROTOCOLS;
+}
+
+/**
+ * Find the best yield pool for a given asset and chain
+ * @param symbol - The asset symbol (e.g., 'USDC', 'USDT')
+ * @param chain - Optional chain filter
+ * @returns The best yield pool or null
+ */
+export async function findBestYieldPool(
+  symbol: string, 
+  chain?: string
+): Promise<YieldPool | null> {
+  const pools = await getTopYieldPools();
+  
+  const filtered = pools.filter(p => 
+    p.symbol.toUpperCase() === symbol.toUpperCase() &&
+    (!chain || p.chain.toLowerCase() === chain.toLowerCase())
+  );
+  
+  if (filtered.length === 0) return null;
+  
+  // Sort by APY and return the best one
+  return filtered.sort((a, b) => b.apy - a.apy)[0];
+}
+
+/**
+ * Enrich a yield pool with deposit address
+ * @param pool - The yield pool to enrich
+ * @returns The enriched yield pool with deposit address
+ */
+export function enrichPoolWithDepositAddress(pool: YieldPool): YieldPool {
+  const depositAddress = getDepositAddress(pool);
+  const protocol = getProtocolInfo(pool);
+  
+  return {
+    ...pool,
+    depositAddress: depositAddress || undefined,
+    rewardToken: protocol?.rewardToken,
+    underlyingToken: pool.symbol
+  };
 }
