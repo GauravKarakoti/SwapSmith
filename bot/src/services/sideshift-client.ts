@@ -1,6 +1,7 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
 import { SIDESHIFT_CONFIG } from '../../../shared/config/sideshift';
+import { SideShiftQuoteSchema, SideShiftCheckoutResponseSchema, CoinSchema } from '../../../shared/schemas/sideshift';
 dotenv.config();
 const AFFILIATE_ID = process.env.SIDESHIFT_AFFILIATE_ID || process.env.NEXT_PUBLIC_AFFILIATE_ID || '';
 const API_KEY = process.env.SIDESHIFT_API_KEY || process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
@@ -128,11 +129,11 @@ export async function getCoins(userIP?: string): Promise<SideShiftCoin[]> {
     const ip = userIP || DEFAULT_USER_IP;
     if (ip) headers['x-user-ip'] = ip;
 
-    const response = await axios.get<SideShiftCoin[]>(
+    const response = await axios.get(
       `${SIDESHIFT_CONFIG.BASE_URL}/coins`,
       { headers }
     );
-    return response.data;
+    return CoinSchema.array().parse(response.data);
   } catch (error) {
     if (axios.isAxiosError(error)) {
       throw new Error(error.response?.data?.error?.message || 'Failed to fetch coins');
@@ -178,7 +179,7 @@ export async function createQuote(
     const ip = userIP || DEFAULT_USER_IP;
     if (ip) headers['x-user-ip'] = ip;
 
-    const response = await axios.post<SideShiftQuote & { id?: string }>(
+    const response = await axios.post(
       `${SIDESHIFT_CONFIG.BASE_URL}/quotes`,
       {
         depositCoin: fromAsset,
@@ -191,14 +192,7 @@ export async function createQuote(
       { headers }
     );
 
-    if (response.data.error) {
-      throw new Error(response.data.error.message);
-    }
-
-    return {
-      ...response.data,
-      id: response.data.id || '' // Ensure ID is present
-    };
+    return SideShiftQuoteSchema.parse(response.data);
   } catch (error) {
     if (axios.isAxiosError(error)) {
       throw new Error(error.response?.data?.error?.message || `Failed to create quote for ${fromAsset} to ${toAsset}`);
@@ -288,19 +282,17 @@ export async function createCheckout(
     const ip = userIP || DEFAULT_USER_IP;
     if (ip) headers['x-user-ip'] = ip;
 
-    const response = await axios.post<SideShiftCheckoutResponse>(
+    const response = await axios.post(
       `${SIDESHIFT_CONFIG.BASE_URL}/checkout`,
       payload,
       { headers }
     );
 
-    if (response.data.error) {
-      throw new Error(response.data.error.message);
-    }
+    const validatedData = SideShiftCheckoutResponseSchema.parse(response.data);
 
     return {
-      ...response.data,
-      url: response.data.url || `${SIDESHIFT_CONFIG.CHECKOUT_URL}/${response.data.id}`
+      ...validatedData,
+      url: validatedData.url || `${SIDESHIFT_CONFIG.CHECKOUT_URL}/${validatedData.id}`
     };
   } catch (error) {
     if (axios.isAxiosError(error)) {
