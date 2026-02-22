@@ -110,8 +110,8 @@ export default function PricesPage() {
   return (
     <>
       <Navbar />
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 pt-16 sm:pt-20">
-        <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <div className="min-h-screen bg-[#050505] pt-16 sm:pt-20">
+        <div className="w-full max-w-[1800px] mx-auto px-6 lg:px-12">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
@@ -122,7 +122,7 @@ export default function PricesPage() {
                 animate={{ scale: 1, opacity: 1 }}
                 whileHover={{ scale: 1.08, color: '#22d3ee', textShadow: '0 2px 20px #22d3ee' }}
                 transition={{ type: 'spring', stiffness: 120, damping: 10 }}
-                className="text-4xl font-bold text-gray-900 dark:text-white cursor-pointer transition-colors duration-300"
+                className="text-4xl font-bold text-white cursor-pointer transition-colors duration-300"
               >
                 Live Crypto Prices
               </motion.h1>

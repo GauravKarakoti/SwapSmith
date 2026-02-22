@@ -1,4 +1,6 @@
 import { getCoins, SideShiftCoin } from './sideshift-client';
+import logger from './logger';
+
 
 interface TokenInfo {
   address: string;
@@ -72,9 +74,10 @@ class TokenResolver {
       }
 
       this.lastFetch = Date.now();
-      console.log(`✅ Token cache refreshed: ${this.cache.size} tokens loaded`);
+      logger.info(`✅ Token cache refreshed: ${this.cache.size} tokens loaded`);
     } catch (error) {
-      console.error('Failed to refresh token cache:', error);
+      logger.error('Failed to refresh token cache:', error);
+
       // Keep using old cache if refresh fails
     }
   }
