@@ -27,7 +27,7 @@ import { useTerminalFullPageAd } from "@/hooks/useAds";
 import { useChatHistory, useChatSessions } from "@/hooks/useCachedData";
 import { useErrorHandler, ErrorType } from "@/hooks/useErrorHandler";
 import { useAudioRecorder } from "@/hooks/useAudioRecorder";
-import { trackTerminalUsage, showRewardNotification } from "@/lib/rewards-service";
+// ...existing code...
 import { usePlan } from "@/hooks/usePlan";
 
 import { ParsedCommand } from "@/utils/groq-client";
