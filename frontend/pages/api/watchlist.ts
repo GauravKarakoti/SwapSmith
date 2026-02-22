@@ -6,6 +6,7 @@ import {
   removeFromWatchlist,
   getCachedPrice,
 } from '@/lib/database';
+import logger from '@/lib/logger';
 
 export default async function handler(
   req: NextApiRequest,
@@ -26,7 +27,7 @@ export default async function handler(
   try {
     decodedToken = await adminAuth.verifyIdToken(idToken);
   } catch (error) {
-    console.error('Error verifying Firebase token:', error);
+    logger.error('Error verifying Firebase token', { error });
     return res
       .status(401)
       .json({ error: 'Unauthorized: Invalid token' });
@@ -63,7 +64,7 @@ export default async function handler(
 
       return res.status(200).json(watchlistWithPrices);
     } catch (error) {
-      console.error('Error fetching watchlist:', error);
+      logger.error('Error fetching watchlist', { error });
       return res
         .status(500)
         .json({ error: 'Failed to fetch watchlist' });
@@ -102,7 +103,7 @@ export default async function handler(
         btcPrice: priceData?.btcPrice ?? null,
       });
     } catch (error) {
-      console.error('Error adding to watchlist:', error);
+      logger.error('Error adding to watchlist', { error });
       return res
         .status(500)
         .json({ error: 'Failed to add to watchlist' });
@@ -137,7 +138,7 @@ export default async function handler(
         message: 'Token removed from watchlist',
       });
     } catch (error) {
-      console.error('Error removing from watchlist:', error);
+      logger.error('Error removing from watchlist', { error });
       return res
         .status(500)
         .json({ error: 'Failed to remove from watchlist' });
