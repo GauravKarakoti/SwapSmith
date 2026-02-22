@@ -140,8 +140,7 @@ export default function SwapConfirmation({ quote, confidence = 100, onAmountChan
     } catch (err) {
       console.error('Failed to calculate max amount:', err);
     } finally {
-      setIsMaxLoading(true); // Keep loading state until requote happens (callback will trigger re-render)
-      setTimeout(() => setIsMaxLoading(false), 2000);
+      setIsMaxLoading(false);
     }
   };
 
