@@ -1,18 +1,33 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getServerSession } from 'next-auth';
-import { authOptions } from 'next-auth';
+import { adminAuth } from '@/lib/firebase-admin';
 import { getWatchlist, addToWatchlist, removeFromWatchlist } from '@/lib/database';
 import { getCachedPrice } from '@/lib/database';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Get user session for authentication
-  const session = await getServerSession(req, res, authOptions);
+  // Get Firebase ID token from authorization header
+  const authHeader = req.headers.authorization;
   
-  if (!session?.user?.email && !session?.user?.id) {
-    return res.status(401).json({ error: 'Unauthorized' });
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: No token provided' });
   }
-
-  const userId = session.user.id || session.user.email;
+  
+  const idToken = authHeader.split('Bearer ')[1];
+  
+  // Verify the Firebase ID token
+  let decodedToken;
+  try {
+    decodedToken = await adminAuth.verifyIdToken(idToken);
+  } catch (error) {
+    console.error('Error verifying Firebase token:', error);
+    return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+  }
+  
+  // Get user ID from the decoded token
+  const userId = decodedToken.uid;
+  
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized: No user ID in token' });
+  }
 
   // GET - Fetch user's watchlist with current prices
   if (req.method === 'GET') {
