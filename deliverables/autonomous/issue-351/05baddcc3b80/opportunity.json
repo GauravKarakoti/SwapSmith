@@ -1,0 +1,18 @@
+{
+  "headline": "GitHub[GauravKarakoti/SwapSmith]: [Bug]: Portfolio Execution Lacks Transaction Support - Partial Failures Leave Inconsistent State",
+  "url": "https://github.com/GauravKarakoti/SwapSmith/issues/351",
+  "expected_usd": 100.0,
+  "strategy": "锁定明码 bounty；交付代码+run_log+sample_data，并准备自动交割链接。",
+  "raw_expected": "100.00 USD",
+  "bounty_literal": "100 USDC",
+  "source_line": "## 🚨 发现新商机：GitHub[GauravKarakoti/SwapSmith]: [Bug]: Portfolio Execution Lacks Transaction Support - Partial Failures Leave Inconsistent State",
+  "kind": "generic_automation",
+  "difficulty": 1.0,
+  "score": 100.0,
+  "oid": "b3d98791359969ea5ecc0b23ecc7dd3104453be70f4363f8613406153af847d6",
+  "payout": {
+    "asset": "USDT",
+    "chain": "EVM",
+    "wallet": "0xF57503F99fA20b912200ed90D26d945093136ef5"
+  }
+}
