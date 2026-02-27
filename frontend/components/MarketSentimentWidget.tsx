@@ -2,15 +2,18 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import { fetchMarketSentiment } from "@/lib/market-sentiment";
-import SentimentDetailsModal from "@/components/SentimentDetailsModal";
 import Link from "next/link";
 
 export default function MarketSentimentWidget() {
-  const [sentiment, setSentiment] = useState({
+  const [sentiment, setSentiment] = useState<MarketSentiment>({
     bullish: 72,
     neutral: 18,
     bearish: 10,
+    fearGreed: null,
+    fearGreedHistory: [],
+    lastUpdated: Date.now(),
   });
+  const [signal, setSignal] = useState<TradingSignal | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [popupOpen, setPopupOpen] = useState(false);
@@ -22,6 +25,9 @@ export default function MarketSentimentWidget() {
     setRefreshing(true);
     const data = await fetchMarketSentiment();
     setSentiment(data);
+    // Generate trading signal
+    const tradingSignal = generateTradingSignal(data);
+    setSignal(tradingSignal);
     setLoading(false);
     setRefreshing(false);
   };
@@ -46,6 +52,16 @@ export default function MarketSentimentWidget() {
     sentimentPercent = sentiment.bearish;
     sentimentColor = "text-red-500";
   }
+
+  // Get Fear & Greed display values
+  const fearGreedValue = sentiment.fearGreed?.value ?? 50;
+  const fearGreedEmoji = getFearGreedEmoji(fearGreedValue);
+  const fearGreedLabel = getFearGreedLabel(fearGreedValue);
+  const fearGreedColor = getFearGreedColor(fearGreedValue);
+
+  // Get trading signal display
+  const signalEmoji = signal?.recommendation === 'buy' ? '⬆️' : signal?.recommendation === 'sell' ? '⬇️' : '➡️';
+  const signalColor = signal?.recommendation === 'buy' ? 'text-green-500' : signal?.recommendation === 'sell' ? 'text-red-500' : 'text-yellow-500';
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -95,7 +111,7 @@ export default function MarketSentimentWidget() {
         className={`flex items-center gap-2 px-3 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-sm select-none cursor-pointer ${sentimentColor} text-sm font-semibold transition-opacity ${
           refreshing ? "opacity-60" : ""
         }`}
-        title="AI Market Sentiment (Live, based on Live Prices trends)"
+        title="AI Market Sentiment (Live, based on Live Prices trends & Fear/Greed Index)"
         onContextMenu={handleContextMenu}
         onDoubleClick={handleDoubleClick}
         onMouseEnter={handleMouseEnter}
@@ -112,13 +128,32 @@ export default function MarketSentimentWidget() {
             <span className="ml-1">({sentimentPercent}%)</span>
           )}
         </span>
+        {/* Fear & Greed Indicator */}
+        {!loading && sentiment.fearGreed && (
+          <span 
+            className="ml-1 text-xs px-1.5 py-0.5 rounded"
+            style={{ backgroundColor: `${fearGreedColor}20`, color: fearGreedColor }}
+            title={`Fear & Greed: ${fearGreedValue} - ${fearGreedLabel}`}
+          >
+            {fearGreedEmoji} {fearGreedValue}
+          </span>
+        )}
+        {/* Trading Signal Indicator */}
+        {!loading && signal && (
+          <span 
+            className={`ml-1 text-xs px-1.5 py-0.5 rounded ${signalColor}`}
+            title={`Signal: ${signal.recommendation.toUpperCase()} (${signal.confidence}% confidence)`}
+          >
+            {signalEmoji} {signal.recommendation.toUpperCase()}
+          </span>
+        )}
         {refreshing && (
           <span className="ml-2 animate-spin">↻</span>
         )}
       </div>
 
       {popupOpen && (
-        <div className="absolute left-1/2 z-50 mt-2 -translate-x-1/2 min-w-[260px]">
+        <div className="absolute left-1/2 z-50 mt-2 -translate-x-1/2 min-w-[300px]">
           <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-2xl p-4 border border-zinc-200 dark:border-zinc-800 text-xs">
             <div className="mb-2 text-zinc-600 dark:text-zinc-300">
               <b>Market Sentiment Details</b><br />
@@ -152,7 +187,40 @@ export default function MarketSentimentWidget() {
               </li>
             </ul>
 
-            <div className="text-zinc-400">
+            {/* Fear & Greed Section */}
+            {sentiment.fearGreed && (
+              <div className="mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-700">
+                <b>Fear & Greed Index</b>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-lg">{fearGreedEmoji}</span>
+                  <span className="font-semibold" style={{ color: fearGreedColor }}>
+                    {fearGreedValue} - {fearGreedLabel}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Trading Signal Section */}
+            {signal && (
+              <div className="mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-700">
+                <b>AI Trading Signal</b>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-lg">{signalEmoji}</span>
+                  <span className={`font-semibold ${signalColor}`}>
+                    {signal.recommendation.toUpperCase()}
+                  </span>
+                  <span className="text-zinc-400">({signal.confidence}% confidence)</span>
+                </div>
+                <div className="mt-1 text-zinc-500 dark:text-zinc-400">
+                  Risk: <span className={signal.riskLevel === 'low' ? 'text-green-500' : signal.riskLevel === 'high' ? 'text-red-500' : 'text-yellow-500'}>{signal.riskLevel.toUpperCase()}</span>
+                </div>
+                <div className="mt-1 text-zinc-500 dark:text-zinc-400 italic">
+                  "{signal.reasoning}"
+                </div>
+              </div>
+            )}
+
+            <div className="text-zinc-400 mt-3">
               Data updates automatically when opened.
             </div>
           </div>

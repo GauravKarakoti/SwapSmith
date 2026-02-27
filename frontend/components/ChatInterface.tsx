@@ -7,10 +7,13 @@ import SwapConfirmation from './SwapConfirmation';
 import PortfolioSummary, { PortfolioItem } from './PortfolioSummary'; // Added Import
 import TrustIndicators from './TrustIndicators';
 import IntentConfirmation from './IntentConfirmation';
+import GasFeeDisplay from './GasFeeDisplay';
+import GasComparisonChart from './GasComparisonChart';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { useAuth } from '@/hooks/useAuth';
+
 
 // Export QuoteData to be used in PortfolioSummary
 export interface QuoteData {
@@ -21,6 +24,7 @@ export interface QuoteData {
   settleAmount: string;
   settleCoin: string;
   settleNetwork: string;
+  depositAddress?: string;
   memo?: string;
   expiry?: string;
   id?: string;
@@ -76,6 +80,7 @@ export default function ChatInterface() {
   const [currentConfidence, setCurrentConfidence] = useState<number | undefined>(undefined);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const { address, isConnected } = useAccount();
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const { handleError } = useErrorHandler();
@@ -248,10 +253,14 @@ export default function ChatInterface() {
     };
   }, [messages, isAuthenticated, isAuthLoading, user?.uid, address]);
 
-  // Show audio error if any
+  // Show audio error if any and auto-focus text input
   useEffect(() => {
     if (audioError) {
       addMessage({ role: 'assistant', content: audioError, type: 'message' });
+      // Auto-focus the text input on voice failure
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
     }
   }, [audioError]);
 
@@ -671,7 +680,9 @@ export default function ChatInterface() {
       try {
         const audioBlob = await stopRecording();
         if (audioBlob) {
-            const audioFile = new File([audioBlob], "voice_command.wav", { type: audioBlob.type || 'audio/wav' });
+            // Safely determine the type depending on whether it's a Blob or a string
+            const mimeType = audioBlob instanceof Blob ? (audioBlob.type || 'audio/wav') : 'audio/wav';
+            const audioFile = new File([audioBlob], "voice_command.wav", { type: mimeType });
             
             const formData = new FormData();
             formData.append('file', audioFile);
@@ -697,6 +708,10 @@ export default function ChatInterface() {
             content: "Sorry, I couldn't process your voice command. Please try again.", 
             type: 'message' 
         });
+        // Auto-focus the text input on transcription failure
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 100);
       } finally {
         setIsLoading(false);
       }
@@ -756,23 +771,49 @@ return (
                     {/* Inject your Custom Components (SwapConfirmation etc) here */}
                     {msg.type === 'intent_confirmation' && <IntentConfirmation command={msg.data?.parsedCommand} onConfirm={handleIntentConfirm} />}
                     {msg.type === 'swap_confirmation' && msg.data?.quoteData && (
-                      <SwapConfirmation 
-                        quote={msg.data.quoteData} 
-                        confidence={msg.data.confidence}
-                        onAmountChange={(newAmount) => {
-                          // Update the quote with the new amount
-                          const quoteData = msg.data?.quoteData;
-                          if (quoteData) {
-                            const updatedQuote = { ...quoteData, depositAmount: newAmount };
-                            addMessage({
-                              role: 'assistant',
-                              content: `Amount updated to ${newAmount} ${quoteData.depositCoin}. Please review the new swap details.`,
-                              type: 'message'
-                            });
-                          }
-                        }}
-                      />
+                      <div className="space-y-4">
+                        {/* Gas Fee Comparison */}
+                        {msg.data?.quoteData?.depositNetwork && msg.data?.quoteData?.settleNetwork && (
+                          <div className="mb-4">
+                            <GasComparisonChart
+                              fromChain={msg.data.quoteData.depositNetwork}
+                              toChain={msg.data.quoteData.settleNetwork}
+                              showRecommendation={true}
+                              className="mb-4"
+                            />
+                            <div className="grid grid-cols-2 gap-2">
+                              <GasFeeDisplay
+                                chain={msg.data.quoteData.depositNetwork}
+                                compact={true}
+                                className="bg-white/5 rounded-lg p-2"
+                              />
+                              <GasFeeDisplay
+                                chain={msg.data.quoteData.settleNetwork}
+                                compact={true}
+                                className="bg-white/5 rounded-lg p-2"
+                              />
+                            </div>
+                          </div>
+                        )}
+                        <SwapConfirmation 
+                          quote={msg.data.quoteData} 
+                          confidence={msg.data.confidence}
+                          onAmountChange={(newAmount) => {
+                            // Update the quote with the new amount
+                            const quoteData = msg.data?.quoteData;
+                            if (quoteData) {
+                              const updatedQuote = { ...quoteData, depositAmount: newAmount };
+                              addMessage({
+                                role: 'assistant',
+                                content: `Amount updated to ${newAmount} ${quoteData.depositCoin}. Please review the new swap details.`,
+                                type: 'message'
+                              });
+                            }
+                          }}
+                        />
+                      </div>
                     )}
+
                   </div>
                 </div>
               )}
@@ -805,6 +846,7 @@ return (
             </button>
             
             <input
+              ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}

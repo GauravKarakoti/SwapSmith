@@ -12,7 +12,13 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(process.cwd(), '../'),
 
   // Leave empty to use defaults, or configure if needed
-  turbopack: {}
+  turbopack: {},
+
+  // Environment variables that should be available at build time
+  // Use a dummy value for build if DATABASE_URL is not set
+  env: {
+    DATABASE_URL: process.env.DATABASE_URL || 'postgresql://dummy:dummy@localhost:5432/dummy',
+  },
 };
 
 export default nextConfig;

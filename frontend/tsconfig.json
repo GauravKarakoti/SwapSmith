@@ -23,7 +23,10 @@
       "dotenv": ["./node_modules/dotenv"],
       "drizzle-kit": ["./node_modules/drizzle-kit"],
       "drizzle-orm": ["./node_modules/drizzle-orm"],
-      "drizzle-orm/*": ["./node_modules/drizzle-orm/*"]
+      "drizzle-orm/*": ["./node_modules/drizzle-orm/*"],
+      "winston": ["./node_modules/winston"],
+      "axios": ["./node_modules/axios"],
+      "@neondatabase/serverless": ["./node_modules/@neondatabase/serverless"],
     },
     "types": ["jest"]
   },

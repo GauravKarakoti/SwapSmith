@@ -127,7 +127,7 @@ export async function getTopYieldPools(): Promise<YieldPool[]> {
   try {
     // Fetch data from yield aggregator (likely DefiLlama based on variable names)
     const response = await axios.get('https://yields.llama.fi/pools');
-    const data = response.data.data;
+    const data = response.data;
 
     const topPools = data.filter((p: any) =>
       ['USDC', 'USDT', 'DAI'].includes(p.symbol) &&

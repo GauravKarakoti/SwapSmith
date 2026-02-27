@@ -447,7 +447,7 @@ export default function LandingPage() {
       <Navbar />
 
       {/* 2. Hero Section */}
-      <section className="relative pt-40 pb-24 px-6 overflow-hidden">
+      <section className="relative pt-24 sm:pt-32 lg:pt-40 pb-16 sm:pb-24 px-4 sm:px-6 overflow-hidden">
         <DashboardPreview />
         <motion.div
           className="max-w-5xl mx-auto text-center space-y-10 relative z-10"
@@ -468,7 +468,7 @@ export default function LandingPage() {
 
           <motion.h1
             variants={itemVariants}
-            className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter leading-[0.9]"
+            className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter leading-[0.9]"
           >
             <span className="bg-gradient-to-b from-white via-white to-white/30 bg-clip-text text-transparent">
               YOUR VOICE-ACTIVATED
@@ -488,7 +488,7 @@ export default function LandingPage() {
 
           <motion.p
             variants={itemVariants}
-            className="text-lg md:text-xl lg:text-2xl text-zinc-400 max-w-2xl mx-auto font-medium"
+            className="text-base sm:text-lg md:text-xl lg:text-2xl text-zinc-400 max-w-2xl mx-auto font-medium"
           >
             Execute complex, cross-chain cryptocurrency swaps using{" "}
             <span className="text-cyan-400">simple natural language</span>.
@@ -519,7 +519,7 @@ export default function LandingPage() {
           <motion.div variants={itemVariants} className="pt-4">
             <MagneticButton
               onClick={handleAccess}
-              className="group relative px-12 py-5 bg-gradient-to-r from-cyan-500 via-purple-600 to-pink-600 rounded-2xl font-black text-xl overflow-hidden"
+              className="group relative px-8 sm:px-12 py-4 sm:py-5 bg-gradient-to-r from-cyan-500 via-purple-600 to-pink-600 rounded-2xl font-black text-lg sm:text-xl overflow-hidden"
             >
               <motion.div
                 className="absolute inset-0 bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500"
@@ -567,7 +567,7 @@ export default function LandingPage() {
       </section>
 
       {/* 3. Features Grid */}
-      <section className="relative max-w-6xl mx-auto px-6 py-24">
+      <section className="relative max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
         <motion.div
           className="text-center mb-16"
           initial={{ opacity: 0, y: 30 }}
@@ -575,7 +575,7 @@ export default function LandingPage() {
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
         >
-          <h2 className="text-4xl md:text-5xl font-black tracking-tighter mb-4">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tighter mb-4">
             <span className="bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">POWERFUL</span> FEATURES
           </h2>
           <p className="text-zinc-500 max-w-md mx-auto">Everything you need for seamless cross-chain trading</p>
@@ -612,7 +612,7 @@ export default function LandingPage() {
       </section>
 
       {/* 4. How it Works */}
-      <section className="relative max-w-4xl mx-auto px-6 py-24">
+      <section className="relative max-w-4xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
         <motion.div
           className="text-center mb-16"
           initial={{ opacity: 0, y: 30 }}
@@ -620,7 +620,7 @@ export default function LandingPage() {
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
         >
-          <h2 className="text-4xl md:text-5xl font-black tracking-tighter">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tighter">
             HOW IT <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">WORKS</span>
           </h2>
         </motion.div>
@@ -642,7 +642,7 @@ export default function LandingPage() {
               <motion.div
                 className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500/0 via-purple-500/0 to-pink-500/0 rounded-2xl opacity-0 group-hover:opacity-100 group-hover:from-cyan-500/20 group-hover:via-purple-500/20 group-hover:to-pink-500/20 transition-all duration-500 blur-sm"
               />
-              <div className="relative flex items-center gap-6 p-6 bg-white/[0.02] border border-white/5 rounded-2xl group-hover:border-cyan-500/30 group-hover:bg-white/[0.04] transition-all duration-300">
+              <div className="relative flex items-center gap-3 sm:gap-6 p-4 sm:p-6 bg-white/[0.02] border border-white/5 rounded-2xl group-hover:border-cyan-500/30 group-hover:bg-white/[0.04] transition-all duration-300">
                 <motion.div
                   className="text-3xl font-black text-transparent bg-gradient-to-b from-white/10 to-white/5 bg-clip-text group-hover:from-cyan-400 group-hover:to-purple-400 transition-all duration-300"
                   whileHover={{ scale: 1.1 }}
@@ -656,7 +656,7 @@ export default function LandingPage() {
                 >
                   <item.icon className="w-6 h-6 text-cyan-400" />
                 </motion.div>
-                <p className="text-lg font-medium text-zinc-300 group-hover:text-white transition-colors">{item.text}</p>
+                <p className="text-sm sm:text-base md:text-lg font-medium text-zinc-300 group-hover:text-white transition-colors">{item.text}</p>
                 <motion.div
                   className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity"
                   animate={{ x: [0, 5, 0] }}
@@ -671,8 +671,8 @@ export default function LandingPage() {
       </section>
 
       {/* Mobile Mockup Section (AutoML Style) */}
-      <section className="relative py-32 px-6 overflow-hidden max-w-7xl mx-auto">
-        <div className="grid lg:grid-cols-2 gap-16 items-center">
+      <section className="relative py-16 sm:py-24 lg:py-32 px-4 sm:px-6 overflow-hidden max-w-7xl mx-auto">
+        <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
           {/* Left Side - Text Content */}
           <motion.div
             initial={{ opacity: 0, x: -50 }}
@@ -681,7 +681,7 @@ export default function LandingPage() {
             transition={{ duration: 0.8, ease: "easeOut" }}
             className="space-y-8 relative z-10"
           >
-            <h2 className="text-5xl md:text-6xl font-black tracking-tighter leading-tight">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter leading-tight">
               Accelerate trading <br />
               innovation with <br />
               <span className="bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent">automated AI</span> <br />
@@ -689,7 +689,7 @@ export default function LandingPage() {
               <span className="text-zinc-500">wealth that lasts.</span>
             </h2>
             
-            <p className="text-xl text-zinc-400 max-w-lg leading-relaxed">
+            <p className="text-base sm:text-lg md:text-xl text-zinc-400 max-w-lg leading-relaxed">
               The all-in-one SwapSmith platform to automate trading workflows, from intent recognition to execution. Empower your portfolio to grow, diversify, and outperform the market—no complex coding required.
             </p>
 
@@ -738,7 +738,7 @@ export default function LandingPage() {
             />
 
             {/* Phone Frame */}
-            <div className="relative z-10 w-[360px] h-[720px] bg-[#0f0f16] rounded-[3rem] border-8 border-[#1a1a24] shadow-2xl mx-auto overflow-hidden">
+            <div className="relative z-10 w-[280px] sm:w-[320px] md:w-[360px] h-[560px] sm:h-[640px] md:h-[720px] bg-[#0f0f16] rounded-[2.5rem] sm:rounded-[3rem] border-4 sm:border-8 border-[#1a1a24] shadow-2xl mx-auto overflow-hidden">
                {/* Phone Notch/Status Bar */}
                <div className="h-8 w-full flex justify-between items-center px-6 pt-3 pb-1">
                  <span className="text-[10px] font-medium text-white">10:24</span>
@@ -884,11 +884,11 @@ export default function LandingPage() {
         <section className='text-white h-screen w-full bg-[#030712] grid place-content-center sticky top-0'>
           <div className='absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:54px_54px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]'></div>
 
-          <div className='relative z-10 max-w-4xl mx-auto px-8'>
-            <h1 className='2xl:text-7xl text-6xl font-semibold text-center tracking-tight leading-[120%] mb-6'>
+          <div className='relative z-10 max-w-4xl mx-auto px-6 sm:px-8'>
+            <h1 className='text-3xl sm:text-5xl md:text-6xl 2xl:text-7xl font-semibold text-center tracking-tight leading-[120%] mb-4 sm:mb-6'>
               Ready to Transform <br /> Your Trading? Scroll Please
             </h1>
-            <p className='text-xl text-gray-400 text-center mt-4'>
+            <p className='text-base sm:text-xl text-gray-400 text-center mt-4'>
               Experience the future of cross-chain swaps with AI-powered voice commands
             </p>
           </div>
@@ -896,20 +896,20 @@ export default function LandingPage() {
 
         <section className='bg-[#0B1120] text-white grid place-content-center h-screen sticky top-0 rounded-tr-2xl rounded-tl-2xl overflow-hidden'>
           <div className='absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:54px_54px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]'></div>
-          <div className='relative z-10 max-w-5xl mx-auto px-8'>
-            <h1 className='2xl:text-7xl text-4xl font-semibold text-center tracking-tight leading-[120%] mb-6'>
+          <div className='relative z-10 max-w-5xl mx-auto px-6 sm:px-8'>
+            <h1 className='text-2xl sm:text-4xl md:text-5xl 2xl:text-7xl font-semibold text-center tracking-tight leading-[120%] mb-4 sm:mb-6'>
               Voice-Activated Cross-Chain Swaps, <br /> Built with AI & Open Source 💼
             </h1>
-            <div className='grid grid-cols-3 gap-6 mt-12'>
-              <div className='bg-white/10 p-6 rounded-xl backdrop-blur-sm border border-white/10'>
+            <div className='grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mt-8 sm:mt-12'>
+              <div className='bg-white/10 p-5 sm:p-6 rounded-xl backdrop-blur-sm border border-white/10'>
                 <h3 className='text-2xl font-bold mb-2'>200+</h3>
                 <p className='text-gray-300'>Supported Assets</p>
               </div>
-              <div className='bg-white/10 p-6 rounded-xl backdrop-blur-sm border border-white/10'>
+              <div className='bg-white/10 p-5 sm:p-6 rounded-xl backdrop-blur-sm border border-white/10'>
                 <h3 className='text-2xl font-bold mb-2'>40+</h3>
                 <p className='text-gray-300'>Blockchain Networks</p>
               </div>
-              <div className='bg-white/10 p-6 rounded-xl backdrop-blur-sm border border-white/10'>
+              <div className='bg-white/10 p-5 sm:p-6 rounded-xl backdrop-blur-sm border border-white/10'>
                 <h3 className='text-2xl font-bold mb-2'>0%</h3>
                 <p className='text-gray-300'>Platform Fees</p>
               </div>
@@ -919,12 +919,12 @@ export default function LandingPage() {
 
         <section className='text-white h-screen w-full bg-[#130E18] grid place-content-center sticky top-0'>
           <div className='absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:54px_54px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]'></div>
-          <div className='relative z-10 max-w-4xl mx-auto px-8'>
-            <h1 className='2xl:text-7xl text-5xl font-semibold text-center tracking-tight leading-[120%] mb-6'>
+          <div className='relative z-10 max-w-4xl mx-auto px-6 sm:px-8'>
+            <h1 className='text-3xl sm:text-4xl md:text-5xl 2xl:text-7xl font-semibold text-center tracking-tight leading-[120%] mb-4 sm:mb-6'>
               Thanks for Scrolling!
               <br /> Keep Going for More 
             </h1>
-            <div className='flex justify-center gap-8 mt-12'>
+            <div className='flex justify-center gap-6 sm:gap-8 mt-8 sm:mt-12'>
               <div className='text-center'>
                 <div className='text-cyan-400 text-4xl mb-2'>⚡</div>
                 <p className='text-gray-400'>Lightning Fast</p>
@@ -947,50 +947,50 @@ export default function LandingPage() {
         <header className='text-white relative w-full bg-slate-950 grid place-content-center h-[80vh]'>
           <div className='absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:14px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]'></div>
 
-          <h1 className='text-6xl font-bold text-center tracking-tight relative z-10'>
+          <h1 className='text-3xl sm:text-5xl md:text-6xl font-bold text-center tracking-tight relative z-10 px-6'>
             I Know You Love to Scroll <br />
             So Keep Scrolling →
           </h1>
         </header>
         <section className='horizontal-section h-[500vh] relative'>
           <ul ref={ulRef} className='flex sticky top-0 h-screen overflow-hidden' style={{ width: '500vw' }}>
-            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-slate-950 flex flex-col justify-center items-center px-12 border-r border-white/5'>
-              <h2 className='text-[20vw] font-bold text-cyan-500 select-none mb-8'>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-slate-950 flex flex-col justify-center items-center px-6 sm:px-12 border-r border-white/5'>
+              <h2 className='text-[20vw] font-bold text-cyan-500 select-none mb-4 sm:mb-8'>
                 TRADE
               </h2>
-              <p className='text-3xl text-zinc-400 max-w-3xl text-center font-medium'>
+              <p className='text-base sm:text-xl md:text-2xl lg:text-3xl text-zinc-400 max-w-3xl text-center font-medium px-4'>
                 Execute complex cross-chain swaps with simple voice commands. Trade 200+ assets across 40+ networks.
               </p>
             </li>
-            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-[#0f0a1e] flex flex-col justify-center items-center px-12 border-r border-white/5'>
-              <h2 className='text-[20vw] font-bold text-purple-500 select-none mb-8'>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-[#0f0a1e] flex flex-col justify-center items-center px-6 sm:px-12 border-r border-white/5'>
+              <h2 className='text-[20vw] font-bold text-purple-500 select-none mb-4 sm:mb-8'>
                 SWAP
               </h2>
-              <p className='text-3xl text-zinc-400 max-w-3xl text-center font-medium'>
+              <p className='text-base sm:text-xl md:text-2xl lg:text-3xl text-zinc-400 max-w-3xl text-center font-medium px-4'>
                 Seamless asset exchanges powered by SideShift.ai. Get real-time quotes and best rates instantly.
               </p>
             </li>
-            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-[#1a0b14] flex flex-col justify-center items-center px-12 border-r border-white/5'>
-              <h2 className='text-[20vw] font-bold text-pink-500 select-none mb-8'>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-[#1a0b14] flex flex-col justify-center items-center px-6 sm:px-12 border-r border-white/5'>
+              <h2 className='text-[20vw] font-bold text-pink-500 select-none mb-4 sm:mb-8'>
                 EARN
               </h2>
-              <p className='text-3xl text-zinc-400 max-w-3xl text-center font-medium'>
+              <p className='text-base sm:text-xl md:text-2xl lg:text-3xl text-zinc-400 max-w-3xl text-center font-medium px-4'>
                 Discover yield opportunities across DeFi protocols. Maximize your crypto earnings effortlessly.
               </p>
             </li>
-            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-[#051a12] flex flex-col justify-center items-center px-12 border-r border-white/5'>
-              <h2 className='text-[20vw] font-bold text-emerald-500 select-none mb-8'>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-[#051a12] flex flex-col justify-center items-center px-6 sm:px-12 border-r border-white/5'>
+              <h2 className='text-[20vw] font-bold text-emerald-500 select-none mb-4 sm:mb-8'>
                 GROW
               </h2>
-              <p className='text-3xl text-zinc-400 max-w-3xl text-center font-medium'>
+              <p className='text-base sm:text-xl md:text-2xl lg:text-3xl text-zinc-400 max-w-3xl text-center font-medium px-4'>
                 Build your portfolio with AI-assisted trading strategies. Make informed decisions with confidence.
               </p>
             </li>
-            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-[#1a0f05] flex flex-col justify-center items-center px-12'>
-              <h2 className='text-[20vw] font-bold text-orange-500 select-none mb-8'>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-[#1a0f05] flex flex-col justify-center items-center px-6 sm:px-12'>
+              <h2 className='text-[20vw] font-bold text-orange-500 select-none mb-4 sm:mb-8'>
                 WIN
               </h2>
-              <p className='text-3xl text-zinc-400 max-w-3xl text-center font-medium'>
+              <p className='text-base sm:text-xl md:text-2xl lg:text-3xl text-zinc-400 max-w-3xl text-center font-medium px-4'>
                 Join thousands of traders using SwapSmith. Experience the future of decentralized trading today.
               </p>
             </li>

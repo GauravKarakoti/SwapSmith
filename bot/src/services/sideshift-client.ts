@@ -18,6 +18,7 @@ export interface SideShiftPair {
 }
 
 export interface SideShiftQuote {
+  depositAddress: any;
   id: string;
   depositCoin: string;
   depositNetwork: string;

@@ -1,19 +1,60 @@
 import * as admin from 'firebase-admin';
 
-if (!admin.apps.length) {
+let _auth: admin.auth.Auth | null = null;
+let _initError: string | null = null;
+
+function initFirebaseAdmin(): void {
+  if (admin.apps.length > 0) {
+    _auth = admin.auth();
+    return;
+  }
+
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  if (!raw) {
+    _initError = 'FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set';
+    console.error('[Firebase Admin]', _initError);
+    return;
+  }
+
   try {
-    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
-      ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)
-      : undefined;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const serviceAccount: any = JSON.parse(raw);
+
+    // Fix common env-var issue: private_key may have literal \\n instead of real newlines
+    if (serviceAccount.private_key) {
+      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+    }
 
     admin.initializeApp({
-      credential: serviceAccount
-        ? admin.credential.cert(serviceAccount)
-        : admin.credential.applicationDefault(),
+      credential: admin.credential.cert(serviceAccount),
     });
-  } catch (error) {
-    console.error('Firebase Admin initialization error:', error);
+
+    _auth = admin.auth();
+    console.log('[Firebase Admin] Initialized. Project:', serviceAccount.project_id ?? 'unknown');
+  } catch (err) {
+    _initError = err instanceof Error ? err.message : String(err);
+    console.error('[Firebase Admin] Initialization error:', _initError);
   }
 }
 
-export const adminAuth = admin.auth();
+initFirebaseAdmin();
+
+/**
+ * Thin wrapper so callers keep the same `adminAuth.verifyIdToken(token)` interface.
+ * Throws with a clear message if the Admin SDK failed to initialise.
+ */
+export const adminAuth = {
+  async verifyIdToken(idToken: string) {
+    if (!_auth) {
+      throw new Error(`Firebase Admin SDK not initialised: ${_initError ?? 'unknown error'}`);
+    }
+    return _auth.verifyIdToken(idToken);
+  },
+  async getUser(uid: string) {
+    if (!_auth) {
+      throw new Error(`Firebase Admin SDK not initialised: ${_initError ?? 'unknown error'}`);
+    }
+    return _auth.getUser(uid);
+  },
+  isInitialized: () => _auth !== null,
+};

@@ -249,7 +249,11 @@ export async function updateSwapHistoryStatus(sideshiftOrderId: string, status: 
   }
   
   await db.update(swapHistory)
-    .set({ status, txHash, updatedAt: new Date() })
+    .set({
+      status,
+      ...(txHash ? { txHash } : {}),
+      updatedAt: new Date()
+    })
     .where(eq(swapHistory.sideshiftOrderId, sideshiftOrderId));
 }
 

@@ -21,10 +21,12 @@ import {
   Wallet,
   ExternalLink,
   Loader2,
+  AlertCircle
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useAccount } from 'wagmi'
 import Navbar from '@/components/Navbar'
+import Footer from '@/components/Footer'
 import { authenticatedFetch } from '@/lib/api-client'
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_REWARD_TOKEN_ADDRESS ?? ''
@@ -103,34 +105,17 @@ export default function RewardsPage() {
   const loadRewardsData = async () => {
     try {
       setLoading(true)
-      
-      // Fetch user stats
       const statsRes = await authenticatedFetch('/api/rewards/stats')
-      if (statsRes.ok) {
-        const data = await statsRes.json()
-        setStats(data)
-      }
+      if (statsRes.ok) setStats(await statsRes.json())
 
-      // Fetch course progress
       const coursesRes = await authenticatedFetch('/api/rewards/courses')
-      if (coursesRes.ok) {
-        const data = await coursesRes.json()
-        setCourses(data)
-      }
+      if (coursesRes.ok) setCourses(await coursesRes.json())
 
-      // Fetch recent activities
       const activitiesRes = await authenticatedFetch('/api/rewards/activities')
-      if (activitiesRes.ok) {
-        const data = await activitiesRes.json()
-        setActivities(data)
-      }
+      if (activitiesRes.ok) setActivities(await activitiesRes.json())
 
-      // Fetch leaderboard
       const leaderboardRes = await authenticatedFetch('/api/rewards/leaderboard')
-      if (leaderboardRes.ok) {
-        const data = await leaderboardRes.json()
-        setLeaderboard(data)
-      }
+      if (leaderboardRes.ok) setLeaderboard(await leaderboardRes.json())
     } catch (error) {
       console.error('Error loading rewards data:', error)
     } finally {
@@ -140,26 +125,21 @@ export default function RewardsPage() {
 
   const handleClaimTokens = async () => {
     if (!stats || parseFloat(stats.totalTokensPending) === 0) return
-
     const trimmed = walletAddress.trim()
     if (!trimmed || !/^0x[0-9a-fA-F]{40}$/.test(trimmed)) {
       setClaimError('Please enter a valid Ethereum wallet address (0x…)')
       return
     }
-
     setClaiming(true)
     setClaimTxHash(null)
     setClaimError(null)
-
     try {
       const res = await authenticatedFetch('/api/rewards/claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ walletAddress: trimmed }),
       })
-
       const data = await res.json()
-
       if (res.ok && data.success) {
         setClaimTxHash(data.txHash)
         await loadRewardsData()
@@ -167,21 +147,18 @@ export default function RewardsPage() {
         setClaimError(data.error || 'Failed to claim tokens. Please try again.')
       }
     } catch (error) {
-      console.error('Error claiming tokens:', error)
       setClaimError('Network error. Please try again.')
     } finally {
       setClaiming(false)
     }
   }
 
-
-
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-[#050505]">
+      <div className="min-h-screen bg-primary">
         <Navbar />
-        <div className="pt-20 flex items-center justify-center h-screen">
-          <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+        <div className="pt-20 flex items-center justify-center h-[calc(100vh-80px)]">
+          <Loader2 className="w-10 h-10 text-accent-primary animate-spin" />
         </div>
       </div>
     )
@@ -189,18 +166,12 @@ export default function RewardsPage() {
 
   const getActionIcon = (type: string) => {
     switch (type) {
-      case 'course_complete':
-        return <BookOpen className="w-4 h-4" />
-      case 'module_complete':
-        return <CheckCircle className="w-4 h-4" />
-      case 'daily_login':
-        return <Clock className="w-4 h-4" />
-      case 'swap_complete':
-        return <Zap className="w-4 h-4" />
-      case 'referral':
-        return <Gift className="w-4 h-4" />
-      default:
-        return <Star className="w-4 h-4" />
+      case 'course_complete': return <BookOpen className="w-4 h-4" />
+      case 'module_complete': return <CheckCircle className="w-4 h-4" />
+      case 'daily_login': return <Clock className="w-4 h-4" />
+      case 'swap_complete': return <Zap className="w-4 h-4" />
+      case 'referral': return <Gift className="w-4 h-4" />
+      default: return <Star className="w-4 h-4" />
     }
   }
 
@@ -209,97 +180,59 @@ export default function RewardsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#050505]">
+    <div className="min-h-screen bg-primary transition-colors duration-500">
       <Navbar />
       
-      <main className="pt-24 pb-16 px-4 sm:px-6 max-w-7xl mx-auto">
+      <main className="pt-32 pb-24 px-4 sm:px-6 max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-12">
           <button
             onClick={() => router.back()}
-            className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors mb-4"
+            className="flex items-center gap-2 text-muted hover:text-primary transition-colors mb-6 group"
           >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="text-sm">Back</span>
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+            <span className="text-sm font-bold uppercase tracking-widest">Back</span>
           </button>
           
-          <div className="flex items-center gap-4 mb-2">
-            <div className="p-3 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-2xl">
-              <Trophy className="w-8 h-8 text-white" />
+          <div className="flex items-center gap-6 mb-2">
+            <div className="p-4 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-[1.5rem] shadow-xl shadow-orange-500/20">
+              <Trophy className="w-10 h-10 text-white" />
             </div>
             <div className="flex-1">
-              <h1 className="text-3xl sm:text-4xl font-bold text-white">Rewards Center</h1>
-              <p className="text-zinc-400 mt-1">Track your progress and earn rewards</p>
+              <h1 className="text-4xl sm:text-5xl font-black text-primary tracking-tighter">Rewards <span className="gradient-text">Center</span></h1>
+              <p className="text-secondary font-medium mt-1">Track your contribution and claim SMTH governance tokens.</p>
             </div>
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-zinc-900 border border-zinc-800 rounded-xl p-6"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-blue-500/10 rounded-lg">
-                <Star className="w-5 h-5 text-blue-400" />
+        {/* Stats Cards - Redesigned as Hifi Modules */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-12">
+          {[
+            { label: 'Total Points', val: stats?.totalPoints || 0, icon: Star, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+            { label: 'Tokens Pending', val: parseFloat(stats?.totalTokensPending || '0').toFixed(2), icon: Coins, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+            { label: 'Tokens Claimed', val: parseFloat(stats?.totalTokensClaimed || '0').toFixed(2), icon: Wallet, color: 'text-purple-400', bg: 'bg-purple-500/10' },
+            { label: 'Global Rank', val: stats?.rank ? `#${stats.rank}` : '—', icon: Trophy, color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
+          ].map((item, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.1 }}
+              className="glow-card rounded-3xl p-6 border-primary"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className={`p-2 ${item.bg} rounded-xl`}>
+                  <item.icon className={`w-5 h-5 ${item.color}`} />
+                </div>
+                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted">{item.label}</h3>
               </div>
-              <h3 className="text-sm text-zinc-400">Total Points</h3>
-            </div>
-            <p className="text-3xl font-bold text-white">{stats?.totalPoints || 0}</p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-zinc-900 border border-zinc-800 rounded-xl p-6"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-green-500/10 rounded-lg">
-                <Coins className="w-5 h-5 text-green-400" />
-              </div>
-              <h3 className="text-sm text-zinc-400">Tokens Pending</h3>
-            </div>
-            <p className="text-3xl font-bold text-white">{parseFloat(stats?.totalTokensPending || '0').toFixed(2)}</p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="bg-zinc-900 border border-zinc-800 rounded-xl p-6"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-purple-500/10 rounded-lg">
-                <Wallet className="w-5 h-5 text-purple-400" />
-              </div>
-              <h3 className="text-sm text-zinc-400">Tokens Claimed</h3>
-            </div>
-            <p className="text-3xl font-bold text-white">{parseFloat(stats?.totalTokensClaimed || '0').toFixed(2)}</p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="bg-zinc-900 border border-zinc-800 rounded-xl p-6"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-yellow-500/10 rounded-lg">
-                <Trophy className="w-5 h-5 text-yellow-400" />
-              </div>
-              <h3 className="text-sm text-zinc-400">Rank</h3>
-            </div>
-            <p className="text-3xl font-bold text-white">
-              {stats?.rank ? `#${stats.rank}` : '—'}
-            </p>
-          </motion.div>
+              <p className="text-3xl font-black text-primary tracking-tighter">{item.val}</p>
+            </motion.div>
+          ))}
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 mb-6 overflow-x-auto border-b border-zinc-800">
+        {/* Tabs - Theme Integrated */}
+        <div className="flex gap-2 mb-8 overflow-x-auto border-b border-primary no-scrollbar">
           {[
             { id: 'overview', label: 'Overview', icon: TrendingUp },
             { id: 'courses', label: 'Learning Progress', icon: BookOpen },
@@ -309,14 +242,15 @@ export default function RewardsPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
-                activeTab === tab.id
-                  ? 'text-white border-b-2 border-blue-500'
-                  : 'text-zinc-400 hover:text-white'
+              className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all whitespace-nowrap relative ${
+                activeTab === tab.id ? 'text-accent-primary' : 'text-muted hover:text-primary'
               }`}
             >
               <tab.icon className="w-4 h-4" />
               {tab.label}
+              {activeTab === tab.id && (
+                <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-1 bg-accent-primary rounded-t-full shadow-[0_-4px_12px_rgba(var(--accent),0.5)]" />
+              )}
             </button>
           ))}
         </div>
@@ -324,42 +258,37 @@ export default function RewardsPage() {
         {/* Tab Content */}
         <AnimatePresence mode="wait">
           {activeTab === 'overview' && (
-            <motion.div
-              key="overview"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="space-y-6"
-            >
-              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                  <Award className="w-5 h-5 text-blue-400" />
-                  Recent Activities
+            <motion.div key="overview" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
+              <div className="glow-card rounded-[2.5rem] border-primary p-8">
+                <h2 className="text-2xl font-black text-primary mb-6 flex items-center gap-3 tracking-tighter">
+                  <Award className="w-6 h-6 text-accent-primary" />
+                  Recent Activity Stream
                 </h2>
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {activities.length === 0 ? (
-                    <p className="text-zinc-500 text-center py-8">No activities yet. Start learning to earn rewards!</p>
+                    <div className="text-center py-16 bg-secondary rounded-3xl border border-dashed border-primary">
+                      <Clock className="w-12 h-12 text-muted mx-auto mb-4" />
+                      <p className="text-secondary font-bold">No data found in your feed.</p>
+                      <p className="text-xs text-muted mt-1 uppercase tracking-widest">Start swapping or learning to generate logs.</p>
+                    </div>
                   ) : (
-                    activities.slice(0, 10).map((activity) => (
-                      <div
-                        key={activity.id}
-                        className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-lg border border-zinc-800 hover:border-zinc-700 transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
+                    activities.slice(0, 8).map((activity) => (
+                      <div key={activity.id} className="flex items-center justify-between p-5 bg-section rounded-2xl border border-primary hover:bg-section-hover transition-all group">
+                        <div className="flex items-center gap-4">
+                          <div className="p-3 bg-tertiary rounded-xl text-accent-primary group-hover:scale-110 transition-transform">
                             {getActionIcon(activity.actionType)}
                           </div>
                           <div>
-                            <p className="text-white font-medium">{getActionLabel(activity.actionType)}</p>
-                            <p className="text-xs text-zinc-500">
+                            <p className="text-primary font-bold text-sm tracking-tight">{getActionLabel(activity.actionType)}</p>
+                            <p className="text-[10px] text-muted font-bold uppercase tracking-widest">
                               {new Date(activity.createdAt).toLocaleDateString()}
                             </p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-green-400 font-bold">+{activity.pointsEarned} pts</p>
+                          <p className="text-emerald-500 font-black tracking-tighter">+{activity.pointsEarned} PTS</p>
                           {parseFloat(activity.tokensPending) > 0 && (
-                            <p className="text-xs text-yellow-400">+{parseFloat(activity.tokensPending).toFixed(2)} tokens</p>
+                            <p className="text-[10px] text-amber-500 font-black uppercase">+{parseFloat(activity.tokensPending).toFixed(2)} SMTH</p>
                           )}
                         </div>
                       </div>
@@ -368,102 +297,83 @@ export default function RewardsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-                  <h3 className="text-lg font-bold text-white mb-4">How to Earn Rewards</h3>
-                  <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="glow-card rounded-[2rem] border-primary p-8">
+                  <h3 className="text-xl font-black text-primary mb-6 tracking-tighter">Contribution Tiers</h3>
+                  <div className="space-y-5">
                     {[
-                      { icon: BookOpen, label: 'Complete Learning Modules', points: '50-100 pts' },
-                      { icon: Star, label: 'Report Bugs', points: '25-200 pts' },
-                      { icon: Lightbulb, label: 'Feature Suggestions', points: '10-50 pts' },
-                      { icon: Zap, label: 'Complete Swaps', points: '5-20 pts' },
-                      { icon: Gift, label: 'Refer Friends', points: '100 pts' },
+                      { icon: BookOpen, label: 'Modular Education', points: '50-100' },
+                      { icon: Star, label: 'Bug Bounty Reporting', points: '25-200' },
+                      { icon: Lightbulb, label: 'Feature Proposals', points: '10-50' },
+                      { icon: Zap, label: 'Exchange Volume', points: '5-20' },
+                      { icon: Gift, label: 'Protocol Referral', points: '100' },
                     ].map((item, idx) => (
-                      <div key={idx} className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <item.icon className="w-4 h-4 text-blue-400" />
-                          <span className="text-zinc-300">{item.label}</span>
+                      <div key={idx} className="flex items-center justify-between group">
+                        <div className="flex items-center gap-4">
+                          <div className="w-8 h-8 rounded-lg bg-secondary border border-primary flex items-center justify-center">
+                            <item.icon className="w-4 h-4 text-accent-primary" />
+                          </div>
+                          <span className="text-secondary font-bold text-sm tracking-tight">{item.label}</span>
                         </div>
-                        <span className="text-green-400 font-medium">{item.points}</span>
+                        <span className="text-emerald-500 font-black text-xs uppercase tracking-widest">{item.points} PTS</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 border border-blue-800/30 rounded-xl p-6">
-                  <h3 className="text-lg font-bold text-white mb-4">Completed Courses</h3>
-                  <div className="text-center py-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-500/10 mb-4">
-                      <BookOpen className="w-8 h-8 text-blue-400" />
-                    </div>
-                    <p className="text-4xl font-bold text-white mb-2">{stats?.completedCourses || 0}</p>
-                    <p className="text-zinc-400">Courses Completed</p>
-                  </div>
+                <div className="bg-gradient-to-br from-blue-600/10 to-purple-600/10 border border-accent-primary/20 rounded-[2.5rem] p-8 flex flex-col items-center justify-center text-center relative overflow-hidden">
+                   <div className="absolute top-0 right-0 p-8 opacity-5"><Trophy className="w-32 h-32" /></div>
+                   <div className="w-20 h-20 rounded-3xl bg-accent-primary/10 flex items-center justify-center mb-6 border border-accent-primary/20">
+                      <BookOpen className="w-10 h-10 text-accent-primary" />
+                   </div>
+                   <p className="text-5xl font-black text-primary tracking-tighter mb-2">{stats?.completedCourses || 0}</p>
+                   <p className="text-xs font-black text-muted uppercase tracking-[0.3em]">Knowledge Certificates</p>
                 </div>
               </div>
             </motion.div>
           )}
 
           {activeTab === 'courses' && (
-            <motion.div
-              key="courses"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="bg-zinc-900 border border-zinc-800 rounded-xl p-6"
-            >
-              <h2 className="text-xl font-bold text-white mb-6">Your Learning Journey</h2>
-              <div className="space-y-4">
+            <motion.div key="courses" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="glow-card rounded-[2.5rem] border-primary p-8">
+              <h2 className="text-2xl font-black text-primary mb-8 tracking-tighter">Your Certification Path</h2>
+              <div className="grid gap-6">
                 {courses.length === 0 ? (
-                  <div className="text-center py-12">
-                    <BookOpen className="w-16 h-16 text-zinc-600 mx-auto mb-4" />
-                    <p className="text-zinc-500 mb-4">No courses started yet</p>
-                    <button
-                      onClick={() => router.push('/learn')}
-                      className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                    >
-                      Start Learning
-                    </button>
+                  <div className="text-center py-20 bg-secondary rounded-3xl border border-dashed border-primary">
+                    <BookOpen className="w-16 h-16 text-muted mx-auto mb-6" />
+                    <p className="text-primary font-bold text-lg mb-6">No active curriculum detected.</p>
+                    <button onClick={() => router.push('/learn')} className="btn-primary px-8 py-3 rounded-2xl font-black uppercase tracking-widest text-sm">Browse Academy</button>
                   </div>
                 ) : (
                   courses.map((course) => {
                     const progress = (course.completedModules.length / course.totalModules) * 100
                     return (
-                      <div
-                        key={course.id}
-                        className="p-6 bg-zinc-800/50 border border-zinc-800 rounded-lg hover:border-zinc-700 transition-colors"
-                      >
-                        <div className="flex items-start justify-between mb-4">
+                      <div key={course.id} className="p-8 bg-section border border-primary rounded-[2rem] hover:bg-section-hover transition-all group">
+                        <div className="flex items-start justify-between mb-8">
                           <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-white mb-1">{course.courseTitle}</h3>
-                            <p className="text-sm text-zinc-400">
-                              {course.completedModules.length} of {course.totalModules} modules completed
+                            <h3 className="text-xl font-black text-primary tracking-tighter group-hover:text-accent-primary transition-colors">{course.courseTitle}</h3>
+                            <p className="text-xs font-bold text-muted uppercase tracking-widest mt-1">
+                              Status: {course.completedModules.length} / {course.totalModules} Units Synchronized
                             </p>
                           </div>
                           {course.isCompleted && (
-                            <div className="flex items-center gap-2 px-3 py-1 bg-green-500/10 border border-green-500/20 rounded-full">
-                              <CheckCircle className="w-4 h-4 text-green-400" />
-                              <span className="text-sm text-green-400 font-medium">Completed</span>
+                            <div className="badge px-4 py-1.5 rounded-full flex items-center gap-2">
+                              <CheckCircle className="w-4 h-4" />
+                              <span className="text-[10px] font-black uppercase tracking-widest">Certified</span>
                             </div>
                           )}
                         </div>
-                        <div className="mb-3">
-                          <div className="flex justify-between text-xs text-zinc-400 mb-1">
-                            <span>Progress</span>
-                            <span>{Math.round(progress)}%</span>
+                        <div className="mb-6">
+                          <div className="flex justify-between items-end mb-3 px-1">
+                            <span className="text-[10px] font-black text-muted uppercase tracking-[0.2em]">Completion Progress</span>
+                            <span className="text-lg font-black text-primary tracking-tighter">{Math.round(progress)}%</span>
                           </div>
-                          <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-300"
-                              style={{ width: `${progress}%` }}
-                            />
+                          <div className="h-4 bg-tertiary rounded-full border border-primary overflow-hidden p-1">
+                            <motion.div initial={{ width: 0 }} animate={{ width: `${progress}%` }} className="h-full bg-accent-primary rounded-full shadow-[0_0_15px_rgba(var(--accent),0.4)]" />
                           </div>
                         </div>
-                        <div className="flex items-center justify-between text-xs text-zinc-500">
-                          <span>Last accessed: {new Date(course.lastAccessed).toLocaleDateString()}</span>
-                          {course.completionDate && (
-                            <span>Completed: {new Date(course.completionDate).toLocaleDateString()}</span>
-                          )}
+                        <div className="flex items-center justify-between text-[10px] font-bold text-muted uppercase tracking-[0.1em]">
+                          <span>Epoch: {new Date(course.lastAccessed).toLocaleDateString()}</span>
+                          {course.completionDate && <span>Archived: {new Date(course.completionDate).toLocaleDateString()}</span>}
                         </div>
                       </div>
                     )
@@ -474,54 +384,38 @@ export default function RewardsPage() {
           )}
 
           {activeTab === 'leaderboard' && (
-            <motion.div
-              key="leaderboard"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="bg-zinc-900 border border-zinc-800 rounded-xl p-6"
-            >
-              <h2 className="text-xl font-bold text-white mb-6">Top Contributors</h2>
-              <div className="space-y-2">
+            <motion.div key="leaderboard" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="glow-card rounded-[2.5rem] border-primary p-8">
+              <h2 className="text-2xl font-black text-primary mb-8 tracking-tighter">Global Contributor Index</h2>
+              <div className="space-y-3">
                 {leaderboard.length === 0 ? (
-                  <p className="text-zinc-500 text-center py-8">No leaderboard data yet</p>
+                  <p className="text-muted text-center py-20 font-bold uppercase tracking-widest">Synchronizing rankings...</p>
                 ) : (
                   leaderboard.map((entry) => (
-                    <div
-                      key={entry.userId}
-                      className={`flex items-center justify-between p-4 rounded-lg transition-colors ${
-                        entry.isCurrentUser
-                          ? 'bg-blue-500/10 border border-blue-500/20'
-                          : 'bg-zinc-800/50 hover:bg-zinc-800'
-                      }`}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
-                          entry.rank === 1 ? 'bg-yellow-500/20 text-yellow-400' :
-                          entry.rank === 2 ? 'bg-gray-400/20 text-gray-400' :
-                          entry.rank === 3 ? 'bg-orange-600/20 text-orange-400' :
-                          'bg-zinc-700 text-zinc-400'
+                    <div key={entry.userId} className={`flex items-center justify-between p-6 rounded-3xl transition-all border ${
+                        entry.isCurrentUser ? 'bg-accent-primary/10 border-accent-primary/30 ring-2 ring-accent-primary/10' : 'bg-section border-primary hover:bg-section-hover'
+                    }`}>
+                      <div className="flex items-center gap-6">
+                        <div className={`flex items-center justify-center w-12 h-12 rounded-2xl font-black text-lg shadow-sm border ${
+                          entry.rank === 1 ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30' :
+                          entry.rank === 2 ? 'bg-zinc-400/20 text-zinc-400 border-zinc-400/30' :
+                          entry.rank === 3 ? 'bg-orange-600/20 text-orange-500 border-orange-600/30' :
+                          'bg-tertiary text-muted border-primary'
                         }`}>
-                          {entry.rank <= 3 ? (
-                            entry.rank === 1 ? <Crown className="w-5 h-5" /> :
-                            <Medal className="w-5 h-5" />
-                          ) : (
-                            <span className="font-bold">{entry.rank}</span>
-                          )}
+                          {entry.rank <= 3 ? (entry.rank === 1 ? <Crown className="w-6 h-6" /> : <Medal className="w-6 h-6" />) : entry.rank}
                         </div>
                         <div>
-                          <p className="text-white font-medium">
-                            {entry.userName || `User ${entry.userId}`}
-                            {entry.isCurrentUser && <span className="text-blue-400 ml-2">(You)</span>}
+                          <p className="text-primary font-black tracking-tighter text-lg flex items-center gap-2">
+                            {entry.userName || `Validator_${entry.userId.slice(0,4)}`}
+                            {entry.isCurrentUser && <span className="badge px-2 py-0.5 rounded text-[8px] uppercase">Node (You)</span>}
                           </p>
-                          <p className="text-xs text-zinc-500">
-                            {parseFloat(entry.totalTokensClaimed).toFixed(2)} tokens claimed
+                          <p className="text-[10px] text-muted font-bold uppercase tracking-widest">
+                            Verified Liquidity: {parseFloat(entry.totalTokensClaimed).toFixed(2)} SMTH
                           </p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-xl font-bold text-white">{entry.totalPoints}</p>
-                        <p className="text-xs text-zinc-500">points</p>
+                        <p className="text-3xl font-black text-primary tracking-tighter leading-none">{entry.totalPoints}</p>
+                        <p className="text-[10px] text-muted font-black uppercase tracking-widest mt-1">XP Power</p>
                       </div>
                     </div>
                   ))
@@ -531,166 +425,104 @@ export default function RewardsPage() {
           )}
 
           {activeTab === 'claim' && (
-            <motion.div
-              key="claim"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="bg-zinc-900 border border-zinc-800 rounded-xl p-6"
-            >
-              <h2 className="text-xl font-bold text-white mb-6">Claim Your Tokens</h2>
+            <motion.div key="claim" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="glow-card rounded-[2.5rem] border-primary p-8">
+              <h2 className="text-2xl font-black text-primary mb-8 tracking-tighter text-center sm:text-left">Mint Governance Tokens</h2>
 
-              {/* Success banner */}
               {claimTxHash && (
-                <div className="mb-6 p-5 bg-green-500/10 border border-green-500/30 rounded-xl space-y-3">
-                  <p className="text-green-400 font-semibold text-lg">✅ Tokens sent to your wallet!</p>
-
-                  <a
-                    href={`https://sepolia.etherscan.io/tx/${claimTxHash}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 underline break-all"
-                  >
-                    <ExternalLink className="w-4 h-4 flex-shrink-0" />
-                    View transaction on Sepolia Etherscan →
+                <div className="mb-8 p-6 bg-emerald-500/10 border border-emerald-500/30 rounded-3xl space-y-4 animate-in zoom-in duration-300">
+                  <p className="text-emerald-500 font-black text-xl tracking-tighter flex items-center gap-3">
+                    <CheckCircle className="w-6 h-6" /> Transaction Broadcast Complete
+                  </p>
+                  <a href={`https://sepolia.etherscan.io/tx/${claimTxHash}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-xs font-bold text-blue-500 hover:text-blue-400 underline uppercase tracking-widest break-all">
+                    <ExternalLink className="w-4 h-4 shrink-0" /> Hash: {claimTxHash}
                   </a>
-
-                  <div className="pt-2 border-t border-green-500/20">
-                    <p className="text-sm text-zinc-300 font-medium mb-2">How to see SMTH in MetaMask:</p>
-                    <ol className="text-sm text-zinc-400 space-y-1 list-decimal list-inside">
-                      <li>Open MetaMask → switch to <span className="text-white">Sepolia Testnet</span></li>
-                      <li>Click <span className="text-white">Import tokens</span> at the bottom of the Assets tab</li>
-                      <li>Paste this contract address:</li>
-                    </ol>
-                    {CONTRACT_ADDRESS ? (
-                      <div className="mt-2 flex items-center gap-2 bg-zinc-800 rounded-lg px-3 py-2">
-                        <code className="text-purple-400 text-xs break-all flex-1">{CONTRACT_ADDRESS}</code>
-                        <button
-                          onClick={() => navigator.clipboard.writeText(CONTRACT_ADDRESS)}
-                          className="text-xs text-zinc-400 hover:text-white whitespace-nowrap"
-                        >
-                          Copy
-                        </button>
-                      </div>
-                    ) : (
-                      <code className="text-purple-400 text-xs">Set NEXT_PUBLIC_REWARD_TOKEN_ADDRESS in .env.local</code>
-                    )}
-                    <ol className="text-sm text-zinc-400 space-y-1 list-decimal list-inside mt-2" start={4}>
-                      <li>Symbol <span className="text-white">SMTH</span> and decimals <span className="text-white">18</span> will auto-fill</li>
-                      <li>Click <span className="text-white">Next → Import</span> — your SMTH balance appears</li>
-                    </ol>
+                  <div className="pt-4 border-t border-emerald-500/20 grid gap-2">
+                    <p className="text-xs font-black text-emerald-600/80 uppercase tracking-widest">Network: Sepolia Mainnet Simulation</p>
+                    <div className="flex items-center gap-2 bg-secondary/50 rounded-xl px-4 py-3 border border-primary">
+                       <code className="text-primary text-[10px] break-all flex-1 font-mono uppercase tracking-widest">{CONTRACT_ADDRESS}</code>
+                       <button onClick={() => navigator.clipboard.writeText(CONTRACT_ADDRESS)} className="text-[10px] font-black text-accent-primary hover:text-primary transition-colors">COPY ADDR</button>
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* Error banner */}
               {claimError && (
-                <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
-                  <p className="text-red-400 font-semibold">❌ {claimError}</p>
+                <div className="mb-8 p-5 bg-red-500/10 border border-red-500/30 rounded-2xl">
+                  <p className="text-red-500 font-black text-sm uppercase tracking-widest flex items-center gap-3">
+                    <AlertCircle className="w-5 h-5" /> {claimError}
+                  </p>
                 </div>
               )}
               
-              <div className="bg-gradient-to-br from-purple-900/20 to-blue-900/20 border border-purple-800/30 rounded-xl p-8 mb-6">
-                <div className="text-center mb-6">
-                  <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-purple-500/10 mb-4">
-                    <Coins className="w-10 h-10 text-purple-400" />
+              <div className="bg-gradient-to-br from-indigo-600/10 to-blue-600/10 border border-primary rounded-[3rem] p-10 mb-8 relative overflow-hidden group">
+                <div className="absolute top-[-10%] right-[-5%] w-[30%] h-[50%] rounded-full bg-accent-primary blur-[80px] opacity-10 group-hover:opacity-20 transition-opacity" />
+                <div className="text-center mb-10 relative z-10">
+                  <div className="inline-flex items-center justify-center w-24 h-24 rounded-[2rem] bg-accent-primary/10 border border-accent-primary/20 mb-6 shadow-2xl">
+                    <Coins className="w-12 h-12 text-accent-primary" />
                   </div>
-                  <h3 className="text-3xl font-bold text-white mb-2">
+                  <h3 className="text-6xl font-black text-primary tracking-tighter mb-2">
                     {parseFloat(stats?.totalTokensPending || '0').toFixed(2)}
                   </h3>
-                  <p className="text-zinc-400">SwapSmith Tokens Available to Claim</p>
+                  <p className="text-xs font-black text-muted uppercase tracking-[0.4em]">Available Liquid SMTH</p>
                 </div>
 
-                <div className="space-y-4 mb-6">
-                  <div className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-lg">
-                    <span className="text-zinc-300">Pending Tokens</span>
-                    <span className="text-white font-bold">{parseFloat(stats?.totalTokensPending || '0').toFixed(2)}</span>
-                  </div>
-                  <div className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-lg">
-                    <span className="text-zinc-300">Total Claimed</span>
-                    <span className="text-green-400 font-bold">{parseFloat(stats?.totalTokensClaimed || '0').toFixed(2)}</span>
-                  </div>
+                <div className="grid sm:grid-cols-2 gap-4 mb-10 relative z-10">
+                   <div className="p-6 bg-secondary/50 border border-primary rounded-2xl text-center">
+                      <span className="text-[10px] font-black text-muted uppercase tracking-widest block mb-1">Vault Pending</span>
+                      <span className="text-2xl font-black text-primary tracking-tighter">{parseFloat(stats?.totalTokensPending || '0').toFixed(2)}</span>
+                   </div>
+                   <div className="p-6 bg-secondary/50 border border-primary rounded-2xl text-center">
+                      <span className="text-[10px] font-black text-muted uppercase tracking-widest block mb-1">Settled Balance</span>
+                      <span className="text-2xl font-black text-emerald-500 tracking-tighter">{parseFloat(stats?.totalTokensClaimed || '0').toFixed(2)}</span>
+                   </div>
                 </div>
 
-                {/* Wallet address input */}
-                <div className="mb-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm text-zinc-400">
-                      <Wallet className="inline w-4 h-4 mr-1 mb-0.5" />
-                      Your Sepolia wallet address
+                <div className="mb-8 relative z-10">
+                  <div className="flex items-center justify-between mb-3 px-2">
+                    <label className="text-[10px] font-black text-muted uppercase tracking-[0.2em] flex items-center gap-2">
+                      <Wallet className="w-3 h-3 text-accent-primary" /> Target Settlement Address
                     </label>
                     {isConnected && connectedWallet && (
-                      <button
-                        onClick={() => { setWalletAddress(connectedWallet); setClaimError(null) }}
-                        className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
-                      >
-                        ✓ Use connected wallet
-                      </button>
+                      <button onClick={() => { setWalletAddress(connectedWallet); setClaimError(null) }} className="text-[10px] font-black text-accent-primary hover:text-primary transition-colors underline decoration-dotted underline-offset-4 uppercase tracking-widest">Sync Current Wallet</button>
                     )}
                   </div>
                   <input
                     type="text"
                     value={walletAddress}
                     onChange={e => { setWalletAddress(e.target.value); setClaimError(null) }}
-                    placeholder="0x…"
-                    className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 font-mono text-sm"
+                    placeholder="0X..."
+                    className="w-full px-6 py-5 bg-tertiary border border-primary rounded-2xl text-primary placeholder-muted focus:ring-4 focus:ring-accent-primary/10 transition-all font-mono text-sm tracking-widest outline-none shadow-inner"
                   />
-                  {isConnected && connectedWallet?.toLowerCase() === walletAddress.toLowerCase() ? (
-                    <p className="text-xs text-green-400 mt-1">✓ Connected wallet auto-filled — tokens will go here on Sepolia</p>
-                  ) : (
-                    <p className="text-xs text-zinc-500 mt-1">
-                      {isConnected
-                        ? 'Click "Use connected wallet" above or paste any Sepolia address'
-                        : 'Paste your MetaMask wallet address (Sepolia network)'}
-                    </p>
-                  )}
+                  <p className="text-[9px] font-black text-muted uppercase tracking-widest mt-4 px-2 leading-relaxed">
+                    Tokens are minted on the Sepolia test network. Ensure your provider is configured for Chain ID 11155111.
+                  </p>
                 </div>
 
                 <button
                   onClick={handleClaimTokens}
                   disabled={claiming || parseFloat(stats?.totalTokensPending || '0') === 0}
-                  className="w-full py-4 px-6 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-zinc-700 disabled:to-zinc-700 text-white font-bold rounded-lg transition-all flex items-center justify-center gap-2 disabled:cursor-not-allowed"
+                  className="btn-primary w-full py-5 rounded-2xl font-black uppercase tracking-[0.3em] text-sm shadow-2xl shadow-blue-500/20 active:scale-[0.98] transition-all disabled:grayscale disabled:opacity-40"
                 >
                   {claiming ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Processing...
-                    </>
+                    <span className="flex items-center justify-center gap-3"><Loader2 className="w-5 h-5 animate-spin" /> Broadcast In Progress</span>
                   ) : (
-                    <>
-                      <Wallet className="w-5 h-5" />
-                      Claim Tokens
-                    </>
+                    <span className="flex items-center justify-center gap-3"><Zap className="w-5 h-5 fill-current" /> Execute Token Claim</span>
                   )}
                 </button>
               </div>
 
-              <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-4">
-                <div className="flex gap-3">
-                  <ExternalLink className="w-5 h-5 text-blue-400 flex-shrink-0" />
-                  <div className="w-full">
-                    <h4 className="text-white font-medium mb-1">How Token Claims Work</h4>
-                    <ul className="text-sm text-zinc-400 space-y-1">
-                      <li>• Earn points by completing courses, daily logins, and swaps</li>
-                      <li>• Connect your MetaMask wallet on Sepolia, or paste your address</li>
-                      <li>• Click <span className="text-white">Claim Tokens</span> — SMTH is sent on-chain in seconds</li>
-                      <li>• View your transaction on Sepolia Etherscan</li>
-                      <li>• Gas fees are covered by SwapSmith</li>
+              <div className="p-8 bg-section border border-primary rounded-[2rem]">
+                <div className="flex gap-6 flex-col md:flex-row items-center md:items-start">
+                  <div className="text-center md:text-left">
+                    <h4 className="text-primary font-black tracking-tighter text-lg mb-3">Protocol Settlement Architecture</h4>
+                    <ul className="grid sm:grid-cols-2 gap-x-12 gap-y-3 text-[10px] font-bold text-secondary uppercase tracking-widest">
+                      <li>• Dynamic XP Conversion Engine</li>
+                      <li>• Direct On-Chain Minting (Sepolia)</li>
+                      <li>• Zero-Gas Claim Environment</li>
+                      <li>• Deterministic Governance Distribution</li>
+                      <li>• Real-Time Etherscan Indexing</li>
+                      <li>• Automated Wallet Handshake</li>
                     </ul>
-                    {CONTRACT_ADDRESS && (
-                      <div className="mt-3 pt-3 border-t border-blue-500/20">
-                        <p className="text-xs text-zinc-400 mb-1">Add SMTH token to MetaMask — contract address:</p>
-                        <div className="flex items-center gap-2 bg-zinc-800/80 rounded-lg px-3 py-2">
-                          <code className="text-purple-400 text-xs break-all flex-1">{CONTRACT_ADDRESS}</code>
-                          <button
-                            onClick={() => navigator.clipboard.writeText(CONTRACT_ADDRESS)}
-                            className="text-xs text-zinc-400 hover:text-white whitespace-nowrap"
-                          >
-                            Copy
-                          </button>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
@@ -698,6 +530,8 @@ export default function RewardsPage() {
           )}
         </AnimatePresence>
       </main>
+
+      <Footer />
     </div>
   )
 }

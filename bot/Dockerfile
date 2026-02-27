@@ -2,7 +2,6 @@
 FROM node:20-slim
 
 # Install ffmpeg AND the tools required to build native addons
-# (build-essential includes 'make', 'g++', etc. python3 is also needed by node-gyp)
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     build-essential \
@@ -12,17 +11,21 @@ RUN apt-get update && apt-get install -y \
 # Set the working directory in the container
 WORKDIR /usr/src/app
 
-# Copy package.json and package-lock.json
-COPY package*.json ./
+# 1. Copy the shared directory first
+COPY shared ./shared
 
-# Install app dependencies
+# 2. Change working directory to bot
+WORKDIR /usr/src/app/bot
+
+# 3. Copy bot package files and install dependencies
+COPY bot/package*.json ./
 RUN npm ci
 
-# Copy the rest of your app's source code
-COPY . .
+# 4. Copy the rest of the bot source code
+COPY bot/ ./
 
 # Run the build script to compile TypeScript to JavaScript
 RUN npm run build
 
-# Your app's start command (from package.json)
-CMD [ "npm", "run", "start" ]
+# Your app's start command
+CMD [ "npm", "run", "start:render" ]

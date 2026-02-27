@@ -2,5 +2,12 @@ dist/
 build/
 node_modules/
 .env
+bot\test_final_debug.txt
+bot\test_final_debug_2.txt
+bot\test_final_debug_3.txt
+bot\test_debug_output_2.txt
+*.txt
+junit.xml
+coverage/
 
 frontend/public/ad-preview.js

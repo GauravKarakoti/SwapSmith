@@ -1,66 +1,83 @@
-import { eq, and, sql as drizzleSql } from 'drizzle-orm';
-import { db, users } from './database';
+/**
+ * Plan Service — DB operations for user plans and usage tracking
+ */
+import { neon } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/neon-http';
+import { eq, sql as drizzleSql } from 'drizzle-orm';
+import { users, planPurchases } from '../../shared/schema';
+import type { Plan } from '../../shared/config/plans';
+import { PLAN_CONFIGS, isLimitExceeded } from '../../shared/config/plans';
 
-// Plan limits configuration
-export const PLAN_LIMITS = {
-  free: {
-    dailyChatLimit: 10,
-    dailyTerminalLimit: 5,
-  },
-  pro: {
-    dailyChatLimit: 100,
-    dailyTerminalLimit: 50,
-  },
-  enterprise: {
-    dailyChatLimit: 1000,
-    dailyTerminalLimit: 500,
-  },
-};
+const sqlConn = neon(process.env.DATABASE_URL!);
+const db = drizzle(sqlConn);
 
-export type PlanType = keyof typeof PLAN_LIMITS;
-
-export interface UserPlanStatus {
-  userId: number;
-  plan: PlanType;
+export interface UsageStatus {
+  plan: Plan;
+  planExpiresAt: Date | null;
   dailyChatCount: number;
-  dailyChatLimit: number;
   dailyTerminalCount: number;
+  dailyChatLimit: number;
   dailyTerminalLimit: number;
   chatLimitExceeded: boolean;
   terminalLimitExceeded: boolean;
+  totalPoints: number;
 }
 
 /**
- * Get user's current plan status
+ * Get the user's current plan and usage stats.
+ * Also resets daily counters if the last reset was on a different UTC day.
  */
-export async function getUserPlanStatus(userId: number): Promise<UserPlanStatus | null> {
+export async function getUserPlanStatus(userId: number): Promise<UsageStatus | null> {
   const result = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!result[0]) return null;
+
   const user = result[0];
 
-  if (!user) return null;
+  // Auto-reset daily counters if it's a new UTC day
+  const now = new Date();
+  const resetAt = user.usageResetAt ? new Date(user.usageResetAt) : new Date(0);
+  const isNewDay =
+    now.getUTCFullYear() !== resetAt.getUTCFullYear() ||
+    now.getUTCMonth() !== resetAt.getUTCMonth() ||
+    now.getUTCDate() !== resetAt.getUTCDate();
 
-  // Determine plan type (default to free if not set)
-  const plan: PlanType = (user as any).plan || 'free';
-  const limits = PLAN_LIMITS[plan];
+  let chatCount = user.dailyChatCount;
+  let terminalCount = user.dailyTerminalCount;
 
-  const dailyChatCount = (user as any).dailyChatCount || 0;
-  const dailyTerminalCount = (user as any).dailyTerminalCount || 0;
+  if (isNewDay) {
+    await db
+      .update(users)
+      .set({ dailyChatCount: 0, dailyTerminalCount: 0, usageResetAt: now, updatedAt: now })
+      .where(eq(users.id, userId));
+    chatCount = 0;
+    terminalCount = 0;
+  }
+
+  // Check if plan has expired — downgrade to free
+  let plan = (user.plan ?? 'free') as Plan;
+  if (plan !== 'free' && user.planExpiresAt && new Date(user.planExpiresAt) < now) {
+    await db.update(users).set({ plan: 'free', updatedAt: now }).where(eq(users.id, userId));
+    plan = 'free';
+  }
+
+  const config = PLAN_CONFIGS[plan];
 
   return {
-    userId,
     plan,
-    dailyChatCount,
-    dailyChatLimit: limits.dailyChatLimit,
-    dailyTerminalCount,
-    dailyTerminalLimit: limits.dailyTerminalLimit,
-    chatLimitExceeded: dailyChatCount >= limits.dailyChatLimit,
-    terminalLimitExceeded: dailyTerminalCount >= limits.dailyTerminalLimit,
+    planExpiresAt: user.planExpiresAt ? new Date(user.planExpiresAt) : null,
+    dailyChatCount: chatCount,
+    dailyTerminalCount: terminalCount,
+    dailyChatLimit: config.dailyChatLimit,
+    dailyTerminalLimit: config.dailyTerminalLimit,
+    chatLimitExceeded: isLimitExceeded(plan, 'chat', chatCount),
+    terminalLimitExceeded: isLimitExceeded(plan, 'terminal', terminalCount),
+    totalPoints: user.totalPoints,
   };
 }
 
 /**
- * Atomically increment chat usage with TOCTOU protection
- * Uses a single atomic query to check limit AND increment counter
+ * Increment the chat counter for a user and return new count.
+ * Throws if the limit has been exceeded.
  */
 export async function incrementChatUsage(userId: number): Promise<{ count: number; limit: number }> {
   const status = await getUserPlanStatus(userId);

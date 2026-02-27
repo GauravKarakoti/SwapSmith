@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Bell, Trash2, Plus, X, Loader2, TrendingUp, TrendingDown, Edit2, Check, AlertCircle } from 'lucide-react';
+import { Bell, Trash2, Plus, X, Loader2, TrendingUp, TrendingDown, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface PriceAlert {

@@ -1,7 +1,8 @@
 ﻿'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { Eye, EyeOff, Zap, User, Mail, Lock, Check, AlertCircle, Loader2, ShieldCheck, ArrowRight } from 'lucide-react'
+import { Eye, EyeOff, User, Mail, Lock, Check, AlertCircle, Loader2, ShieldCheck, ArrowRight } from 'lucide-react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { useAuth } from '@/hooks/useAuth'
 import AuroraBackground from '@/components/AuroraBackground'
@@ -12,42 +13,42 @@ import AuroraBackground from '@/components/AuroraBackground'
 const PLANS = [
   {
     name: 'Free',
-    price: '$0',
-    period: 'forever',
+    price: '0',
+    period: 'coins · forever',
     gradient: 'linear-gradient(135deg, #052212 0%, #061a10 100%)',
     border: '1px solid rgba(52,211,153,0.22)',
     accent: '#34d399',
     icon: '',
-    features: ['Unlimited swaps', 'Real-time prices', '50+ chains', 'AI chat terminal'],
+    features: ['20 AI chats / day', '5 terminal commands / day', 'Real-time prices', '50+ chains'],
     cta: '/register',
     ctaLabel: 'Get Started',
     ctaStyle: { background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.28)', color: '#34d399' },
   },
   {
-    name: 'Pro',
-    price: '$12',
-    period: '/mo',
+    name: 'Premium',
+    price: '500',
+    period: 'coins · 30 days',
     gradient: 'linear-gradient(135deg, #050d2a 0%, #080d22 100%)',
     border: '1px solid rgba(96,165,250,0.35)',
     accent: '#60a5fa',
     icon: '',
-    features: ['Everything in Free', 'Swap history export', 'Priority execution', 'Telegram bot access'],
-    cta: '/rewards',
-    ctaLabel: 'Upgrade to Pro',
+    features: ['200 AI chats / day', '50 terminal commands / day', 'Ad-free experience', 'All Free features'],
+    cta: '/checkout',
+    ctaLabel: 'Activate Premium',
     ctaStyle: { background: '#2563eb', border: 'none', color: '#fff' },
     popular: true,
   },
   {
-    name: 'Premium',
-    price: '$29',
-    period: '/mo',
+    name: 'Pro',
+    price: '1,500',
+    period: 'coins · 30 days',
     gradient: 'linear-gradient(135deg, #0f0520 0%, #0a0318 100%)',
     border: '1px solid rgba(167,139,250,0.28)',
     accent: '#a78bfa',
     icon: '',
-    features: ['Everything in Pro', 'AI swap routing', 'Live yield alerts', 'Early access features'],
-    cta: '/rewards',
-    ctaLabel: 'Unlock Premium',
+    features: ['Unlimited AI chats', 'Unlimited terminal', 'Ad-free experience', 'Priority access'],
+    cta: '/checkout',
+    ctaLabel: 'Activate Pro',
     ctaStyle: { background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.28)', color: '#a78bfa' },
   },
 ]
@@ -64,7 +65,7 @@ export default function RegisterPage() {
   const { register, isLoading } = useAuth()
 
   // Carousel state for plan cards
-  const [carouselIdx, setCarouselIdx] = useState(1) // start on Pro
+  const [carouselIdx, setCarouselIdx] = useState(1) // start on Premium
   const carouselNext = useCallback(() => setCarouselIdx((p) => (p + 1) % PLANS.length), [])
   useEffect(() => { const t = setInterval(carouselNext, 4000); return () => clearInterval(t) }, [carouselNext])
 
@@ -103,8 +104,8 @@ export default function RegisterPage() {
 
           {/* Logo */}
           <div className="animate-element animate-delay-100 flex items-center gap-2.5 mb-1">
-            <div className="flex items-center justify-center w-9 h-9 rounded-xl" style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.22)' }}>
-              <Zap className="w-4 h-4" style={{ color: '#60a5fa' }} fill="currentColor" />
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl overflow-hidden">
+              <Image src="/swapsmithicon.png" alt="SwapSmith" width={36} height={36} />
             </div>
             <span className="font-bold text-base tracking-tight" style={{ color: '#fff' }}>SwapSmith</span>
           </div>
@@ -246,6 +247,16 @@ export default function RegisterPage() {
             style={{ border: '1px solid rgba(255,255,255,0.08)', color: '#9ca3af' }}
           >
             Already have an account? Sign in 
+          </Link>
+
+          {/* Admin Portal */}
+          <Link
+            href="/admin/login"
+            className="animate-element animate-delay-900 block w-full text-center rounded-2xl py-3 text-xs font-medium transition-all duration-200"
+            style={{ border: '1px solid rgba(124,58,237,0.2)', color: '#6b7280' }}
+          >
+            <ShieldCheck className="w-3 h-3 inline mr-1.5" style={{ color: '#a78bfa' }} />
+            Admin Portal
           </Link>
 
           {/* Footer note */}

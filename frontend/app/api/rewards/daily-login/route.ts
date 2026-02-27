@@ -1,8 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { addRewardActivity, getUserByWalletOrId } from '@/lib/database';
+import { addRewardActivity, getUserByWalletOrId, getUserRewardActivities } from '@/lib/database';
+import { neon } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/neon-http';
+import { eq } from 'drizzle-orm';
+import { users } from '../../../../../shared/schema';
 
 const DAILY_LOGIN_POINTS = 10;
 const DAILY_LOGIN_TOKENS = '0.1';
+
+/** Look up a user by Firebase UID, wallet address, or numeric DB id. */
+async function resolveUser(identifier: string) {
+  const rawSql = neon(process.env.DATABASE_URL!);
+  const db = drizzle(rawSql);
+
+  // 1. Try Firebase UID
+  const byFirebase = await db.select().from(users).where(eq(users.firebaseUid, identifier)).limit(1);
+  if (byFirebase[0]) return byFirebase[0];
+
+  // 2. Try wallet address
+  const byWallet = await getUserByWalletOrId(identifier);
+  if (byWallet) return byWallet;
+
+  // 3. Try numeric ID
+  const numId = parseInt(identifier, 10);
+  if (!isNaN(numId)) {
+    const byId = await db.select().from(users).where(eq(users.id, numId)).limit(1);
+    if (byId[0]) return byId[0];
+  }
+
+  return null;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,10 +42,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const userIdNum = parseInt(userId);
-    
-    // Check if user already logged in today
-    const user = await getUserByWalletOrId(userId);
+    // Resolve user by Firebase UID, wallet address, or numeric id
+    const user = await resolveUser(userId);
     if (!user) {
       return NextResponse.json(
         { error: 'User not found' },
@@ -26,8 +51,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const userIdNum = user.id;
+
     // Check if there's already a daily login reward for today
-    const { getUserRewardActivities } = await import('@/lib/database');
     const recentActivities = await getUserRewardActivities(userIdNum, 20);
     
     const today = new Date();

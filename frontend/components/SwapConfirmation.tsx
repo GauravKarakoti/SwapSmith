@@ -1,12 +1,12 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { CheckCircle, AlertCircle, ExternalLink, Copy, Check, ShieldCheck, Shield, AlertTriangle, Info, TrendingUp, Zap } from 'lucide-react'
-import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi' // Added usePublicClient
-import { parseEther, formatEther, type Chain } from 'viem'
+import { useAccount, useSendTransaction, useSwitchChain, usePublicClient, useBalance } from 'wagmi' // Added usePublicClient, useBalance
+import { parseEther, formatEther, type Chain, formatUnits, parseUnits } from 'viem'
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
 import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift'
+import { getCoins } from '@/utils/sideshift-client'
 
-// --- Interface and Constants ---
-interface QuoteData {
+export interface QuoteData {
   depositAmount: string;
   depositCoin: string;
   depositNetwork: string;
@@ -14,6 +14,7 @@ interface QuoteData {
   settleAmount: string;
   settleCoin: string;
   settleNetwork: string;
+  depositAddress?: string; // Keep only the optional version
   memo?: string;
   expiry?: string;
   id?: string;
@@ -69,9 +70,9 @@ export default function SwapConfirmation({ quote, confidence = 100, onAmountChan
   const [copiedMemo, setCopiedMemo] = useState(false)
   const [isSimulating, setIsSimulating] = useState(false);
   const [safetyCheck, setSafetyCheck] = useState<SafetyCheckResult | null>(null);
-  const [walletBalance, setWalletBalance] = useState<string | null>(null);
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
-
+  const [tokenAddress, setTokenAddress] = useState<string | undefined>(undefined);
+  const [isMaxLoading, setIsMaxLoading] = useState(false);
   const { address, isConnected, chain: connectedChain } = useAccount()
   const { data: hash, error, isPending, isSuccess, sendTransaction } = useSendTransaction()
   const { switchChainAsync } = useSwitchChain()
@@ -81,6 +82,36 @@ export default function SwapConfirmation({ quote, confidence = 100, onAmountChan
 
   // Get a public client specifically for the target chain to run simulations
   const publicClient = usePublicClient({ chainId: depositChainId });
+
+  // Fetch token address for non-native tokens
+  useEffect(() => {
+    const fetchTokenAddress = async () => {
+      if (!quote.depositNetwork || !quote.depositCoin) return;
+      const chain = CHAIN_MAP[quote.depositNetwork.toLowerCase()];
+
+      // If it looks like a native token match, skip fetch
+      if (chain && chain.nativeCurrency.symbol.toUpperCase() === quote.depositCoin.toUpperCase()) {
+        setTokenAddress(undefined);
+        return;
+      }
+
+      try {
+        const coins = await getCoins();
+        const coinDef = coins.find(c => c.coin === quote.depositCoin);
+        const networkDef = coinDef?.networks.find(n => n.network === quote.depositNetwork);
+        if (networkDef?.tokenContract) {
+          setTokenAddress(networkDef.tokenContract);
+        }
+      } catch (e) { console.error('Failed to fetch token address', e) }
+    };
+    fetchTokenAddress();
+  }, [quote.depositCoin, quote.depositNetwork]);
+
+  const { data: balanceData } = useBalance({
+    address: address,
+    chainId: depositChainId,
+    token: tokenAddress as `0x${string}` | undefined,
+  });
 
   const handleConfirm = async () => {
     if (!quote) {
@@ -99,8 +130,18 @@ export default function SwapConfirmation({ quote, confidence = 100, onAmountChan
       return;
     }
 
+    // Log quote for debugging to verify depositAddress exists
+    console.log("Swap quote:", quote);
+    
+    // Validate depositAddress before proceeding
+    if (!quote.depositAddress) {
+      console.error("depositAddress is missing from quote:", quote);
+      alert("Error: Deposit address is missing. Cannot proceed with swap.");
+      return;
+    }
+    
     const transactionDetails = {
-      to: address, // Note: Ideally this should be the SideShift deposit address generated from an Order
+      to: quote.depositAddress as `0x${string}`, // SideShift deposit address
       value: parseEther(quote.depositAmount),
       chainId: depositChainId,
     };
@@ -135,7 +176,7 @@ export default function SwapConfirmation({ quote, confidence = 100, onAmountChan
     try {
       const balance = await publicClient.getBalance({ address });
       const balanceFormatted = formatEther(balance);
-      setWalletBalance(balanceFormatted);
+      // setWalletBalance(balanceFormatted);
 
       // Call the callback to update the parent component with the max amount
       if (onAmountChange) {

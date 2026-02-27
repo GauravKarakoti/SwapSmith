@@ -18,34 +18,18 @@ import {
 
 import Navbar from "@/components/Navbar";
 import ClaudeChatInput from "@/components/ClaudeChatInput";
-import SwapConfirmation from "@/components/SwapConfirmation";
+import SwapConfirmation, { QuoteData } from "@/components/SwapConfirmation";
 import IntentConfirmation from "@/components/IntentConfirmation";
 import FullPageAd from "@/components/FullPageAd";
+import PlanLimitBanner from "@/components/PlanLimitBanner";
 import { useTerminalFullPageAd } from "@/hooks/useAds";
 
 import { useChatHistory, useChatSessions } from "@/hooks/useCachedData";
 import { useErrorHandler, ErrorType } from "@/hooks/useErrorHandler";
 import { useAudioRecorder } from "@/hooks/useAudioRecorder";
-import { trackTerminalUsage, showRewardNotification } from "@/lib/rewards-service";
+import { usePlan } from "@/hooks/usePlan";
 
 import { ParsedCommand } from "@/utils/groq-client";
-
-/* -------------------------------------------------------------------------- */
-/* Types                                    */
-/* -------------------------------------------------------------------------- */
-
-interface QuoteData {
-  depositAmount: string;
-  depositCoin: string;
-  depositNetwork: string;
-  rate: string;
-  settleAmount: string;
-  settleCoin: string;
-  settleNetwork: string;
-  memo?: string;
-  expiry?: string;
-  id?: string;
-}
 
 interface Message {
   role: "user" | "assistant";
@@ -132,12 +116,16 @@ const LiveStatsCard = () => {
 /* -------------------------------------------------------------------------- */
 
 export default function TerminalPage() {
-  const router = useRouter();
   const { address, isConnected } = useAccount();
   const { handleError } = useErrorHandler();
 
-  // Ads — full-page plans overlay shown on login arrival + periodic visits
+  // Plan limits
+  const { status: planStatus, checkTerminalUsage } = usePlan();
+  const [limitBannerVisible, setLimitBannerVisible] = useState(false);
+
+  // Ads — hidden for Premium/Pro users
   const { showAd, dismiss: dismissAd } = useTerminalFullPageAd();
+  const isAdFree = planStatus?.plan === 'premium' || planStatus?.plan === 'pro';
 
   // State
   const [messages, setMessages] = useState<Message[]>([
@@ -233,7 +221,9 @@ export default function TerminalPage() {
     try {
       const audioBlob = await stopRecording();
       if (audioBlob) {
-        const audioFile = new File([audioBlob], "voice_command.wav", { type: audioBlob.type || 'audio/wav' });
+        // Safely determine the type depending on whether it's a Blob or a string
+        const mimeType = audioBlob instanceof Blob ? (audioBlob.type || 'audio/wav') : 'audio/wav';
+        const audioFile = new File([audioBlob], "voice_command.wav", { type: mimeType });
 
         const formData = new FormData();
         formData.append("file", audioFile);
@@ -324,6 +314,13 @@ export default function TerminalPage() {
 
   const processCommand = async (text: string) => {
     if (!text.trim()) return;
+
+    // Check terminal usage limit before processing
+    const usageCheck = await checkTerminalUsage();
+    if (!usageCheck.allowed) {
+      setLimitBannerVisible(true);
+      return;
+    }
     
     // Add user message first
     addMessage({
@@ -453,8 +450,8 @@ export default function TerminalPage() {
     <>
       <Navbar />
 
-      {/* Full-page plans interstitial — shown on login arrival or periodic visits */}
-      {showAd && (
+      {/* Full-page plans interstitial — hidden for Premium/Pro users */}
+      {showAd && !isAdFree && (
         <FullPageAd variant="plans" duration={12000} onDismiss={dismissAd} />
       )}
 
@@ -514,6 +511,37 @@ export default function TerminalPage() {
               </div>
 
               <div className="p-3 border-t border-[var(--border)] bg-[var(--panel-soft)]/70 backdrop-blur">
+                {/* Plan usage mini-display */}
+                {planStatus && (
+                  <div className="mb-3 px-2 py-2 rounded-xl bg-[var(--panel-soft)]/60 border border-[var(--border)]">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] text-[var(--muted)] capitalize font-semibold">
+                        {planStatus.plan} plan
+                      </span>
+                      <Link href="/checkout" className="text-[10px] text-cyan-400 hover:text-cyan-300 transition-colors">
+                        Upgrade
+                      </Link>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-[var(--muted)]">
+                      <span>Terminal</span>
+                      <span>
+                        {planStatus.dailyTerminalCount}/
+                        {planStatus.dailyTerminalLimit === -1 ? '∞' : planStatus.dailyTerminalLimit}
+                      </span>
+                    </div>
+                    <div className="mt-1 h-1 bg-[var(--panel-soft)] rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${planStatus.terminalLimitExceeded ? 'bg-red-500' : 'bg-cyan-500'}`}
+                        style={{
+                          width: planStatus.dailyTerminalLimit === -1
+                            ? '10%'
+                            : `${Math.min((planStatus.dailyTerminalCount / planStatus.dailyTerminalLimit) * 100, 100)}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <a
                   href="https://t.me/SwapSmithBot"
                   target="_blank"
@@ -544,6 +572,15 @@ export default function TerminalPage() {
 
           <div className="flex-1 overflow-y-auto px-4 py-8">
             <div className="max-w-3xl mx-auto space-y-4">
+              {/* Plan limit banner */}
+              {limitBannerVisible && planStatus && (
+                <PlanLimitBanner
+                  feature="terminal"
+                  currentPlan={planStatus.plan}
+                  onDismiss={() => setLimitBannerVisible(false)}
+                />
+              )}
+
               {/* Header / Hero */}
               <div className="mb-2">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--panel-soft)]/80 border border-[var(--border)] text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
