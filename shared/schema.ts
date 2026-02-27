@@ -30,6 +30,10 @@ export const users = pgTable('users', {
   sessionTopic: text('session_topic'),
   totalPoints: integer('total_points').notNull().default(0),
   totalTokensClaimed: numeric('total_tokens_claimed', { precision: 20, scale: 8 }).notNull().default('0'),
+  // Plan and usage tracking fields
+  plan: text('plan').notNull().default('free'),
+  dailyChatCount: integer('daily_chat_count').notNull().default(0),
+  dailyTerminalCount: integer('daily_terminal_count').notNull().default(0),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
