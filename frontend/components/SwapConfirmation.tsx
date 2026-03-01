@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { CheckCircle, AlertCircle, ExternalLink, Copy, Check, ShieldCheck, Shield, AlertTriangle, Info, TrendingUp, Zap } from 'lucide-react'
-import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi' // Added usePublicClient
+import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi'
 import { parseEther, formatEther, type Chain } from 'viem'
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
 import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift'
+import TransactionSecurityScanner from './TransactionSecurityScanner'
+import type { SecurityCheckResult } from '@/utils/security-scanner'
 
 export interface QuoteData {
   depositAmount: string;
@@ -13,7 +15,7 @@ export interface QuoteData {
   settleAmount: string;
   settleCoin: string;
   settleNetwork: string;
-  depositAddress?: string; // Keep only the optional version
+  depositAddress?: string;
   memo?: string;
   expiry?: string;
   id?: string;
@@ -39,7 +41,6 @@ const EXPLORER_URLS: { [key: string]: string } = {
 
 const SIDESHIFT_TRACKING_URL = SIDESHIFT_CONFIG.TRACKING_URL
 
-// Map network names from your API to wagmi chain objects
 const CHAIN_MAP: { [key: string]: Chain } = {
   ethereum: mainnet,
   polygon: polygon,
@@ -50,7 +51,6 @@ const CHAIN_MAP: { [key: string]: Chain } = {
   base: base,
 }
 
-// Safety Check Result Interface
 interface SafetyCheckResult {
   passed: boolean;
   checks: {
@@ -63,7 +63,6 @@ interface SafetyCheckResult {
   overallMessage: string;
 }
 
-// --- Main Component ---
 export default function SwapConfirmation({ quote, confidence, onAmountChange }: SwapConfirmationProps) {
   const [copiedAddress, setCopiedAddress] = useState(false)
   const [copiedMemo, setCopiedMemo] = useState(false)
@@ -71,16 +70,18 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
   const [safetyCheck, setSafetyCheck] = useState<SafetyCheckResult | null>(null);
   const [walletBalance, setWalletBalance] = useState<string | null>(null);
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
+  const [securityScanResult, setSecurityScanResult] = useState<SecurityCheckResult | null>(null);
 
   const { address, isConnected, chain: connectedChain } = useAccount()
   const { data: hash, error, isPending, isSuccess, sendTransaction } = useSendTransaction()
   const { switchChainAsync } = useSwitchChain()
 
-  // Get Chain ID for the deposit network
   const depositChainId = CHAIN_MAP[quote.depositNetwork.toLowerCase()]?.id;
-
-  // Get a public client specifically for the target chain to run simulations
   const publicClient = usePublicClient({ chainId: depositChainId });
+
+  const handleSecurityScanComplete = (result: SecurityCheckResult) => {
+    setSecurityScanResult(result);
+  };
 
   const handleConfirm = async () => {
     if (!quote) {
@@ -99,10 +100,8 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
       return;
     }
 
-    // Log quote for debugging to verify depositAddress exists
     console.log("Swap quote:", quote);
     
-    // Validate depositAddress before proceeding
     if (!quote.depositAddress) {
       console.error("depositAddress is missing from quote:", quote);
       alert("Error: Deposit address is missing. Cannot proceed with swap.");
@@ -110,7 +109,7 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
     }
     
     const transactionDetails = {
-      to: quote.depositAddress as `0x${string}`, // SideShift deposit address
+      to: quote.depositAddress as `0x${string}`,
       value: parseEther(quote.depositAmount),
       chainId: depositChainId,
     };
@@ -147,7 +146,6 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
       const balanceFormatted = formatEther(balance);
       setWalletBalance(balanceFormatted);
 
-      // Call the callback to update the parent component with the max amount
       if (onAmountChange) {
         onAmountChange(balanceFormatted);
       }
@@ -173,16 +171,13 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
     try {
       if (!address) throw new Error("Wallet not connected");
 
-      // 1. Address Validation Check
       if (address && address.startsWith('0x') && address.length === 42) {
         checks.address = { passed: true, message: 'Valid Ethereum address format' };
       } else {
         checks.address = { passed: false, message: 'Invalid address format' };
       }
 
-      // 2. Check if chain is supported for simulation
       if (!depositChainId || !publicClient) {
-        // Fallback for non-EVM chains (e.g. Bitcoin) where we can't easily simulate via wagmi
         console.log("Skipping detailed simulation for non-EVM chain");
         checks.network = { passed: true, message: 'Non-EVM chain (limited validation)' };
         checks.balance = { passed: true, message: 'Cannot verify balance on non-EVM chain' };
@@ -200,14 +195,12 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
         return;
       }
 
-      // 3. Network Check
       if (connectedChain?.id === depositChainId) {
         checks.network = { passed: true, message: `Connected to ${getNetworkName(quote.depositNetwork)}` };
       } else {
         checks.network = { passed: false, message: `Need to switch to ${getNetworkName(quote.depositNetwork)}` };
       }
 
-      // 4. Balance Check
       const balance = await publicClient.getBalance({ address });
       const requiredAmount = parseEther(quote.depositAmount);
 
@@ -223,7 +216,6 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
         };
       }
 
-      // 5. Gas Estimation Check
       try {
         const gasEstimate = await publicClient.estimateGas({
           account: address,
@@ -255,10 +247,8 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
         };
       }
 
-      // Add a small delay so the user sees the checking state
       await new Promise(resolve => setTimeout(resolve, 800));
 
-      // Determine overall risk level
       const allPassed = Object.values(checks).every(check => check.passed);
       const criticalFailed = !checks.balance.passed || !checks.gas.passed;
 
@@ -345,6 +335,8 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
   }
 
   const explorerUrl = getExplorerUrl()
+
+  const isTransactionBlocked = safetyCheck?.riskLevel === 'unsafe' || securityScanResult?.riskLevel === 'critical' || securityScanResult?.riskLevel === 'high';
 
   if (isSuccess) {
     return (
@@ -448,6 +440,21 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
         )}
       </div>
 
+      {/* Advanced Security Scanner */}
+      <div className="mt-4">
+        <TransactionSecurityScanner
+          fromToken={quote.depositCoin}
+          fromNetwork={quote.depositNetwork}
+          toToken={quote.settleCoin}
+          toNetwork={quote.settleNetwork}
+          fromAmount={quote.depositAmount}
+          contractAddress={quote.depositAddress}
+          userAddress={address || undefined}
+          autoScan={false}
+          onScanComplete={handleSecurityScanComplete}
+        />
+      </div>
+
       <div className="mt-3 mb-3">
         {!safetyCheck ? (
           <button
@@ -469,7 +476,6 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
           </button>
         ) : (
           <div className="space-y-3">
-            {/* Overall Status Banner */}
             <div className={`flex items-center gap-2 p-3 rounded-lg border ${safetyCheck.riskLevel === 'safe'
               ? 'bg-green-50 border-green-200 text-green-700'
               : safetyCheck.riskLevel === 'warning'
@@ -489,14 +495,12 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
               </div>
             </div>
 
-            {/* Detailed Checks */}
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
               <div className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
                 <Info className="w-3 h-3" />
                 Safety Check Details
               </div>
 
-              {/* Address Check */}
               <div className="flex items-start gap-2 text-xs">
                 {safetyCheck.checks.address.passed ? (
                   <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
@@ -509,7 +513,6 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
                 </div>
               </div>
 
-              {/* Network Check */}
               <div className="flex items-start gap-2 text-xs">
                 {safetyCheck.checks.network.passed ? (
                   <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
@@ -522,7 +525,6 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
                 </div>
               </div>
 
-              {/* Balance Check */}
               <div className="flex items-start gap-2 text-xs">
                 {safetyCheck.checks.balance.passed ? (
                   <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
@@ -535,7 +537,6 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
                 </div>
               </div>
 
-              {/* Gas Check */}
               <div className="flex items-start gap-2 text-xs">
                 {safetyCheck.checks.gas.passed ? (
                   <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
@@ -552,7 +553,6 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
               </div>
             </div>
 
-            {/* Re-run button */}
             <button
               onClick={handleSimulate}
               disabled={isSimulating}
@@ -568,15 +568,17 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
       <div className="mt-4 space-y-2">
         <button
           onClick={handleConfirm}
-          disabled={!isConnected || isPending || !address || (safetyCheck?.riskLevel === 'unsafe') || false}
-          className={`w-full py-3 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${safetyCheck?.riskLevel === 'safe'
-            ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700'
-            : safetyCheck?.riskLevel === 'warning'
-              ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white hover:from-yellow-600 hover:to-yellow-700'
-              : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700'
+          disabled={!isConnected || isPending || !address || isTransactionBlocked}
+          className={`w-full py-3 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${isTransactionBlocked
+            ? 'bg-gray-400 text-white cursor-not-allowed'
+            : safetyCheck?.riskLevel === 'safe'
+              ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700'
+              : safetyCheck?.riskLevel === 'warning'
+                ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white hover:from-yellow-600 hover:to-yellow-700'
+                : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700'
             }`}
         >
-          {isPending ? 'Check Your Wallet...' : safetyCheck?.riskLevel === 'unsafe' ? 'Transaction Blocked (Unsafe)' : 'Confirm and Send'}
+          {isPending ? 'Check Your Wallet...' : isTransactionBlocked ? 'Transaction Blocked (Unsafe)' : 'Confirm and Send'}
         </button>
 
         {explorerUrl && !isSuccess && (

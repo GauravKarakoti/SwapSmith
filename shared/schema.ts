@@ -660,3 +660,118 @@ export type StrategyPerformance = typeof strategyPerformance.$inferSelect;
 export type NewStrategyPerformance = typeof strategyPerformance.$inferInsert;
 export type StrategyTrade = typeof strategyTrades.$inferSelect;
 export type NewStrategyTrade = typeof strategyTrades.$inferInsert;
+
+// --- SECURITY SCANNER SCHEMAS ---
+
+export const riskLevelType = pgEnum('risk_level', ['safe', 'low', 'medium', 'high', 'critical', 'unknown']);
+
+export const threatType = pgEnum('threat_type', ['scam', 'phishing', 'honeypot', 'rug_pull', 'fake_token', 'mixer', 'none']);
+
+export const securityScans = pgTable('security_scans', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  walletAddress: text('wallet_address'),
+  // Transaction details
+  fromToken: text('from_token').notNull(),
+  fromNetwork: text('from_network').notNull(),
+  toToken: text('to_token').notNull(),
+  toNetwork: text('to_network').notNull(),
+  fromAmount: text('from_amount').notNull(),
+  contractAddress: text('contract_address'),
+  // Risk assessment
+  riskScore: integer('risk_score').notNull().default(0),
+  riskLevel: riskLevelType('risk_level').notNull().default('unknown'),
+  // Security checks (JSON)
+  checks: jsonb('checks').notNull().default({}),
+  // Token analysis
+  tokenAnalysis: jsonb('token_analysis').default({}),
+  // Contract analysis
+  contractAnalysis: jsonb('contract_analysis').default({}),
+  // Simulation results
+  simulationResult: jsonb('simulation_result').default({}),
+  // Scan metadata
+  scanType: text('scan_type').notNull().default('pre-transaction'),
+  isMalicious: boolean('is_malicious').default(false),
+  flags: text('flags').array(),
+  // Timestamps
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  expiresAt: timestamp('expires_at'),
+}, (table) => [
+  index("idx_security_scans_user_id").on(table.userId),
+  index("idx_security_scans_wallet_address").on(table.walletAddress),
+  index("idx_security_scans_risk_level").on(table.riskLevel),
+  index("idx_security_scans_created_at").on(table.createdAt),
+  index("idx_security_scans_contract_address").on(table.contractAddress),
+]);
+
+export const tokenSecurityCache = pgTable('token_security_cache', {
+  id: serial('id').primaryKey(),
+  tokenAddress: text('token_address').notNull(),
+  network: text('network').notNull(),
+  // Token metadata
+  tokenName: text('token_name'),
+  tokenSymbol: text('token_symbol'),
+  tokenDecimals: integer('token_decimals'),
+  // Security data
+  isHoneypot: boolean('is_honeypot').default(false),
+  isMalicious: boolean('is_malicious').default(false),
+  isVerified: boolean('is_verified').default(false),
+  // Risk factors
+  riskScore: integer('risk_score').default(0),
+  riskFactors: jsonb('risk_factors').default([]),
+  // Contract properties
+  isPausable: boolean('is_pausable').default(false),
+  isMintable: boolean('is_mintable').default(false),
+  isBlacklisted: boolean('is_blacklisted').default(false),
+  hasProxy: boolean('has_proxy').default(false),
+  // Ownership
+  ownerAddress: text('owner_address'),
+  liquidityLocked: boolean('liquidity_locked').default(false),
+  lockedAmount: text('locked_amount'),
+  lockExpiry: timestamp('lock_expiry'),
+  // Trading analysis
+  buyTax: real('buy_tax').default(0),
+  sellTax: real('sell_tax').default(0),
+  cannotSell: boolean('cannot_sell').default(false),
+  // Holder analysis
+  top10HoldersPercent: real('top_10_holders_percent').default(0),
+  // Timestamps
+  lastVerified: timestamp('last_verified').notNull().defaultNow(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  expiresAt: timestamp('expires_at').notNull(),
+}, (table) => ({
+  unique: unique('token_security_cache_unique').on(table.tokenAddress, table.network),
+}));
+
+export const knownMaliciousAddresses = pgTable('known_malicious_addresses', {
+  id: serial('id').primaryKey(),
+  address: text('address').notNull().unique(),
+  network: text('network').notNull(),
+  // Threat information
+  threatType: threatType('threat_type').notNull(),
+  threatCategory: text('threat_category'),
+  description: text('description'),
+  // Source
+  source: text('source').notNull(),
+  confidence: real('confidence').default(0),
+  // Status
+  isActive: boolean('is_active').default(true),
+  reportedBy: text('reported_by'),
+  // Timestamps
+  firstSeen: timestamp('first_seen').notNull().defaultNow(),
+  lastVerified: timestamp('last_verified').notNull().defaultNow(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => [
+  index("idx_known_malicious_addresses_address").on(table.address),
+  index("idx_known_malicious_addresses_network").on(table.network),
+  index("idx_known_malicious_addresses_threat_type").on(table.threatType),
+]);
+
+// --- TYPES ---
+
+export type SecurityScan = typeof securityScans.$inferSelect;
+export type NewSecurityScan = typeof securityScans.$inferInsert;
+export type TokenSecurityCache = typeof tokenSecurityCache.$inferSelect;
+export type NewTokenSecurityCache = typeof tokenSecurityCache.$inferInsert;
+export type KnownMaliciousAddress = typeof knownMaliciousAddresses.$inferSelect;
+export type NewKnownMaliciousAddress = typeof knownMaliciousAddresses.$inferInsert;
