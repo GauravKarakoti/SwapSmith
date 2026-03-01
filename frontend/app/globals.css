@@ -21,6 +21,8 @@
 
 @import "tailwindcss";
 
+@variant dark (&:where(.dark, .dark *));
+
 /* ── Morphing card animation ─────────────────────────────────────── */
 @keyframes morphing {
   0% {
