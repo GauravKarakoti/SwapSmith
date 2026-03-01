@@ -9,6 +9,7 @@ export interface SideShiftQuote {
   depositNetwork: string;
   settleCoin: string;
   settleNetwork: string;
+  depositAddress: string;
   depositAmount: string;
   settleAmount: string;
   rate: string;

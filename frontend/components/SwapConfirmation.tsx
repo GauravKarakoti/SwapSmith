@@ -13,7 +13,7 @@ export interface QuoteData {
   settleAmount: string;
   settleCoin: string;
   settleNetwork: string;
-  depositAddress?: string; // Keep only the optional version
+  depositAddress: string;
   memo?: string;
   expiry?: string;
   id?: string;
@@ -227,7 +227,7 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
       try {
         const gasEstimate = await publicClient.estimateGas({
           account: address,
-          to: address,
+          to: quote.depositAddress as `0x${string}`,
           value: requiredAmount
         });
 
@@ -407,7 +407,7 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
           <div className="flex justify-between items-start mb-2">
             <span className="text-gray-600 font-medium">Send funds to this address:</span>
             <button
-              onClick={() => copyToClipboard(address as string, 'address')}
+              onClick={() => copyToClipboard(quote.depositAddress, 'address')}
               className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
             >
               {copiedAddress ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
@@ -415,7 +415,7 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
             </button>
           </div>
           <div className="bg-gray-500 p-2 rounded text-xs font-mono break-all">
-            {address}
+            {quote.depositAddress}
           </div>
         </div>
 
