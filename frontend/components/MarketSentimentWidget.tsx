@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import { fetchMarketSentiment } from "@/lib/market-sentiment";
-import SentimentDetailsModal from "@/components/SentimentDetailsModal";
 import Link from "next/link";
 
 export default function MarketSentimentWidget() {

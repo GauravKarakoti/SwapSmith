@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAccount } from "wagmi";
@@ -116,7 +115,6 @@ const LiveStatsCard = () => {
 /* -------------------------------------------------------------------------- */
 
 export default function TerminalPage() {
-  const router = useRouter();
   const { address, isConnected } = useAccount();
   const { handleError } = useErrorHandler();
 

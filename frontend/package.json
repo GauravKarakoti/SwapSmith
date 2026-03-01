@@ -40,6 +40,7 @@
     "react-dom": "19.2.4",
     "react-hot-toast": "^2.6.0",
     "svg-path-commander": "^2.1.11",
+    "swr": "^2.4.1",
     "three": "^0.183.1",
     "viem": "^2.37.3",
     "wagmi": "^2.16.9",
