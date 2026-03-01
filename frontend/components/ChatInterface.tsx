@@ -12,6 +12,7 @@ import GasComparisonChart from './GasComparisonChart';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useAuth } from '@/hooks/useAuth';
 
 
@@ -79,6 +80,7 @@ export default function ChatInterface() {
   const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
   const [currentConfidence, setCurrentConfidence] = useState<number | undefined>(undefined);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const { address, isConnected } = useAccount();
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const { handleError } = useErrorHandler();
@@ -86,14 +88,54 @@ export default function ChatInterface() {
   const hasLoadedPersistenceRef = useRef(false);
   const saveSequenceRef = useRef(0);
 
-  // Use cross-browser audio recorder
+  // Native Speech Recognition
   const {
-    isRecording,
-    isSupported: isAudioSupported,
-    startRecording,
-    stopRecording,
-    error: audioError
+    isListening: isNativeRecording,
+    transcript: nativeTranscript,
+    isSupported: isNativeSupported,
+    startRecording: startNativeRecording,
+    stopRecording: stopNativeRecording,
+    error: nativeAudioError
+  } = useSpeechRecognition();
+
+  // Use cross-browser audio recorder (Whisper API Fallback)
+  const {
+    isRecording: isWhisperRecording,
+    isSupported: isWhisperSupported,
+    startRecording: startWhisperRecording,
+    stopRecording: stopWhisperRecording,
+    error: whisperAudioError
   } = useAudioRecorder();
+
+  const isRecording = isNativeRecording || isWhisperRecording;
+  const isAudioSupported = isNativeSupported || isWhisperSupported;
+
+  // Auto-focus text input field upon failure
+  useEffect(() => {
+    if (nativeAudioError || whisperAudioError) {
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [nativeAudioError, whisperAudioError]);
+
+  // Sync native transcript to input state
+  useEffect(() => {
+    if (nativeTranscript) {
+      setInput(nativeTranscript);
+    }
+  }, [nativeTranscript]);
+
+  const prevIsNativeRecording = useRef(isNativeRecording);
+  
+  useEffect(() => {
+    // If recording just stopped and we have a transcript, send it
+    if (prevIsNativeRecording.current && !isNativeRecording && nativeTranscript.trim()) {
+      const text = nativeTranscript.trim();
+      addMessage({ role: 'user', content: text, type: 'message' });
+      processCommand(text);
+      setInput('');
+    }
+    prevIsNativeRecording.current = isNativeRecording;
+  }, [isNativeRecording, nativeTranscript]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -251,12 +293,33 @@ export default function ChatInterface() {
     };
   }, [messages, isAuthenticated, isAuthLoading, user?.uid, address]);
 
-  // Show audio error if any
+  // Show audio error if any, and auto-focus the text input on failure
   useEffect(() => {
-    if (audioError) {
-      addMessage({ role: 'assistant', content: audioError, type: 'message' });
+    const errorMsg = nativeAudioError || whisperAudioError;
+    if (errorMsg) {
+      addMessage({ role: 'assistant', content: errorMsg, type: 'message' });
+      setTimeout(() => inputRef.current?.focus(), 100);
     }
-  }, [audioError]);
+  }, [nativeAudioError, whisperAudioError]);
+
+  // Handle native speech recognition transcript updates
+  useEffect(() => {
+    if (isNativeRecording && nativeTranscript) {
+      setInput(nativeTranscript);
+    }
+  }, [isNativeRecording, nativeTranscript]);
+
+  const prevIsNativeRecording = useRef(false);
+  useEffect(() => {
+    // When native speech recognition finishes naturally (or stopped)
+    if (prevIsNativeRecording.current && !isNativeRecording && nativeTranscript) {
+      const text = nativeTranscript;
+      setInput('');
+      addMessage({ role: 'user', content: text, type: 'message' });
+      processCommand(text);
+    }
+    prevIsNativeRecording.current = isNativeRecording;
+  }, [isNativeRecording, nativeTranscript]);
 
   const formatTime = (date: Date) => {
     const hours = date.getHours();
@@ -670,41 +733,50 @@ export default function ChatInterface() {
 
   const handleVoiceRecording = async () => {
     if (isRecording) {
-      setIsLoading(true);
-      try {
-        const audioBlob = await stopRecording();
-        if (audioBlob) {
-          const audioFile = new File([audioBlob], "voice_command.wav", { type: audioBlob.type || 'audio/wav' });
+      if (isNativeRecording) {
+        stopNativeRecording();
+      } else if (isWhisperRecording) {
+        setIsLoading(true);
+        try {
+          const audioBlob = await stopWhisperRecording();
+          if (audioBlob) {
+            const audioFile = new File([audioBlob], "voice_command.wav", { type: audioBlob.type || 'audio/wav' });
 
-          const formData = new FormData();
-          formData.append('file', audioFile);
+            const formData = new FormData();
+            formData.append('file', audioFile);
 
-          const response = await fetch('/api/transcribe', {
-            method: 'POST',
-            body: formData
-          });
+            const response = await fetch('/api/transcribe', {
+              method: 'POST',
+              body: formData
+            });
 
-          const data = await response.json();
+            const data = await response.json();
 
-          if (data.error) throw new Error(data.error);
+            if (data.error) throw new Error(data.error);
 
-          if (data.text) {
-            addMessage({ role: 'user', content: data.text, type: 'message' });
-            processCommand(data.text);
+            if (data.text) {
+              addMessage({ role: 'user', content: data.text, type: 'message' });
+              processCommand(data.text);
+            }
           }
+        } catch (err) {
+          console.error("Voice processing failed:", err);
+          addMessage({
+            role: 'assistant',
+            content: "Sorry, I couldn't process your voice command. Please try again.",
+            type: 'message'
+          });
+          inputRef.current?.focus();
+        } finally {
+          setIsLoading(false);
         }
-      } catch (err) {
-        console.error("Voice processing failed:", err);
-        addMessage({
-          role: 'assistant',
-          content: "Sorry, I couldn't process your voice command. Please try again.",
-          type: 'message'
-        });
-      } finally {
-        setIsLoading(false);
       }
     } else {
-      await startRecording();
+      if (isNativeSupported) {
+        startNativeRecording();
+      } else if (isWhisperSupported) {
+        await startWhisperRecording();
+      }
     }
   };
 
@@ -845,6 +917,7 @@ export default function ChatInterface() {
             </button>
 
             <input
+              ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
