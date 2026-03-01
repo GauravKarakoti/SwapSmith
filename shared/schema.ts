@@ -149,6 +149,8 @@ export const limitOrders = pgTable('limit_orders', {
   sideshiftOrderId: text('sideshift_order_id'),
   error: text('error'),
   executedAt: timestamp('executed_at'),
+  retryCount: integer('retry_count').notNull().default(0),
+  retryAfter: timestamp('retry_after'),
 }, (table) => [
   index("idx_limit_orders_telegram_id").on(table.telegramId),
 ]);
@@ -330,9 +332,9 @@ export const discussions = pgTable('discussions', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at'),
 }, (table) => [
-	index("idx_discussions_category").on(table.category),
-	index("idx_discussions_created_at").on(table.createdAt),
-	index("idx_discussions_user_id").on(table.userId),
+  index("idx_discussions_category").on(table.category),
+  index("idx_discussions_created_at").on(table.createdAt),
+  index("idx_discussions_user_id").on(table.userId),
 ]);
 
 // --- REWARDS SCHEMAS ---
@@ -470,23 +472,23 @@ export const gasOptimizationHistory = pgTable('gas_optimization_history', {
 // --- RELATIONS ---
 
 
-export const courseProgressRelations = relations(courseProgress, ({one}) => ({
-	user: one(users, {
-		fields: [courseProgress.userId],
-		references: [users.id]
-	}),
+export const courseProgressRelations = relations(courseProgress, ({ one }) => ({
+  user: one(users, {
+    fields: [courseProgress.userId],
+    references: [users.id]
+  }),
 }));
 
-export const usersRelations = relations(users, ({many}) => ({
-	courseProgresses: many(courseProgress),
-	rewardsLogs: many(rewardsLog),
+export const usersRelations = relations(users, ({ many }) => ({
+  courseProgresses: many(courseProgress),
+  rewardsLogs: many(rewardsLog),
 }));
 
-export const rewardsLogRelations = relations(rewardsLog, ({one}) => ({
-	user: one(users, {
-		fields: [rewardsLog.userId],
-		references: [users.id]
-	}),
+export const rewardsLogRelations = relations(rewardsLog, ({ one }) => ({
+  user: one(users, {
+    fields: [rewardsLog.userId],
+    references: [users.id]
+  }),
 }));
 
 // --- PLAN PURCHASES TABLE ---
@@ -504,7 +506,7 @@ export const planPurchases = pgTable('plan_purchases', {
   index("idx_plan_purchases_user_id").on(table.userId),
 ]);
 
-export const planPurchasesRelations = relations(planPurchases, ({one}) => ({
+export const planPurchasesRelations = relations(planPurchases, ({ one }) => ({
   user: one(users, {
     fields: [planPurchases.userId],
     references: [users.id],
