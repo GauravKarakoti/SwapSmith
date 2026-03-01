@@ -110,13 +110,6 @@ export default function ChatInterface() {
   const isRecording = isNativeRecording || isWhisperRecording;
   const isAudioSupported = isNativeSupported || isWhisperSupported;
 
-  // Auto-focus text input field upon failure
-  useEffect(() => {
-    if (nativeAudioError || whisperAudioError) {
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  }, [nativeAudioError, whisperAudioError]);
-
   // Sync native transcript to input state only while native recording is active
   useEffect(() => {
     if (isNativeRecording && nativeTranscript) {
