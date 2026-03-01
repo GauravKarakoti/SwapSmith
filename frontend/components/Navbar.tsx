@@ -200,7 +200,7 @@ export default function Navbar() {
       {mobileMenuOpen && (
         <>
           <div className="fixed inset-0 bg-white/20 dark:bg-black/60 backdrop-blur-md z-[60]" onClick={() => setMobileMenuOpen(false)} />
-          <div className="fixed top-0 right-0 bottom-0 w-[85%] max-w-sm bg-white/95 dark:bg-zinc-900 shadow-[[-10px_0_40px_rgba(0,0,0,0.1)]] dark:shadow-2xl z-[70] animate-in slide-in-from-right duration-300 backdrop-blur-xl border-l border-slate-200/50 dark:border-none">
+          <div className="fixed top-0 right-0 bottom-0 w-[85%] max-w-sm bg-white/95 dark:bg-zinc-900 shadow-[-10px_0_40px_rgba(0,0,0,0.1)] dark:shadow-2xl z-[70] animate-in slide-in-from-right duration-300 backdrop-blur-xl border-l border-slate-200/50 dark:border-none">
             <div className="p-6 flex flex-col h-full">
               <div className="flex items-center justify-between mb-6">
                 <Link href="/" className="flex items-center gap-2" onClick={() => setMobileMenuOpen(false)}>
