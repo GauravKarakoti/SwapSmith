@@ -31,29 +31,29 @@ const DashboardPreview = () => (
         y: { duration: 6, repeat: Infinity, ease: "easeInOut" }
       }}
       style={{ left: '5%', top: '20%' }}
-      className="absolute hidden xl:block p-6 bg-[#0a0a12]/90 backdrop-blur-md rounded-3xl shadow-2xl w-[320px] text-white border border-white/10"
+      className="absolute hidden xl:block p-6 bg-white/90 dark:bg-[#0a0a12]/90 backdrop-blur-md rounded-3xl shadow-2xl w-[320px] text-slate-800 dark:text-white border border-slate-200/50 dark:border-white/10"
     >
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-cyan-900/30 flex items-center justify-center border border-cyan-500/30">
-            <BarChart3 className="w-5 h-5 text-cyan-400" />
+          <div className="w-8 h-8 rounded-lg bg-cyan-100 dark:bg-cyan-900/30 flex items-center justify-center border border-cyan-500/30">
+            <BarChart3 className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
           </div>
-          <span className="font-bold text-sm text-zinc-200">Portfolio Value</span>
+          <span className="font-bold text-sm text-slate-600 dark:text-zinc-200">Portfolio Value</span>
         </div>
-        <span className="text-xs font-semibold text-emerald-400 bg-emerald-900/20 px-2 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Live
+        <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/20 px-2 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse"></span> Live
         </span>
       </div>
       
       <div className="mb-6">
-        <div className="text-4xl font-black mb-1 text-white tracking-tight">$42,853.21</div>
-        <div className="flex items-center gap-2 text-sm text-zinc-400">
+        <div className="text-4xl font-black mb-1 text-slate-900 dark:text-white tracking-tight">$42,853.21</div>
+        <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-zinc-400">
           <span>Net Worth</span>
-          <span className="text-emerald-400 font-bold bg-emerald-900/20 px-1.5 rounded text-xs">+5.24%</span>
+          <span className="text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-100 dark:bg-emerald-900/20 px-1.5 rounded text-xs">+5.24%</span>
         </div>
       </div>
       
-      <div className="h-24 w-full bg-black/20 rounded-xl mb-6 relative overflow-hidden border border-white/5">
+      <div className="h-24 w-full bg-slate-100 dark:bg-black/20 rounded-xl mb-6 relative overflow-hidden border border-slate-200 dark:border-white/5">
         {/* Crypto Line Chart */}
         <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 40" preserveAspectRatio="none">
           <defs>
@@ -66,22 +66,22 @@ const DashboardPreview = () => (
           <path d="M0 30 Q 10 25 20 28 T 40 20 T 60 15 T 80 22 T 100 10" fill="none" stroke="#22d3ee" strokeWidth="2" strokeLinecap="round" />
         </svg>
         {/* Interactive Point */}
-        <div className="absolute top-[25%] right-[20%] w-3 h-3 bg-cyan-400 rounded-full border-2 border-[#0a0a12] shadow-[0_0_10px_rgba(34,211,238,0.5)]"></div>
+        <div className="absolute top-[25%] right-[20%] w-3 h-3 bg-cyan-400 rounded-full border-2 border-slate-50 dark:border-[#0a0a12] shadow-[0_0_10px_rgba(34,211,238,0.5)]"></div>
         
-        <div className="absolute bottom-2 left-3 text-[10px] text-zinc-500 font-mono tracking-wider">BTC / USDT PRICE ACTION</div>
+        <div className="absolute bottom-2 left-3 text-[10px] text-slate-400 dark:text-zinc-500 font-mono tracking-wider">BTC / USDT PRICE ACTION</div>
       </div>
       
       <div className="space-y-3">
         <div className="flex justify-between text-sm">
-          <span className="font-medium text-zinc-400">Gas Tracker</span>
-          <span className="font-bold text-purple-400 flex items-center gap-1">
+          <span className="font-medium text-slate-500 dark:text-zinc-400">Gas Tracker</span>
+          <span className="font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1">
             <Zap className="w-3 h-3" /> 12 Gwei
           </span>
         </div>
-        <div className="w-full bg-zinc-800 rounded-full h-1.5">
+        <div className="w-full bg-slate-200 dark:bg-zinc-800 rounded-full h-1.5">
           <div className="bg-gradient-to-r from-cyan-400 to-purple-500 h-1.5 rounded-full w-[35%]"></div>
         </div>
-        <div className="flex justify-between text-xs text-zinc-500 pt-1 font-medium font-mono">
+        <div className="flex justify-between text-xs text-slate-400 dark:text-zinc-500 pt-1 font-medium font-mono">
           <span>Slippage: &lt;0.5%</span>
           <span>Route: Best</span>
         </div>
@@ -104,48 +104,48 @@ const DashboardPreview = () => (
         y: { duration: 7, repeat: Infinity, ease: "easeInOut", delay: 1 }
       }}
       style={{ right: '5%', top: '25%' }}
-      className="absolute hidden xl:block p-6 bg-[#0a0a12]/90 backdrop-blur-md rounded-3xl shadow-2xl w-[300px] text-white border border-white/10"
+      className="absolute hidden xl:block p-6 bg-white/90 dark:bg-[#0a0a12]/90 backdrop-blur-md rounded-3xl shadow-2xl w-[300px] text-slate-800 dark:text-white border border-slate-200/50 dark:border-white/10"
     >
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-pink-900/30 flex items-center justify-center border border-pink-500/30">
-            <ListChecks className="w-5 h-5 text-pink-400" />
+          <div className="w-8 h-8 rounded-lg bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center border border-pink-500/30">
+            <ListChecks className="w-5 h-5 text-pink-600 dark:text-pink-400" />
           </div>
-          <span className="font-bold text-sm text-zinc-200">Active Swaps</span>
+          <span className="font-bold text-sm text-slate-600 dark:text-zinc-200">Active Swaps</span>
         </div>
-        <span className="text-xs font-bold border border-cyan-500/30 px-2 py-1 rounded-md text-cyan-400 bg-cyan-900/20 shadow-[0_0_10px_rgba(34,211,238,0.1)]">SYNC</span>
+        <span className="text-xs font-bold border border-cyan-500/30 px-2 py-1 rounded-md text-cyan-600 dark:text-cyan-400 bg-cyan-100 dark:bg-cyan-900/20 shadow-[0_0_10px_rgba(34,211,238,0.1)]">SYNC</span>
       </div>
       
       <div className="mb-6">
-        <div className="text-4xl font-black mb-1 text-white tracking-tight">1,204</div>
-        <div className="text-sm text-zinc-400">Transactions Today</div>
+        <div className="text-4xl font-black mb-1 text-slate-900 dark:text-white tracking-tight">1,204</div>
+        <div className="text-sm text-slate-500 dark:text-zinc-400">Transactions Today</div>
       </div>
       
       <div className="flex gap-3 mb-6">
-        <div className="flex-1 bg-white/5 p-3 rounded-xl border border-white/5 text-center transition-colors hover:bg-white/10">
-          <div className="text-lg font-bold text-white">2.4s</div>
-          <div className="text-[10px] text-zinc-500 uppercase font-bold tracking-wide">Avg Time</div>
+        <div className="flex-1 bg-slate-100 dark:bg-white/5 p-3 rounded-xl border border-slate-200 dark:border-white/5 text-center transition-colors hover:bg-slate-200 dark:hover:bg-white/10">
+          <div className="text-lg font-bold text-slate-800 dark:text-white">2.4s</div>
+          <div className="text-[10px] text-slate-400 dark:text-zinc-500 uppercase font-bold tracking-wide">Avg Time</div>
         </div>
-        <div className="flex-1 bg-white/5 p-3 rounded-xl border border-white/5 text-center transition-colors hover:bg-white/10">
-          <div className="text-lg font-bold text-white">$4.2M</div>
-          <div className="text-[10px] text-zinc-500 uppercase font-bold tracking-wide">Volume</div>
+        <div className="flex-1 bg-slate-100 dark:bg-white/5 p-3 rounded-xl border border-slate-200 dark:border-white/5 text-center transition-colors hover:bg-slate-200 dark:hover:bg-white/10">
+          <div className="text-lg font-bold text-slate-800 dark:text-white">$4.2M</div>
+          <div className="text-[10px] text-slate-400 dark:text-zinc-500 uppercase font-bold tracking-wide">Volume</div>
         </div>
       </div>
       
       <div className="space-y-3">
         {[
-            { name: "Ethereum", label: "Bridge Active", status: "STABLE", color: "text-blue-400 bg-blue-900/30 border-blue-500/30", icon: "💎" },
-            { name: "Arbitrum", label: "Low Fees", status: "FAST", color: "text-cyan-400 bg-cyan-900/30 border-cyan-500/30", icon: "⚡" },
-            { name: "Solana", label: "High Speed", status: "TURBO", color: "text-purple-400 bg-purple-900/30 border-purple-500/30", icon: "🚀" }
+            { name: "Ethereum", label: "Bridge Active", status: "STABLE", color: "text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 border-blue-500/30", icon: "💎" },
+            { name: "Arbitrum", label: "Low Fees", status: "FAST", color: "text-cyan-600 dark:text-cyan-400 bg-cyan-100 dark:bg-cyan-900/30 border-cyan-500/30", icon: "⚡" },
+            { name: "Solana", label: "High Speed", status: "TURBO", color: "text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/30 border-purple-500/30", icon: "🚀" }
         ].map((item, i) => (
             <div key={i} className={`flex items-center p-3 rounded-xl border transition-all hover:translate-x-1 ${
-                i === 0 ? 'bg-gradient-to-r from-blue-900/20 to-transparent border-blue-500/20 ring-1 ring-blue-400/10' 
-                : 'bg-white/5 border-white/5 hover:border-white/10'
+                i === 0 ? 'bg-gradient-to-r from-blue-100/50 dark:from-blue-900/20 to-transparent border-blue-500/20 ring-1 ring-blue-400/10' 
+                : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/5 hover:border-slate-300 dark:hover:border-white/10'
             }`}>
                 <div className="w-8 h-8 flex items-center justify-center text-lg">{item.icon}</div>
                 <div className="flex-1 ml-2">
-                    <div className="text-xs font-bold text-white group-hover:text-cyan-400 transition-colors">{item.name}</div>
-                    <div className="text-[10px] text-zinc-500 font-medium">{item.label}</div>
+                    <div className="text-xs font-bold text-slate-800 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">{item.name}</div>
+                    <div className="text-[10px] text-slate-500 dark:text-zinc-500 font-medium">{item.label}</div>
                 </div>
                 <span className={`text-[10px] font-bold px-2 py-1 rounded-md border ${item.color}`}>{item.status}</span>
             </div>
@@ -169,17 +169,17 @@ const DashboardPreview = () => (
             y: { duration: 5, repeat: Infinity, ease: "easeInOut", delay: 0 }
         }}
         style={{ left: '15%', bottom: '15%' }}
-        className="absolute hidden xl:block p-4 bg-[#0a0a12]/90 backdrop-blur-md rounded-2xl shadow-xl w-[220px] text-white border border-white/10 z-10"
+        className="absolute hidden xl:block p-4 bg-white/90 dark:bg-[#0a0a12]/90 backdrop-blur-md rounded-2xl shadow-xl w-[220px] text-slate-800 dark:text-white border border-slate-200/50 dark:border-white/10 z-10"
     >
         <div className="flex items-center gap-2 mb-3">
             <div className="w-6 h-6 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 flex items-center justify-center">
                 <Sparkles className="w-3 h-3 text-white" />
             </div>
-            <span className="text-xs font-bold text-transparent bg-gradient-to-r from-pink-400 to-rose-400 bg-clip-text">AI Agent Active</span>
+            <span className="text-xs font-bold text-transparent bg-gradient-to-r from-pink-500 to-rose-500 bg-clip-text">AI Agent Active</span>
         </div>
-        <h4 className="font-black text-lg text-white mb-1">SwapSmith Pro</h4>
-        <p className="text-[10px] text-zinc-400 mb-3">Auto-routing optimization enabled</p>
-        <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden">
+        <h4 className="font-black text-lg text-slate-900 dark:text-white mb-1">SwapSmith Pro</h4>
+        <p className="text-[10px] text-slate-500 dark:text-zinc-400 mb-3">Auto-routing optimization enabled</p>
+        <div className="w-full h-1 bg-slate-200 dark:bg-zinc-800 rounded-full overflow-hidden">
             <motion.div 
                 className="h-full bg-gradient-to-r from-pink-500 to-rose-500"
                 animate={{ width: ["0%", "100%"] }}
@@ -189,13 +189,13 @@ const DashboardPreview = () => (
     </motion.div>
     
     {/* Floating Background Words - Crypto Themed */}
-     <motion.div animate={{ rotate: 360 }} transition={{ duration: 150, repeat: Infinity, ease: 'linear' }} className="absolute left-[10%] top-[15%] text-white/[0.03] font-black text-7xl select-none -z-10 blur-[2px] pointer-events-none tracking-tighter">
+     <motion.div animate={{ rotate: 360 }} transition={{ duration: 150, repeat: Infinity, ease: 'linear' }} className="absolute left-[10%] top-[15%] text-slate-900/[0.03] dark:text-white/[0.03] font-black text-7xl select-none -z-10 blur-[2px] pointer-events-none tracking-tighter">
         LIQUIDITY
      </motion.div>
-     <motion.div animate={{ rotate: -360 }} transition={{ duration: 180, repeat: Infinity, ease: 'linear' }} className="absolute right-[8%] bottom-[25%] text-white/[0.03] font-black text-7xl select-none -z-10 blur-[2px] pointer-events-none tracking-tighter">
+     <motion.div animate={{ rotate: -360 }} transition={{ duration: 180, repeat: Infinity, ease: 'linear' }} className="absolute right-[8%] bottom-[25%] text-slate-900/[0.03] dark:text-white/[0.03] font-black text-7xl select-none -z-10 blur-[2px] pointer-events-none tracking-tighter">
         PROTOCOL
      </motion.div>
-     <motion.div animate={{ y: [-20, 20, -20] }} transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }} className="absolute left-[20%] bottom-[30%] text-cyan-500/5 font-black text-5xl select-none -z-10 transform -rotate-12 pointer-events-none">
+     <motion.div animate={{ y: [-20, 20, -20] }} transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }} className="absolute left-[20%] bottom-[30%] text-cyan-600/5 dark:text-cyan-500/5 font-black text-5xl select-none -z-10 transform -rotate-12 pointer-events-none">
         GAS
      </motion.div>
   </div>
@@ -407,11 +407,11 @@ export default function LandingPage() {
   return (
     <ReactLenis root>
       {/* Main Landing Page Content */}
-      <div className="min-h-screen bg-[#030308] text-white selection:bg-cyan-500/30 font-sans overflow-x-hidden">
+      <div className="min-h-screen bg-slate-50 dark:bg-[#030308] text-slate-900 dark:text-white selection:bg-cyan-500/30 font-sans overflow-x-hidden transition-colors duration-300">
       {/* Animated background gradient */}
       <div className="fixed inset-0 pointer-events-none">
         <motion.div
-          className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-pink-500/10 rounded-full blur-[150px]"
+          className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-pink-500/10 rounded-full blur-[150px] mix-blend-multiply dark:mix-blend-normal opacity-50 dark:opacity-100"
           animate={{
             x: [0, 100, 0],
             y: [0, 50, 0],
@@ -420,7 +420,7 @@ export default function LandingPage() {
           transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
         />
         <motion.div
-          className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-cyan-500/10 rounded-full blur-[150px]"
+          className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-cyan-500/10 rounded-full blur-[150px] mix-blend-multiply dark:mix-blend-normal opacity-50 dark:opacity-100"
           animate={{
             x: [0, -80, 0],
             y: [0, -60, 0],
@@ -436,9 +436,9 @@ export default function LandingPage() {
 
       {/* Grid overlay */}
       <div
-        className="fixed inset-0 pointer-events-none opacity-[0.02]"
+        className="fixed inset-0 pointer-events-none opacity-[0.02] dark:opacity-[0.02] mix-blend-multiply dark:mix-blend-normal"
         style={{
-          backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
+          backgroundImage: `linear-gradient(currentColor 1px, transparent 1px), linear-gradient(90deg, currentColor 1px, transparent 1px)`,
           backgroundSize: '60px 60px',
         }}
       />
@@ -461,8 +461,8 @@ export default function LandingPage() {
               animate={{ boxShadow: ["0 0 20px rgba(34,211,238,0.1)", "0 0 40px rgba(34,211,238,0.2)", "0 0 20px rgba(34,211,238,0.1)"] }}
               transition={{ duration: 2, repeat: Infinity }}
             >
-              <Sparkles className="w-4 h-4 text-cyan-400" />
-              <span className="text-xs font-semibold text-cyan-300 tracking-wider uppercase">AI-Powered Trading</span>
+              <Sparkles className="w-4 h-4 text-cyan-500 dark:text-cyan-400" />
+              <span className="text-xs font-semibold text-cyan-600 dark:text-cyan-300 tracking-wider uppercase">AI-Powered Trading</span>
             </motion.div>
           </motion.div>
 
@@ -470,12 +470,12 @@ export default function LandingPage() {
             variants={itemVariants}
             className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter leading-[0.9]"
           >
-            <span className="bg-gradient-to-b from-white via-white to-white/30 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-b from-slate-900 via-slate-800 to-slate-500 dark:from-white dark:via-white dark:to-white/30 bg-clip-text text-transparent">
               YOUR VOICE-ACTIVATED
             </span>
             <br />
             <motion.span
-              className="bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent"
+              className="bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 dark:from-cyan-400 dark:via-purple-400 dark:to-pink-400 bg-clip-text text-transparent"
               animate={{
                 backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
               }}
@@ -488,10 +488,10 @@ export default function LandingPage() {
 
           <motion.p
             variants={itemVariants}
-            className="text-base sm:text-lg md:text-xl lg:text-2xl text-zinc-400 max-w-2xl mx-auto font-medium"
+            className="text-base sm:text-lg md:text-xl lg:text-2xl text-slate-500 dark:text-zinc-400 max-w-2xl mx-auto font-medium"
           >
             Execute complex, cross-chain cryptocurrency swaps using{" "}
-            <span className="text-cyan-400">simple natural language</span>.
+            <span className="text-cyan-600 dark:text-cyan-400">simple natural language</span>.
           </motion.p>
 
           <motion.div
@@ -501,16 +501,16 @@ export default function LandingPage() {
             <motion.div
               className="absolute -inset-1 bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-pink-500/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
             />
-            <div className="relative bg-white/5 border border-white/10 p-5 rounded-2xl backdrop-blur-sm">
+            <div className="relative bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 p-5 rounded-2xl backdrop-blur-sm shadow-xl dark:shadow-none">
               <div className="flex items-center gap-2 mb-2">
                 <motion.div
-                  className="w-2 h-2 rounded-full bg-cyan-400"
+                  className="w-2 h-2 rounded-full bg-cyan-500 dark:bg-cyan-400"
                   animate={{ scale: [1, 1.3, 1] }}
                   transition={{ duration: 1.5, repeat: Infinity }}
                 />
-                <span className="text-xs text-zinc-500 uppercase tracking-wider">Voice Command</span>
+                <span className="text-xs text-slate-500 dark:text-zinc-500 uppercase tracking-wider">Voice Command</span>
               </div>
-              <p className="italic text-zinc-300 text-base md:text-lg">
+              <p className="italic text-slate-700 dark:text-zinc-300 text-base md:text-lg">
                 &ldquo;Swap half of my MATIC on Polygon for 50 USDC on Arbitrum.&rdquo;
               </p>
             </div>
@@ -556,10 +556,10 @@ export default function LandingPage() {
                 className="text-center"
                 whileHover={{ y: -5 }}
               >
-                <div className="text-3xl font-black bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
+                <div className="text-3xl font-black bg-gradient-to-r from-cyan-600 to-purple-600 dark:from-cyan-400 dark:to-purple-400 bg-clip-text text-transparent">
                   {stat.value}
                 </div>
-                <div className="text-xs text-zinc-500 uppercase tracking-wider">{stat.label}</div>
+                <div className="text-xs text-slate-500 dark:text-zinc-500 uppercase tracking-wider">{stat.label}</div>
               </motion.div>
             ))}
           </motion.div>
@@ -576,9 +576,9 @@ export default function LandingPage() {
           transition={{ duration: 0.6 }}
         >
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tighter mb-4">
-            <span className="bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">POWERFUL</span> FEATURES
+            <span className="bg-gradient-to-r from-cyan-600 to-purple-600 dark:from-cyan-400 dark:to-purple-400 bg-clip-text text-transparent">POWERFUL</span> FEATURES
           </h2>
-          <p className="text-zinc-500 max-w-md mx-auto">Everything you need for seamless cross-chain trading</p>
+          <p className="text-slate-600 dark:text-zinc-500 max-w-md mx-auto">Everything you need for seamless cross-chain trading</p>
         </motion.div>
 
         <motion.div
@@ -591,7 +591,7 @@ export default function LandingPage() {
           {features.map((feature, idx) => (
             <motion.div key={idx} variants={itemVariants}>
               <GlowCard
-                className="h-full p-8 bg-white/[0.02] border border-white/5 rounded-3xl backdrop-blur-sm"
+                className="h-full p-8 bg-white dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 rounded-3xl backdrop-blur-sm shadow-xl dark:shadow-none"
                 glowColor={feature.color}
               >
                 <div className="relative z-10 space-y-4">
@@ -600,10 +600,10 @@ export default function LandingPage() {
                     whileHover={{ rotate: [0, -10, 10, 0] }}
                     transition={{ duration: 0.5 }}
                   >
-                    <feature.icon className={`w-7 h-7 text-${feature.color}-400`} style={{ color: feature.color === 'cyan' ? '#22d3ee' : feature.color === 'purple' ? '#a855f7' : feature.color === 'pink' ? '#ec4899' : feature.color === 'emerald' ? '#34d399' : '#fb923c' }} />
+                    <feature.icon className={`w-7 h-7 text-${feature.color}-600 dark:text-${feature.color}-400`} style={{ color: undefined }} />
                   </motion.div>
-                  <h3 className="text-xl font-bold text-white">{feature.title}</h3>
-                  <p className="text-zinc-500 text-sm leading-relaxed">{feature.desc}</p>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">{feature.title}</h3>
+                  <p className="text-slate-600 dark:text-zinc-500 text-sm leading-relaxed">{feature.desc}</p>
                 </div>
               </GlowCard>
             </motion.div>
@@ -620,8 +620,8 @@ export default function LandingPage() {
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
         >
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tighter">
-            HOW IT <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">WORKS</span>
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tighter text-slate-900 dark:text-white">
+            HOW IT <span className="bg-gradient-to-r from-purple-600 to-pink-600 dark:from-purple-400 dark:to-pink-400 bg-clip-text text-transparent">WORKS</span>
           </h2>
         </motion.div>
 
@@ -642,9 +642,9 @@ export default function LandingPage() {
               <motion.div
                 className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500/0 via-purple-500/0 to-pink-500/0 rounded-2xl opacity-0 group-hover:opacity-100 group-hover:from-cyan-500/20 group-hover:via-purple-500/20 group-hover:to-pink-500/20 transition-all duration-500 blur-sm"
               />
-              <div className="relative flex items-center gap-3 sm:gap-6 p-4 sm:p-6 bg-white/[0.02] border border-white/5 rounded-2xl group-hover:border-cyan-500/30 group-hover:bg-white/[0.04] transition-all duration-300">
+              <div className="relative flex items-center gap-3 sm:gap-6 p-4 sm:p-6 bg-white dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 rounded-2xl group-hover:border-cyan-500/30 group-hover:bg-slate-50 dark:group-hover:bg-white/[0.04] transition-all duration-300 shadow-sm dark:shadow-none">
                 <motion.div
-                  className="text-3xl font-black text-transparent bg-gradient-to-b from-white/10 to-white/5 bg-clip-text group-hover:from-cyan-400 group-hover:to-purple-400 transition-all duration-300"
+                  className="text-3xl font-black text-transparent bg-gradient-to-b from-slate-200 to-slate-300 dark:from-white/10 dark:to-white/5 bg-clip-text group-hover:from-cyan-600 group-hover:to-purple-600 dark:group-hover:from-cyan-400 dark:group-hover:to-purple-400 transition-all duration-300"
                   whileHover={{ scale: 1.1 }}
                 >
                   0{item.step}
@@ -654,15 +654,15 @@ export default function LandingPage() {
                   whileHover={{ rotate: 360 }}
                   transition={{ duration: 0.5 }}
                 >
-                  <item.icon className="w-6 h-6 text-cyan-400" />
+                  <item.icon className="w-6 h-6 text-cyan-600 dark:text-cyan-400" />
                 </motion.div>
-                <p className="text-sm sm:text-base md:text-lg font-medium text-zinc-300 group-hover:text-white transition-colors">{item.text}</p>
+                <p className="text-sm sm:text-base md:text-lg font-medium text-slate-600 dark:text-zinc-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{item.text}</p>
                 <motion.div
                   className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity"
                   animate={{ x: [0, 5, 0] }}
                   transition={{ duration: 1, repeat: Infinity }}
                 >
-                  <ArrowRight className="w-5 h-5 text-cyan-400" />
+                  <ArrowRight className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
                 </motion.div>
               </div>
             </motion.div>
@@ -681,32 +681,32 @@ export default function LandingPage() {
             transition={{ duration: 0.8, ease: "easeOut" }}
             className="space-y-8 relative z-10"
           >
-            <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter leading-tight">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter leading-tight text-slate-900 dark:text-white">
               Accelerate trading <br />
               innovation with <br />
-              <span className="bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent">automated AI</span> <br />
+              <span className="bg-gradient-to-r from-cyan-600 to-purple-600 dark:from-cyan-400 dark:to-purple-500 bg-clip-text text-transparent">automated AI</span> <br />
               strategies and build <br />
-              <span className="text-zinc-500">wealth that lasts.</span>
+              <span className="text-slate-400 dark:text-zinc-500">wealth that lasts.</span>
             </h2>
             
-            <p className="text-base sm:text-lg md:text-xl text-zinc-400 max-w-lg leading-relaxed">
+            <p className="text-base sm:text-lg md:text-xl text-slate-600 dark:text-zinc-400 max-w-lg leading-relaxed">
               The all-in-one SwapSmith platform to automate trading workflows, from intent recognition to execution. Empower your portfolio to grow, diversify, and outperform the market—no complex coding required.
             </p>
 
             {/* Feature Card */}
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-colors cursor-default">
+            <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-6 hover:bg-slate-50 dark:hover:bg-white/10 transition-colors cursor-default shadow-lg dark:shadow-none">
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center flex-shrink-0">
-                  <Sparkles className="w-5 h-5 text-cyan-400" />
+                  <Sparkles className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-lg mb-2">How does AI-Powered Trading boost profitability?</h4>
-                  <p className="text-zinc-400 text-sm leading-relaxed">
+                  <h4 className="font-bold text-lg mb-2 text-slate-900 dark:text-white">How does AI-Powered Trading boost profitability?</h4>
+                  <p className="text-slate-600 dark:text-zinc-400 text-sm leading-relaxed">
                     Our platform automates market analysis, route optimization, gas estimation, and slippage protection. Instantly execute best-price swaps across 40+ chains with a single voice command—freeing you to focus on strategy.
                   </p>
                 </div>
-                <button className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center hover:bg-white/10 flex-shrink-0">
-                   <div className="w-2 h-2 rounded-full bg-cyan-400" />
+                <button className="w-8 h-8 rounded-full border border-slate-200 dark:border-white/20 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/10 flex-shrink-0">
+                   <div className="w-2 h-2 rounded-full bg-cyan-500 dark:bg-cyan-400" />
                 </button>
               </div>
             </div>
@@ -839,7 +839,7 @@ export default function LandingPage() {
       </section>
 
       {/* 5. Footer */}
-      <footer className="relative py-16 border-t border-white/5">
+      <footer className="relative py-16 border-t border-slate-200 dark:border-white/5">
         <motion.div
           className="max-w-7xl mx-auto px-6 flex flex-col items-center gap-6"
           initial={{ opacity: 0 }}
@@ -854,25 +854,25 @@ export default function LandingPage() {
               animate={{ rotate: [0, 360] }}
               transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
             >
-              <Zap className="w-5 h-5 text-cyan-400" />
+              <Zap className="w-5 h-5 text-cyan-500 dark:text-cyan-400" />
             </motion.div>
-            <span className="text-sm font-bold tracking-widest uppercase bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
+            <span className="text-sm font-bold tracking-widest uppercase bg-gradient-to-r from-cyan-600 to-purple-600 dark:from-cyan-400 dark:to-purple-400 bg-clip-text text-transparent">
               SwapSmith Terminal
             </span>
           </motion.div>
-          <div className="flex gap-6 text-xs text-zinc-600">
+          <div className="flex gap-6 text-xs text-slate-500 dark:text-zinc-600">
             {["Privacy", "Terms", "Docs"].map((item) => (
               <motion.a
                 key={item}
                 href="#"
-                className="hover:text-cyan-400 transition-colors cursor-pointer"
+                className="hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors cursor-pointer"
                 whileHover={{ y: -2 }}
               >
                 {item}
               </motion.a>
             ))}
           </div>
-          <p className="text-xs text-zinc-700">
+          <p className="text-xs text-slate-400 dark:text-zinc-700">
             © 2026 SwapSmith. Built with AI.
           </p>
         </motion.div>
@@ -881,44 +881,44 @@ export default function LandingPage() {
 
       {/* Scroll Animation Section - After Footer */}
       <article>
-        <section className='text-white h-screen w-full bg-[#030712] grid place-content-center sticky top-0'>
-          <div className='absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:54px_54px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]'></div>
+        <section className='text-slate-900 dark:text-white h-screen w-full bg-slate-50 dark:bg-[#030712] grid place-content-center sticky top-0'>
+          <div className='absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:54px_54px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]'></div>
 
           <div className='relative z-10 max-w-4xl mx-auto px-6 sm:px-8'>
             <h1 className='text-3xl sm:text-5xl md:text-6xl 2xl:text-7xl font-semibold text-center tracking-tight leading-[120%] mb-4 sm:mb-6'>
               Ready to Transform <br /> Your Trading? Scroll Please
             </h1>
-            <p className='text-base sm:text-xl text-gray-400 text-center mt-4'>
+            <p className='text-base sm:text-xl text-slate-500 dark:text-gray-400 text-center mt-4'>
               Experience the future of cross-chain swaps with AI-powered voice commands
             </p>
           </div>
         </section>
 
-        <section className='bg-[#0B1120] text-white grid place-content-center h-screen sticky top-0 rounded-tr-2xl rounded-tl-2xl overflow-hidden'>
-          <div className='absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:54px_54px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]'></div>
+        <section className='bg-white dark:bg-[#0B1120] text-slate-900 dark:text-white grid place-content-center h-screen sticky top-0 rounded-tr-2xl rounded-tl-2xl overflow-hidden shadow-2xl dark:shadow-none border-t border-slate-200 dark:border-none'>
+          <div className='absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:54px_54px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]'></div>
           <div className='relative z-10 max-w-5xl mx-auto px-6 sm:px-8'>
             <h1 className='text-2xl sm:text-4xl md:text-5xl 2xl:text-7xl font-semibold text-center tracking-tight leading-[120%] mb-4 sm:mb-6'>
               Voice-Activated Cross-Chain Swaps, <br /> Built with AI & Open Source 💼
             </h1>
             <div className='grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mt-8 sm:mt-12'>
-              <div className='bg-white/10 p-5 sm:p-6 rounded-xl backdrop-blur-sm border border-white/10'>
+              <div className='bg-slate-50 dark:bg-white/10 p-5 sm:p-6 rounded-xl backdrop-blur-sm border border-slate-200 dark:border-white/10 shadow-lg dark:shadow-none'>
                 <h3 className='text-2xl font-bold mb-2'>200+</h3>
-                <p className='text-gray-300'>Supported Assets</p>
+                <p className='text-slate-500 dark:text-gray-300'>Supported Assets</p>
               </div>
-              <div className='bg-white/10 p-5 sm:p-6 rounded-xl backdrop-blur-sm border border-white/10'>
+              <div className='bg-slate-50 dark:bg-white/10 p-5 sm:p-6 rounded-xl backdrop-blur-sm border border-slate-200 dark:border-white/10 shadow-lg dark:shadow-none'>
                 <h3 className='text-2xl font-bold mb-2'>40+</h3>
-                <p className='text-gray-300'>Blockchain Networks</p>
+                <p className='text-slate-500 dark:text-gray-300'>Blockchain Networks</p>
               </div>
-              <div className='bg-white/10 p-5 sm:p-6 rounded-xl backdrop-blur-sm border border-white/10'>
+              <div className='bg-slate-50 dark:bg-white/10 p-5 sm:p-6 rounded-xl backdrop-blur-sm border border-slate-200 dark:border-white/10 shadow-lg dark:shadow-none'>
                 <h3 className='text-2xl font-bold mb-2'>0%</h3>
-                <p className='text-gray-300'>Platform Fees</p>
+                <p className='text-slate-500 dark:text-gray-300'>Platform Fees</p>
               </div>
             </div>
           </div>
         </section>
 
-        <section className='text-white h-screen w-full bg-[#130E18] grid place-content-center sticky top-0'>
-          <div className='absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:54px_54px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]'></div>
+        <section className='text-slate-900 dark:text-white h-screen w-full bg-slate-50 dark:bg-[#130E18] grid place-content-center sticky top-0 border-t border-slate-200 dark:border-none'>
+          <div className='absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:54px_54px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]'></div>
           <div className='relative z-10 max-w-4xl mx-auto px-6 sm:px-8'>
             <h1 className='text-3xl sm:text-4xl md:text-5xl 2xl:text-7xl font-semibold text-center tracking-tight leading-[120%] mb-4 sm:mb-6'>
               Thanks for Scrolling!
@@ -926,16 +926,16 @@ export default function LandingPage() {
             </h1>
             <div className='flex justify-center gap-6 sm:gap-8 mt-8 sm:mt-12'>
               <div className='text-center'>
-                <div className='text-cyan-400 text-4xl mb-2'>⚡</div>
-                <p className='text-gray-400'>Lightning Fast</p>
+                <div className='text-cyan-600 dark:text-cyan-400 text-4xl mb-2'>⚡</div>
+                <p className='text-slate-500 dark:text-gray-400'>Lightning Fast</p>
               </div>
               <div className='text-center'>
-                <div className='text-purple-400 text-4xl mb-2'>🔒</div>
-                <p className='text-gray-400'>Secure & Safe</p>
+                <div className='text-purple-600 dark:text-purple-400 text-4xl mb-2'>🔒</div>
+                <p className='text-slate-500 dark:text-gray-400'>Secure & Safe</p>
               </div>
               <div className='text-center'>
-                <div className='text-pink-400 text-4xl mb-2'>🎯</div>
-                <p className='text-gray-400'>Easy to Use</p>
+                <div className='text-pink-600 dark:text-pink-400 text-4xl mb-2'>🎯</div>
+                <p className='text-slate-500 dark:text-gray-400'>Easy to Use</p>
               </div>
             </div>
           </div>
@@ -944,8 +944,8 @@ export default function LandingPage() {
 
       {/* Horizontal Scroll Animation Section */}
       <article>
-        <header className='text-white relative w-full bg-slate-950 grid place-content-center h-[80vh]'>
-          <div className='absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:14px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]'></div>
+        <header className='text-slate-900 dark:text-white relative w-full bg-slate-100 dark:bg-slate-950 grid place-content-center h-[80vh]'>
+          <div className='absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:14px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]'></div>
 
           <h1 className='text-3xl sm:text-5xl md:text-6xl font-bold text-center tracking-tight relative z-10 px-6'>
             I Know You Love to Scroll <br />
@@ -954,43 +954,43 @@ export default function LandingPage() {
         </header>
         <section className='horizontal-section h-[500vh] relative'>
           <ul ref={ulRef} className='flex sticky top-0 h-screen overflow-hidden' style={{ width: '500vw' }}>
-            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-slate-950 flex flex-col justify-center items-center px-6 sm:px-12 border-r border-white/5'>
-              <h2 className='text-[20vw] font-bold text-cyan-500 select-none mb-4 sm:mb-8'>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-slate-50 dark:bg-slate-950 flex flex-col justify-center items-center px-6 sm:px-12 border-r border-slate-200 dark:border-white/5'>
+              <h2 className='text-[20vw] font-bold text-cyan-600 dark:text-cyan-500 select-none mb-4 sm:mb-8'>
                 TRADE
               </h2>
-              <p className='text-base sm:text-xl md:text-2xl lg:text-3xl text-zinc-400 max-w-3xl text-center font-medium px-4'>
+              <p className='text-base sm:text-xl md:text-2xl lg:text-3xl text-slate-600 dark:text-zinc-400 max-w-3xl text-center font-medium px-4'>
                 Execute complex cross-chain swaps with simple voice commands. Trade 200+ assets across 40+ networks.
               </p>
             </li>
-            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-[#0f0a1e] flex flex-col justify-center items-center px-6 sm:px-12 border-r border-white/5'>
-              <h2 className='text-[20vw] font-bold text-purple-500 select-none mb-4 sm:mb-8'>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-purple-50 dark:bg-[#0f0a1e] flex flex-col justify-center items-center px-6 sm:px-12 border-r border-slate-200 dark:border-white/5'>
+              <h2 className='text-[20vw] font-bold text-purple-600 dark:text-purple-500 select-none mb-4 sm:mb-8'>
                 SWAP
               </h2>
-              <p className='text-base sm:text-xl md:text-2xl lg:text-3xl text-zinc-400 max-w-3xl text-center font-medium px-4'>
+              <p className='text-base sm:text-xl md:text-2xl lg:text-3xl text-slate-600 dark:text-zinc-400 max-w-3xl text-center font-medium px-4'>
                 Seamless asset exchanges powered by SideShift.ai. Get real-time quotes and best rates instantly.
               </p>
             </li>
-            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-[#1a0b14] flex flex-col justify-center items-center px-6 sm:px-12 border-r border-white/5'>
-              <h2 className='text-[20vw] font-bold text-pink-500 select-none mb-4 sm:mb-8'>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-pink-50 dark:bg-[#1a0b14] flex flex-col justify-center items-center px-6 sm:px-12 border-r border-slate-200 dark:border-white/5'>
+              <h2 className='text-[20vw] font-bold text-pink-600 dark:text-pink-500 select-none mb-4 sm:mb-8'>
                 EARN
               </h2>
-              <p className='text-base sm:text-xl md:text-2xl lg:text-3xl text-zinc-400 max-w-3xl text-center font-medium px-4'>
+              <p className='text-base sm:text-xl md:text-2xl lg:text-3xl text-slate-600 dark:text-zinc-400 max-w-3xl text-center font-medium px-4'>
                 Discover yield opportunities across DeFi protocols. Maximize your crypto earnings effortlessly.
               </p>
             </li>
-            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-[#051a12] flex flex-col justify-center items-center px-6 sm:px-12 border-r border-white/5'>
-              <h2 className='text-[20vw] font-bold text-emerald-500 select-none mb-4 sm:mb-8'>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-emerald-50 dark:bg-[#051a12] flex flex-col justify-center items-center px-6 sm:px-12 border-r border-slate-200 dark:border-white/5'>
+              <h2 className='text-[20vw] font-bold text-emerald-600 dark:text-emerald-500 select-none mb-4 sm:mb-8'>
                 GROW
               </h2>
-              <p className='text-base sm:text-xl md:text-2xl lg:text-3xl text-zinc-400 max-w-3xl text-center font-medium px-4'>
+              <p className='text-base sm:text-xl md:text-2xl lg:text-3xl text-slate-600 dark:text-zinc-400 max-w-3xl text-center font-medium px-4'>
                 Build your portfolio with AI-assisted trading strategies. Make informed decisions with confidence.
               </p>
             </li>
-            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-[#1a0f05] flex flex-col justify-center items-center px-6 sm:px-12'>
-              <h2 className='text-[20vw] font-bold text-orange-500 select-none mb-4 sm:mb-8'>
+            <li className='horizontal-scroll-item h-screen w-screen flex-shrink-0 bg-orange-50 dark:bg-[#1a0f05] flex flex-col justify-center items-center px-6 sm:px-12'>
+              <h2 className='text-[20vw] font-bold text-orange-600 dark:text-orange-500 select-none mb-4 sm:mb-8'>
                 WIN
               </h2>
-              <p className='text-base sm:text-xl md:text-2xl lg:text-3xl text-zinc-400 max-w-3xl text-center font-medium px-4'>
+              <p className='text-base sm:text-xl md:text-2xl lg:text-3xl text-slate-600 dark:text-zinc-400 max-w-3xl text-center font-medium px-4'>
                 Join thousands of traders using SwapSmith. Experience the future of decentralized trading today.
               </p>
             </li>
@@ -999,14 +999,14 @@ export default function LandingPage() {
         {/* FAQ Section */}
         <FAQSection />
 
-        <footer className='relative font-medium text-white grid place-content-center h-[80vh] overflow-hidden'>
+        <footer className='relative font-medium text-slate-900 dark:text-white grid place-content-center h-[80vh] overflow-hidden'>
           {/* Background Image with Blur */}
           <div 
             className="absolute inset-0 bg-[url('/image.png')] bg-cover bg-center"
             style={{ filter: 'blur(8px)' }}
           />
           {/* Dark Overlay for better text readability */}
-          <div className="absolute inset-0 bg-black/20" />
+          <div className="absolute inset-0 bg-white/80 dark:bg-black/20 transition-colors duration-300" />
           
           <div className='relative z-10 text-center space-y-4'>
             <div className='text-3xl md:text-4xl font-bold mb-8'>
@@ -1014,7 +1014,7 @@ export default function LandingPage() {
             </div>
             <button
               onClick={handleAccess}
-              className='px-8 py-4 bg-white text-purple-600 rounded-full font-bold text-lg hover:scale-105 transition-transform shadow-lg'
+              className='px-8 py-4 bg-slate-900 dark:bg-white text-white dark:text-purple-600 rounded-full font-bold text-lg hover:scale-105 transition-transform shadow-lg'
             >
               Launch SwapSmith Now
             </button>
