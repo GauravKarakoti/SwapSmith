@@ -4,7 +4,6 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import {
-  Zap,
   User,
   Users,
   LogOut,
@@ -92,8 +91,8 @@ export default function Navbar() {
 
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3 group shrink-0">
-            <div className="bg-blue-600 p-1.5 rounded-xl shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-all duration-200">
-              <Zap className="w-5 h-5 text-white" fill="white" />
+            <div className="p-0.5 rounded-xl shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-all duration-200 overflow-hidden">
+              <Image src="/swapsmithicon.png" alt="SwapSmith" width={36} height={36} className="rounded-xl" unoptimized />
             </div>
             <span className="hidden lg:block text-lg font-black uppercase tracking-tighter text-zinc-900 dark:text-white">
               SwapSmith
@@ -205,8 +204,8 @@ export default function Navbar() {
             <div className="p-6 flex flex-col h-full">
               <div className="flex items-center justify-between mb-6">
                 <Link href="/" className="flex items-center gap-2" onClick={() => setMobileMenuOpen(false)}>
-                  <div className="bg-blue-600 p-1.5 rounded-xl">
-                    <Zap className="w-5 h-5 text-white" fill="white" />
+                  <div className="overflow-hidden rounded-xl shadow-lg shadow-blue-500/20">
+                    <Image src="/swapsmithicon.png" alt="SwapSmith" width={36} height={36} className="rounded-xl" unoptimized />
                   </div>
                   <span className="font-black text-lg uppercase tracking-tighter text-zinc-900 dark:text-white">SwapSmith</span>
                 </Link>

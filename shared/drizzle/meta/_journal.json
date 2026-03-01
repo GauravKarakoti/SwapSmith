@@ -57,6 +57,20 @@
       "when": 1772124337391,
       "tag": "0008_cheerful_la_nuit",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1772285685562,
+      "tag": "0009_narrow_prowler",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1772345452958,
+      "tag": "0010_robust_red_ghost",
+      "breakpoints": true
     }
   ]
 }
