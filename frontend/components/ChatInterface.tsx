@@ -117,12 +117,12 @@ export default function ChatInterface() {
     }
   }, [nativeAudioError, whisperAudioError]);
 
-  // Sync native transcript to input state
+  // Sync native transcript to input state only while native recording is active
   useEffect(() => {
-    if (nativeTranscript) {
+    if (isNativeRecording && nativeTranscript) {
       setInput(nativeTranscript);
     }
-  }, [nativeTranscript]);
+  }, [isNativeRecording, nativeTranscript]);
 
   const prevIsNativeRecording = useRef(isNativeRecording);
   
