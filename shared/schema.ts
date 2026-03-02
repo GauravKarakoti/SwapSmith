@@ -149,8 +149,6 @@ export const limitOrders = pgTable('limit_orders', {
   sideshiftOrderId: text('sideshift_order_id'),
   error: text('error'),
   executedAt: timestamp('executed_at'),
-  retryCount: integer('retry_count').notNull().default(0),
-  retryAfter: timestamp('retry_after'),
 }, (table) => [
   index("idx_limit_orders_telegram_id").on(table.telegramId),
 ]);
