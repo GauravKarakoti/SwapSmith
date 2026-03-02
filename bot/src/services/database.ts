@@ -7,6 +7,7 @@ import { safeParseJSON } from '../utils/safeParse';
 import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
 import type { ParsedCommand } from './parseUserCommand';
 import logger from './logger';
+import { TERMINAL_STATUSES_LIST } from '../constants';
 
 dotenv.config();
 
@@ -76,7 +77,7 @@ export const checkouts = pgTable('checkouts', {
   checkoutId: text('checkout_id').notNull().unique(),
   settleAsset: text('settle_asset').notNull(),
   settleNetwork: text('settle_network').notNull(),
-  settleAmount: real('settle_amount').notNull(),
+  settleAmount: numeric('settle_amount', { precision: 30, scale: 18 }).notNull(),
   settleAddress: text('settle_address').notNull(),
   status: text('status').notNull().default('pending'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -475,8 +476,7 @@ export async function updateOrderStatus(sideshiftOrderId: string, newStatus: str
 
 export async function createCheckoutEntry(telegramId: number, checkout: SideShiftCheckoutResponse) {
   // Fix: Convert number to float if needed or ensure parsing is safe
-  const amount = typeof checkout.settleAmount === 'string' ? parseFloat(checkout.settleAmount) : checkout.settleAmount;
-
+  const amount = checkout.settleAmount.toString();
   await db.insert(checkouts).values({
     telegramId,
     checkoutId: checkout.id,
@@ -497,8 +497,8 @@ export async function getUserCheckouts(telegramId: number): Promise<Checkout[]> 
 
 // --- ORDER MONITOR HELPERS ---
 
-const TERMINAL_STATUSES = ['settled', 'expired', 'refunded', 'failed'];
-
+// Re-export so callers that previously used this module's constant continue to work
+export const TERMINAL_STATUSES = TERMINAL_STATUSES_LIST;
 export async function getPendingOrders(): Promise<Order[]> {
   return await db.select().from(orders)
     .where(notInArray(orders.status, TERMINAL_STATUSES));
@@ -522,6 +522,23 @@ export async function addWatchedOrder(telegramId: number, sideshiftOrderId: stri
     sideshiftOrderId,
     lastStatus: initialStatus,
   }).onConflictDoNothing();
+}
+
+/**
+ * Retrieves all watched orders that are not in a terminal state.
+ */
+export async function getPendingWatchedOrders(): Promise<WatchedOrder[]> {
+  return await db.select().from(watchedOrders)
+    .where(notInArray(watchedOrders.lastStatus, TERMINAL_STATUSES));
+}
+
+/**
+ * Updates the last known status of a watched order.
+ */
+export async function updateWatchedOrderStatus(sideshiftOrderId: string, newStatus: string) {
+  await db.update(watchedOrders)
+    .set({ lastStatus: newStatus })
+    .where(eq(watchedOrders.sideshiftOrderId, sideshiftOrderId));
 }
 
 /**

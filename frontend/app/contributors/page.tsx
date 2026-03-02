@@ -77,7 +77,7 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
   return (
     <motion.div
       variants={cardVariant}
-      className="relative overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 p-5 backdrop-blur-sm"
+      className="relative overflow-hidden rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 p-5 backdrop-blur-sm"
     >
       <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-blue-500/5 to-transparent rounded-bl-full" />
       <div className="flex items-center gap-3">
@@ -85,8 +85,8 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
           {icon}
         </div>
         <div>
-          <p className="text-2xl font-black text-zinc-900 dark:text-white">{value}</p>
-          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">{label}</p>
+          <p className="text-2xl font-black text-slate-900 dark:text-white">{value}</p>
+          <p className="text-xs font-medium text-slate-500 dark:text-zinc-400 uppercase tracking-wider">{label}</p>
         </div>
       </div>
     </motion.div>
@@ -107,7 +107,7 @@ function TopContributorCard({ contributor, rank }: { contributor: Contributor; r
       variants={cardVariant}
       whileHover={{ y: -8, scale: 1.02 }}
       transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-      className={`group relative overflow-hidden rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 p-6 backdrop-blur-sm cursor-pointer ${sizes.card}`}
+      className={`group relative overflow-hidden rounded-3xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 p-6 backdrop-blur-sm cursor-pointer ${sizes.card}`}
     >
       {/* Glow effect */}
       <div className="absolute inset-0 bg-gradient-to-br from-blue-500/0 via-transparent to-purple-500/0 group-hover:from-blue-500/5 group-hover:to-purple-500/5 transition-all duration-500 " />
@@ -131,19 +131,19 @@ function TopContributorCard({ contributor, rank }: { contributor: Contributor; r
             className={`${sizes.avatar} rounded-full object-cover`}
             unoptimized
           />
-          <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-white dark:bg-zinc-900 flex items-center justify-center border-2 border-zinc-200 dark:border-zinc-700">
-            <Github className="w-3.5 h-3.5 text-zinc-600 dark:text-zinc-300" />
+          <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-white dark:bg-zinc-900 flex items-center justify-center border-2 border-slate-200 dark:border-zinc-700">
+            <Github className="w-3.5 h-3.5 text-slate-600 dark:text-zinc-300" />
           </div>
         </div>
 
         {/* Info */}
         <div>
-          <h3 className={`${sizes.text} font-bold text-zinc-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors`}>
+          <h3 className={`${sizes.text} font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors`}>
             {contributor.login}
           </h3>
           <div className="flex items-center justify-center gap-1.5 mt-1">
-            <GitCommit className="w-3.5 h-3.5 text-zinc-400" />
-            <span className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">
+            <GitCommit className="w-3.5 h-3.5 text-slate-400" />
+            <span className="text-sm font-semibold text-slate-500 dark:text-zinc-400">
               {contributor.contributions} commits
             </span>
           </div>
@@ -167,10 +167,10 @@ function ContributorCard({ contributor, rank }: { contributor: Contributor; rank
       variants={cardVariant}
       whileHover={{ y: -4 }}
       transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-      className="group relative flex items-center gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 p-4 backdrop-blur-sm hover:border-blue-300 dark:hover:border-blue-600/40 cursor-pointer transition-colors"
+      className="group relative flex items-center gap-4 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 p-4 backdrop-blur-sm hover:border-blue-300 dark:hover:border-blue-600/40 cursor-pointer transition-colors"
     >
       {/* Rank number */}
-      <span className="text-sm font-bold text-zinc-300 dark:text-zinc-700 w-6 text-center shrink-0">
+      <span className="text-sm font-bold text-slate-300 dark:text-zinc-700 w-6 text-center shrink-0">
         #{rank}
       </span>
 
@@ -181,25 +181,25 @@ function ContributorCard({ contributor, rank }: { contributor: Contributor; rank
           alt={contributor.login}
           width={44}
           height={44}
-          className="w-11 h-11 rounded-full object-cover ring-2 ring-zinc-100 dark:ring-zinc-800"
+          className="w-11 h-11 rounded-full object-cover ring-2 ring-slate-100 dark:ring-zinc-800"
           unoptimized
         />
       </div>
 
       {/* Name & commits */}
       <div className="flex-1 min-w-0">
-        <p className="font-bold text-sm text-zinc-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+        <p className="font-bold text-sm text-slate-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
           {contributor.login}
         </p>
         <div className="flex items-center gap-1 mt-0.5">
-          <GitCommit className="w-3 h-3 text-zinc-400" />
-          <span className="text-xs text-zinc-500 dark:text-zinc-400">{contributor.contributions} commits</span>
+          <GitCommit className="w-3 h-3 text-slate-400" />
+          <span className="text-xs text-slate-500 dark:text-zinc-400">{contributor.contributions} commits</span>
         </div>
       </div>
 
       {/* Contribution bar */}
       <div className="hidden sm:block w-20">
-        <div className="h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+        <div className="h-1.5 rounded-full bg-slate-100 dark:bg-zinc-800 overflow-hidden">
           <div
             className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500"
             style={{ width: `${Math.min(100, (contributor.contributions / 50) * 100)}%` }}
@@ -208,19 +208,19 @@ function ContributorCard({ contributor, rank }: { contributor: Contributor; rank
       </div>
 
       {/* Arrow */}
-      <ExternalLink className="w-4 h-4 text-zinc-300 dark:text-zinc-700 group-hover:text-blue-500 transition-colors shrink-0" />
+      <ExternalLink className="w-4 h-4 text-slate-300 dark:text-zinc-700 group-hover:text-blue-500 transition-colors shrink-0" />
     </motion.a>
   );
 }
 
 function SkeletonCard() {
   return (
-    <div className="animate-pulse rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 p-4 flex items-center gap-4">
-      <div className="w-6 h-4 bg-zinc-200 dark:bg-zinc-800 rounded" />
-      <div className="w-11 h-11 rounded-full bg-zinc-200 dark:bg-zinc-800" />
+    <div className="animate-pulse rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 p-4 flex items-center gap-4">
+      <div className="w-6 h-4 bg-slate-200 dark:bg-zinc-800 rounded" />
+      <div className="w-11 h-11 rounded-full bg-slate-200 dark:bg-zinc-800" />
       <div className="flex-1 space-y-2">
-        <div className="h-4 bg-zinc-200 dark:bg-zinc-800 rounded w-24" />
-        <div className="h-3 bg-zinc-200 dark:bg-zinc-800 rounded w-16" />
+        <div className="h-4 bg-slate-200 dark:bg-zinc-800 rounded w-24" />
+        <div className="h-3 bg-slate-200 dark:bg-zinc-800 rounded w-16" />
       </div>
     </div>
   );
@@ -228,10 +228,10 @@ function SkeletonCard() {
 
 function SkeletonTopCard() {
   return (
-    <div className="animate-pulse rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 p-6 flex flex-col items-center gap-3">
-      <div className="w-24 h-24 rounded-full bg-zinc-200 dark:bg-zinc-800" />
-      <div className="h-5 bg-zinc-200 dark:bg-zinc-800 rounded w-28" />
-      <div className="h-3 bg-zinc-200 dark:bg-zinc-800 rounded w-20" />
+    <div className="animate-pulse rounded-3xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 p-6 flex flex-col items-center gap-3">
+      <div className="w-24 h-24 rounded-full bg-slate-200 dark:bg-zinc-800" />
+      <div className="h-5 bg-slate-200 dark:bg-zinc-800 rounded w-28" />
+      <div className="h-3 bg-slate-200 dark:bg-zinc-800 rounded w-20" />
     </div>
   );
 }
@@ -294,7 +294,7 @@ export default function ContributorsPage() {
     <>
       <Navbar />
 
-      <div className="min-h-screen pt-24 sm:pt-28 pb-20 bg-zinc-50 dark:bg-[#08080f]">
+      <div className="min-h-screen pt-24 sm:pt-28 pb-20 bg-slate-50 dark:bg-[#030712]">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
 
           {/* ── Hero ── */}
@@ -303,13 +303,13 @@ export default function ContributorsPage() {
               <Heart className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
               <span className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Open Source Community</span>
             </div>
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-zinc-900 dark:text-white tracking-tight">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-900 dark:text-white tracking-tight">
               Our{' '}
               <span className="bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-600 bg-clip-text text-transparent">
                 Contributors
               </span>
             </h1>
-            <p className="mt-4 text-base sm:text-lg text-zinc-500 dark:text-zinc-400 max-w-2xl mx-auto leading-relaxed">
+            <p className="mt-4 text-base sm:text-lg text-slate-500 dark:text-zinc-400 max-w-2xl mx-auto leading-relaxed">
               SwapSmith is built by an incredible community of developers.
               Every contribution matters — from bug fixes to features.
             </p>
@@ -320,7 +320,7 @@ export default function ContributorsPage() {
                 href={`https://github.com/${REPO_OWNER}/${REPO_NAME}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-bold text-sm hover:opacity-90 transition-opacity shadow-lg shadow-zinc-900/10 dark:shadow-white/10"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-sm hover:opacity-90 transition-opacity shadow-lg shadow-slate-900/10 dark:shadow-white/10"
               >
                 <Github className="w-4 h-4" />
                 View on GitHub
@@ -329,7 +329,7 @@ export default function ContributorsPage() {
                 href={`https://github.com/${REPO_OWNER}/${REPO_NAME}/issues`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 font-bold text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 font-bold text-sm hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
               >
                 <Sparkles className="w-4 h-4" />
                 Start Contributing
@@ -349,13 +349,13 @@ export default function ContributorsPage() {
           {!loading && !error && contributors.length > 0 && (
             <motion.div {...fadeUp(0.15)} className="mb-10">
               <div className="relative max-w-md mx-auto">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   type="text"
                   placeholder="Search contributors..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition-all"
                 />
               </div>
             </motion.div>
@@ -367,8 +367,8 @@ export default function ContributorsPage() {
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-red-50 dark:bg-red-500/10 mb-4">
                 <Code2 className="w-7 h-7 text-red-500" />
               </div>
-              <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-2">Failed to load contributors</h3>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">{error}</p>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Failed to load contributors</h3>
+              <p className="text-sm text-slate-500 dark:text-zinc-400 mb-6">{error}</p>
               <button
                 onClick={() => window.location.reload()}
                 className="px-5 py-2 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 transition-colors"
@@ -395,7 +395,7 @@ export default function ContributorsPage() {
             <motion.section {...fadeUp(0.2)} variants={stagger} initial="initial" animate="animate" className="mb-10">
               <div className="flex items-center gap-2 mb-5">
                 <Trophy className="w-5 h-5 text-amber-500" />
-                <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Top Contributors</h2>
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">Top Contributors</h2>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {topThree.map((c, i) => (
@@ -411,9 +411,9 @@ export default function ContributorsPage() {
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2">
                   <Users className="w-5 h-5 text-blue-500" />
-                  <h2 className="text-lg font-bold text-zinc-900 dark:text-white">All Contributors</h2>
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">All Contributors</h2>
                 </div>
-                <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-500">{filtered.length} total</span>
+                <span className="text-xs font-semibold text-slate-400 dark:text-zinc-500">{filtered.length} total</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {rest.map((c, i) => (
@@ -426,8 +426,8 @@ export default function ContributorsPage() {
           {/* ── No results ── */}
           {!loading && !error && filtered.length === 0 && searchQuery && (
             <motion.div {...fadeUp(0.1)} className="text-center py-16">
-              <Search className="w-10 h-10 text-zinc-300 dark:text-zinc-700 mx-auto mb-4" />
-              <p className="text-zinc-500 dark:text-zinc-400 font-medium">
+              <Search className="w-10 h-10 text-slate-300 dark:text-zinc-700 mx-auto mb-4" />
+              <p className="text-slate-500 dark:text-zinc-400 font-medium">
                 No contributors found for &quot;{searchQuery}&quot;
               </p>
             </motion.div>
@@ -436,16 +436,16 @@ export default function ContributorsPage() {
           {/* ── Contribute CTA ── */}
           {!loading && !error && (
             <motion.section {...fadeUp(0.4)} className="mt-16">
-              <div className="relative overflow-hidden rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-zinc-900 dark:via-zinc-900 dark:to-zinc-900 p-8 sm:p-10 text-center">
+              <div className="relative overflow-hidden rounded-3xl border border-slate-200 dark:border-zinc-800 bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-zinc-900 dark:via-zinc-900 dark:to-zinc-900 p-8 sm:p-10 text-center">
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-72 h-72 bg-blue-400/10 dark:bg-blue-500/5 rounded-full blur-3xl" />
                 <div className="relative">
                   <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-100 dark:bg-blue-500/10 mb-4">
                     <Code2 className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                   </div>
-                  <h3 className="text-2xl sm:text-3xl font-black text-zinc-900 dark:text-white mb-3">
+                  <h3 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mb-3">
                     Want to contribute?
                   </h3>
-                  <p className="text-zinc-500 dark:text-zinc-400 max-w-lg mx-auto mb-6 text-sm sm:text-base">
+                  <p className="text-slate-500 dark:text-zinc-400 max-w-lg mx-auto mb-6 text-sm sm:text-base">
                     We welcome all contributions! Check out our open issues, pick one that interests you,
                     and submit a pull request to become part of the SwapSmith community.
                   </p>
@@ -463,7 +463,7 @@ export default function ContributorsPage() {
                       href={`https://github.com/${REPO_OWNER}/${REPO_NAME}/fork`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 font-bold text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 font-bold text-sm hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
                     >
                       <GitFork className="w-4 h-4" />
                       Fork Repository
