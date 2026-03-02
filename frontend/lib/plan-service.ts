@@ -3,7 +3,8 @@
  */
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { eq, sql as drizzleSql } from 'drizzle-orm';
+import { eq, sql as drizzleSql, and } from 'drizzle-orm';
+// 1. ADDED planPurchases to the import
 import { users, planPurchases } from '../../shared/schema';
 import type { Plan } from '../../shared/config/plans';
 import { PLAN_CONFIGS, isLimitExceeded } from '../../shared/config/plans';
@@ -21,6 +22,61 @@ export interface UsageStatus {
   chatLimitExceeded: boolean;
   terminalLimitExceeded: boolean;
   totalPoints: number;
+}
+
+export async function purchasePlan(
+  userId: number, 
+  plan: Plan
+): Promise<{ success: boolean; message: string; newPlan?: Plan; expiresAt?: Date }> {
+  const userResult = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!userResult[0]) {
+    return { success: false, message: 'User not found' };
+  }
+  const user = userResult[0];
+
+  const config = PLAN_CONFIGS[plan];
+  if (!config) {
+    return { success: false, message: 'Invalid plan' };
+  }
+
+  // Check if the user has enough coins (points)
+  if (user.totalPoints < config.coinsCost) {
+    return { success: false, message: 'Insufficient coins' };
+  }
+
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + config.durationDays * 24 * 60 * 60 * 1000);
+
+  // We can use a transaction to make sure both the deduction and logging happen atomically
+  await db.transaction(async (tx) => {
+    // 1. Deduct coins and activate plan
+    await tx.update(users)
+      .set({
+        totalPoints: user.totalPoints - config.coinsCost,
+        plan: plan,
+        planPurchasedAt: now,
+        planExpiresAt: expiresAt,
+        updatedAt: now,
+      })
+      .where(eq(users.id, userId));
+
+    // 2. Log the purchase in the planPurchases table
+    await tx.insert(planPurchases).values({
+      userId,
+      plan,
+      coinsSpent: config.coinsCost,
+      durationDays: config.durationDays,
+      activatedAt: now,
+      expiresAt: expiresAt,
+    });
+  });
+
+  return {
+    success: true,
+    message: `Successfully upgraded to ${config.displayName} plan`,
+    newPlan: plan,
+    expiresAt,
+  };
 }
 
 /**
@@ -92,8 +148,9 @@ export async function incrementChatUsage(userId: number): Promise<{ count: numbe
     throw new Error('User not found');
   }
   
-  const plan: PlanType = (userResult[0] as any).plan || 'free';
-  const dailyChatLimit = PLAN_LIMITS[plan].dailyChatLimit;
+  // 2 & 3: Changed PlanType to Plan and PLAN_LIMITS to PLAN_CONFIGS
+  const plan: Plan = (userResult[0] as any).plan || 'free';
+  const dailyChatLimit = PLAN_CONFIGS[plan].dailyChatLimit;
 
   // 🔒 ATOMIC OPERATION: Check limit and increment in a single query
   // This prevents TOCTOU race conditions by performing the check atomically in the database
@@ -134,8 +191,9 @@ export async function incrementTerminalUsage(userId: number): Promise<{ count: n
     throw new Error('User not found');
   }
   
-  const plan: PlanType = (userResult[0] as any).plan || 'free';
-  const dailyTerminalLimit = PLAN_LIMITS[plan].dailyTerminalLimit;
+  // 2 & 3: Changed PlanType to Plan and PLAN_LIMITS to PLAN_CONFIGS
+  const plan: Plan = (userResult[0] as any).plan || 'free';
+  const dailyTerminalLimit = PLAN_CONFIGS[plan].dailyTerminalLimit;
 
   // 🔒 ATOMIC OPERATION: Check limit and increment in a single query
   // This prevents TOCTOU race conditions by performing the check atomically in the database
@@ -173,7 +231,8 @@ export async function resetDailyCounters(): Promise<void> {
 /**
  * Update user's plan type
  */
-export async function updateUserPlan(userId: number, plan: PlanType): Promise<void> {
+// 3: Changed PlanType to Plan
+export async function updateUserPlan(userId: number, plan: Plan): Promise<void> {
   await db.update(users)
     .set({
       plan,
