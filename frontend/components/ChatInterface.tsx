@@ -76,6 +76,7 @@ export default function ChatInterface() {
   const [currentConfidence, setCurrentConfidence] = useState<number | undefined>(undefined);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const { address, isConnected } = useAccount();
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const { handleError } = useErrorHandler();
@@ -248,10 +249,14 @@ export default function ChatInterface() {
     };
   }, [messages, isAuthenticated, isAuthLoading, user?.uid, address]);
 
-  // Show audio error if any
+  // Show audio error if any and auto-focus text input
   useEffect(() => {
     if (audioError) {
       addMessage({ role: 'assistant', content: audioError, type: 'message' });
+      // Auto-focus text input on voice failure
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
     }
   }, [audioError]);
 
@@ -805,6 +810,7 @@ return (
             </button>
             
             <input
+              ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -825,12 +831,16 @@ return (
           </div>
         </div>
         
-        {/* Voice Fallback */}
-        {!isAudioSupported && (
-            <div className="text-red-500 text-xs mt-2 px-1 text-center font-medium">
-                🎤 Voice input is not supported in your browser. Please use Chrome or type your command.
+        {/* Voice Status - Better UX messaging */}
+        {!isAudioSupported ? (
+            <div className="text-amber-500 text-xs mt-2 px-1 text-center font-medium">
+                🎤 Voice input not supported in this browser. Using text input instead.
             </div>
-        )}
+        ) : audioError ? (
+            <div className="text-amber-500 text-xs mt-2 px-1 text-center font-medium">
+                🎤 Voice error. Please type your command.
+            </div>
+        ) : null}
 
         {/* Footer Warning */}
         {!isConnected && (
