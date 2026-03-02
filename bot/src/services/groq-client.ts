@@ -25,7 +25,7 @@ const groq = getGroqClient();
 
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "swap_and_stake" | "unknown";
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "swap_and_stake" | "stake" | "trailing_stop" | "unknown";
   
   // Single Swap Fields
   fromAsset: string | null;
@@ -75,6 +75,11 @@ export interface ParsedCommand {
   toProject: string | null;
   toYield: number | null;
 
+  // Stake Fields
+  estimatedApy?: number | null;
+  stakeProtocol?: string | null;
+  stakePool?: string | null;
+
   // Limit Order Fields (Legacy - kept for compatibility, prefer 'conditions')
   conditionOperator?: 'gt' | 'lt';
   conditionValue?: number;
@@ -112,7 +117,19 @@ MODES:
 7. "dca": Dollar Cost Averaging.
 8. "limit_order": Buy/Sell at specific price.
 
+9. "stake": Stake assets directly to earn yield. For liquid staking.
+   Example: "Stake 1000 USDC to earn yield"
+   Example: "Stake my ETH for staking rewards"
+   Example: "Stake ETH on Lido for yield"
+
+10. "swap_and_stake": Swap one asset and stake the result in one transaction (Zap).
+    Example: "Swap 1 ETH to USDC and stake it"
+    Example: "Zap 100 ETH into aave for yield"
+    Example: "Swap and stake 500 USDC to get best APY"
+
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
+
+STAKING PROTOCOLS: aave, compound, lido, yearn, morpho, spark, euler.
 
 ADDRESS RESOLUTION:
 - Users can specify addresses as raw wallet addresses (0x...), ENS names (ending in .eth), Lens handles (ending in .lens), Unstoppable Domains (ending in .crypto, .nft, .blockchain, etc.), or nicknames from their address book.
@@ -140,7 +157,7 @@ AMBIGUITY HANDLING:
 RESPONSE FORMAT:
 {
   "success": boolean,
-  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order",
+  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "stake" | "swap_and_stake",
   "fromAsset": string | null,
   "fromChain": string | null,
   "amount": number | null,
@@ -164,6 +181,13 @@ RESPONSE FORMAT:
   "settleNetwork": null,
   "settleAmount": null,
   "settleAddress": null,
+  
+  // Staking Fields (for stake and swap_and_stake intents)
+  "estimatedApy": number | null,
+  "stakeProtocol": "aave" | "compound" | "lido" | "yearn" | "morpho" | "spark" | "euler" | null,
+  "stakePool": string | null,
+  "toProject": string | null,
+  
   "conditionOperator": "gt" | "lt" | null,
   "conditionValue": number | null,
   "conditionAsset": string | null,
@@ -215,6 +239,18 @@ EXAMPLES:
 
 14. "DCA 200 USDC into ETH every month on the 1st"
     -> intent: "dca", fromAsset: "USDC", toAsset: "ETH", amount: 200, frequency: "monthly", dayOfMonth: "1", confidence: 95
+
+15. "Stake 1000 USDC to earn yield"
+    -> intent: "stake", fromAsset: "USDC", amount: 1000, confidence: 95, parsedMessage: "Stake 1000 USDC to earn yield"
+
+16. "Stake my ETH on Lido"
+    -> intent: "stake", fromAsset: "ETH", stakeProtocol: "lido", confidence: 95, parsedMessage: "Stake ETH on Lido for yield"
+
+17. "Swap 1 ETH to USDC and stake it"
+    -> intent: "swap_and_stake", fromAsset: "ETH", toAsset: "USDC", amount: 1, stakeProtocol: "aave", confidence: 90, parsedMessage: "Swap 1 ETH to USDC and stake for yield"
+
+18. "Zap 100 ETH into aave for yield"
+    -> intent: "swap_and_stake", fromAsset: "ETH", amount: 100, stakeProtocol: "aave", confidence: 95, parsedMessage: "Swap 100 ETH and stake in Aave for yield"
 `;
 
 // RENAMED from parseUserCommand to parseWithLLM
@@ -311,6 +347,11 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     fromYield: parsed.fromYield || null,
     toProject: parsed.toProject || null,
     toYield: parsed.toYield || null,
+    
+    // Stake fields
+    estimatedApy: parsed.estimatedApy || null,
+    stakeProtocol: parsed.stakeProtocol || null,
+    stakePool: parsed.stakePool || null,
     
     // New fields
     targetPrice: parsed.targetPrice,
