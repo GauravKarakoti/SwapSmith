@@ -130,16 +130,26 @@
     overlay.id = '__swapsmith_ad_preview__'
     overlay.style.cssText = `
       position:fixed; inset:0; z-index:99999;
-      display:flex; align-items:center; justify-content:center; padding:16px;
+      display:flex; align-items:center; justify-content:center; padding:8px;
       background:rgba(15,23,42,0.82);
       backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
     `
 
     overlay.innerHTML = `
-      <div style="
+      <style>
+        @media (max-width: 600px) {
+          #__ss_ad_inner__ { border-radius: 14px !important; }
+          #__ss_ad_body__ { padding: 40px 16px 20px !important; }
+          #__ss_ad_grid__ { grid-template-columns: 1fr !important; }
+          #__ss_ad_heading__ { font-size: 20px !important; line-height: 1.25 !important; }
+          #__ss_ad_dismiss__ { top: 10px !important; right: 10px !important; }
+        }
+      </style>
+      <div id="__ss_ad_inner__" style="
         position:relative; width:100%; max-width:768px;
+        max-height:90vh; overflow-x:hidden; overflow-y:auto;
         background:#fff; border-radius:20px;
-        box-shadow:0 25px 80px rgba(0,0,0,0.35); overflow:hidden;
+        box-shadow:0 25px 80px rgba(0,0,0,0.35);
       ">
         <!-- Dismiss -->
         <button id="__ss_ad_dismiss__" style="
@@ -157,16 +167,16 @@
         <span style="position:absolute;top:42px;left:42px;font-size:22px;pointer-events:none;user-select:none;">⭐</span>
         <span style="position:absolute;top:36px;right:80px;font-size:18px;pointer-events:none;user-select:none;">✨</span>
 
-        <div style="padding:40px 32px 32px;">
+        <div id="__ss_ad_body__" style="padding:40px 32px 32px;">
           <!-- Header -->
           <div style="text-align:center; margin-bottom:28px;">
             <p style="font-size:13px; font-weight:700; color:#2563eb; margin:0 0 6px; letter-spacing:0.03em;">${data.eyebrow}</p>
-            <h2 style="font-size:26px; font-weight:900; color:#111; margin:0 0 6px; letter-spacing:-0.03em; line-height:1.2;">${data.title}</h2>
+            <h2 id="__ss_ad_heading__" style="font-size:26px; font-weight:900; color:#111; margin:0 0 6px; letter-spacing:-0.03em; line-height:1.2;">${data.title}</h2>
             <p style="font-size:13px; color:#6b7280; margin:0;">${data.subtitle}</p>
           </div>
 
           <!-- Cards -->
-          <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px; align-items:start;">
+          <div id="__ss_ad_grid__" style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px; align-items:start;">
             ${cardHTML}
           </div>
         </div>
