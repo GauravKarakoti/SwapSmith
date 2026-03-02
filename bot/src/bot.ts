@@ -156,13 +156,33 @@ bot.on(message('voice'), async (ctx) => {
     await new Promise<void>((resolve, reject) => {
       const ffmpeg = spawn('ffmpeg', ['-i', oga, mp3, '-y']);
 
+      let stderrData = '';
+
+      if (ffmpeg.stderr) {
+        ffmpeg.stderr.on('data', (chunk) => {
+          stderrData += chunk.toString();
+        });
+      }
+
+      if (ffmpeg.stdout) {
+        ffmpeg.stdout.on('data', () => {
+          // drain stdout to avoid blocking if ffmpeg writes to it
+        });
+      }
+
       ffmpeg.on('error', (err) => reject(err));
 
       ffmpeg.on('close', (code) => {
         if (code === 0) {
           resolve();
         } else {
-          reject(new Error(`FFmpeg process exited with code ${code}`));
+          reject(
+            new Error(
+              `FFmpeg process exited with code ${code}${
+                stderrData ? `; stderr: ${stderrData}` : ''
+              }`,
+            ),
+          );
         }
       });
     });
