@@ -7,9 +7,12 @@ import {
   swapHistory,
   users,
   userSettings,
+  coinGiftLogs,
   type AdminUser,
   type AdminRequest,
+  type CoinGiftLog,
 } from '../../shared/schema';
+export type { CoinGiftLog };
 
 const rawSql = neon(process.env.DATABASE_URL!);
 const db = drizzle(rawSql);
@@ -710,4 +713,317 @@ export async function updateUserAdminStatus(
       updatedAt:  new Date(),
     });
   }
+}
+// ── Testnet Coin Management ────────────────────────────────────────────────
+
+/**
+ * Testnet coin balance is stored in user_settings.preferences.testnetCoins
+ * so we avoid altering the core users table.
+ */
+
+interface TestnetCoinsPrefs {
+  balance: number;
+  totalGifted: number;
+  lastUpdated: string | null;
+}
+
+function defaultTestnetCoins(): TestnetCoinsPrefs {
+  return { balance: 0, totalGifted: 0, lastUpdated: null };
+}
+
+async function getTestnetCoinsPrefs(firebaseUid: string): Promise<TestnetCoinsPrefs> {
+  const rows = await db
+    .select({ preferences: userSettings.preferences })
+    .from(userSettings)
+    .where(eq(userSettings.userId, firebaseUid))
+    .limit(1);
+
+  if (!rows[0]?.preferences) return defaultTestnetCoins();
+  try {
+    const p = JSON.parse(rows[0].preferences);
+    const c = p.testnetCoins ?? {};
+    return {
+      balance:      typeof c.balance === 'number'      ? c.balance      : 0,
+      totalGifted:  typeof c.totalGifted === 'number'  ? c.totalGifted  : 0,
+      lastUpdated:  c.lastUpdated ?? null,
+    };
+  } catch {
+    return defaultTestnetCoins();
+  }
+}
+
+async function setTestnetCoinsPrefs(firebaseUid: string, coins: TestnetCoinsPrefs): Promise<void> {
+  const existing = await db
+    .select({ preferences: userSettings.preferences, id: userSettings.id })
+    .from(userSettings)
+    .where(eq(userSettings.userId, firebaseUid))
+    .limit(1);
+
+  let prefs: Record<string, unknown> = {};
+  if (existing[0]?.preferences) {
+    try { prefs = JSON.parse(existing[0].preferences); } catch { /* ignore */ }
+  }
+  prefs.testnetCoins = { ...coins, lastUpdated: new Date().toISOString() };
+  const prefsStr = JSON.stringify(prefs);
+
+  if (existing.length > 0) {
+    await db.update(userSettings).set({ preferences: prefsStr, updatedAt: new Date() })
+      .where(eq(userSettings.userId, firebaseUid));
+  } else {
+    await db.insert(userSettings).values({ userId: firebaseUid, preferences: prefsStr, updatedAt: new Date() });
+  }
+}
+
+export interface CoinUserRow {
+  id: number;
+  firebaseUid: string | null;
+  walletAddress: string | null;
+  testnetBalance: number;
+  totalGifted: number;
+  lastUpdated: string | null;
+  swapCount: number;
+}
+
+/** List all users with their testnet coin balances */
+export async function getCoinUsersList(
+  page: number,
+  limit: number,
+  search?: string,
+  hasSwapped?: boolean,
+): Promise<{ rows: CoinUserRow[]; total: number }> {
+  const offset = (page - 1) * limit;
+
+  type UserPrefRow = { id: number; firebase_uid: string | null; wallet_address: string | null; preferences: string | null; swap_count: number };
+
+  let totalResult: { total: number }[];
+  let userRows: UserPrefRow[];
+
+  if (search && hasSwapped) {
+    const pattern = `%${search}%`;
+    totalResult = (await rawSql`
+      SELECT count(*)::int AS total FROM users u
+      WHERE (u.wallet_address ILIKE ${pattern} OR u.firebase_uid ILIKE ${pattern})
+        AND EXISTS (SELECT 1 FROM swap_history sh WHERE sh.user_id = u.firebase_uid)
+    `) as { total: number }[];
+    userRows = (await rawSql`
+      SELECT u.id, u.firebase_uid, u.wallet_address, us.preferences,
+             COALESCE(sc.cnt, 0)::int AS swap_count
+      FROM users u
+      LEFT JOIN user_settings us ON us.user_id = u.firebase_uid
+      LEFT JOIN (SELECT user_id, count(*)::int AS cnt FROM swap_history GROUP BY user_id) sc
+        ON sc.user_id = u.firebase_uid
+      WHERE (u.wallet_address ILIKE ${pattern} OR u.firebase_uid ILIKE ${pattern})
+        AND EXISTS (SELECT 1 FROM swap_history sh WHERE sh.user_id = u.firebase_uid)
+      ORDER BY u.created_at DESC NULLS LAST
+      LIMIT ${limit} OFFSET ${offset}
+    `) as UserPrefRow[];
+  } else if (search) {
+    const pattern = `%${search}%`;
+    totalResult = (await rawSql`
+      SELECT count(*)::int AS total FROM users u
+      WHERE (u.wallet_address ILIKE ${pattern} OR u.firebase_uid ILIKE ${pattern})
+    `) as { total: number }[];
+    userRows = (await rawSql`
+      SELECT u.id, u.firebase_uid, u.wallet_address, us.preferences,
+             COALESCE(sc.cnt, 0)::int AS swap_count
+      FROM users u
+      LEFT JOIN user_settings us ON us.user_id = u.firebase_uid
+      LEFT JOIN (SELECT user_id, count(*)::int AS cnt FROM swap_history GROUP BY user_id) sc
+        ON sc.user_id = u.firebase_uid
+      WHERE (u.wallet_address ILIKE ${pattern} OR u.firebase_uid ILIKE ${pattern})
+      ORDER BY u.created_at DESC NULLS LAST
+      LIMIT ${limit} OFFSET ${offset}
+    `) as UserPrefRow[];
+  } else if (hasSwapped) {
+    totalResult = (await rawSql`
+      SELECT count(*)::int AS total FROM users u
+      WHERE EXISTS (SELECT 1 FROM swap_history sh WHERE sh.user_id = u.firebase_uid)
+    `) as { total: number }[];
+    userRows = (await rawSql`
+      SELECT u.id, u.firebase_uid, u.wallet_address, us.preferences,
+             COALESCE(sc.cnt, 0)::int AS swap_count
+      FROM users u
+      LEFT JOIN user_settings us ON us.user_id = u.firebase_uid
+      LEFT JOIN (SELECT user_id, count(*)::int AS cnt FROM swap_history GROUP BY user_id) sc
+        ON sc.user_id = u.firebase_uid
+      WHERE EXISTS (SELECT 1 FROM swap_history sh WHERE sh.user_id = u.firebase_uid)
+      ORDER BY u.created_at DESC NULLS LAST
+      LIMIT ${limit} OFFSET ${offset}
+    `) as UserPrefRow[];
+  } else {
+    totalResult = (await rawSql`SELECT count(*)::int AS total FROM users`) as { total: number }[];
+    userRows = (await rawSql`
+      SELECT u.id, u.firebase_uid, u.wallet_address, us.preferences,
+             COALESCE(sc.cnt, 0)::int AS swap_count
+      FROM users u
+      LEFT JOIN user_settings us ON us.user_id = u.firebase_uid
+      LEFT JOIN (SELECT user_id, count(*)::int AS cnt FROM swap_history GROUP BY user_id) sc
+        ON sc.user_id = u.firebase_uid
+      ORDER BY u.created_at DESC NULLS LAST
+      LIMIT ${limit} OFFSET ${offset}
+    `) as UserPrefRow[];
+  }
+
+  const rows: CoinUserRow[] = userRows.map((r) => {
+    let coins: TestnetCoinsPrefs = defaultTestnetCoins();
+    try {
+      const p = r.preferences ? JSON.parse(r.preferences) : {};
+      const c = p.testnetCoins ?? {};
+      coins = {
+        balance:     typeof c.balance === 'number'     ? c.balance     : 0,
+        totalGifted: typeof c.totalGifted === 'number' ? c.totalGifted : 0,
+        lastUpdated: c.lastUpdated ?? null,
+      };
+    } catch { /* ignore */ }
+    return {
+      id:             r.id,
+      firebaseUid:    r.firebase_uid,
+      walletAddress:  r.wallet_address,
+      testnetBalance: coins.balance,
+      totalGifted:    coins.totalGifted,
+      lastUpdated:    coins.lastUpdated,
+      swapCount:      r.swap_count ?? 0,
+    };
+  });
+
+  return { rows, total: totalResult[0]?.total ?? 0 };
+}
+
+/** Gift, deduct, or reset testnet coins for a user */
+export async function adjustTestnetCoins(params: {
+  adminId: string;
+  adminEmail: string;
+  targetUserId: number;
+  targetFirebaseUid: string;
+  walletAddress: string | null;
+  action: 'gift' | 'deduct' | 'reset';
+  amount: number;
+  note?: string;
+}): Promise<{ balanceBefore: number; balanceAfter: number }> {
+  const current = await getTestnetCoinsPrefs(params.targetFirebaseUid);
+  const balanceBefore = current.balance;
+  let balanceAfter: number;
+  let additionalGifted = 0;
+
+  if (params.action === 'gift') {
+    balanceAfter = balanceBefore + params.amount;
+    additionalGifted = params.amount;
+  } else if (params.action === 'deduct') {
+    balanceAfter = Math.max(0, balanceBefore - params.amount);
+  } else {
+    // reset
+    balanceAfter = 0;
+  }
+
+  await setTestnetCoinsPrefs(params.targetFirebaseUid, {
+    balance:      balanceAfter,
+    totalGifted:  current.totalGifted + additionalGifted,
+    lastUpdated:  new Date().toISOString(),
+  });
+
+  // Write audit log
+  await db.insert(coinGiftLogs).values({
+    adminId:       params.adminId,
+    adminEmail:    params.adminEmail,
+    targetUserId:  params.targetUserId,
+    walletAddress: params.walletAddress,
+    action:        params.action,
+    amount:        String(params.amount),
+    balanceBefore: String(balanceBefore),
+    balanceAfter:  String(balanceAfter),
+    note:          params.note ?? null,
+  });
+
+  return { balanceBefore, balanceAfter };
+}
+
+export interface CoinSupplyStats {
+  totalUsers: number;
+  usersWithCoins: number;
+  totalDistributed: number;
+  totalCurrentBalance: number;
+  recentLogs: (CoinGiftLog & { walletAddress: string | null })[];
+}
+
+/** Get global testnet coin supply overview */
+export async function getCoinSupplyStats(): Promise<CoinSupplyStats> {
+  const [totalUsersRow, recentLogs] = await Promise.all([
+    rawSql`SELECT count(*)::int AS total FROM users` as unknown as Promise<{ total: number }[]>,
+    db.select().from(coinGiftLogs)
+      .orderBy(desc(coinGiftLogs.createdAt))
+      .limit(50),
+  ]);
+
+  // Compute running totals by scanning all user_settings for testnetCoins prefs
+  type PrefRow = { preferences: string | null; wallet_address: string | null };
+  const prefRows: PrefRow[] = (await rawSql`
+    SELECT us.preferences, u.wallet_address
+    FROM user_settings us
+    JOIN users u ON u.firebase_uid = us.user_id
+    WHERE us.preferences LIKE '%testnetCoins%'
+  `) as PrefRow[];
+
+  let totalDistributed = 0;
+  let totalCurrentBalance = 0;
+  let usersWithCoins = 0;
+
+  for (const pr of prefRows) {
+    try {
+      const p = pr.preferences ? JSON.parse(pr.preferences) : {};
+      const c = p.testnetCoins ?? {};
+      const bal = typeof c.balance === 'number' ? c.balance : 0;
+      const gifted = typeof c.totalGifted === 'number' ? c.totalGifted : 0;
+      if (bal > 0 || gifted > 0) usersWithCoins++;
+      totalCurrentBalance += bal;
+      totalDistributed += gifted;
+    } catch { /* ignore */ }
+  }
+
+  return {
+    totalUsers:          (totalUsersRow as { total: number }[])[0]?.total ?? 0,
+    usersWithCoins,
+    totalDistributed,
+    totalCurrentBalance,
+    recentLogs: recentLogs.map(l => ({ ...l, walletAddress: l.walletAddress ?? null })),
+  };
+}
+
+/** Get recent coin logs for a specific user */
+export async function getUserCoinLogs(targetUserId: number, limit = 20): Promise<CoinGiftLog[]> {
+  return db
+    .select()
+    .from(coinGiftLogs)
+    .where(eq(coinGiftLogs.targetUserId, targetUserId))
+    .orderBy(desc(coinGiftLogs.createdAt))
+    .limit(limit);
+}
+
+/** Gift coins to ALL users in batch */
+export async function giftAllUsers(params: {
+  adminId: string;
+  adminEmail: string;
+  amount: number;
+  note?: string;
+}): Promise<{ usersGifted: number; totalCoinsDistributed: number }> {
+  type UserRow = { id: number; firebase_uid: string; wallet_address: string | null };
+  const allUsers = (await rawSql`
+    SELECT id, firebase_uid, wallet_address FROM users WHERE firebase_uid IS NOT NULL
+  `) as UserRow[];
+
+  let gifted = 0;
+  for (const u of allUsers) {
+    await adjustTestnetCoins({
+      adminId:           params.adminId,
+      adminEmail:        params.adminEmail,
+      targetUserId:      u.id,
+      targetFirebaseUid: u.firebase_uid,
+      walletAddress:     u.wallet_address,
+      action:            'gift',
+      amount:            params.amount,
+      note:              params.note,
+    });
+    gifted++;
+  }
+
+  return { usersGifted: gifted, totalCoinsDistributed: gifted * params.amount };
 }
