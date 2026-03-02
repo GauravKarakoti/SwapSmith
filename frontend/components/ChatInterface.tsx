@@ -117,17 +117,17 @@ export default function ChatInterface() {
     }
   }, [isNativeRecording, nativeTranscript]);
 
-  const prevIsNativeRecording = useRef(isNativeRecording);
+  const prevIsNativeRecordingRef = useRef(isNativeRecording);
   
   useEffect(() => {
     // If recording just stopped and we have a transcript, send it
-    if (prevIsNativeRecording.current && !isNativeRecording && nativeTranscript.trim()) {
+    if (prevIsNativeRecordingRef.current && !isNativeRecording && nativeTranscript.trim()) {
       const text = nativeTranscript.trim();
       addMessage({ role: 'user', content: text, type: 'message' });
       setTimeout(() => processCommand(text), 500);
       setInput('');
     }
-    prevIsNativeRecording.current = isNativeRecording;
+    prevIsNativeRecordingRef.current = isNativeRecording;
   }, [isNativeRecording, nativeTranscript]);
 
   useEffect(() => {
