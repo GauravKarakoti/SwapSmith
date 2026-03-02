@@ -298,7 +298,13 @@ export class LimitOrderWorker {
             error: error instanceof Error ? error.message : 'Unknown error',
             status: 'pending' // ensure status remains pending
           })
-          .where(eq(limitOrders.id, order.id));
+          .where(
+            and(
+              eq(limitOrders.id, order.id),
+              eq(limitOrders.status, 'executing'),
+              eq(limitOrders.isActive, true),
+            )
+          );
 
         logger.info(`⏳ Scheduled retry ${nextRetryCount}/${MAX_RETRIES} for order #${order.id} at ${nextRetryAfter.toISOString()}`);
       } else {
