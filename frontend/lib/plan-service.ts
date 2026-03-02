@@ -80,13 +80,24 @@ export async function getUserPlanStatus(userId: number): Promise<UsageStatus | n
  * Throws if the limit has been exceeded.
  */
 export async function incrementChatUsage(userId: number): Promise<{ count: number; limit: number }> {
-  const status = await getUserPlanStatus(userId);
-  if (!status) throw new Error('User not found');
-
-  const dailyChatLimit = status.dailyChatLimit;
+  // First, get the user's plan to determine their limit
+  // This is a fast single-row lookup, not a check-then-update
+  const userResult = await db
+    .select({ plan: users.plan })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  
+  if (!userResult[0]) {
+    throw new Error('User not found');
+  }
+  
+  const plan: PlanType = (userResult[0] as any).plan || 'free';
+  const dailyChatLimit = PLAN_LIMITS[plan].dailyChatLimit;
 
   // 🔒 ATOMIC OPERATION: Check limit and increment in a single query
   // This prevents TOCTOU race conditions by performing the check atomically in the database
+  // The WHERE clause ensures the update only succeeds if count < limit
   const result = await db.update(users)
     .set({
       dailyChatCount: drizzleSql`${users.dailyChatCount} + 1`,
@@ -99,6 +110,7 @@ export async function incrementChatUsage(userId: number): Promise<{ count: numbe
     .returning({ dailyChatCount: users.dailyChatCount });
 
   // If no rows were updated, it means the limit was already reached
+  // This is the database telling us the limit is exceeded
   if (result.length === 0) {
     throw new Error('Daily chat limit exceeded');
   }
@@ -107,14 +119,23 @@ export async function incrementChatUsage(userId: number): Promise<{ count: numbe
 }
 
 /**
- * Atomically increment terminal usage with TOCTOU protection
- * Uses a single atomic query to check limit AND increment counter
+ * Atomically increment terminal usage with TOCTOU protection.
+ * Uses a single atomic query to check limit AND increment counter.
  */
 export async function incrementTerminalUsage(userId: number): Promise<{ count: number; limit: number }> {
-  const status = await getUserPlanStatus(userId);
-  if (!status) throw new Error('User not found');
-
-  const dailyTerminalLimit = status.dailyTerminalLimit;
+  // First, get the user's plan to determine their limit
+  const userResult = await db
+    .select({ plan: users.plan })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  
+  if (!userResult[0]) {
+    throw new Error('User not found');
+  }
+  
+  const plan: PlanType = (userResult[0] as any).plan || 'free';
+  const dailyTerminalLimit = PLAN_LIMITS[plan].dailyTerminalLimit;
 
   // 🔒 ATOMIC OPERATION: Check limit and increment in a single query
   // This prevents TOCTOU race conditions by performing the check atomically in the database
