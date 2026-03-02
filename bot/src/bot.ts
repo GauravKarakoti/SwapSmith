@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import axios from 'axios';
-import { execFile } from 'child_process';
+import { spawn } from 'child_process';
 import express from 'express';
 import { sql } from 'drizzle-orm';
 import cors from 'cors';
@@ -170,11 +170,39 @@ bot.on(message('voice'), async (ctx) => {
     const res = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
     fs.writeFileSync(oga, res.data);
 
-    await new Promise<void>((resolve, reject) =>
-      execFile('ffmpeg', ['-i', oga, mp3, '-y'], (e) =>
-        e ? reject(e) : resolve()
-      )
-    );
+    await new Promise<void>((resolve, reject) => {
+      const ffmpeg = spawn('ffmpeg', ['-i', oga, mp3, '-y']);
+
+      let stderrData = '';
+
+      if (ffmpeg.stderr) {
+        ffmpeg.stderr.on('data', (chunk) => {
+          stderrData += chunk.toString();
+        });
+      }
+
+      if (ffmpeg.stdout) {
+        ffmpeg.stdout.on('data', () => {
+          // drain stdout to avoid blocking if ffmpeg writes to it
+        });
+      }
+
+      ffmpeg.on('error', (err) => reject(err));
+
+      ffmpeg.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(
+            new Error(
+              `FFmpeg process exited with code ${code}${
+                stderrData ? `; stderr: ${stderrData}` : ''
+              }`,
+            ),
+          );
+        }
+      });
+    });
 
     const text = await transcribeAudio(mp3);
     await handleTextMessage(ctx, text, 'voice');
