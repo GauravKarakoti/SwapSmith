@@ -1,5 +1,5 @@
 {
-  "id": "b11910bd-c3c2-4bc3-ae19-3a181eee763f",
+  "id": "ea60e9fc-f7ce-496a-be92-36cf8be1d4f4",
   "prevId": "03bdeb5b-ce27-44a1-b332-b9afd9050330",
   "version": "7",
   "dialect": "postgresql",
@@ -606,7 +606,7 @@
         },
         "settle_amount": {
           "name": "settle_amount",
-          "type": "text",
+          "type": "numeric(30, 18)",
           "primaryKey": false,
           "notNull": true
         },
@@ -1823,19 +1823,6 @@
         },
         "executed_at": {
           "name": "executed_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "retry_count": {
-          "name": "retry_count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "retry_after": {
-          "name": "retry_after",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false
