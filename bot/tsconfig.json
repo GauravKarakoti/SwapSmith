@@ -6,8 +6,40 @@
     "outDir": "./dist",
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "downlevelIteration": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "@/*": [
+        "./*"
+      ],
+      "dotenv": [
+        "./node_modules/dotenv"
+      ],
+      "drizzle-kit": [
+        "./node_modules/drizzle-kit"
+      ],
+      "drizzle-orm": [
+        "./node_modules/drizzle-orm"
+      ],
+      "drizzle-orm/*": [
+        "./node_modules/drizzle-orm/*"
+      ],
+      "winston": [
+        "./node_modules/winston"
+      ],
+      "axios": [
+        "./node_modules/axios"
+      ],
+    },
   },
-  "include": ["src/**/*", "../shared/schema.ts"],
-  "exclude": ["drizzle.config.ts", "src/workers/limitOrderWorker.ts"]
+  "include": [
+    "src/**/*",
+    "../shared/**/*"
+  ],
+  "exclude": [
+    "drizzle.config.ts",
+    "src/workers/limitOrderWorker.ts",
+    "src/workers/price-alerts.ts"
+  ]
 }

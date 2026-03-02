@@ -26,7 +26,7 @@ function getGroqClient(): Groq {
 export interface ParsedCommand {
   success: boolean;
   intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "dca" | "unknown";
-  
+
   // Single Swap Fields
   fromAsset: string | null;
   fromChain: string | null;
@@ -34,7 +34,7 @@ export interface ParsedCommand {
   toChain: string | null;
   amount: number | null;
   amountType?: "exact" | "percentage" | "all" | null;
-  
+
   // Portfolio Fields
   portfolio?: {
     toAsset: string;
@@ -123,6 +123,24 @@ RESPONSE FORMAT:
 }
 `;
 
+export async function transcribeAudio(file: File): Promise<string> {
+  try {
+    const groq = getGroqClient();
+    
+    // Call Groq's audio transcription endpoint
+    const transcription = await groq.audio.transcriptions.create({
+      file: file,
+      model: "whisper-large-v3", // You can also use "whisper-large-v3-turbo" for faster/cheaper inference
+      response_format: "json",
+    });
+
+    return transcription.text;
+  } catch (error) {
+    console.error("Error transcribing audio with Groq:", error);
+    throw new Error("Failed to transcribe audio");
+  }
+}
+
 export async function parseUserCommand(userInput: string): Promise<ParsedCommand> {
   try {
     const groq = getGroqClient();
@@ -153,29 +171,14 @@ export async function parseUserCommand(userInput: string): Promise<ParsedCommand
   }
 }
 
-export async function transcribeAudio(audioFile: File): Promise<string> {
-  try {
-    const groq = getGroqClient();
-    const transcription = await groq.audio.transcriptions.create({
-      file: audioFile,
-      model: "whisper-large-v3",
-      response_format: "json",
-    });
-    return transcription.text;
-  } catch (error) {
-    console.error("Transcription Error:", error);
-    throw new Error("Failed to transcribe audio");
-  }
-}
-
 function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string): ParsedCommand {
   const errors: string[] = [];
-  
+
   if (parsed.intent === "swap") {
     if (!parsed.fromAsset) errors.push("Source asset not specified");
     if (!parsed.toAsset) errors.push("Destination asset not specified");
     if (!parsed.amount || parsed.amount <= 0) errors.push("Invalid amount specified");
-    
+
   } else if (parsed.intent === "dca") {
     if (!parsed.fromAsset) errors.push("Source asset not specified");
     if (!parsed.toAsset) errors.push("Destination asset not specified");
@@ -198,13 +201,13 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     if (!parsed.settleAsset) errors.push("Asset to receive/send not specified");
     if (!parsed.settleAmount || parsed.settleAmount <= 0) errors.push("Invalid amount specified");
   }
-  
+
   const allErrors = [...(parsed.validationErrors || []), ...errors];
   const success = parsed.success !== false && allErrors.length === 0;
-  
+
   const rawConfidence = typeof parsed.confidence === 'number' ? parsed.confidence : 0;
   const confidence = allErrors.length > 0 ? Math.max(0, rawConfidence - 30) : rawConfidence;
-  
+
   return {
     success,
     intent: parsed.intent || 'unknown',
@@ -215,7 +218,7 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     amount: parsed.amount || null,
     amountType: parsed.amountType || null,
     portfolio: parsed.portfolio,
-    
+
     // DCA & Limit Order fields
     frequency: parsed.frequency,
     dayOfWeek: parsed.dayOfWeek,
@@ -227,7 +230,7 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     settleAsset: parsed.settleAsset || null,
     settleNetwork: parsed.settleNetwork || null,
     settleAmount: parsed.settleAmount || null,
-    settleAddress: parsed.settleAddress || null, 
+    settleAddress: parsed.settleAddress || null,
     confidence: confidence,
     validationErrors: allErrors,
     parsedMessage: parsed.parsedMessage || '',

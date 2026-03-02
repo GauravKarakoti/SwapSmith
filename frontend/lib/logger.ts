@@ -20,7 +20,7 @@ const currentLevel = process.env.NEXT_PUBLIC_LOG_LEVEL
 /**
  * Format log message with timestamp and metadata
  */
-function formatMessage(level: string, message: string, metadata?: Record<string, any>): string {
+function formatMessage(level: string, message: string, metadata?: Record<string, unknown>): string {
   const timestamp = new Date().toISOString();
   const metadataStr = metadata ? ` ${JSON.stringify(metadata)}` : '';
   return `${timestamp} [${level.toUpperCase()}]: ${message}${metadataStr}`;
@@ -30,25 +30,25 @@ function formatMessage(level: string, message: string, metadata?: Record<string,
  * Logger instance with methods for each log level
  */
 export const logger = {
-  error: (message: string, metadata?: Record<string, any>) => {
+  error: (message: string, metadata?: Record<string, unknown>) => {
     if (currentLevel >= LogLevel.error) {
       console.error(formatMessage('error', message, metadata));
     }
   },
   
-  warn: (message: string, metadata?: Record<string, any>) => {
+  warn: (message: string, metadata?: Record<string, unknown>) => {
     if (currentLevel >= LogLevel.warn) {
       console.warn(formatMessage('warn', message, metadata));
     }
   },
   
-  info: (message: string, metadata?: Record<string, any>) => {
+  info: (message: string, metadata?: Record<string, unknown>) => {
     if (currentLevel >= LogLevel.info) {
       console.log(formatMessage('info', message, metadata));
     }
   },
   
-  debug: (message: string, metadata?: Record<string, any>) => {
+  debug: (message: string, metadata?: Record<string, unknown>) => {
     if (currentLevel >= LogLevel.debug) {
       console.debug(formatMessage('debug', message, metadata));
     }

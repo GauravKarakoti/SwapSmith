@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import { CheckCircle, AlertCircle, ExternalLink, Copy, Check, ShieldCheck, Shield, AlertTriangle, Info, TrendingUp, Zap } from 'lucide-react'
 import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi' // Added usePublicClient
-import { parseEther, formatEther, type Chain } from 'viem'
+import { parseEther, formatEther, type Chain, isAddress } from 'viem'
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
 import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift'
 
-// --- Interface and Constants ---
-interface QuoteData {
+export interface QuoteData {
   depositAmount: string;
   depositCoin: string;
   depositNetwork: string;
@@ -14,6 +13,7 @@ interface QuoteData {
   settleAmount: string;
   settleCoin: string;
   settleNetwork: string;
+  depositAddress?: string;
   memo?: string;
   expiry?: string;
   id?: string;
@@ -64,12 +64,12 @@ interface SafetyCheckResult {
 }
 
 // --- Main Component ---
-export default function SwapConfirmation({ quote, confidence = 100, onAmountChange }: SwapConfirmationProps) {
+export default function SwapConfirmation({ quote, confidence, onAmountChange }: SwapConfirmationProps) {
   const [copiedAddress, setCopiedAddress] = useState(false)
   const [copiedMemo, setCopiedMemo] = useState(false)
   const [isSimulating, setIsSimulating] = useState(false);
   const [safetyCheck, setSafetyCheck] = useState<SafetyCheckResult | null>(null);
-  const [walletBalance, setWalletBalance] = useState<string | null>(null);
+  const [_walletBalance, setWalletBalance] = useState<string | null>(null);
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
 
   const { address, isConnected, chain: connectedChain } = useAccount()
@@ -99,8 +99,18 @@ export default function SwapConfirmation({ quote, confidence = 100, onAmountChan
       return;
     }
 
+    // Log quote for debugging to verify depositAddress exists
+    console.log("Swap quote:", quote);
+    
+    // Validate depositAddress before proceeding
+    if (!quote.depositAddress) {
+      console.error("depositAddress is missing from quote:", quote);
+      alert("Error: Deposit address is missing. Cannot proceed with swap.");
+      return;
+    }
+    
     const transactionDetails = {
-      to: address, // Note: Ideally this should be the SideShift deposit address generated from an Order
+      to: quote.depositAddress as `0x${string}`, // SideShift deposit address
       value: parseEther(quote.depositAmount),
       chainId: depositChainId,
     };
@@ -215,9 +225,13 @@ export default function SwapConfirmation({ quote, confidence = 100, onAmountChan
 
       // 5. Gas Estimation Check
       try {
+        if (!quote.depositAddress || !isAddress(quote.depositAddress)) {
+           throw new Error("Invalid deposit address for gas estimation");
+        }
+
         const gasEstimate = await publicClient.estimateGas({
           account: address,
-          to: address,
+          to: quote.depositAddress as `0x${string}`,
           value: requiredAmount
         });
 
@@ -358,7 +372,7 @@ export default function SwapConfirmation({ quote, confidence = 100, onAmountChan
     <div className="mt-4 bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
       <div className="flex items-center justify-between mb-3">
         <h4 className="font-semibold text-gray-900">Swap Details</h4>
-        {confidence && confidence >= 90 ? (
+        {confidence && confidence >= 80 ? (
           <CheckCircle className="w-5 h-5 text-green-500" />
         ) : (
           <AlertCircle className="w-5 h-5 text-yellow-500" />
@@ -397,15 +411,16 @@ export default function SwapConfirmation({ quote, confidence = 100, onAmountChan
           <div className="flex justify-between items-start mb-2">
             <span className="text-gray-600 font-medium">Send funds to this address:</span>
             <button
-              onClick={() => copyToClipboard(address as string, 'address')}
+              onClick={() => quote.depositAddress && copyToClipboard(quote.depositAddress, 'address')}
               className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
+              disabled={!quote.depositAddress}
             >
               {copiedAddress ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
               {copiedAddress ? 'Copied!' : 'Copy'}
             </button>
           </div>
           <div className="bg-gray-500 p-2 rounded text-xs font-mono break-all">
-            {address}
+            {quote.depositAddress}
           </div>
         </div>
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Bell, Trash2, Plus, X, Loader2, TrendingUp, TrendingDown, Edit2, Check, AlertCircle } from 'lucide-react';
+import { Bell, Trash2, Plus, X, Loader2, TrendingUp, TrendingDown, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface PriceAlert {
@@ -22,7 +22,7 @@ interface PriceAlertManagerProps {
   onSwap?: (coin: string, network: string) => void;
 }
 
-export default function PriceAlertManager({ onSwap }: PriceAlertManagerProps) {
+export default function PriceAlertManager({ onSwap: _onSwap }: PriceAlertManagerProps) {
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -113,7 +113,7 @@ export default function PriceAlertManager({ onSwap }: PriceAlertManagerProps) {
 
       if (!response.ok) throw new Error('Failed to update alert');
 
-      const updated = await response.json();
+      await response.json();
       setAlerts((prev) => prev.map((a) => (a.id === alertId ? { ...a, isActive } : a)));
     } catch (err) {
       setError('Failed to update alert');

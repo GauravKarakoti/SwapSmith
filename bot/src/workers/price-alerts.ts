@@ -1,7 +1,8 @@
 import { Telegraf } from 'telegraf';
 import axios from 'axios';
 import { eq } from 'drizzle-orm';
-import { db, priceAlerts, users, userSettings } from '../services/database';
+import { db, users, userSettings } from '../services/database';
+import { priceAlerts } from '../../../shared/schema';
 import logger from '../services/logger';
 
 const CHECK_INTERVAL_MS = 60 * 1000; // 60 seconds

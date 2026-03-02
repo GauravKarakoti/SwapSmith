@@ -1,15 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-// Extend Window interface for Web Speech API
-declare global {
-  interface Window {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    SpeechRecognition: any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    webkitSpeechRecognition: any;
-  }
-}
-
 export interface UseSpeechRecognitionReturn {
   isListening: boolean;
   transcript: string;
@@ -132,21 +122,38 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
       setIsListening(true);
       setError(null);
     };
+recognitionRef.current.onend = () => {
+  setIsListening(false);
+};
 
-    recognitionRef.current.onend = () => {
-      setIsListening(false);
-    };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+recognitionRef.current.onresult = (event: any) => {
+  let finalTranscript = '';
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    recognitionRef.current.onresult = (event: any) => {
-      let finalTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
-        } else {
-          finalTranscript += event.results[i][0].transcript;
-        }
-      }
+  for (let i = event.resultIndex; i < event.results.length; ++i) {
+    finalTranscript += event.results[i][0].transcript;
+  }
+
+  setTranscript(finalTranscript);
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+recognitionRef.current.onerror = (event: any) => {
+  console.error("Speech recognition error:", event.error);
+
+  switch (event.error) {
+    case 'no-speech':
+      setError("No speech detected. Please try again.");
+      break;
+    case 'audio-capture':
+      setError("No microphone found.");
+      break;
+    case 'not-allowed':
+      setError("Microphone permission denied.");
+      break;
+    default:
+      setError("Voice recognition failed. Switching to text input.");
+  }
       setTranscript(finalTranscript);
     };
 

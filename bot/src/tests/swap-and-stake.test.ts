@@ -2,6 +2,32 @@ import { parseUserCommand } from '../services/parseUserCommand';
 import { getZapQuote, formatZapQuote } from '../services/stake-client';
 import { getDepositAddress, getProtocolInfo, enrichPoolWithDepositAddress, YIELD_PROTOCOLS } from '../services/yield-client';
 
+// Mock the Groq client to avoid API key requirement
+jest.mock('../services/groq-client', () => ({
+  parseWithLLM: jest.fn(),
+  transcribeAudio: jest.fn(),
+}));
+
+// Mock SideShift client
+jest.mock('../services/sideshift-client', () => ({
+  createQuote: jest.fn().mockResolvedValue({
+    id: 'mock-quote-id',
+    depositCoin: 'ETH',
+    depositNetwork: 'ethereum',
+    settleCoin: 'USDC',
+    settleNetwork: 'ethereum',
+    depositAmount: '1',
+    settleAmount: '3000',
+    rate: '3000',
+    affiliateId: '',
+  }),
+  createOrder: jest.fn().mockResolvedValue({
+    id: 'mock-order-id',
+    depositAddress: '0x1234567890123456789012345678901234567890',
+  }),
+  getOrderStatus: jest.fn(),
+}));
+
 describe('Swap and Stake Enhancement', () => {
   
   describe('parseUserCommand - swap_and_stake intent detection', () => {
@@ -60,8 +86,8 @@ describe('Swap and Stake Enhancement', () => {
     
     test('should get deposit address for Aave V3 on Ethereum', () => {
       const mockPool = {
-       thereum',
-        project chain: 'E: 'aave-v3',
+        chain: 'Ethereum',
+        project: 'aave-v3',
         symbol: 'USDC',
         apy: 5.0,
         tvlUsd: 1000000
@@ -148,8 +174,8 @@ describe('Swap and Stake Enhancement', () => {
         depositAddress: '0x87870Bca3F3f6335e32cdC2d17F6b8d2c2A3eE1',
         protocolName: 'Aave V3',
         steps: [
-          { step: 1, action: 'swap', description: 'Swap 1 ETH to USDC', status: 'ready' },
-          { step: 2, action: 'stake', description: 'Deposit USDC to Aave V3', status: 'pending' }
+          { step: 1, action: 'swap' as const, description: 'Swap 1 ETH to USDC', status: 'ready' as const },
+          { step: 2, action: 'stake' as const, description: 'Deposit USDC to Aave V3', status: 'pending' as const }
         ]
       };
       

@@ -34,10 +34,15 @@ import {
   Calendar,
   TrendingUp,
   Download,
+  Crown,
+  Star,
+  MessageSquare,
+  Terminal,
 } from 'lucide-react'
 import Image from 'next/image'
 import { useAuth } from '@/hooks/useAuth'
 import Navbar from '@/components/Navbar'
+import { usePlan } from '@/hooks/usePlan'
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 
@@ -198,6 +203,7 @@ export default function ProfilePage() {
   const router = useRouter()
   const { logout, user, isAuthenticated, isLoading: authLoading } = useAuth()
   const { address, isConnected, chain } = useAccount()
+  const { status: planStatus, loading: planLoading } = usePlan()
   const { disconnect } = useDisconnect()
 
   // Preferences
@@ -970,6 +976,128 @@ export default function ProfilePage() {
             {/* Right Column - CONTINUE IN NEXT FILE */}
             {/* Right Column */}
             <div className="space-y-6">
+          {/* Subscription Plan Section */}
+          <SectionHeader icon={Crown} label="Subscription Plan" />
+          <GlowCard className="p-5" delay={0.16}>
+            {planLoading ? (
+              <div className="flex items-center justify-center py-6">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500" />
+              </div>
+            ) : planStatus ? (
+              <div className="space-y-4">
+                {/* Plan Badge */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${
+                      planStatus.plan === 'pro' ? 'bg-purple-500/20 border border-purple-500/30' :
+                      planStatus.plan === 'premium' ? 'bg-blue-500/20 border border-blue-500/30' :
+                      'bg-gray-500/20 border border-gray-500/30'
+                    }`}>
+                      <Crown className={`w-5 h-5 ${
+                        planStatus.plan === 'pro' ? 'text-purple-400' :
+                        planStatus.plan === 'premium' ? 'text-blue-400' : 'text-gray-400'
+                      }`} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-primary capitalize">{planStatus.plan} Plan</p>
+                      {planStatus.planExpiresAt ? (
+                        <p className="text-xs text-tertiary">
+                          Expires {new Date(planStatus.planExpiresAt).toLocaleDateString()}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-tertiary">Free forever</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-amber-400">
+                    <Star className="w-3.5 h-3.5" />
+                    <span className="text-sm font-bold">{planStatus.totalPoints.toLocaleString()}</span>
+                    <span className="text-xs text-amber-400/70">coins</span>
+                  </div>
+                </div>
+
+                {/* Daily Usage */}
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-tertiary">Today&apos;s Usage</p>
+                  
+                  {/* Chat */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs text-secondary flex items-center gap-1.5">
+                        <MessageSquare className="w-3.5 h-3.5" /> Chat Messages
+                      </span>
+                      <span className={`text-xs font-semibold ${
+                        planStatus.chatLimitExceeded ? 'text-red-400' : 'text-secondary'
+                      }`}>
+                        {planStatus.dailyChatCount}/
+                        {planStatus.dailyChatLimit === -1 ? 'Unlimited' : planStatus.dailyChatLimit}
+                      </span>
+                    </div>
+                    {planStatus.dailyChatLimit !== -1 && (
+                      <div className="h-1.5 bg-section-hover rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            planStatus.chatLimitExceeded ? 'bg-red-500' : 'bg-blue-500'
+                          }`}
+                          style={{ width: `${Math.min((planStatus.dailyChatCount / planStatus.dailyChatLimit) * 100, 100)}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Terminal */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs text-secondary flex items-center gap-1.5">
+                        <Terminal className="w-3.5 h-3.5" /> Terminal Executions
+                      </span>
+                      <span className={`text-xs font-semibold ${
+                        planStatus.terminalLimitExceeded ? 'text-red-400' : 'text-secondary'
+                      }`}>
+                        {planStatus.dailyTerminalCount}/
+                        {planStatus.dailyTerminalLimit === -1 ? 'Unlimited' : planStatus.dailyTerminalLimit}
+                      </span>
+                    </div>
+                    {planStatus.dailyTerminalLimit !== -1 && (
+                      <div className="h-1.5 bg-section-hover rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            planStatus.terminalLimitExceeded ? 'bg-red-500' : 'bg-purple-500'
+                          }`}
+                          style={{ width: `${Math.min((planStatus.dailyTerminalCount / planStatus.dailyTerminalLimit) * 100, 100)}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Upgrade CTA */}
+                {planStatus.plan === 'free' && (
+                  <button
+                    onClick={() => router.push('/checkout')}
+                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white text-xs font-bold uppercase tracking-widest transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2"
+                  >
+                    <Crown className="w-3.5 h-3.5" />
+                    Upgrade Plan
+                  </button>
+                )}
+                {planStatus.plan !== 'free' && (
+                  <button
+                    onClick={() => router.push('/checkout')}
+                    className="w-full py-2.5 rounded-xl border border-profile text-secondary text-xs font-semibold hover:bg-section-hover transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Crown className="w-3.5 h-3.5" />
+                    Manage Plan
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-sm text-tertiary">Sign in to view plan details</p>
+              </div>
+            )}
+          </GlowCard>
+
           {/* Portfolio Stats */}
           <SectionHeader icon={TrendingUp} label="Portfolio Stats" />
           <GlowCard className="p-5" delay={0.18}>
