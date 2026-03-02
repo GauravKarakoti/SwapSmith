@@ -22,7 +22,7 @@ services:
       - ./bot/.env
     environment:
       - DATABASE_URL=postgres://postgres:postgres@db:5432/swapsmith
-    command: sh -c "npm run db:migrate && npm run start"
+    command: sh -c "MAX_RETRIES=30; COUNTER=0; until pg_isready -d \"$DATABASE_URL\"; do COUNTER=$$((COUNTER+1)); if [ \"$$COUNTER\" -ge \"$$MAX_RETRIES\" ]; then echo \"Database not ready after $$MAX_RETRIES attempts, exiting\"; exit 1; fi; echo waiting for database; sleep 2; done; npm run db:migrate && npm run start"
     depends_on:
       db:
         condition: service_healthy

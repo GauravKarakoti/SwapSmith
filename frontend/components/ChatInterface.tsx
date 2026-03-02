@@ -117,7 +117,7 @@ export default function ChatInterface() {
     }
   }, [isNativeRecording, nativeTranscript]);
 
-  const prevIsNativeRecordingRef = useRef(isNativeRecording); // Renamed to avoid block-scoped variable redeclaration error
+  const prevIsNativeRecordingRef = useRef(isNativeRecording);
   
   useEffect(() => {
     // If recording just stopped and we have a transcript, send it

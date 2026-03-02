@@ -62,6 +62,7 @@
       "**/__tests__/**/*.test.ts",
       "**/?(*.)+(spec|test).ts"
     ],
-    "verbose": true
+    "verbose": true,
+    "moduleDirectories": ["node_modules", "<rootDir>/node_modules"]
   }
 }
