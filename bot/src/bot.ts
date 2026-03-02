@@ -551,6 +551,21 @@ async function start() {
     await orderMonitor.loadPendingOrders();
     orderMonitor.start();
 
+    // Schedule hourly reconciliation with an in-flight guard to prevent concurrent runs
+    let reconcileInFlight = false;
+    const reconcileInterval = setInterval(async () => {
+      if (reconcileInFlight) {
+        logger.warn('[OrderMonitor] Skipping reconciliation — previous run still in flight');
+        return;
+      }
+      reconcileInFlight = true;
+      try {
+        await orderMonitor.reconcile();
+      } finally {
+        reconcileInFlight = false;
+      }
+    }, 60 * 60_000); // every hour (60 minutes × 60 000 ms)
+
     const sockets = new Set<Socket>();
     const server: Server = app.listen(PORT, () =>
       logger.info(`🌍 Server running on port ${PORT}`)
@@ -578,6 +593,7 @@ async function start() {
 
       try {
         // Stop background work first so no new activity is scheduled
+        clearInterval(reconcileInterval);
         orderMonitor.stop();
         dcaScheduler.stop();
         limitOrderWorker.stop();
