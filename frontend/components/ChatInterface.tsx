@@ -124,7 +124,7 @@ export default function ChatInterface() {
     if (prevIsNativeRecording.current && !isNativeRecording && nativeTranscript.trim()) {
       const text = nativeTranscript.trim();
       addMessage({ role: 'user', content: text, type: 'message' });
-      processCommand(text);
+      setTimeout(() => processCommand(text), 500);
       setInput('');
     }
     prevIsNativeRecording.current = isNativeRecording;
@@ -294,25 +294,6 @@ export default function ChatInterface() {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [nativeAudioError, whisperAudioError]);
-
-  // Handle native speech recognition transcript updates
-  useEffect(() => {
-    if (isNativeRecording && nativeTranscript) {
-      setInput(nativeTranscript);
-    }
-  }, [isNativeRecording, nativeTranscript]);
-
-  const prevIsNativeRecording = useRef(false);
-  useEffect(() => {
-    // When native speech recognition finishes naturally (or stopped)
-    if (prevIsNativeRecording.current && !isNativeRecording && nativeTranscript) {
-      const text = nativeTranscript;
-      setInput('');
-      addMessage({ role: 'user', content: text, type: 'message' });
-      processCommand(text);
-    }
-    prevIsNativeRecording.current = isNativeRecording;
-  }, [isNativeRecording, nativeTranscript]);
 
   const formatTime = (date: Date) => {
     const hours = date.getHours();
