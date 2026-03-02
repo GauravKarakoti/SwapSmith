@@ -25,6 +25,7 @@ import {
 import { useAuth } from '@/hooks/useAuth'
 import { useAccount } from 'wagmi'
 import Navbar from '@/components/Navbar'
+import Footer from '@/components/Footer'
 import { authenticatedFetch } from '@/lib/api-client'
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_REWARD_TOKEN_ADDRESS ?? ''
@@ -698,6 +699,7 @@ export default function RewardsPage() {
           )}
         </AnimatePresence>
       </main>
+      <Footer />
     </div>
   )
 }
