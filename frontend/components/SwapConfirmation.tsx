@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { CheckCircle, AlertCircle, ExternalLink, Copy, Check, ShieldCheck, Shield, AlertTriangle, Info, TrendingUp, Zap } from 'lucide-react'
 import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi' // Added usePublicClient
-import { parseEther, formatEther, type Chain } from 'viem'
+import { parseEther, formatEther, type Chain, isAddress } from 'viem'
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
 import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift'
 
@@ -225,6 +225,10 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
 
       // 5. Gas Estimation Check
       try {
+        if (!quote.depositAddress || !isAddress(quote.depositAddress)) {
+           throw new Error("Invalid deposit address for gas estimation");
+        }
+
         const gasEstimate = await publicClient.estimateGas({
           account: address,
           to: quote.depositAddress as `0x${string}`,
