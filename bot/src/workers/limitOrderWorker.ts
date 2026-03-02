@@ -203,7 +203,6 @@ export class LimitOrderWorker {
       const result = await db.update(limitOrders)
         .set({
           status: 'executing',
-          executedAt: new Date()
         })
         .where(and(eq(limitOrders.id, order.id), eq(limitOrders.status, 'pending')))
         .returning();
