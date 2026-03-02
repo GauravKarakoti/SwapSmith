@@ -411,8 +411,9 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
           <div className="flex justify-between items-start mb-2">
             <span className="text-gray-600 font-medium">Send funds to this address:</span>
             <button
-              onClick={() => copyToClipboard(quote.depositAddress, 'address')}
+              onClick={() => quote.depositAddress && copyToClipboard(quote.depositAddress, 'address')}
               className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
+              disabled={!quote.depositAddress}
             >
               {copiedAddress ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
               {copiedAddress ? 'Copied!' : 'Copy'}
