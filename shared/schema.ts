@@ -553,3 +553,31 @@ export const adminRequests = pgTable('admin_requests', {
 
 export type AdminUser = typeof adminUsers.$inferSelect;
 export type AdminRequest = typeof adminRequests.$inferSelect;
+
+// --- TESTNET COIN GIFT LOGS ---
+
+export const coinGiftActionType = pgEnum('coin_gift_action_type', ['gift', 'deduct', 'reset']);
+
+export const coinGiftLogs = pgTable('coin_gift_logs', {
+  id: serial('id').primaryKey(),
+  adminId: text('admin_id').notNull(),          // admin firebaseUid
+  adminEmail: text('admin_email').notNull(),
+  targetUserId: integer('target_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  walletAddress: text('wallet_address'),
+  action: coinGiftActionType('action').notNull(),
+  amount: numeric('amount', { precision: 20, scale: 2 }).notNull(),
+  balanceBefore: numeric('balance_before', { precision: 20, scale: 2 }).notNull().default('0'),
+  balanceAfter: numeric('balance_after', { precision: 20, scale: 2 }).notNull().default('0'),
+  note: text('note'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => [
+  index('idx_coin_gift_logs_target_user').on(table.targetUserId),
+  index('idx_coin_gift_logs_admin').on(table.adminId),
+  index('idx_coin_gift_logs_created_at').on(table.createdAt),
+]);
+
+export const coinGiftLogsRelations = relations(coinGiftLogs, ({ one }) => ({
+  user: one(users, { fields: [coinGiftLogs.targetUserId], references: [users.id] }),
+}));
+
+export type CoinGiftLog = typeof coinGiftLogs.$inferSelect;

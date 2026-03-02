@@ -188,7 +188,7 @@
     const bar = document.getElementById('__ss_ad_progress__')
     const start = Date.now()
     const DURATION = 14000
-    const raf = requestAnimationFrame(function tick() {
+    requestAnimationFrame(function tick() {
       const pct = Math.max(0, 100 - ((Date.now() - start) / DURATION) * 100)
       bar.style.width = pct + '%'
       if (pct <= 0) { overlay.remove(); return }
@@ -200,9 +200,10 @@
   }
 
   /* ── 4. Expose helper functions on window ──────────────────────── */
-  window.showPlansAd    = () => injectPreview('plans')
-  window.showFeaturesAd = () => injectPreview('features')
-  window.showPromoAd    = () => injectPreview('promo')
+  window.showPlansAd         = () => injectPreview('plans')
+  window.showFeaturesAd      = () => injectPreview('features')
+  window.showPromoAd         = () => injectPreview('promo')
+  window.triggerTerminalAd   = triggerTerminalAd
 
   console.info('[SwapSmith Ads] ✅ Preview helpers loaded!')
   console.info('  showPlansAd()    → pricing plans modal')
