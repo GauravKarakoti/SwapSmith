@@ -7,6 +7,7 @@ import { safeParseJSON } from '../utils/safeParse';
 import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
 import type { ParsedCommand } from './parseUserCommand';
 import logger from './logger';
+import { TERMINAL_STATUSES_LIST } from '../constants';
 
 dotenv.config();
 
@@ -495,8 +496,8 @@ export async function getUserCheckouts(telegramId: number): Promise<Checkout[]> 
 
 // --- ORDER MONITOR HELPERS ---
 
-const TERMINAL_STATUSES = ['settled', 'expired', 'refunded', 'failed'];
-
+// Re-export so callers that previously used this module's constant continue to work
+export const TERMINAL_STATUSES = TERMINAL_STATUSES_LIST;
 export async function getPendingOrders(): Promise<Order[]> {
   return await db.select().from(orders)
     .where(notInArray(orders.status, TERMINAL_STATUSES));

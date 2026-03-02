@@ -1,5 +1,6 @@
 import type { SideShiftOrderStatus } from './sideshift-client';
 import type { Order } from './database';
+import { TERMINAL_STATUSES_LIST } from '../constants';
 import logger from './logger';
 
 
@@ -23,13 +24,21 @@ export type StatusChangeCallback = (
     orderDetails: SideShiftOrderStatus
 ) => void;
 
+/** Structural type for records returned by getPendingWatchedOrders */
+export interface WatchedOrderRecord {
+    sideshiftOrderId: string;
+    telegramId: number;
+    lastStatus: string;
+    createdAt?: Date | null;
+}
+
 /** Dependencies injected into the monitor (makes it testable) */
 export interface OrderMonitorDeps {
     getOrderStatus: (orderId: string) => Promise<SideShiftOrderStatus>;
     updateOrderStatus: (orderId: string, newStatus: string) => Promise<void>;
     updateWatchedOrderStatus: (orderId: string, newStatus: string) => Promise<void>;
     getPendingOrders: () => Promise<Order[]>;
-    getPendingWatchedOrders: () => Promise<any[]>; // using any to avoid cyclic dep if WatchedOrder isn't imported
+    getPendingWatchedOrders: () => Promise<WatchedOrderRecord[]>;
     addWatchedOrder: (telegramId: number, orderId: string, initialStatus: string) => Promise<void>;
     onStatusChange: StatusChangeCallback;
 }
@@ -37,7 +46,7 @@ export interface OrderMonitorDeps {
 // --- Constants ---
 
 /** Terminal statuses — orders in these states stop being tracked */
-export const TERMINAL_STATUSES = new Set(['settled', 'expired', 'refunded', 'failed']);
+export const TERMINAL_STATUSES = new Set(TERMINAL_STATUSES_LIST);
 
 /** Maximum concurrent API calls to SideShift */
 const MAX_CONCURRENT = 5;
@@ -230,13 +239,18 @@ export class OrderMonitor {
             const oldStatus = order.lastStatus;
 
             if (newStatus !== oldStatus) {
-                // Status changed — update DB and notify
+                // Status changed — persist to DB first, then notify
                 order.lastStatus = newStatus;
 
-                await Promise.allSettled([
-                    this.deps.updateOrderStatus(order.orderId, newStatus),
-                    this.deps.updateWatchedOrderStatus(order.orderId, newStatus)
-                ]);
+                try {
+                    await Promise.all([
+                        this.deps.updateOrderStatus(order.orderId, newStatus),
+                        this.deps.updateWatchedOrderStatus(order.orderId, newStatus)
+                    ]);
+                } catch (err) {
+                    logger.error(`[OrderMonitor] Failed to persist status update for ${order.orderId}:`, err);
+                    return; // Don't notify when DB write failed — the next polling cycle will retry
+                }
 
                 this.deps.onStatusChange(order.telegramId, order.orderId, oldStatus, newStatus, status);
 
