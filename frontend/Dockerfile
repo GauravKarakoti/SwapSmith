@@ -8,10 +8,8 @@ WORKDIR /app
 COPY shared ./shared
 
 RUN apk add --no-cache ffmpeg
-COPY . .
 
-ARG GROQ_API_KEY
-ENV GROQ_API_KEY=$GROQ_API_KEY
+# ARG key removed for security; keys will be provided at runtime via env variables
 
 COPY frontend/package*.json ./
 RUN npm ci
