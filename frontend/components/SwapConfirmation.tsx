@@ -9,11 +9,11 @@ export interface QuoteData {
   depositAmount: string;
   depositCoin: string;
   depositNetwork: string;
+  depositAddress: string; // REQUIRED: SideShift deposit address, never send to user's wallet
   rate: string;
   settleAmount: string;
   settleCoin: string;
   settleNetwork: string;
-  depositAddress?: string;
   memo?: string;
   expiry?: string;
   id?: string;
@@ -99,18 +99,24 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
       return;
     }
 
-    // Log quote for debugging to verify depositAddress exists
-    console.log("Swap quote:", quote);
+    // SECURITY: Always validate depositAddress is from SideShift, never user's wallet
+    console.log("Processing swap to SideShift address:", quote.depositAddress);
     
-    // Validate depositAddress before proceeding
-    if (!quote.depositAddress) {
-      console.error("depositAddress is missing from quote:", quote);
-      alert("Error: Deposit address is missing. Cannot proceed with swap.");
+    if (!quote.depositAddress || !isAddress(quote.depositAddress)) {
+      console.error("Invalid deposit address from quote:", quote);
+      alert("Error: Invalid SideShift deposit address. Cannot proceed with swap.");
+      return;
+    }
+
+    // CRITICAL: Verify we're not sending to the user's own address
+    if (quote.depositAddress.toLowerCase() === address?.toLowerCase()) {
+      console.error("SECURITY: Attempted to send funds to user's own address instead of SideShift!");
+      alert("ERROR: Cannot send funds to your own wallet. Must send to SideShift deposit address.");
       return;
     }
     
     const transactionDetails = {
-      to: quote.depositAddress as `0x${string}`, // SideShift deposit address
+      to: quote.depositAddress as `0x${string}`, // SideShift deposit address (NOT user's wallet)
       value: parseEther(quote.depositAmount),
       chainId: depositChainId,
     };
