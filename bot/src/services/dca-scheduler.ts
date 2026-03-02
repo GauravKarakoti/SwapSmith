@@ -116,8 +116,12 @@ export class DCAScheduler {
           lastStatus: 'pending',
         }).onConflictDoNothing();
 
+        const nextExecution = this.calculateNextExecution(schedule.intervalHours);
         await tx.update(dcaSchedules)
-          .set({ ordersExecuted: sql`orders_executed + 1` })
+          .set({
+            ordersExecuted: sql`orders_executed + 1`,
+            nextExecutionAt: nextExecution
+          })
           .where(eq(dcaSchedules.id, schedule.id));
       });
 
