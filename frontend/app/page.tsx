@@ -389,11 +389,46 @@ export default function LandingPage() {
   }, [])
 
   const features = [
-    { icon: MessageSquare, title: "Natural Language", desc: "Describe the swap you want in plain English. No complex forms required.", color: "cyan" },
-    { icon: Zap, title: "Cross-Chain Magic", desc: "Seamlessly swap between 200+ assets across 40+ chains using SideShift.ai API.", color: "purple" },
-    { icon: Mic, title: "Voice Input", desc: "Experimental voice integration allows you to command the agent hands-free.", color: "pink" },
-    { icon: Shield, title: "Self-Custodial", desc: "Your keys stay yours. Transactions are only executed after your explicit confirmation.", color: "emerald" },
-    { icon: BarChart3, title: "Real-Time Quotes", desc: "Always get the best available rate via SideShift integration.", color: "orange" },
+    { 
+      icon: MessageSquare, 
+      title: "Natural Language", 
+      desc: "Describe the swap you want in plain English. No complex forms required.", 
+      color: "cyan",
+      bgClass: "from-cyan-500/20 to-cyan-600/10",
+      textClass: "text-cyan-600 dark:text-cyan-400"
+    },
+    { 
+      icon: Zap, 
+      title: "Cross-Chain Magic", 
+      desc: "Seamlessly swap between 200+ assets across 40+ chains using SideShift.ai API.", 
+      color: "purple",
+      bgClass: "from-purple-500/20 to-purple-600/10",
+      textClass: "text-purple-600 dark:text-purple-400"
+    },
+    { 
+      icon: Mic, 
+      title: "Voice Input", 
+      desc: "Experimental voice integration allows you to command the agent hands-free.", 
+      color: "pink",
+      bgClass: "from-pink-500/20 to-pink-600/10",
+      textClass: "text-pink-600 dark:text-pink-400"
+    },
+    { 
+      icon: Shield, 
+      title: "Self-Custodial", 
+      desc: "Your keys stay yours. Transactions are only executed after your explicit confirmation.", 
+      color: "emerald",
+      bgClass: "from-emerald-500/20 to-emerald-600/10",
+      textClass: "text-emerald-600 dark:text-emerald-400"
+    },
+    { 
+      icon: BarChart3, 
+      title: "Real-Time Quotes", 
+      desc: "Always get the best available rate via SideShift integration.", 
+      color: "orange",
+      bgClass: "from-orange-500/20 to-orange-600/10",
+      textClass: "text-orange-600 dark:text-orange-400"
+    },
   ]
 
   const steps = [
@@ -596,11 +631,11 @@ export default function LandingPage() {
               >
                 <div className="relative z-10 space-y-4">
                   <motion.div
-                    className={`w-14 h-14 rounded-2xl bg-gradient-to-br from-${feature.color}-500/20 to-${feature.color}-600/10 flex items-center justify-center`}
+                    className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.bgClass} flex items-center justify-center`}
                     whileHover={{ rotate: [0, -10, 10, 0] }}
                     transition={{ duration: 0.5 }}
                   >
-                    <feature.icon className={`w-7 h-7 text-${feature.color}-600 dark:text-${feature.color}-400`} style={{ color: undefined }} />
+                    <feature.icon className={`w-7 h-7 ${feature.textClass}`} />
                   </motion.div>
                   <h3 className="text-xl font-bold text-slate-900 dark:text-white">{feature.title}</h3>
                   <p className="text-slate-600 dark:text-zinc-500 text-sm leading-relaxed">{feature.desc}</p>
