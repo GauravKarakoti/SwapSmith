@@ -13,7 +13,7 @@ export interface QuoteData {
   settleAmount: string;
   settleCoin: string;
   settleNetwork: string;
-  depositAddress: string;
+  depositAddress?: string;
   memo?: string;
   expiry?: string;
   id?: string;
