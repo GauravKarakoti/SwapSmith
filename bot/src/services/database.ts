@@ -122,28 +122,26 @@ export const limitOrders = pgTable('limit_orders', {
   toAsset: text('to_asset').notNull(),
   toNetwork: text('to_network').notNull(),
   fromAmount: text('from_amount').notNull(),
-
+  
   // Logic fields
   conditionOperator: text('condition_operator'), // 'gt' | 'lt'
   conditionValue: real('condition_value'),
   conditionAsset: text('condition_asset'),
-
+  
   // Legacy/Schema compatibility
-  targetPrice: text('target_price'),
-
+  targetPrice: text('target_price'), 
+  
   currentPrice: text('current_price'),
   settleAddress: text('settle_address'),
-
+  
   isActive: integer('is_active').notNull().default(1),
   status: text('status').default('pending'),
   sideShiftOrderId: text('sideshift_order_id'),
   error: text('error'),
-
+  
   createdAt: timestamp('created_at').defaultNow(),
   executedAt: timestamp('executed_at'),
   lastCheckedAt: timestamp('last_checked_at'),
-  retryCount: integer('retry_count').notNull().default(0),
-  retryAfter: timestamp('retry_after'),
 });
 
 // --- SHARED SCHEMAS (used by both bot and frontend) ---
@@ -220,9 +218,9 @@ export const discussions = pgTable('discussions', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at'),
 }, (table) => [
-  index("idx_discussions_category").on(table.category),
-  index("idx_discussions_created_at").on(table.createdAt),
-  index("idx_discussions_user_id").on(table.userId),
+	index("idx_discussions_category").on(table.category),
+	index("idx_discussions_created_at").on(table.createdAt),
+	index("idx_discussions_user_id").on(table.userId),
 ]);
 
 // --- REWARDS SCHEMAS ---
@@ -261,23 +259,23 @@ export const rewardsLog = pgTable('rewards_log', {
 
 // --- RELATIONS ---
 
-export const courseProgressRelations = relations(courseProgress, ({ one }) => ({
-  user: one(users, {
-    fields: [courseProgress.userId],
-    references: [users.id]
-  }),
+export const courseProgressRelations = relations(courseProgress, ({one}) => ({
+	user: one(users, {
+		fields: [courseProgress.userId],
+		references: [users.id]
+	}),
 }));
 
-export const usersRelations = relations(users, ({ many }) => ({
-  courseProgresses: many(courseProgress),
-  rewardsLogs: many(rewardsLog),
+export const usersRelations = relations(users, ({many}) => ({
+	courseProgresses: many(courseProgress),
+	rewardsLogs: many(rewardsLog),
 }));
 
-export const rewardsLogRelations = relations(rewardsLog, ({ one }) => ({
-  user: one(users, {
-    fields: [rewardsLog.userId],
-    references: [users.id]
-  }),
+export const rewardsLogRelations = relations(rewardsLog, ({one}) => ({
+	user: one(users, {
+		fields: [rewardsLog.userId],
+		references: [users.id]
+	}),
 }));
 
 const schema = {
@@ -360,7 +358,7 @@ export async function resolveNickname(telegramId: number, nickname: string): Pro
         eq(addressBook.label, nickname.toLowerCase())
       ))
       .limit(1);
-
+      
     return result[0]?.address || null;
   } catch (error) {
     logger.error('Error resolving nickname:', error);
@@ -386,9 +384,9 @@ export async function setUserWalletAndSession(telegramId: number, walletAddress:
 export async function getConversationState(telegramId: number) {
   try {
     const result = await db.select({ state: conversations.state, lastUpdated: conversations.lastUpdated })
-      .from(conversations)
-      .where(eq(conversations.telegramId, telegramId));
-
+        .from(conversations)
+        .where(eq(conversations.telegramId, telegramId));
+    
     if (!result[0]?.state) return null;
 
     const state = safeParseJSON(result[0].state);
@@ -400,7 +398,7 @@ export async function getConversationState(telegramId: number) {
       return null;
     }
     return state;
-  } catch (err) {
+  } catch(err) {
     return memoryState.get(telegramId) || null;
   }
 }
@@ -413,7 +411,7 @@ export async function setConversationState(telegramId: number, state: any) {
         target: conversations.telegramId,
         set: { state: JSON.stringify(state), lastUpdated: new Date() }
       });
-  } catch (err) {
+  } catch(err) {
     memoryState.set(telegramId, state);
   }
 }
@@ -421,7 +419,7 @@ export async function setConversationState(telegramId: number, state: any) {
 export async function clearConversationState(telegramId: number) {
   try {
     await db.delete(conversations).where(eq(conversations.telegramId, telegramId));
-  } catch (err) {
+  } catch(err) {
     memoryState.delete(telegramId);
   }
 }
@@ -476,7 +474,7 @@ export async function updateOrderStatus(sideshiftOrderId: string, newStatus: str
 export async function createCheckoutEntry(telegramId: number, checkout: SideShiftCheckoutResponse) {
   // Fix: Convert number to float if needed or ensure parsing is safe
   const amount = typeof checkout.settleAmount === 'string' ? parseFloat(checkout.settleAmount) : checkout.settleAmount;
-
+  
   await db.insert(checkouts).values({
     telegramId,
     checkoutId: checkout.id,
@@ -528,12 +526,12 @@ export async function addWatchedOrder(telegramId: number, sideshiftOrderId: stri
  * Retrieves active DCA schedules.
  */
 export async function getActiveDCASchedules(): Promise<DCASchedule[]> {
-  try {
-    return await db.select().from(dcaSchedules).where(eq(dcaSchedules.isActive, 1));
-  } catch (error) {
-    logger.error("Failed to get active DCA schedules", error);
-    return [];
-  }
+    try {
+        return await db.select().from(dcaSchedules).where(eq(dcaSchedules.isActive, 1));
+    } catch (error) {
+        logger.error("Failed to get active DCA schedules", error);
+        return [];
+    }
 
 }
 
@@ -588,19 +586,19 @@ export async function createDCASchedule(
   // Simple scheduling: start now. Complex cron logic omitted for brevity.
 
   const result = await db.insert(dcaSchedules).values({
-    telegramId: telegramId || 0, // Fallback for web users
-    fromAsset,
-    fromNetwork,
-    toAsset,
-    toNetwork,
-    amountPerOrder: amount,
-    intervalHours,
-    totalOrders: 10, // Default constant
-    ordersExecuted: 0,
-    isActive: 1,
-    nextExecutionAt
+      telegramId: telegramId || 0, // Fallback for web users
+      fromAsset,
+      fromNetwork,
+      toAsset,
+      toNetwork,
+      amountPerOrder: amount,
+      intervalHours,
+      totalOrders: 10, // Default constant
+      ordersExecuted: 0,
+      isActive: 1,
+      nextExecutionAt
   }).returning();
-
+  
   return result[0];
 }
 
@@ -617,64 +615,64 @@ export async function createLimitOrder(
   settleAddress: string
 ) {
   const result = await db.insert(limitOrders).values({
-    telegramId: telegramId || 0, // Fallback
-    fromAsset,
-    fromNetwork,
-    toAsset,
-    toNetwork,
-    fromAmount: amount,
-    targetPrice: targetPrice.toString(),
-    conditionOperator,
-    conditionValue: typeof targetPrice === 'string' ? parseFloat(targetPrice) : targetPrice,
-    conditionAsset,
-    settleAddress,
-    isActive: 1,
-    status: 'pending',
-    createdAt: new Date(),
-    lastCheckedAt: new Date()
+      telegramId: telegramId || 0, // Fallback
+      fromAsset,
+      fromNetwork,
+      toAsset,
+      toNetwork,
+      fromAmount: amount,
+      targetPrice: targetPrice.toString(),
+      conditionOperator,
+      conditionValue: typeof targetPrice === 'string' ? parseFloat(targetPrice) : targetPrice,
+      conditionAsset,
+      settleAddress,
+      isActive: 1,
+      status: 'pending',
+      createdAt: new Date(),
+      lastCheckedAt: new Date()
   }).returning();
 
   return result[0];
 }
 
 export async function createDelayedOrder(data: Partial<DelayedOrder>) {
-  if (data.orderType === 'limit_order') {
-    await db.insert(limitOrders).values({
-      telegramId: data.telegramId!,
-      fromAsset: data.fromAsset!,
-      fromNetwork: data.fromChain!,
-      toAsset: data.toAsset!,
-      toNetwork: data.toChain!,
-      fromAmount: data.amount!.toString(),
-      targetPrice: data.targetPrice!.toString(),
-      conditionValue: data.targetPrice,
-      conditionOperator: data.condition === 'above' ? 'gt' : 'lt',
-      conditionAsset: data.fromAsset!, // assumption
-      settleAddress: data.settleAddress,
-      currentPrice: null,
-      isActive: 1,
-      lastCheckedAt: new Date(),
-    });
-  } else if (data.orderType === 'dca') {
-    // Approximate interval hours from frequency string
-    let intervalHours = 24;
-    if (data.frequency === 'weekly') intervalHours = 168;
-    if (data.frequency === 'monthly') intervalHours = 720;
-
-    await db.insert(dcaSchedules).values({
-      telegramId: data.telegramId!,
-      fromAsset: data.fromAsset!,
-      fromNetwork: data.fromChain!,
-      toAsset: data.toAsset!,
-      toNetwork: data.toChain!,
-      amountPerOrder: data.amount!.toString(),
-      intervalHours: intervalHours,
-      totalOrders: data.maxExecutions || 10,
-      ordersExecuted: 0,
-      isActive: 1,
-      nextExecutionAt: data.nextExecutionAt || new Date()
-    });
-  }
+    if (data.orderType === 'limit_order') {
+        await db.insert(limitOrders).values({
+            telegramId: data.telegramId!,
+            fromAsset: data.fromAsset!,
+            fromNetwork: data.fromChain!,
+            toAsset: data.toAsset!,
+            toNetwork: data.toChain!,
+            fromAmount: data.amount!.toString(),
+            targetPrice: data.targetPrice!.toString(),
+            conditionValue: data.targetPrice,
+            conditionOperator: data.condition === 'above' ? 'gt' : 'lt',
+            conditionAsset: data.fromAsset!, // assumption
+            settleAddress: data.settleAddress,
+            currentPrice: null,
+            isActive: 1,
+            lastCheckedAt: new Date(),
+        });
+    } else if (data.orderType === 'dca') {
+        // Approximate interval hours from frequency string
+        let intervalHours = 24;
+        if(data.frequency === 'weekly') intervalHours = 168;
+        if(data.frequency === 'monthly') intervalHours = 720;
+        
+        await db.insert(dcaSchedules).values({
+            telegramId: data.telegramId!,
+            fromAsset: data.fromAsset!,
+            fromNetwork: data.fromChain!,
+            toAsset: data.toAsset!,
+            toNetwork: data.toChain!,
+            amountPerOrder: data.amount!.toString(),
+            intervalHours: intervalHours,
+            totalOrders: data.maxExecutions || 10,
+            ordersExecuted: 0,
+            isActive: 1,
+            nextExecutionAt: data.nextExecutionAt || new Date()
+        });
+    }
 }
 
 export async function getPendingDelayedOrders(): Promise<DelayedOrder[]> {
@@ -685,39 +683,39 @@ export async function getPendingDelayedOrders(): Promise<DelayedOrder[]> {
     .where(eq(limitOrders.isActive, 1));
 
   pendingLimits.forEach(o => {
-    allOrders.push({
-      id: o.id,
-      telegramId: o.telegramId,
-      orderType: 'limit_order',
-      fromAsset: o.fromAsset,
-      fromChain: o.fromNetwork,
-      toAsset: o.toAsset,
-      toChain: o.toNetwork,
-      amount: parseFloat(o.fromAmount),
-      settleAddress: o.settleAddress,
-      targetPrice: o.conditionValue ? o.conditionValue : parseFloat(o.targetPrice || '0'),
-      condition: o.conditionOperator === 'gt' ? 'above' : 'below',
-    });
+      allOrders.push({
+          id: o.id,
+          telegramId: o.telegramId,
+          orderType: 'limit_order',
+          fromAsset: o.fromAsset,
+          fromChain: o.fromNetwork,
+          toAsset: o.toAsset,
+          toChain: o.toNetwork,
+          amount: parseFloat(o.fromAmount),
+          settleAddress: o.settleAddress,
+          targetPrice: o.conditionValue ? o.conditionValue : parseFloat(o.targetPrice || '0'),
+          condition: o.conditionOperator === 'gt' ? 'above' : 'below', 
+      });
   });
 
   // Fetch DCA Orders
   const pendingDCA = await db.select({
-    id: dcaSchedules.id,
-    telegramId: dcaSchedules.telegramId,
-    fromAsset: dcaSchedules.fromAsset,
-    fromChain: dcaSchedules.fromNetwork,
-    toAsset: dcaSchedules.toAsset,
-    toChain: dcaSchedules.toNetwork,
-    amountPerOrder: dcaSchedules.amountPerOrder,
-    intervalHours: dcaSchedules.intervalHours,
-    totalOrders: dcaSchedules.totalOrders,
-    ordersExecuted: dcaSchedules.ordersExecuted,
-    nextExecutionAt: dcaSchedules.nextExecutionAt,
-    walletAddress: users.walletAddress
+      id: dcaSchedules.id,
+      telegramId: dcaSchedules.telegramId,
+      fromAsset: dcaSchedules.fromAsset,
+      fromChain: dcaSchedules.fromNetwork,
+      toAsset: dcaSchedules.toAsset,
+      toChain: dcaSchedules.toNetwork,
+      amountPerOrder: dcaSchedules.amountPerOrder,
+      intervalHours: dcaSchedules.intervalHours,
+      totalOrders: dcaSchedules.totalOrders,
+      ordersExecuted: dcaSchedules.ordersExecuted,
+      nextExecutionAt: dcaSchedules.nextExecutionAt,
+      walletAddress: users.walletAddress
   })
-    .from(dcaSchedules)
-    .leftJoin(users, eq(dcaSchedules.telegramId, users.telegramId))
-    .where(eq(dcaSchedules.isActive, 1));
+  .from(dcaSchedules)
+  .leftJoin(users, eq(dcaSchedules.telegramId, users.telegramId))
+  .where(eq(dcaSchedules.isActive, 1));
 
   pendingDCA.forEach(o => {
     // Map interval back to string frequency for compatibility
@@ -726,19 +724,19 @@ export async function getPendingDelayedOrders(): Promise<DelayedOrder[]> {
     if (o.intervalHours >= 720) frequency = 'monthly';
 
     allOrders.push({
-      id: o.id,
-      telegramId: o.telegramId,
-      orderType: 'dca',
-      fromAsset: o.fromAsset,
-      fromChain: o.fromChain,
-      toAsset: o.toAsset,
-      toChain: o.toChain,
-      amount: parseFloat(o.amountPerOrder),
-      settleAddress: o.walletAddress,
-      frequency,
-      maxExecutions: o.totalOrders,
-      executionCount: o.ordersExecuted,
-      nextExecutionAt: o.nextExecutionAt
+        id: o.id,
+        telegramId: o.telegramId,
+        orderType: 'dca',
+        fromAsset: o.fromAsset,
+        fromChain: o.fromChain,
+        toAsset: o.toAsset,
+        toChain: o.toChain,
+        amount: parseFloat(o.amountPerOrder),
+        settleAddress: o.walletAddress,
+        frequency,
+        maxExecutions: o.totalOrders,
+        executionCount: o.ordersExecuted,
+        nextExecutionAt: o.nextExecutionAt
     });
   });
 
@@ -746,40 +744,40 @@ export async function getPendingDelayedOrders(): Promise<DelayedOrder[]> {
 }
 
 export async function updateDelayedOrderStatus(
-  orderId: number,
+  orderId: number, 
   status: 'active' | 'completed' | 'pending' | 'expired',
   executionCount?: number,
   nextExecutionAt?: Date
 ) {
   // Try updating Limit Orders
   if (status === 'completed' || status === 'expired') {
-    await db.update(limitOrders)
-      .set({ isActive: 0 })
-      .where(eq(limitOrders.id, orderId));
+      await db.update(limitOrders)
+        .set({ isActive: 0 })
+        .where(eq(limitOrders.id, orderId));
   }
 
   // Try updating DCA Schedules
   if (status === 'completed') {
     await db.update(dcaSchedules)
-      .set({ isActive: 0 })
-      .where(eq(dcaSchedules.id, orderId));
+        .set({ isActive: 0 })
+        .where(eq(dcaSchedules.id, orderId));
   } else if (executionCount !== undefined && nextExecutionAt) {
-    // Update execution progress
-    await db.update(dcaSchedules)
-      .set({
-        ordersExecuted: executionCount,
-        nextExecutionAt: nextExecutionAt
-      })
-      .where(eq(dcaSchedules.id, orderId));
+      // Update execution progress
+      await db.update(dcaSchedules)
+        .set({ 
+            ordersExecuted: executionCount,
+            nextExecutionAt: nextExecutionAt
+        })
+        .where(eq(dcaSchedules.id, orderId));
   }
 }
 
 export async function cancelDelayedOrder(id: number, type: 'limit_order' | 'dca') {
-  if (type === 'limit_order') {
-    await db.update(limitOrders).set({ isActive: 0 }).where(eq(limitOrders.id, id));
-  } else {
-    await db.update(dcaSchedules).set({ isActive: 0 }).where(eq(dcaSchedules.id, id));
-  }
+    if (type === 'limit_order') {
+        await db.update(limitOrders).set({ isActive: 0 }).where(eq(limitOrders.id, id));
+    } else {
+        await db.update(dcaSchedules).set({ isActive: 0 }).where(eq(dcaSchedules.id, id));
+    }
 }
 
 export async function updateLimitOrderStatus(
@@ -789,15 +787,15 @@ export async function updateLimitOrderStatus(
   error?: string
 ) {
   const updateData: any = { status };
-
+  
   if (sideshiftOrderId) updateData.sideShiftOrderId = sideshiftOrderId;
   if (error) updateData.error = error;
   if (status === 'executed') {
-    updateData.executedAt = new Date();
-    updateData.isActive = 0;
+      updateData.executedAt = new Date();
+      updateData.isActive = 0;
   }
   if (status === 'failed' || status === 'cancelled') {
-    updateData.isActive = 0;
+      updateData.isActive = 0;
   }
 
   await db.update(limitOrders)
