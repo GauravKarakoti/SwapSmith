@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import axios from 'axios';
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import express from 'express';
 import { sql } from 'drizzle-orm';
 import cors from 'cors';
@@ -168,15 +168,33 @@ bot.on(message('voice'), async (ctx) => {
   const fileId = ctx.message.voice.file_id;
   const fileLink = await ctx.telegram.getFileLink(fileId);
 
-  const oga = path.join(os.tmpdir(), `${Date.now()}.oga`);
-  const mp3 = oga.replace('.oga', '.mp3');
+  // Security: Generate safe temporary file paths to prevent shell injection
+  // Using timestamp-based naming ensures uniqueness and prevents path traversal
+  const tempDir = os.tmpdir();
+  const safeFileName = `audio_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const oga = path.join(tempDir, `${safeFileName}.oga`);
+  const mp3 = path.join(tempDir, `${safeFileName}.mp3`);
+
+  // Security: Validate file paths are within temp directory
+  const ogaNormalized = path.normalize(oga);
+  const mp3Normalized = path.normalize(mp3);
+  
+  if (!ogaNormalized.startsWith(path.normalize(tempDir)) || 
+      !mp3Normalized.startsWith(path.normalize(tempDir))) {
+    return ctx.reply('❌ Security error: Invalid file path.');
+  }
 
   try {
     const res = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
     fs.writeFileSync(oga, res.data);
 
     await new Promise<void>((resolve, reject) => {
-      const ffmpeg = spawn('ffmpeg', ['-i', oga, mp3, '-y']);
+      // Security: Using spawn() instead of exec() prevents shell injection
+      // Arguments are passed as an array, not concatenated into a shell command string
+      const ffmpeg = spawn('ffmpeg', ['-i', oga, mp3, '-y'], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: 30000, // 30 second timeout
+      });
 
       let stderrData = '';
 
