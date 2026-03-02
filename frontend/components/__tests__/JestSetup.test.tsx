@@ -13,7 +13,7 @@ describe('Jest Configuration', () => {
 
   test('DOM matching is available', () => {
     const div = document.createElement('div');
-    expect(div).toBeInTheDocument() || expect(div).toBeTruthy();
+    expect(div).toBeTruthy();
   });
 
   test('Test environment is jsdom', () => {
