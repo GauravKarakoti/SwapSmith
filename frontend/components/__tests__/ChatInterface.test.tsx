@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 
@@ -13,7 +13,7 @@ jest.mock('wagmi', () => ({
 
 jest.mock('@/hooks/useErrorHandler', () => ({
   useErrorHandler: jest.fn(() => ({
-    handleError: jest.fn((err, type, options) => 'An error occurred'),
+    handleError: jest.fn((_err, _type, _options) => 'An error occurred'),
   })),
   ErrorType: {
     VOICE_ERROR: 'VOICE_ERROR',

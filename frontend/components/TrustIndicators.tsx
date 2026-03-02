@@ -1,12 +1,15 @@
 'use client'
 
-import { Shield, Lock, Eye, CheckCircle, AlertTriangle, AlertCircle } from 'lucide-react'
+import { Shield, Lock, Eye, CheckCircle, AlertTriangle, AlertCircle, BarChart3 } from 'lucide-react'
+import { useAgentReputation } from '@/hooks/useAgentReputation';
 
 interface TrustIndicatorsProps {
   confidence?: number;
 }
 
 export default function TrustIndicators({ confidence }: TrustIndicatorsProps) {
+  const { reputation } = useAgentReputation();
+  
   // Normalize confidence to 0-100 scale if it's 0-1
   const normalizedConfidence = confidence !== undefined
     ? (confidence <= 1 ? confidence * 100 : confidence)
@@ -22,6 +25,12 @@ export default function TrustIndicators({ confidence }: TrustIndicatorsProps) {
     if (score >= 80) return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
     if (score >= 50) return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
     return 'bg-red-500/10 text-red-400 border-red-500/20';
+  };
+
+  const getSuccessRateColor = (rate: number) => {
+    if (rate >= 90) return 'text-emerald-400';
+    if (rate >= 70) return 'text-yellow-400';
+    return 'text-red-400';
   };
 
   const getConfidenceIcon = (score: number) => {
@@ -60,6 +69,24 @@ export default function TrustIndicators({ confidence }: TrustIndicatorsProps) {
         )}
       </div>
       
+      {/* Agent Reliability Stats */}
+      {reputation && (
+        <div className="mb-4 p-3 bg-white/[0.02] rounded-xl border border-white/5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-purple-400" />
+                <span className="text-xs font-medium text-gray-300">Agent Success Rate</span>
+            </div>
+            <div className="text-right">
+                <div className={`text-sm font-bold ${getSuccessRateColor(reputation.successRate)}`}>
+                    {reputation.successRate}%
+                </div>
+                <div className="text-[10px] text-gray-500">
+                    {reputation.totalSwaps} swaps executed
+                </div>
+            </div>
+        </div>
+      )}
+
       {/* Features Grid */}
       <div className="grid grid-cols-2 gap-y-4 gap-x-6">
         <div className="flex items-center gap-3 group">

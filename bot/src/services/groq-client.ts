@@ -116,6 +116,9 @@ MODES:
 6. "yield_migrate": Move funds between pools.
 7. "dca": Dollar Cost Averaging.
 8. "limit_order": Buy/Sell at specific price.
+9. "swap_and_stake": Swap assets and immediately stake them for yield.
+   Example: "Swap 100 USDC for ETH and stake it"
+   Keywords: "swap and stake", "zap", "stake immediately", "swap to stake"
 
 9. "stake": Stake assets directly to earn yield. For liquid staking.
    Example: "Stake 1000 USDC to earn yield"
@@ -240,17 +243,14 @@ EXAMPLES:
 14. "DCA 200 USDC into ETH every month on the 1st"
     -> intent: "dca", fromAsset: "USDC", toAsset: "ETH", amount: 200, frequency: "monthly", dayOfMonth: "1", confidence: 95
 
-15. "Stake 1000 USDC to earn yield"
-    -> intent: "stake", fromAsset: "USDC", amount: 1000, confidence: 95, parsedMessage: "Stake 1000 USDC to earn yield"
+15. "Swap 100 USDC for ETH and stake it immediately"
+    -> intent: "swap_and_stake", fromAsset: "USDC", toAsset: "ETH", amount: 100, toProject: null, confidence: 95
 
-16. "Stake my ETH on Lido"
-    -> intent: "stake", fromAsset: "ETH", stakeProtocol: "lido", confidence: 95, parsedMessage: "Stake ETH on Lido for yield"
+16. "Zap 50 USDC into Aave"
+    -> intent: "swap_and_stake", fromAsset: "USDC", toAsset: "USDC", amount: 50, toProject: "aave", confidence: 95
 
-17. "Swap 1 ETH to USDC and stake it"
-    -> intent: "swap_and_stake", fromAsset: "ETH", toAsset: "USDC", amount: 1, stakeProtocol: "aave", confidence: 90, parsedMessage: "Swap 1 ETH to USDC and stake for yield"
-
-18. "Zap 100 ETH into aave for yield"
-    -> intent: "swap_and_stake", fromAsset: "ETH", amount: 100, stakeProtocol: "aave", confidence: 95, parsedMessage: "Swap 100 ETH and stake in Aave for yield"
+17. "Swap 1 ETH to USDC and stake on Compound"
+    -> intent: "swap_and_stake", fromAsset: "ETH", toAsset: "USDC", amount: 1, toProject: "compound", confidence: 95
 `;
 
 // RENAMED from parseUserCommand to parseWithLLM

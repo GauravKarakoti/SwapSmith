@@ -115,6 +115,15 @@ export async function getZapQuote(
     throw new Error(`No deposit address found for ${toAsset} on ${stakeNetwork}`);
   }
 
+  // Validate that the deposit address is not a placeholder
+  const { isPlaceholderAddress } = await import('./yield-client');
+  if (isPlaceholderAddress(enrichedPool.depositAddress)) {
+    throw new Error(
+      `Protocol ${enrichedPool.project} on ${stakeNetwork} is not yet supported. ` +
+      `Please try a different protocol or network.`
+    );
+  }
+
   // Calculate estimated yield
   const amountNum = parseFloat(swapQuote.settleAmount || '0');
   const estimatedAnnualYield = (amountNum * enrichedPool.apy / 100).toFixed(2);
@@ -160,26 +169,37 @@ export async function createZapTransaction(
   settleAddress: string,
   userIP: string
 ): Promise<ZapTransaction> {
-  // Create the swap order via SideShift
-  const swapOrder = await createOrder(
-    zapQuote.stakePool.depositAddress || '', // Use deposit address as settle address for auto-staking
-    settleAddress,
-    settleAddress
+  // First, we need to create a proper SideShift quote
+  const swapQuote = await createQuote(
+    zapQuote.fromAsset,
+    zapQuote.fromNetwork,
+    zapQuote.toAsset,
+    zapQuote.toNetwork,
+    parseFloat(zapQuote.fromAmount),
+    userIP
   );
 
+  if (swapQuote.error) {
+    throw new Error(`Quote error: ${swapQuote.error.message}`);
+  }
+
+  // Create the swap order via SideShift
+  // User receives the swapped tokens to their address
+  // They will need to manually stake or we can provide instructions
+  const swapOrder = await createOrder(
+    swapQuote.id,
+    settleAddress, // User receives the swapped tokens
+    settleAddress, // Refund to same address
+    userIP
+  );
+
+  if (!swapOrder.id) {
+    throw new Error('Failed to create swap order');
+  }
+
   return {
-    swapOrderId: swapOrder.id || '',
-    swapQuote: {
-      id: swapOrder.id,
-      depositCoin: zapQuote.fromAsset,
-      depositNetwork: zapQuote.fromNetwork,
-      settleCoin: zapQuote.toAsset,
-      settleNetwork: zapQuote.toNetwork,
-      depositAmount: zapQuote.fromAmount,
-      settleAmount: zapQuote.expectedReceive,
-      rate: (parseFloat(zapQuote.expectedReceive) / parseFloat(zapQuote.fromAmount)).toString(),
-      affiliateId: '',
-    },
+    swapOrderId: swapOrder.id,
+    swapQuote: swapQuote,
     stakePool: zapQuote.stakePool,
     stakeTransactionData: {
       to: zapQuote.depositAddress,

@@ -29,7 +29,7 @@ export async function fetchMarketSentiment() {
       bearish: Math.round((bearish / total) * 100),
       neutral: 100 - Math.round((bullish / total) * 100) - Math.round((bearish / total) * 100),
     };
-  } catch (e) {
+  } catch {
     // Fallback to fake data
     return { bullish: 72, neutral: 18, bearish: 10 };
   }

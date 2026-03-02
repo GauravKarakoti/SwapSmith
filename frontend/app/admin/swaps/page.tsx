@@ -2,16 +2,16 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 import { auth } from '@/lib/firebase'
 import { signOut } from 'firebase/auth'
 import {
-  ArrowLeftRight, BarChart2, Users, LogOut, RefreshCw,
-  Search, ChevronLeft, ChevronRight, Eye, X, Menu,
+  ArrowLeftRight,
+  Search, ChevronLeft, ChevronRight, Eye, X,
   AlertTriangle, Activity, ShieldAlert, ShieldCheck,
   Key, Clock, CheckCircle2, XCircle, Loader2, Zap,
   TrendingUp, ToggleLeft, ToggleRight, Save,
 } from 'lucide-react'
+import AdminNavbar from '@/components/AdminNavbar'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -155,7 +155,6 @@ export default function AdminSwapsPage() {
 
   // ── Admin state ──
   const [adminInfo, setAdminInfo] = useState<AdminInfo | null>(null)
-  const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   // ── Swap list state ──
   const [swaps, setSwaps]       = useState<AdminSwap[]>([])
@@ -343,114 +342,20 @@ export default function AdminSwapsPage() {
     router.push('/admin/login')
   }
 
-  // ── Nav ────────────────────────────────────────────────────────────────
-  const NavBtn = ({ label, icon: Icon, path, active }: { label: string; icon: React.ElementType; path: string; active?: boolean }) => (
-    <button
-      onClick={() => { setMobileNavOpen(false); router.push(path) }}
-      style={{
-        background: active ? '#1e1e40' : '#18181b',
-        border: `1px solid ${active ? '#2563eb55' : '#27272a'}`,
-        color: active ? '#93c5fd' : '#a1a1aa',
-        borderRadius: 10, padding: '11px 16px',
-        cursor: 'pointer', display: 'flex', alignItems: 'center',
-        gap: 10, fontSize: 14, fontWeight: active ? 600 : 400, width: '100%',
-      }}
-    >
-      <Icon size={16} /> {label}
-    </button>
-  )
-
   const isSuperAdmin = adminInfo?.role === 'super_admin'
 
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
     <div style={{ minHeight: '100vh', background: '#070710', color: '#e4e4e7', fontFamily: 'inherit' }}>
-      <style>{`
-        .admin-nav-label  { display: inline; }
-        .admin-nav-right  { display: flex; }
-        .admin-nav-hamburger { display: none !important; }
-        @media (max-width: 768px) {
-          .admin-nav-label    { display: none !important; }
-          .admin-nav-right    { display: none !important; }
-          .admin-nav-hamburger{ display: flex !important; }
-          .admin-nav          { padding: 10px 16px !important; }
-          .admin-content      { padding: 16px 10px !important; }
-        }
-        @keyframes spin { to { transform: rotate(360deg) } }
-        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-      `}</style>
 
-      {/* ── Navbar ── */}
-      <nav className="admin-nav" style={{
-        background: '#0b0b18', borderBottom: '1px solid #18182a',
-        padding: '14px 32px', display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 50,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Image src="/swapsmithicon.png" alt="SwapSmith" width={36} height={36} style={{ borderRadius: 8 }} unoptimized />
-          <span className="admin-nav-label" style={{ fontSize: 18, fontWeight: 700 }}>SwapSmith Admin</span>
-          <span style={{ background: '#1e3a5f', color: '#93c5fd', border: '1px solid #2563eb44', borderRadius: 20, fontSize: 11, padding: '2px 10px', marginLeft: 4, fontWeight: 600 }}>
-            {adminInfo?.role?.replace('_', ' ').toUpperCase() ?? 'ADMIN'}
-          </span>
-        </div>
-
-        <div className="admin-nav-right" style={{ alignItems: 'center', gap: 10 }}>
-          <span style={{ color: '#52525b', fontSize: 12 }}>
-            {adminInfo?.name} · Refreshed {lastRefresh.toLocaleTimeString()}
-          </span>
-          <button onClick={() => router.push('/admin/dashboard')}
-            style={{ background: '#18181b', border: '1px solid #27272a', color: '#a1a1aa', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-            <BarChart2 size={14} /> Analytics
-          </button>
-          <button onClick={() => router.push('/admin/users')}
-            style={{ background: '#18181b', border: '1px solid #27272a', color: '#a1a1aa', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-            <Users size={14} /> Users
-          </button>
-          <button onClick={() => { fetchSwaps(page); fetchMetrics() }}
-            style={{ background: '#18181b', border: '1px solid #27272a', color: '#a1a1aa', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-            <RefreshCw size={14} /> Refresh
-          </button>
-          <button onClick={handleLogout}
-            style={{ background: '#450a0a22', border: '1px solid #dc262644', color: '#f87171', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-            <LogOut size={14} /> Logout
-          </button>
-        </div>
-
-        <button className="admin-nav-hamburger" onClick={() => setMobileNavOpen(true)}
-          style={{ background: '#18181b', border: '1px solid #27272a', color: '#a1a1aa', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', alignItems: 'center', gap: 6 }}>
-          <Menu size={20} />
-        </button>
-      </nav>
-
-      {/* ── Mobile drawer ── */}
-      {mobileNavOpen && (
-        <>
-          <div onClick={() => setMobileNavOpen(false)}
-            style={{ position: 'fixed', inset: 0, background: '#00000070', backdropFilter: 'blur(2px)', zIndex: 200 }} />
-          <div style={{
-            position: 'fixed', top: 0, right: 0, bottom: 0, width: '80%', maxWidth: 300,
-            background: '#0b0b18', borderLeft: '1px solid #1e1e2a', zIndex: 201,
-            display: 'flex', flexDirection: 'column', padding: 24, gap: 8,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <span style={{ fontSize: 16, fontWeight: 700 }}>SwapSmith Admin</span>
-              <button onClick={() => setMobileNavOpen(false)}
-                style={{ background: '#18181b', border: '1px solid #27272a', color: '#a1a1aa', borderRadius: 8, padding: 6, cursor: 'pointer' }}>
-                <X size={18} />
-              </button>
-            </div>
-            <NavBtn label="Analytics" icon={BarChart2} path="/admin/dashboard" />
-            <NavBtn label="Users" icon={Users} path="/admin/users" />
-            <NavBtn label="Swaps" icon={ArrowLeftRight} path="/admin/swaps" active />
-            <div style={{ flex: 1 }} />
-            <button onClick={() => { setMobileNavOpen(false); handleLogout() }}
-              style={{ background: '#450a0a22', border: '1px solid #dc262644', color: '#f87171', borderRadius: 10, padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}>
-              <LogOut size={16} /> Logout
-            </button>
-          </div>
-        </>
-      )}
+      <AdminNavbar
+        activePage="swaps"
+        adminInfo={adminInfo}
+        onLogout={handleLogout}
+        onRefresh={() => { fetchSwaps(page); fetchMetrics() }}
+        lastRefresh={lastRefresh}
+      />
 
       {/* ── Content ── */}
       <div className="admin-content" style={{ maxWidth: '100%', margin: '0 auto', padding: '28px 24px' }}>
