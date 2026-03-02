@@ -10,6 +10,8 @@ import { spawn } from 'child_process';
 import express from 'express';
 import { sql } from 'drizzle-orm';
 import cors from 'cors';
+import type { Server } from 'http';
+import type { Socket } from 'net';
 
 import { transcribeAudio } from './services/groq-client';
 import logger, { Sentry, handleError } from './services/logger';
@@ -546,24 +548,80 @@ async function start() {
     await orderMonitor.loadPendingOrders();
     orderMonitor.start();
 
-    const server = app.listen(PORT, () =>
+    const sockets = new Set<Socket>();
+    const server: Server = app.listen(PORT, () =>
       logger.info(`🌍 Server running on port ${PORT}`)
     );
+    server.on('connection', (socket) => {
+      sockets.add(socket);
+      socket.on('close', () => sockets.delete(socket));
+    });
 
     await bot.launch();
     logger.info('🤖 Bot launched');
 
-    const shutdown = (signal: string) => {
-      dcaScheduler.stop();
-      limitOrderWorker.stop();
-      stopStakeWorker();
-      orderMonitor.stop();
-      bot.stop(signal);
-      server.close(() => process.exit(0));
+    let isShuttingDown = false;
+    const shutdown = async (signal: string) => {
+      if (isShuttingDown) return;
+      isShuttingDown = true;
+      logger.info(`🛑 Shutdown initiated (${signal})`);
+
+      const forceExitTimer = setTimeout(() => {
+        logger.error('🧨 Forced shutdown after timeout');
+        // eslint-disable-next-line no-process-exit
+        process.exit(1);
+      }, 8_000);
+      forceExitTimer.unref?.();
+
+      try {
+        // Stop background work first so no new activity is scheduled
+        orderMonitor.stop();
+        dcaScheduler.stop();
+        limitOrderWorker.stop();
+        stopStakeWorker();
+
+        // Stop Telegraf (polling/webhook)
+        bot.stop(signal);
+
+        // Close HTTP server and any keep-alive sockets
+        try {
+          (server as any).closeIdleConnections?.();
+          (server as any).closeAllConnections?.();
+        } catch {
+          // ignore best-effort calls
+        }
+
+        sockets.forEach((s) => {
+          try {
+            s.destroy();
+          } catch {
+            // ignore
+          }
+        });
+
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+
+        clearTimeout(forceExitTimer);
+        // eslint-disable-next-line no-process-exit
+        process.exit(0);
+      } catch (e) {
+        handleError('ShutdownFailed', e);
+        clearTimeout(forceExitTimer);
+        // eslint-disable-next-line no-process-exit
+        process.exit(1);
+      }
     };
 
     process.once('SIGINT', () => shutdown('SIGINT'));
     process.once('SIGTERM', () => shutdown('SIGTERM'));
+    process.once('uncaughtException', (err) => {
+      handleError('UncaughtException', err);
+      void shutdown('uncaughtException');
+    });
+    process.once('unhandledRejection', (reason) => {
+      handleError('UnhandledRejection', reason);
+      void shutdown('unhandledRejection');
+    });
   } catch (e) {
     handleError('StartupFailed', e);
     process.exit(1);
