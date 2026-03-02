@@ -61,7 +61,7 @@ app.use(cors({
   origin: function (origin: any, callback: any) {
     // allow requests with no origin (like mobile apps, curl requests)
     if (!origin) return callback(null, true);
-    
+
     if (allowedOrigins.indexOf(origin) === -1) {
       const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
       return callback(new Error(msg), false);
@@ -79,7 +79,10 @@ app.use(express.json());
 const orderMonitor = new OrderMonitor({
   getOrderStatus,
   updateOrderStatus: db.updateOrderStatus,
+  updateWatchedOrderStatus: db.updateWatchedOrderStatus,
   getPendingOrders: db.getPendingOrders,
+  getPendingWatchedOrders: db.getPendingWatchedOrders,
+  addWatchedOrder: db.addWatchedOrder,
   onStatusChange: async (telegramId, orderId, oldStatus, newStatus, details) => {
     const emojiMap: Record<string, string> = {
       waiting: '⏳',
@@ -418,10 +421,10 @@ bot.action('confirm_swap_and_stake', async (ctx) => {
     await ctx.editMessageText('⚙️ Creating swap & stake order...');
 
     const parsed = state.parsedCommand;
-    
+
     // Import stake client functions
     const { getZapQuote, createZapTransaction, formatZapQuote } = await import('./services/stake-client');
-    
+
     // Validate required fields
     if (!parsed.fromAsset || !parsed.toAsset || !parsed.amount || !parsed.settleAddress) {
       throw new Error('Missing required fields for swap and stake');
@@ -535,7 +538,7 @@ async function start() {
       await db.db.execute(sql`SELECT 1`);
       dcaScheduler.start();
       limitOrderWorker.start(bot);
-      
+
       try {
         initializeStakeWorker(bot);
         logger.info('✅ Stake worker initialized successfully');
@@ -547,6 +550,21 @@ async function start() {
 
     await orderMonitor.loadPendingOrders();
     orderMonitor.start();
+
+    // Schedule hourly reconciliation with an in-flight guard to prevent concurrent runs
+    let reconcileInFlight = false;
+    const reconcileInterval = setInterval(async () => {
+      if (reconcileInFlight) {
+        logger.warn('[OrderMonitor] Skipping reconciliation — previous run still in flight');
+        return;
+      }
+      reconcileInFlight = true;
+      try {
+        await orderMonitor.reconcile();
+      } finally {
+        reconcileInFlight = false;
+      }
+    }, 60 * 60_000); // every hour (60 minutes × 60 000 ms)
 
     const sockets = new Set<Socket>();
     const server: Server = app.listen(PORT, () =>
@@ -575,6 +593,7 @@ async function start() {
 
       try {
         // Stop background work first so no new activity is scheduled
+        clearInterval(reconcileInterval);
         orderMonitor.stop();
         dcaScheduler.stop();
         limitOrderWorker.stop();
