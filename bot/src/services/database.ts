@@ -76,7 +76,7 @@ export const checkouts = pgTable('checkouts', {
   checkoutId: text('checkout_id').notNull().unique(),
   settleAsset: text('settle_asset').notNull(),
   settleNetwork: text('settle_network').notNull(),
-  settleAmount: real('settle_amount').notNull(),
+  settleAmount: numeric('settle_amount', { precision: 30, scale: 18 }).notNull(),
   settleAddress: text('settle_address').notNull(),
   status: text('status').notNull().default('pending'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -473,7 +473,7 @@ export async function updateOrderStatus(sideshiftOrderId: string, newStatus: str
 
 export async function createCheckoutEntry(telegramId: number, checkout: SideShiftCheckoutResponse) {
   // Fix: Convert number to float if needed or ensure parsing is safe
-  const amount = typeof checkout.settleAmount === 'string' ? parseFloat(checkout.settleAmount) : checkout.settleAmount;
+  const amount = checkout.settleAmount.toString();
   
   await db.insert(checkouts).values({
     telegramId,
