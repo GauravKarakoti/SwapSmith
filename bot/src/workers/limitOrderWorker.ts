@@ -287,8 +287,8 @@ export class LimitOrderWorker {
 
       if (currentRetries < MAX_RETRIES) {
         const nextRetryCount = currentRetries + 1;
-        // Exponential backoff: 2^retryCount * 1 minute
-        const backoffMs = Math.pow(2, nextRetryCount) * 60 * 1000;
+        // Exponential backoff: 2^currentRetries * 1 minute -> 1,2,4,8,16...
+        const backoffMs = Math.pow(2, currentRetries) * 60 * 1000;
         const nextRetryAfter = new Date(Date.now() + backoffMs);
 
         await db.update(limitOrders)
