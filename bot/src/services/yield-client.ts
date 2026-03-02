@@ -111,6 +111,144 @@ export const YIELD_PROTOCOLS: YieldProtocol[] = [
   },
 ];
 
+// Staking Provider Mapping for Liquid Staking
+export interface StakingProvider {
+  token: string;
+  provider: string;
+  stakingToken: string;
+  apr: number;
+  chain: string;
+  depositAddress: string;
+  supportsRestaking?: boolean;
+}
+
+export const STAKING_PROVIDERS: Record<string, StakingProvider[]> = {
+  ETH: [
+    {
+      token: 'ETH',
+      provider: 'Lido',
+      stakingToken: 'stETH',
+      apr: 3.8,
+      chain: 'ethereum',
+      depositAddress: '0xae7ab96520DE3A18f5e31e70f08B3B58f1dB0c9A',
+      supportsRestaking: true
+    },
+    {
+      token: 'ETH',
+      provider: 'Rocket Pool',
+      stakingToken: 'rETH',
+      apr: 3.6,
+      chain: 'ethereum',
+      depositAddress: '0xae7ab96520DE3A18f5e31e70f08B3B58f1dB0c9A', // Placeholder
+      supportsRestaking: true
+    }
+  ],
+  MATIC: [
+    {
+      token: 'MATIC',
+      provider: 'Stader',
+      stakingToken: 'MATICx',
+      apr: 4.2,
+      chain: 'polygon',
+      depositAddress: '0x0000000000000000000000000000000000000000' // Placeholder
+    },
+    {
+      token: 'MATIC',
+      provider: 'Lido',
+      stakingToken: 'stMATIC',
+      apr: 4.0,
+      chain: 'polygon',
+      depositAddress: '0x0000000000000000000000000000000000000000' // Placeholder
+    }
+  ],
+  SOL: [
+    {
+      token: 'SOL',
+      provider: 'Marinade',
+      stakingToken: 'mSOL',
+      apr: 6.8,
+      chain: 'solana',
+      depositAddress: 'MarinadeStake11111111111111111111111111111'
+    },
+    {
+      token: 'SOL',
+      provider: 'Lido',
+      stakingToken: 'stSOL',
+      apr: 6.5,
+      chain: 'solana',
+      depositAddress: '11111111111111111111111111111111' // Placeholder
+    }
+  ],
+  ATOM: [
+    {
+      token: 'ATOM',
+      provider: 'Stride',
+      stakingToken: 'stATOM',
+      apr: 18.5,
+      chain: 'cosmos',
+      depositAddress: 'cosmos1placeholder'
+    }
+  ],
+  USDC: [
+    {
+      token: 'USDC',
+      provider: 'Aave',
+      stakingToken: 'aUSDC',
+      apr: 4.5,
+      chain: 'ethereum',
+      depositAddress: '0x87870Bca3F3f6335e32cdC2d17F6b8d2c2A3eE1'
+    },
+    {
+      token: 'USDC',
+      provider: 'Compound',
+      stakingToken: 'cUSDC',
+      apr: 4.2,
+      chain: 'ethereum',
+      depositAddress: '0xc3d688B66703497DAA19211EEdff47f253B8A93'
+    }
+  ]
+};
+
+/**
+ * Get staking provider for a specific token
+ * @param token - Token symbol (e.g., 'ETH', 'MATIC')
+ * @param preferredProvider - Optional preferred provider name
+ * @returns StakingProvider or null if not supported
+ */
+export function getStakingProvider(token: string, preferredProvider?: string): StakingProvider | null {
+  const providers = STAKING_PROVIDERS[token.toUpperCase()];
+  if (!providers || providers.length === 0) {
+    return null;
+  }
+  
+  if (preferredProvider) {
+    const provider = providers.find(p =>
+      p.provider.toLowerCase() === preferredProvider.toLowerCase()
+    );
+    if (provider) return provider;
+  }
+  
+  // Return highest APR provider by default
+  return providers.reduce((best, current) => current.apr > best.apr ? current : best);
+}
+
+/**
+ * Check if a token is supported for staking
+ * @param token - Token symbol
+ * @returns boolean
+ */
+export function isStakingSupported(token: string): boolean {
+  return token.toUpperCase() in STAKING_PROVIDERS;
+}
+
+/**
+ * Get all supported staking tokens
+ * @returns Array of token symbols
+ */
+export function getSupportedStakingTokens(): string[] {
+  return Object.keys(STAKING_PROVIDERS);
+}
+
 export interface StakingQuote {
   pool: YieldPool;
   stakeAmount: string;

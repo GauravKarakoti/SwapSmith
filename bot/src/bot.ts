@@ -195,7 +195,7 @@ async function handleTextMessage(
   if (
     state?.parsedCommand &&
     !state.parsedCommand.settleAddress &&
-    ['swap', 'checkout', 'portfolio', 'limit_order'].includes(
+    ['swap', 'checkout', 'portfolio', 'limit_order', 'stake'].includes(
       state.parsedCommand.intent
     )
   ) {
@@ -246,6 +246,57 @@ async function handleTextMessage(
     const yields = await getTopStablecoinYields();
     return ctx.replyWithMarkdown(
       `📈 *Top Stablecoin Yields:*\n\n${formatYieldPools(yields)}`
+    );
+  }
+
+  /* ---------------- Stake ---------------- */
+
+  if (parsed.intent === 'stake') {
+    await db.setConversationState(userId, { parsedCommand: parsed });
+    
+    const { fromAsset, amount, fromChain, toProject } = parsed;
+    const { getStakingProvider, isStakingSupported } = await import('./services/yield-client');
+    
+    // Check if token is supported for staking
+    if (!isStakingSupported(fromAsset!)) {
+      return ctx.replyWithMarkdown(
+        `❌ *Staking not supported for ${fromAsset}*\n\n` +
+        `Supported tokens: ETH, MATIC, SOL, ATOM, USDC\n\n` +
+        `Try: "Stake ETH" or "Stake MATIC"`
+      );
+    }
+    
+    // Get the best staking provider
+    const provider = getStakingProvider(fromAsset!, toProject || undefined);
+    
+    if (!provider) {
+      return ctx.replyWithMarkdown(
+        `❌ *No staking provider found for ${fromAsset}*`
+      );
+    }
+    
+    const amountText = amount ? `${amount} ${fromAsset}` : `All ${fromAsset}`;
+    const chainText = fromChain || provider.chain;
+    
+    let msg = `🥩 *Stake ${fromAsset}*\n\n`;
+    msg += `Amount: ${amountText}\n`;
+    msg += `Chain: ${chainText}\n`;
+    msg += `Provider: ${provider.provider}\n`;
+    msg += `Receive: ${provider.stakingToken}\n`;
+    msg += `Est. APR: ${provider.apr}%\n\n`;
+    
+    if (provider.supportsRestaking) {
+      msg += `✅ Supports restaking\n\n`;
+    }
+    
+    msg += `Proceed with staking?`;
+    
+    return ctx.replyWithMarkdown(
+      msg,
+      Markup.inlineKeyboard([
+        Markup.button.callback('✅ Yes', 'confirm_stake'),
+        Markup.button.callback('❌ Cancel', 'cancel_swap'),
+      ])
     );
   }
 
@@ -398,6 +449,48 @@ bot.action('confirm_portfolio', async (ctx) => {
 /* -------------------------------------------------------------------------- */
 /* ACTIONS                                                                    */
 /* -------------------------------------------------------------------------- */
+
+bot.action('confirm_stake', async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return ctx.answerCbQuery('Error');
+  
+  const state = await db.getConversationState(userId);
+  if (!state?.parsedCommand || state.parsedCommand.intent !== 'stake') {
+    return ctx.answerCbQuery('Session expired.');
+  }
+  
+  const { fromAsset, amount, fromChain, toProject } = state.parsedCommand;
+  const { getStakingProvider } = await import('./services/yield-client');
+  
+  const provider = getStakingProvider(fromAsset!, toProject || undefined);
+  if (!provider) {
+    return ctx.editMessageText('❌ Staking provider not found.');
+  }
+  
+  await ctx.answerCbQuery('Preparing stake transaction...');
+  
+  // Create a stake order/quote
+  const amountText = amount ? `${amount} ${fromAsset}` : `All ${fromAsset}`;
+  
+  ctx.editMessageText(
+    `🥩 *Stake Confirmation*\n\n` +
+    `✅ Staking ${amountText}\n` +
+    `📍 Provider: ${provider.provider}\n` +
+    `🎁 Receive: ${provider.stakingToken}\n` +
+    `📈 Est. APR: ${provider.apr}%\n\n` +
+    `Click below to proceed with the transaction:`,
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        Markup.button.webApp(
+          '📱 Sign Stake Transaction',
+          `${MINI_APP_URL}?action=stake&token=${fromAsset}&amount=${amount || 'all'}&provider=${provider.provider}&chain=${fromChain || provider.chain}`
+        ),
+        Markup.button.callback('❌ Cancel', 'cancel_swap'),
+      ]),
+    }
+  );
+});
 
 bot.action('cancel_swap', async (ctx) => {
   if (!ctx.from) return;

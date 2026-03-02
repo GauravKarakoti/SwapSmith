@@ -25,7 +25,7 @@ const groq = getGroqClient();
 
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "unknown";
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "stake" | "unknown";
   
   // Single Swap Fields
   fromAsset: string | null;
@@ -108,6 +108,9 @@ MODES:
 6. "yield_migrate": Move funds between pools.
 7. "dca": Dollar Cost Averaging.
 8. "limit_order": Buy/Sell at specific price.
+9. "stake": Stake tokens for passive yield.
+   Example: "Stake 2 ETH" -> {"intent": "stake", "token": "ETH", "amount": "2", "chain": "ethereum"}
+   Example: "Stake my MATIC on Polygon" -> {"intent": "stake", "token": "MATIC", "amount": null, "chain": "polygon"}
 
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
 
@@ -137,7 +140,7 @@ AMBIGUITY HANDLING:
 RESPONSE FORMAT:
 {
   "success": boolean,
-  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order",
+  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "stake",
   "fromAsset": string | null,
   "fromChain": string | null,
   "amount": number | null,
@@ -212,6 +215,18 @@ EXAMPLES:
 
 14. "DCA 200 USDC into ETH every month on the 1st"
     -> intent: "dca", fromAsset: "USDC", toAsset: "ETH", amount: 200, frequency: "monthly", dayOfMonth: "1", confidence: 95
+
+15. "Stake 2 ETH"
+    -> intent: "stake", fromAsset: "ETH", fromChain: "ethereum", amount: 2, confidence: 95
+
+16. "Stake 0.5 ETH on Ethereum"
+    -> intent: "stake", fromAsset: "ETH", fromChain: "ethereum", amount: 0.5, confidence: 95
+
+17. "I want to stake my MATIC"
+    -> intent: "stake", fromAsset: "MATIC", fromChain: "polygon", amount: null, amountType: "all", confidence: 90
+
+18. "Stake 1000 USDC for yield"
+    -> intent: "stake", fromAsset: "USDC", amount: 1000, confidence: 95
 `;
 
 // RENAMED from parseUserCommand to parseWithLLM

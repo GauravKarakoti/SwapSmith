@@ -40,6 +40,10 @@ const REGEX_MULTI_SOURCE = /([A-Z]+)\s+(?:and|&)\s+([A-Z]+)\s+(?:to|into|for)/i;
 const REGEX_SWAP_STAKE = /(?:swap\s+and\s+stake|zap\s+(?:into|to)|stake\s+(?:my|after|then)|swap\s+(?:to|into)\s+(?:stake|yield))/i;
 const REGEX_STAKE_PROTOCOL = /(?:to\s+)?(aave|compound|yearn|lido|morpho|euler|spark)/i;
 
+// Regex for direct staking intent (not swap-and-stake)
+const REGEX_STAKE_INTENT = /\b(stake|staking|staked)\b/i;
+const REGEX_STAKE_KEYWORD = /(?:stake|staking)\s+(?:my\s+)?(\d+(?:\.\d+)?)?\s*([A-Z]{2,5})/i;
+
 function normalizeNumber(val: string): number {
   val = val.toLowerCase().replace(/[\$,]/g, '');
 
@@ -127,7 +131,112 @@ export async function parseUserCommand(
     };
   }
 
-  // 1. Check for Swap Intent Keywords
+  // 1. Check for direct Stake Intent (not swap-and-stake)
+  const isStakeIntent = REGEX_STAKE_INTENT.test(input) && !REGEX_SWAP_STAKE.test(input);
+  
+  if (isStakeIntent) {
+    let amount: number | null = null;
+    let fromAsset: string | null = null;
+    let fromChain: string | null = null;
+    let confidence = 70;
+    
+    // Try to extract amount and token
+    const stakeMatch = input.match(REGEX_STAKE_KEYWORD);
+    if (stakeMatch) {
+      if (stakeMatch[1]) {
+        amount = parseFloat(stakeMatch[1]);
+        confidence += 20;
+      }
+      if (stakeMatch[2]) {
+        fromAsset = stakeMatch[2].toUpperCase();
+        confidence += 20;
+      }
+    }
+    
+    // If no amount/token extracted, try generic patterns
+    if (!fromAsset) {
+      const tokenMatch = input.match(/\b(ETH|MATIC|SOL|ATOM|USDC|USDT|DAI|BTC|BNB|AVAX)\b/i);
+      if (tokenMatch) {
+        fromAsset = tokenMatch[1].toUpperCase();
+        confidence += 15;
+      }
+    }
+    
+    if (!amount) {
+      // Check for "all" or "my" indicating full balance stake
+      if (/\b(all|my|everything)\b/i.test(input)) {
+        amount = null; // Will be interpreted as "all"
+        confidence += 10;
+      } else {
+        const numMatch = input.match(/\b(\d+(?:\.\d+)?)\b/);
+        if (numMatch) {
+          amount = parseFloat(numMatch[1]);
+          confidence += 15;
+        }
+      }
+    }
+    
+    // Detect chain if specified
+    const chainMatch = input.match(/\b(ethereum|polygon|solana|cosmos|arbitrum|base|bsc|avalanche)\b/i);
+    if (chainMatch) {
+      fromChain = chainMatch[1].toLowerCase();
+    } else if (fromAsset) {
+      // Default chains based on asset
+      const defaultChains: Record<string, string> = {
+        'ETH': 'ethereum',
+        'MATIC': 'polygon',
+        'SOL': 'solana',
+        'ATOM': 'cosmos',
+        'BTC': 'bitcoin'
+      };
+      fromChain = defaultChains[fromAsset] || 'ethereum';
+    }
+    
+    // Extract preferred provider if mentioned
+    const providerMatch = input.match(/\b(lido|rocket\s*pool|stader|marinade|aave|compound)\b/i);
+    const toProject = providerMatch ? providerMatch[1].toLowerCase().replace(/\s+/g, '') : null;
+    
+    if (fromAsset) {
+      return {
+        success: true,
+        intent: 'stake',
+        fromAsset,
+        fromChain,
+        toAsset: fromAsset, // Staking keeps the same asset
+        toChain: fromChain,
+        amount,
+        amountType: amount ? 'exact' : 'all',
+        excludeAmount: undefined,
+        excludeToken: undefined,
+        quoteAmount: undefined,
+        conditions: undefined,
+        portfolio: undefined,
+        frequency: null,
+        dayOfWeek: null,
+        dayOfMonth: null,
+        settleAsset: null,
+        settleNetwork: null,
+        settleAmount: null,
+        settleAddress: null,
+        fromProject: null,
+        fromYield: null,
+        toProject,
+        toYield: null,
+        conditionOperator: undefined,
+        conditionValue: undefined,
+        conditionAsset: undefined,
+        targetPrice: undefined,
+        condition: undefined,
+        confidence: Math.min(100, confidence),
+        validationErrors: [],
+        parsedMessage: `Parsed: Stake ${amount || 'all'} ${fromAsset} on ${fromChain || 'default chain'}${toProject ? ' via ' + toProject : ''}`,
+        requiresConfirmation: true,
+        originalInput: userInput
+      };
+    }
+  }
+
+  // 2. Check for Swap Intent Keywords
   const isSwapRelated = /\b(swap|convert|send|transfer|buy|sell|move|exchange)\b/i.test(input);
 
   if (isSwapRelated) {
