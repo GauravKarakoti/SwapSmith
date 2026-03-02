@@ -217,7 +217,7 @@ export default function Navbar() {
                     key={href}
                     href={href}
                     className={`flex items-center gap-4 p-4 rounded-2xl text-base font-bold transition-all ${
-                      pathname === href ? "bg-blue-600 text-white shadow-[0_4px_15px_rgba(37,99,235,0.3)] shadow-blue-500/30" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100/80 dark:hover:bg-zinc-800 hover:text-blue-600 dark:hover:text-zinc-300"
+                      pathname === href ? "bg-blue-600 text-white shadow-[0_4px_15px_rgba(37,99,235,0.3)]" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100/80 dark:hover:bg-zinc-800 hover:text-blue-600 dark:hover:text-zinc-300"
                     }`}
                   >
                     <Icon className="w-5 h-5" /> {label}
@@ -228,7 +228,7 @@ export default function Navbar() {
                     key={href}
                     href={href}
                     className={`flex items-center gap-4 p-4 rounded-2xl text-base font-bold transition-all ${
-                      pathname === href ? "bg-blue-600 text-white shadow-[0_4px_15px_rgba(37,99,235,0.3)] shadow-blue-500/30" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100/80 dark:hover:bg-zinc-800 hover:text-blue-600 dark:hover:text-zinc-300"
+                      pathname === href ? "bg-blue-600 text-white shadow-[0_4px_15px_rgba(37,99,235,0.3)]" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100/80 dark:hover:bg-zinc-800 hover:text-blue-600 dark:hover:text-zinc-300"
                     }`}
                   >
                     <Icon className="w-5 h-5" /> {label}
