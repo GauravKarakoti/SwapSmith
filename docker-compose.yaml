@@ -22,7 +22,7 @@ services:
       - ./bot/.env
     environment:
       - DATABASE_URL=postgres://postgres:postgres@db:5432/swapsmith
-    command: sh -c "npm run db:migrate && npm run start"
+    command: sh -c "until pg_isready -h db -U postgres; do echo waiting for database; sleep 2; done; npm run db:migrate && npm run start"
     depends_on:
       db:
         condition: service_healthy
