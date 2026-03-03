@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   MessageSquare, 
@@ -382,6 +383,7 @@ export default function DiscussionsPage() {
           </div>
         </div>
       </div>
+      <Footer />
     </>
   );
 }
