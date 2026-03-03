@@ -7,7 +7,6 @@ import { useState, useEffect } from 'react';
 import { 
   ArrowRight, 
   Clock, 
-  Zap, 
   Shield, 
   ChevronDown, 
   CheckCircle, 
@@ -16,7 +15,8 @@ import {
   Info,
   TrendingUp,
   DollarSign,
-  Speed
+  Zap,
+  Timer
 } from 'lucide-react';
 
 interface BridgeQuote {
@@ -359,7 +359,7 @@ export default function BridgeComparison({
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <Speed className="w-4 h-4 text-blue-600" />
+              <Timer className="w-4 h-4 text-blue-600" />
               <span className="text-gray-600 dark:text-gray-400">
                 Fastest: <span className="font-medium text-gray-900 dark:text-white">{bestTime}min</span>
               </span>

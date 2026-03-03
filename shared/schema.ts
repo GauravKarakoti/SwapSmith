@@ -660,3 +660,60 @@ export type StrategyPerformance = typeof strategyPerformance.$inferSelect;
 export type NewStrategyPerformance = typeof strategyPerformance.$inferInsert;
 export type StrategyTrade = typeof strategyTrades.$inferSelect;
 export type NewStrategyTrade = typeof strategyTrades.$inferInsert;
+
+// --- PORTFOLIO REBALANCING SCHEMAS ---
+
+export const portfolioTargets = pgTable('portfolio_targets', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  telegramId: bigint('telegram_id', { mode: 'number' }),
+  name: text('name').notNull(),
+  assets: jsonb('assets').notNull(),
+  driftThreshold: real('drift_threshold').notNull().default(5.0),
+  isActive: boolean('is_active').notNull().default(true),
+  autoRebalance: boolean('auto_rebalance').notNull().default(false),
+  lastRebalancedAt: timestamp('last_rebalanced_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => [
+  index("idx_portfolio_targets_user_id").on(table.userId),
+  index("idx_portfolio_targets_telegram_id").on(table.telegramId),
+  index("idx_portfolio_targets_is_active").on(table.isActive),
+]);
+
+export const rebalanceHistory = pgTable('rebalance_history', {
+  id: serial('id').primaryKey(),
+  portfolioTargetId: integer('portfolio_target_id').notNull().references(() => portfolioTargets.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull(),
+  telegramId: bigint('telegram_id', { mode: 'number' }),
+  triggerType: text('trigger_type').notNull(),
+  totalPortfolioValue: numeric('total_portfolio_value', { precision: 20, scale: 8 }).notNull(),
+  swapsExecuted: jsonb('swaps_executed').notNull(),
+  totalFees: numeric('total_fees', { precision: 20, scale: 8 }).notNull().default('0'),
+  status: text('status').notNull().default('pending'),
+  errorMessage: text('error_message'),
+  startedAt: timestamp('started_at').defaultNow(),
+  completedAt: timestamp('completed_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => [
+  index("idx_rebalance_history_user_id").on(table.userId),
+  index("idx_rebalance_history_portfolio_target_id").on(table.portfolioTargetId),
+  index("idx_rebalance_history_status").on(table.status),
+  index("idx_rebalance_history_created_at").on(table.createdAt),
+]);
+
+export const portfolioTargetsRelations = relations(portfolioTargets, ({many}) => ({
+  rebalanceHistory: many(rebalanceHistory),
+}));
+
+export const rebalanceHistoryRelations = relations(rebalanceHistory, ({one}) => ({
+  portfolioTarget: one(portfolioTargets, {
+    fields: [rebalanceHistory.portfolioTargetId],
+    references: [portfolioTargets.id],
+  }),
+}));
+
+export type PortfolioTarget = typeof portfolioTargets.$inferSelect;
+export type NewPortfolioTarget = typeof portfolioTargets.$inferInsert;
+export type RebalanceHistory = typeof rebalanceHistory.$inferSelect;
+export type NewRebalanceHistory = typeof rebalanceHistory.$inferInsert;
