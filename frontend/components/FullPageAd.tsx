@@ -184,10 +184,10 @@ export default function FullPageAd({
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4"
       style={{ background: 'rgba(15,23,42,0.80)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
     >
-      <div className="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-5xl max-h-[90vh] overflow-x-hidden overflow-y-auto bg-white rounded-2xl shadow-2xl">
 
         {/* Dismiss */}
         <button
@@ -206,24 +206,24 @@ export default function FullPageAd({
 
         {/* PLANS VARIANT */}
         {variant === 'plans' && (
-          <div className="px-8 pt-10 pb-8">
+          <div className="px-4 pt-8 pb-5 sm:px-8 sm:pt-10 sm:pb-8">
             <span className="absolute top-10 left-10 text-2xl select-none pointer-events-none"></span>
             <span className="absolute top-8 right-20 text-xl select-none pointer-events-none"></span>
 
-            <div className="text-center mb-7">
+            <div className="text-center mb-4 sm:mb-7">
               <p className="text-sm font-bold text-blue-500 mb-2 tracking-wide">Simple Pricing</p>
-              <h2 className="text-3xl font-black text-gray-900 tracking-tight mb-2">
+              <h2 className="text-xl sm:text-3xl font-black text-gray-900 tracking-tight mb-2">
                 Unlock <span className="text-blue-600">SwapSmith&apos;s</span> full potential
               </h2>
               <p className="text-sm text-gray-500">AI routing  Telegram swaps  yield scouting — pick your plan.</p>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 items-start">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
               {PLANS.map((plan, i) => (
                 <div
                   key={plan.name}
-                  className={`ad-card-enter ad-card-hover relative flex flex-col rounded-2xl p-5 border ${plan.popular ? 'border-gray-800 shadow-xl' : 'border-gray-200'}`}
-                  style={plan.popular ? { transform: 'translateY(-6px) scale(1.02)', animationDelay: `${i * 0.12}s` } : { animationDelay: `${i * 0.12}s` }}
+                  className={`ad-card-enter ad-card-hover relative flex flex-col rounded-2xl p-4 sm:p-5 border ${plan.popular ? 'border-gray-800 shadow-xl sm:-translate-y-1.5 sm:scale-[1.02] mt-6 sm:mt-0' : 'border-gray-200'}`}
+                  style={{ animationDelay: `${i * 0.12}s` }}
                 >
                   {plan.popular && (
                     <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-xs font-black text-white whitespace-nowrap" style={{ background: '#f59e0b' }}>
@@ -236,7 +236,7 @@ export default function FullPageAd({
                   <h3 className="text-base font-black text-gray-900 mb-0.5">{plan.name}</h3>
                   <p className="text-[11px] text-gray-500 mb-3 leading-snug">{plan.tagline}</p>
                   <div className="flex items-baseline gap-1 mb-4">
-                    <span className="text-3xl font-black text-gray-900">{plan.price}</span>
+                    <span className="text-2xl sm:text-3xl font-black text-gray-900">{plan.price}</span>
                     <span className="text-sm text-gray-400">{plan.period}</span>
                   </div>
                   <ul className="flex flex-col gap-2 flex-1 mb-5">
@@ -265,24 +265,24 @@ export default function FullPageAd({
 
         {/* FEATURES VARIANT */}
         {variant === 'features' && (
-          <div className="px-8 pt-10 pb-8">
+          <div className="px-4 pt-8 pb-5 sm:px-8 sm:pt-10 sm:pb-8">
             <span className="absolute top-10 left-10 text-2xl select-none pointer-events-none"></span>
             <span className="absolute top-8 right-20 text-xl select-none pointer-events-none"></span>
 
-            <div className="text-center mb-7">
+            <div className="text-center mb-4 sm:mb-7">
               <p className="text-sm font-bold text-blue-500 mb-2 tracking-wide">Explore SwapSmith</p>
-              <h2 className="text-3xl font-black text-gray-900 tracking-tight mb-2">
+              <h2 className="text-xl sm:text-3xl font-black text-gray-900 tracking-tight mb-2">
                 Powerful tools, <span className="text-blue-600">built for DeFi</span>
               </h2>
               <p className="text-sm text-gray-500">Trade smarter with SwapSmith&apos;s suite of decentralised finance tools.</p>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 items-start">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
               {SITE_FEATURES.map((feat, i) => (
                 <div
                   key={feat.name}
-                  className={`ad-card-enter ad-card-hover relative flex flex-col rounded-2xl p-5 border ${feat.popular ? 'border-gray-800 shadow-xl' : 'border-gray-200'}`}
-                  style={feat.popular ? { transform: 'translateY(-6px) scale(1.02)', animationDelay: `${i * 0.12}s` } : { animationDelay: `${i * 0.12}s` }}
+                  className={`ad-card-enter ad-card-hover relative flex flex-col rounded-2xl p-4 sm:p-5 border ${feat.popular ? 'border-gray-800 shadow-xl sm:-translate-y-1.5 sm:scale-[1.02] mt-6 sm:mt-0' : 'border-gray-200'}`}
+                  style={{ animationDelay: `${i * 0.12}s` }}
                 >
                   {feat.popular && (
                     <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-xs font-black text-white whitespace-nowrap" style={{ background: '#f59e0b' }}>
@@ -295,7 +295,7 @@ export default function FullPageAd({
                   <h3 className="text-base font-black text-gray-900 mb-0.5">{feat.name}</h3>
                   <p className="text-[11px] text-gray-500 mb-3 leading-snug">{feat.tagline}</p>
                   <div className="flex items-baseline gap-1 mb-4">
-                    <span className="text-3xl font-black text-gray-900">{feat.statNum}</span>
+                    <span className="text-2xl sm:text-3xl font-black text-gray-900">{feat.statNum}</span>
                     <span className="text-sm text-gray-400">{feat.statLabel}</span>
                   </div>
                   <ul className="flex flex-col gap-2 flex-1 mb-5">
@@ -326,26 +326,26 @@ export default function FullPageAd({
 
         {/* PROMO VARIANT */}
         {variant === 'promo' && (
-          <div className="px-8 pt-10 pb-8">
+          <div className="px-4 pt-8 pb-5 sm:px-8 sm:pt-10 sm:pb-8">
             <span className="absolute top-10 left-10 text-2xl select-none pointer-events-none">🎁</span>
             <span className="absolute top-8 right-20 text-xl select-none pointer-events-none">✨</span>
 
-            <div className="text-center mb-7">
+            <div className="text-center mb-4 sm:mb-7">
               <p className="text-sm font-bold text-blue-500 mb-2 tracking-wide">Discover SwapSmith</p>
-              <h2 className="text-3xl font-black text-gray-900 tracking-tight mb-2">
+              <h2 className="text-xl sm:text-3xl font-black text-gray-900 tracking-tight mb-2">
                 More ways to <span className="text-blue-600">earn &amp; learn</span>
               </h2>
               <p className="text-sm text-gray-500">Connect your wallet, level up your DeFi knowledge, and earn rewards every day.</p>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 items-start">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
               {PROMO_CARDS.map((card, i) => (
                 <div
                   key={card.name}
-                  className={`ad-card-enter ad-card-hover relative flex flex-col rounded-2xl p-5 border ${
-                    card.popular ? 'border-gray-800 shadow-xl' : 'border-gray-200'
+                  className={`ad-card-enter ad-card-hover relative flex flex-col rounded-2xl p-4 sm:p-5 border ${
+                    card.popular ? 'border-gray-800 shadow-xl sm:-translate-y-1.5 sm:scale-[1.02] mt-6 sm:mt-0' : 'border-gray-200'
                   }`}
-                  style={card.popular ? { transform: 'translateY(-6px) scale(1.02)', animationDelay: `${i * 0.12}s` } : { animationDelay: `${i * 0.12}s` }}
+                  style={{ animationDelay: `${i * 0.12}s` }}
                 >
                   {card.popular && (
                     <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-xs font-black text-white whitespace-nowrap" style={{ background: '#f59e0b' }}>
@@ -358,7 +358,7 @@ export default function FullPageAd({
                   <h3 className="text-base font-black text-gray-900 mb-0.5">{card.name}</h3>
                   <p className="text-[11px] text-gray-500 mb-3 leading-snug">{card.tagline}</p>
                   <div className="flex items-baseline gap-1 mb-4">
-                    <span className="text-3xl font-black text-gray-900">{card.statNum}</span>
+                    <span className="text-2xl sm:text-3xl font-black text-gray-900">{card.statNum}</span>
                     <span className="text-sm text-gray-400">{card.statLabel}</span>
                   </div>
                   <ul className="flex flex-col gap-2 flex-1 mb-5">
