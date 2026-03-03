@@ -409,9 +409,9 @@ export const discussions = pgTable('discussions', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at'),
 }, (table) => [
-	index("idx_discussions_category").on(table.category),
-	index("idx_discussions_created_at").on(table.createdAt),
-	index("idx_discussions_user_id").on(table.userId),
+  index("idx_discussions_category").on(table.category),
+  index("idx_discussions_created_at").on(table.createdAt),
+  index("idx_discussions_user_id").on(table.userId),
 ]);
 
 // --- REWARDS SCHEMAS ---
@@ -549,11 +549,11 @@ export const gasOptimizationHistory = pgTable('gas_optimization_history', {
 // --- RELATIONS ---
 
 
-export const courseProgressRelations = relations(courseProgress, ({one}) => ({
-	user: one(users, {
-		fields: [courseProgress.userId],
-		references: [users.id]
-	}),
+export const courseProgressRelations = relations(courseProgress, ({ one }) => ({
+  user: one(users, {
+    fields: [courseProgress.userId],
+    references: [users.id]
+  }),
 }));
 
 export const usersRelations = relations(users, ({many}) => ({
@@ -563,11 +563,11 @@ export const usersRelations = relations(users, ({many}) => ({
 	subscriptions: many(strategySubscriptions),
 }));
 
-export const rewardsLogRelations = relations(rewardsLog, ({one}) => ({
-	user: one(users, {
-		fields: [rewardsLog.userId],
-		references: [users.id]
-	}),
+export const rewardsLogRelations = relations(rewardsLog, ({ one }) => ({
+  user: one(users, {
+    fields: [rewardsLog.userId],
+    references: [users.id]
+  }),
 }));
 
 // --- PLAN PURCHASES TABLE ---
@@ -585,7 +585,7 @@ export const planPurchases = pgTable('plan_purchases', {
   index("idx_plan_purchases_user_id").on(table.userId),
 ]);
 
-export const planPurchasesRelations = relations(planPurchases, ({one}) => ({
+export const planPurchasesRelations = relations(planPurchases, ({ one }) => ({
   user: one(users, {
     fields: [planPurchases.userId],
     references: [users.id],

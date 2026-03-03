@@ -143,6 +143,8 @@ export const limitOrders = pgTable('limit_orders', {
   createdAt: timestamp('created_at').defaultNow(),
   executedAt: timestamp('executed_at'),
   lastCheckedAt: timestamp('last_checked_at'),
+  retryCount: integer('retry_count').notNull().default(0),
+  retryAfter: timestamp('retry_after'),
 });
 
 // --- SHARED SCHEMAS (used by both bot and frontend) ---
