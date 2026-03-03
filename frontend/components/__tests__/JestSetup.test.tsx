@@ -3,7 +3,7 @@ import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
 /**
- * Basic test to verify Jest is configured properly
+ * Basic test to verify Vitest is configured properly
  * This test doesn't depend on component-specific dependencies
  */
 describe('Vitest Configuration', () => {
