@@ -58,7 +58,7 @@ const app = express();
 const allowedOrigins = [MINI_APP_URL, 'http://localhost:3000', 'http://localhost:3001'];
 
 app.use(cors({
-  origin: function (origin: any, callback: any) {
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
     // allow requests with no origin (like mobile apps, curl requests)
     if (!origin) return callback(null, true);
 
@@ -316,7 +316,8 @@ async function handleTextMessage(
       `📊 *Portfolio Strategy*\n\n` +
       parsed.portfolio
         ?.map(
-          (p: any) => `• ${p.percentage}% → ${p.toAsset} on ${p.toChain}`
+          (p: { percentage: number; toAsset: string; toChain: string }) =>
+            `• ${p.percentage}% → ${p.toAsset} on ${p.toChain}`,
         )
         .join('\n');
 
@@ -622,8 +623,12 @@ async function start() {
 
         // Close HTTP server and any keep-alive sockets
         try {
-          (server as any).closeIdleConnections?.();
-          (server as any).closeAllConnections?.();
+          const advancedServer = server as unknown as {
+            closeIdleConnections?: () => void;
+            closeAllConnections?: () => void;
+          };
+          advancedServer.closeIdleConnections?.();
+          advancedServer.closeAllConnections?.();
         } catch {
           // ignore best-effort calls
         }
