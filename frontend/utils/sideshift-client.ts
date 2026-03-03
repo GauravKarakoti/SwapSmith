@@ -80,7 +80,16 @@ export async function createQuote(
         }
       }
     );
-    return { ...response.data, id: response.data.id };
+
+    const quote = { ...response.data, id: response.data.id };
+
+    // SECURITY: Validate depositAddress is always present and properly formatted
+    if (!quote.depositAddress) {
+      console.error('SideShift API returned quote without depositAddress:', quote);
+      throw new Error('Invalid quote: SideShift deposit address is missing. Please try again.');
+    }
+
+    return quote;
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: { message?: string } } } };
     throw new Error(err.response?.data?.error?.message || 'Failed to create quote');
