@@ -302,7 +302,7 @@ export class LimitOrderWorker {
             and(
               eq(limitOrders.id, order.id),
               eq(limitOrders.status, 'executing'),
-              eq(limitOrders.isActive, true),
+              eq(limitOrders.isActive, 1),
             )
           );
 
