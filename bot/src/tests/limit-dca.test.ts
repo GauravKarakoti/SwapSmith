@@ -48,7 +48,7 @@ describe('Limit Order & DCA Parsing', () => {
   });
 
   it('should parse a sell limit order', async () => {
-    const mockGroq = require('groq-sdk');
+    const mockGroq = require('groq-sdk').default;
     mockGroq.mockImplementation(() => ({
       chat: {
         completions: {
@@ -84,7 +84,7 @@ describe('Limit Order & DCA Parsing', () => {
   });
 
   it('should parse a DCA command', async () => {
-    const mockGroq = require('groq-sdk');
+    const mockGroq = require('groq-sdk').default;
     mockGroq.mockImplementation(() => ({
       chat: {
         completions: {
@@ -123,7 +123,7 @@ describe('Limit Order & DCA Parsing', () => {
   });
 
   it('should validate limit order fields', async () => {
-    const mockGroq = require('groq-sdk');
+    const mockGroq = require('groq-sdk').default;
     mockGroq.mockImplementation(() => ({
       chat: {
         completions: {
@@ -155,7 +155,7 @@ describe('Limit Order & DCA Parsing', () => {
   });
 
   it('should validate DCA fields', async () => {
-    const mockGroq = require('groq-sdk');
+    const mockGroq = require('groq-sdk').default;
     mockGroq.mockImplementation(() => ({
       chat: {
         completions: {
