@@ -83,6 +83,7 @@ export const checkouts = pgTable('checkouts', {
   checkoutId: text('checkout_id').notNull().unique(),
   settleAsset: text('settle_asset').notNull(),
   settleNetwork: text('settle_network').notNull(),
+  settleAmount: text('settle_amount').notNull(),
   settleAmount: numeric('settle_amount', { precision: 30, scale: 18 }).notNull(),
   settleAddress: text('settle_address').notNull(),
   status: text('status').notNull().default('pending'),
