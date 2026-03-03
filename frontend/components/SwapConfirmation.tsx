@@ -1,9 +1,8 @@
 import { useState } from 'react'
-import { CheckCircle, AlertCircle, ExternalLink, Copy, Check, ShieldCheck, Shield, AlertTriangle, Info, TrendingUp, Zap, Wallet } from 'lucide-react'
+import { CheckCircle, Zap, Wallet } from 'lucide-react'
 import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi'
 import { parseEther, formatEther, type Chain } from 'viem'
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
-import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift'
 
 export interface QuoteData {
   depositAmount: string;
@@ -25,18 +24,6 @@ interface SwapConfirmationProps {
   onAmountChange?: (newAmount: string) => void;
 }
 
-const EXPLORER_URLS: { [key: string]: string } = {
-  ethereum: 'https://etherscan.io',
-  bitcoin: 'https://blockchain.com/explorer',
-  polygon: 'https://polygonscan.com',
-  arbitrum: 'https://arbiscan.io',
-  avalanche: 'https://snowtrace.io',
-  optimism: 'https://optimistic.etherscan.io',
-  bsc: 'https://bscscan.com',
-  base: 'https://basescan.org',
-  solana: 'https://solscan.io',
-}
-
 const CHAIN_MAP: { [key: string]: Chain } = {
   ethereum: mainnet,
   polygon: polygon,
@@ -47,23 +34,14 @@ const CHAIN_MAP: { [key: string]: Chain } = {
   base: base,
 }
 
-interface SafetyCheckResult {
-  passed: boolean;
-  checks: {
-    balance: { passed: boolean; message: string };
-    gas: { passed: boolean; message: string; estimatedGas?: string };
-    network: { passed: boolean; message: string };
-    address: { passed: boolean; message: string };
-  };
-  riskLevel: 'safe' | 'warning' | 'unsafe';
-  overallMessage: string;
+// Helper function to capitalize network names
+const getNetworkName = (network: string) => {
+  return network.charAt(0).toUpperCase() + network.slice(1).toLowerCase();
 }
 
 export default function SwapConfirmation({ quote, confidence, onAmountChange }: SwapConfirmationProps) {
   const [copiedAddress, setCopiedAddress] = useState(false)
   const [copiedMemo, setCopiedMemo] = useState(false)
-  const [isSimulating, setIsSimulating] = useState(false);
-  const [safetyCheck, setSafetyCheck] = useState<SafetyCheckResult | null>(null);
   const [walletBalance, setWalletBalance] = useState<string | null>(null);
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
 
@@ -74,7 +52,6 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
   const depositChainId = CHAIN_MAP[quote.depositNetwork.toLowerCase()]?.id;
   const publicClient = usePublicClient({ chainId: depositChainId });
 
-  // --- NEW: Max Button Logic ---
   const handleMaxClick = async () => {
     if (!address || !publicClient) {
       alert("Please connect your wallet to fetch balance.");
@@ -96,16 +73,17 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
         finalAmount = calculated > 0 ? calculated.toFixed(6) : "0";
       }
 
+      setWalletBalance(balanceInEther);
+
       // Update the parent state (SwapSmith Agent)
       if (onAmountChange) {
-        onAmountChange(balanceFormatted);
+        onAmountChange(finalAmount);
         // Show confirmation feedback
         setTimeout(() => {
           // Balance display will update after new quote is fetched
         }, 300);
       } else {
-        alert(`Your max balance is ${parseFloat(balanceFormatted).toFixed(4)} ${quote.depositCoin}. Please update the amount manually.`);
-        onAmountChange(finalAmount);
+        alert(`Your max balance is ${parseFloat(finalAmount).toFixed(4)} ${quote.depositCoin}. Please update the amount manually.`);
       }
     } catch (err) {
       console.error('Max balance fetch failed:', err);
@@ -165,70 +143,74 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
           </div>
           <div className="flex flex-col items-end gap-2">
             <button
-              onClick={handleFetchBalance}
+              onClick={handleMaxClick}
               disabled={!isConnected || isLoadingBalance}
               className="px-3 py-2 text-xs font-semibold bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
               title="Set amount to your full wallet balance"
             >
               {isLoadingBalance ? <span className="flex items-center gap-1"><div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>Loading...</span> : '💰 Max'}
-      <div className="space-y-4">
-        {/* You Send Section with Max Button */}
-        <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-xs font-semibold text-blue-600 uppercase tracking-tight">You Send</span>
-            <button 
-              onClick={handleMaxClick}
-              disabled={isLoadingBalance || !isConnected}
-              className="flex items-center gap-1 text-[10px] font-bold bg-blue-600 text-white px-2 py-0.5 rounded hover:bg-blue-700 transition-all disabled:opacity-50"
-            >
-              <Wallet className="w-3 h-3" /> {isLoadingBalance ? '...' : 'USE MAX'}
             </button>
-            {walletBalance && !isLoadingBalance && (
-              <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">
-                Balance: {parseFloat(walletBalance).toFixed(4)} {quote.depositCoin}
-              </span>
-            )}
-          </div>
-          <div className="flex justify-between items-end">
-            <span className="text-xl font-bold text-blue-900">{quote.depositAmount}</span>
-            <span className="text-sm font-medium text-blue-700">{quote.depositCoin} ({quote.depositNetwork})</span>
+            <div className="space-y-4">
+              {/* You Send Section with Max Button */}
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-xs font-semibold text-blue-600 uppercase tracking-tight">You Send</span>
+                  <button 
+                    onClick={handleMaxClick}
+                    disabled={isLoadingBalance || !isConnected}
+                    className="flex items-center gap-1 text-[10px] font-bold bg-blue-600 text-white px-2 py-0.5 rounded hover:bg-blue-700 transition-all disabled:opacity-50"
+                  >
+                    <Wallet className="w-3 h-3" /> {isLoadingBalance ? '...' : 'USE MAX'}
+                  </button>
+                  {walletBalance && !isLoadingBalance && (
+                    <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                      Balance: {parseFloat(walletBalance).toFixed(4)} {quote.depositCoin}
+                    </span>
+                  )}
+                </div>
+                <div className="flex justify-between items-end">
+                  <span className="text-xl font-bold text-blue-900">{quote.depositAmount}</span>
+                  <span className="text-sm font-medium text-blue-700">{quote.depositCoin} ({quote.depositNetwork})</span>
+                </div>
+              </div>
+
+              {/* Receive Section */}
+              <div className="bg-green-50 border border-green-100 rounded-lg p-3">
+                <span className="text-xs font-semibold text-green-600 uppercase tracking-tight">You Receive Approx.</span>
+                <div className="flex justify-between items-end mt-1">
+                  <span className="text-xl font-bold text-green-900">{quote.settleAmount}</span>
+                  <span className="text-sm font-medium text-green-700">{quote.settleCoin}</span>
+                </div>
+              </div>
+
+              {/* Deposit Address Info */}
+              <div className="pt-2">
+                <div className="flex justify-between text-[11px] text-gray-500 mb-1 px-1">
+                  <span>Deposit Address</span>
+                  <button onClick={() => copyToClipboard(quote.depositAddress || '', 'address')} className="text-blue-600 hover:underline">
+                    {copiedAddress ? 'Copied!' : 'Copy Address'}
+                  </button>
+                </div>
+                <div className="bg-gray-50 border border-gray-200 p-2 rounded text-[10px] font-mono break-all text-gray-600 italic">
+                  {quote.depositAddress}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-2 w-full">
+              <button
+                onClick={handleConfirm}
+                disabled={!isConnected || isPending}
+                className="w-full py-3 bg-gray-900 text-white rounded-lg font-bold hover:bg-black transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
+              >
+                {isPending ? 'Confirming...' : 'Confirm and Send'}
+              </button>
+              <p className="text-[10px] text-center text-gray-400">
+                By confirming, you agree to SideShift's terms and gas fees.
+              </p>
+            </div>
           </div>
         </div>
-
-        {/* Receive Section */}
-        <div className="bg-green-50 border border-green-100 rounded-lg p-3">
-          <span className="text-xs font-semibold text-green-600 uppercase tracking-tight">You Receive Approx.</span>
-          <div className="flex justify-between items-end mt-1">
-            <span className="text-xl font-bold text-green-900">{quote.settleAmount}</span>
-            <span className="text-sm font-medium text-green-700">{quote.settleCoin}</span>
-          </div>
-        </div>
-
-        {/* Deposit Address Info */}
-        <div className="pt-2">
-          <div className="flex justify-between text-[11px] text-gray-500 mb-1 px-1">
-            <span>Deposit Address</span>
-            <button onClick={() => copyToClipboard(quote.depositAddress || '', 'address')} className="text-blue-600 hover:underline">
-              {copiedAddress ? 'Copied!' : 'Copy Address'}
-            </button>
-          </div>
-          <div className="bg-gray-50 border border-gray-200 p-2 rounded text-[10px] font-mono break-all text-gray-600 italic">
-            {quote.depositAddress}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-6 flex flex-col gap-2">
-        <button
-          onClick={handleConfirm}
-          disabled={!isConnected || isPending}
-          className="w-full py-3 bg-gray-900 text-white rounded-lg font-bold hover:bg-black transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
-        >
-          {isPending ? 'Confirming...' : 'Confirm and Send'}
-        </button>
-        <p className="text-[10px] text-center text-gray-400">
-          By confirming, you agree to SideShift's terms and gas fees.
-        </p>
       </div>
     </div>
   )

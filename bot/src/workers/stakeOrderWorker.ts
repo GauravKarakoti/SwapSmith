@@ -186,17 +186,9 @@ async function notifySwapStatusChange(order: StakeOrder, newStatus: string): Pro
  */
 export function stopStakeWorker(): void {
   logger.info('[StakeWorker] Stopping stake order worker');
-<<<<<<< HEAD
-  if (stakeTask) {
-    stakeTask.stop();
-    stakeTask = null;
-  }
-=======
-  if (scheduledTask) {
-    scheduledTask.stop();
-    scheduledTask = null;
   if (scheduledTask) {
     scheduledTask.stop();
     scheduledTask = null;
   }
   bot = null;
+}
