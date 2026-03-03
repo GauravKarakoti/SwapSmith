@@ -1,37 +1,26 @@
 import { parseUserCommand } from '../services/parseUserCommand'; // Fixed import
 import * as priceMonitor from '../services/price-monitor';
 import * as db from '../services/database';
+import * as groqClient from '../services/groq-client';
 
-// Mock the groq-sdk module
-jest.mock('groq-sdk', () => {
+// Mock parseWithLLM directly
+jest.mock('../services/groq-client', () => {
   return {
-    __esModule: true,
-    default: jest.fn().mockImplementation(() => ({
-      chat: {
-        completions: {
-          create: jest.fn().mockResolvedValue({
-            choices: [{
-              message: {
-                content: JSON.stringify({
-                  success: true,
-                  intent: 'limit_order',
-                  fromAsset: 'USDC',
-                  fromChain: 'ethereum',
-                  toAsset: 'ETH',
-                  toChain: 'ethereum',
-                  amount: 1,
-                  targetPrice: 2500,
-                  condition: 'below',
-                  confidence: 95,
-                  validationErrors: [],
-                  parsedMessage: 'Buy 1 ETH with USDC if price drops below $2500'
-                })
-              }
-            }]
-          })
-        }
-      }
-    }))
+    ...jest.requireActual('../services/groq-client'),
+    parseWithLLM: jest.fn().mockResolvedValue({
+      success: true,
+      intent: 'limit_order',
+      fromAsset: 'USDC',
+      fromChain: 'ethereum',
+      toAsset: 'ETH',
+      toChain: 'ethereum',
+      amount: 1,
+      targetPrice: 2500,
+      condition: 'below',
+      confidence: 95,
+      validationErrors: [],
+      parsedMessage: 'Buy 1 ETH with USDC if price drops below $2500'
+    })
   };
 });
 
@@ -48,33 +37,20 @@ describe('Limit Order & DCA Parsing', () => {
   });
 
   it('should parse a sell limit order', async () => {
-    const mockGroq = require('groq-sdk');
-    mockGroq.mockImplementation(() => ({
-      chat: {
-        completions: {
-          create: jest.fn().mockResolvedValue({
-            choices: [{
-              message: {
-                content: JSON.stringify({
-                  success: true,
-                  intent: 'limit_order',
-                  fromAsset: 'ETH',
-                  fromChain: 'ethereum',
-                  toAsset: 'USDC',
-                  toChain: 'ethereum',
-                  amount: 2,
-                  targetPrice: 4000,
-                  condition: 'above',
-                  confidence: 95,
-                  validationErrors: [],
-                  parsedMessage: 'Sell 2 ETH when price hits $4000'
-                })
-              }
-            }]
-          })
-        }
-      }
-    }));
+    (groqClient.parseWithLLM as jest.Mock).mockResolvedValueOnce({
+      success: true,
+      intent: 'limit_order',
+      fromAsset: 'ETH',
+      fromChain: 'ethereum',
+      toAsset: 'USDC',
+      toChain: 'ethereum',
+      amount: 2,
+      targetPrice: 4000,
+      condition: 'above',
+      confidence: 95,
+      validationErrors: [],
+      parsedMessage: 'Sell 2 ETH when price hits $4000'
+    });
 
     const result = await parseUserCommand('Sell 2 ETH when price hits $4000', []);
     expect(result.success).toBe(true);
@@ -84,33 +60,20 @@ describe('Limit Order & DCA Parsing', () => {
   });
 
   it('should parse a DCA command', async () => {
-    const mockGroq = require('groq-sdk');
-    mockGroq.mockImplementation(() => ({
-      chat: {
-        completions: {
-          create: jest.fn().mockResolvedValue({
-            choices: [{
-              message: {
-                content: JSON.stringify({
-                  success: true,
-                  intent: 'dca',
-                  toAsset: 'BTC',
-                  toChain: 'bitcoin',
-                  amount: 50,
-                  totalAmount: 200,
-                  frequency: 'weekly',
-                  numPurchases: 4,
-                  startDate: '2024-01-01T00:00:00Z',
-                  confidence: 95,
-                  validationErrors: [],
-                  parsedMessage: 'DCA $50 into Bitcoin every week for a month'
-                })
-              }
-            }]
-          })
-        }
-      }
-    }));
+    (groqClient.parseWithLLM as jest.Mock).mockResolvedValueOnce({
+      success: true,
+      intent: 'dca',
+      toAsset: 'BTC',
+      toChain: 'bitcoin',
+      amount: 50,
+      totalAmount: 200,
+      frequency: 'weekly',
+      numPurchases: 4,
+      startDate: '2024-01-01T00:00:00Z',
+      confidence: 95,
+      validationErrors: [],
+      parsedMessage: 'DCA $50 into Bitcoin every week for a month'
+    });
 
     const result = await parseUserCommand('DCA $50 into Bitcoin every week for a month', []);
     expect(result.success).toBe(true);
@@ -123,31 +86,18 @@ describe('Limit Order & DCA Parsing', () => {
   });
 
   it('should validate limit order fields', async () => {
-    const mockGroq = require('groq-sdk');
-    mockGroq.mockImplementation(() => ({
-      chat: {
-        completions: {
-          create: jest.fn().mockResolvedValue({
-            choices: [{
-              message: {
-                content: JSON.stringify({
-                  success: true,
-                  intent: 'limit_order',
-                  fromAsset: 'USDC',
-                  toAsset: 'ETH',
-                  amount: 1,
-                  targetPrice: null, // Missing target price
-                  condition: 'below',
-                  confidence: 80,
-                  validationErrors: [],
-                  parsedMessage: 'Invalid limit order'
-                })
-              }
-            }]
-          })
-        }
-      }
-    }));
+    (groqClient.parseWithLLM as jest.Mock).mockResolvedValueOnce({
+      success: false,
+      intent: 'limit_order',
+      fromAsset: 'USDC',
+      toAsset: 'ETH',
+      amount: 1,
+      targetPrice: null, // Missing target price
+      condition: 'below',
+      confidence: 80,
+      validationErrors: ['Target price not specified'],
+      parsedMessage: 'Invalid limit order'
+    });
 
     const result = await parseUserCommand('Buy ETH when cheap', []);
     expect(result.success).toBe(false);
@@ -155,31 +105,18 @@ describe('Limit Order & DCA Parsing', () => {
   });
 
   it('should validate DCA fields', async () => {
-    const mockGroq = require('groq-sdk');
-    mockGroq.mockImplementation(() => ({
-      chat: {
-        completions: {
-          create: jest.fn().mockResolvedValue({
-            choices: [{
-              message: {
-                content: JSON.stringify({
-                  success: true,
-                  intent: 'dca',
-                  toAsset: 'BTC',
-                  amount: 50,
-                  totalAmount: null, // Missing total amount
-                  frequency: 'weekly',
-                  numPurchases: 4,
-                  confidence: 80,
-                  validationErrors: [],
-                  parsedMessage: 'Invalid DCA'
-                })
-              }
-            }]
-          })
-        }
-      }
-    }));
+    (groqClient.parseWithLLM as jest.Mock).mockResolvedValueOnce({
+      success: false,
+      intent: 'dca',
+      toAsset: 'BTC',
+      amount: 50,
+      totalAmount: null, // Missing total amount
+      frequency: 'weekly',
+      numPurchases: 4,
+      confidence: 80,
+      validationErrors: ['Total investment amount not specified'],
+      parsedMessage: 'Invalid DCA'
+    });
 
     const result = await parseUserCommand('DCA into Bitcoin', []);
     expect(result.success).toBe(false);
@@ -192,7 +129,7 @@ describe('Price Monitor', () => {
     const currentPrice = 2400;
     const targetPrice = 2500;
     const condition = 'below';
-    
+
     const triggered = priceMonitor.isLimitOrderTriggered(currentPrice, targetPrice, condition);
     expect(triggered).toBe(true);
   });
@@ -201,7 +138,7 @@ describe('Price Monitor', () => {
     const currentPrice = 4100;
     const targetPrice = 4000;
     const condition = 'above';
-    
+
     const triggered = priceMonitor.isLimitOrderTriggered(currentPrice, targetPrice, condition);
     expect(triggered).toBe(true);
   });
@@ -210,7 +147,7 @@ describe('Price Monitor', () => {
     const currentPrice = 2600;
     const targetPrice = 2500;
     const condition = 'below';
-    
+
     const triggered = priceMonitor.isLimitOrderTriggered(currentPrice, targetPrice, condition);
     expect(triggered).toBe(false);
   });
