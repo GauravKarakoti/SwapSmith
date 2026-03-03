@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import CryptoChart from './CryptoChart';
 import { motion } from 'framer-motion';
-import { Activity, TrendingUp, Sparkles } from 'lucide-react';
+import { Activity, Sparkles } from 'lucide-react';
 
 export interface TopCoin {
   coin: string;

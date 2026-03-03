@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth } from '@/lib/firebase-admin';
 import { getAdminByFirebaseUid, getAdminSwapById } from '@/lib/admin-service';
-import { SIDESHIFT_CONFIG } from 'shared/config/sideshift';
+import { SIDESHIFT_CONFIG } from '../../../../../../shared/config/sideshift';
 
 async function authenticate(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
