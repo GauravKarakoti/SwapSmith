@@ -64,6 +64,7 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
   const [copiedMemo, setCopiedMemo] = useState(false)
   const [isSimulating, setIsSimulating] = useState(false);
   const [safetyCheck, setSafetyCheck] = useState<SafetyCheckResult | null>(null);
+  const [walletBalance, setWalletBalance] = useState<string | null>(null);
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
 
   const { address, isConnected, chain: connectedChain } = useAccount()
@@ -97,6 +98,13 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
 
       // Update the parent state (SwapSmith Agent)
       if (onAmountChange) {
+        onAmountChange(balanceFormatted);
+        // Show confirmation feedback
+        setTimeout(() => {
+          // Balance display will update after new quote is fetched
+        }, 300);
+      } else {
+        alert(`Your max balance is ${parseFloat(balanceFormatted).toFixed(4)} ${quote.depositCoin}. Please update the amount manually.`);
         onAmountChange(finalAmount);
       }
     } catch (err) {
@@ -148,6 +156,21 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
         </div>
       </div>
 
+      <div className="space-y-3 text-sm">
+        <div className="flex justify-between items-start">
+          <div className="flex-1">
+            <span className="text-gray-600 block">You send:</span>
+            <span className="font-medium text-gray-900 text-base mt-1 block">{quote.depositAmount} {quote.depositCoin}</span>
+            <span className="text-gray-500 text-xs mt-0.5 block">on {getNetworkName(quote.depositNetwork)}</span>
+          </div>
+          <div className="flex flex-col items-end gap-2">
+            <button
+              onClick={handleFetchBalance}
+              disabled={!isConnected || isLoadingBalance}
+              className="px-3 py-2 text-xs font-semibold bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+              title="Set amount to your full wallet balance"
+            >
+              {isLoadingBalance ? <span className="flex items-center gap-1"><div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>Loading...</span> : '💰 Max'}
       <div className="space-y-4">
         {/* You Send Section with Max Button */}
         <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
@@ -160,6 +183,11 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
             >
               <Wallet className="w-3 h-3" /> {isLoadingBalance ? '...' : 'USE MAX'}
             </button>
+            {walletBalance && !isLoadingBalance && (
+              <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                Balance: {parseFloat(walletBalance).toFixed(4)} {quote.depositCoin}
+              </span>
+            )}
           </div>
           <div className="flex justify-between items-end">
             <span className="text-xl font-bold text-blue-900">{quote.depositAmount}</span>
