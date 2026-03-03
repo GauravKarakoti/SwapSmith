@@ -14,6 +14,7 @@ import {
   rewardsLog,
   watchlist,
   priceAlerts,
+  orders, // Import orders for reputation calculation
 } from '../../shared/schema';
 
 const sql = neon(process.env.DATABASE_URL!);
@@ -31,6 +32,7 @@ export {
   rewardsLog,
   watchlist,
   priceAlerts,
+  orders,
 };
 
 export type User = typeof users.$inferSelect;
@@ -264,12 +266,13 @@ export async function getAgentReputation(): Promise<{ totalSwaps: number; succes
   }
 
   try {
+    // Query orders (bot) to get comprehensive stats
     const result = await db
       .select({
         total: count(),
-        success: count(drizzleSql`CASE WHEN ${swapHistory.status} = 'settled' THEN 1 END`)
+        success: count(drizzleSql`CASE WHEN ${orders.status} = 'settled' THEN 1 END`)
       })
-      .from(swapHistory);
+      .from(orders);
     
     if (!result || result.length === 0) {
        return { totalSwaps: 0, successRate: 0, successCount: 0 };
