@@ -509,12 +509,29 @@ async function start() {
     logger.info('🤖 Bot launched');
 
     const shutdown = (signal: string) => {
+      logger.info(`Shutting down due to ${signal}...`);
+      
+      // Force exit if graceful shutdown hangs
+      setTimeout(() => {
+        logger.error('Shutdown sequence timed out. Forcing exit.');
+        process.exit(1);
+      }, 5000).unref();
+
       dcaScheduler.stop();
       limitOrderWorker.stop();
       stopStakeWorker();
       orderMonitor.stop();
       bot.stop(signal);
-      server.close(() => process.exit(0));
+      
+      // Close server and exit
+      server.close((err) => {
+        if (err) {
+          logger.error('Error closing server:', err);
+          process.exit(1);
+        }
+        logger.info('Server closed. Exiting process.');
+        process.exit(0);
+      });
     };
 
     process.once('SIGINT', () => shutdown('SIGINT'));
