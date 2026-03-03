@@ -85,7 +85,7 @@ export default async function handler(
       }
 
       // Validate percentages sum to 100
-      const totalPercentage = assets.reduce((sum: number, a: any) => sum + a.targetPercentage, 0);
+      const totalPercentage = assets.reduce((sum: number, a: { targetPercentage: number }) => sum + a.targetPercentage, 0);
       if (Math.abs(totalPercentage - 100) > 0.1) {
         return res.status(400).json({
           error: `Asset percentages must sum to 100% (Current: ${totalPercentage}%)`,
@@ -116,7 +116,7 @@ export default async function handler(
         return res.status(400).json({ error: 'Missing required field: id' });
       }
 
-      const updateData: any = {};
+      const updateData: Record<string, unknown> = {};
       if (name) updateData.name = name;
       if (assets) {
         // Validate assets
@@ -128,7 +128,7 @@ export default async function handler(
           }
         }
         
-        const totalPercentage = assets.reduce((sum: number, a: any) => sum + a.targetPercentage, 0);
+        const totalPercentage = assets.reduce((sum: number, a: { targetPercentage: number }) => sum + a.targetPercentage, 0);
         if (Math.abs(totalPercentage - 100) > 0.1) {
           return res.status(400).json({
             error: `Asset percentages must sum to 100% (Current: ${totalPercentage}%)`,

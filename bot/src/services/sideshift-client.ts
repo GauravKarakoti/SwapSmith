@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { z } from 'zod';
 import dotenv from 'dotenv';
 import { SIDESHIFT_CONFIG } from '../../../shared/config/sideshift';
 dotenv.config();
@@ -120,6 +121,144 @@ export interface SideShiftCoin {
   settleOffline: string[] | boolean;
 }
 
+// ============================================
+// Zod Schemas for Runtime Validation
+// ============================================
+
+const TokenDetailSchema = z.object({
+  contractAddress: z.string(),
+  decimals: z.number(),
+});
+
+const SideShiftErrorSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+});
+
+const SideShiftCoinSchema = z.object({
+  networks: z.array(z.string()),
+  coin: z.string(),
+  name: z.string(),
+  hasMemo: z.boolean(),
+  deprecated: z.boolean().optional(),
+  fixedOnly: z.union([z.array(z.string()), z.boolean()]),
+  variableOnly: z.union([z.array(z.string()), z.boolean()]),
+  tokenDetails: z.record(z.string(), TokenDetailSchema).optional(),
+  networksWithMemo: z.array(z.string()),
+  depositOffline: z.union([z.array(z.string()), z.boolean()]),
+  settleOffline: z.union([z.array(z.string()), z.boolean()]),
+});
+
+const SideShiftPairSchema = z.object({
+  depositCoin: z.string(),
+  settleCoin: z.string(),
+  depositNetwork: z.string(),
+  settleNetwork: z.string(),
+  min: z.string(),
+  max: z.string(),
+  rate: z.string(),
+  hasMemo: z.boolean(),
+});
+
+const SideShiftQuoteSchema = z.object({
+  id: z.string(),
+  depositCoin: z.string(),
+  depositNetwork: z.string(),
+  settleCoin: z.string(),
+  settleNetwork: z.string(),
+  depositAmount: z.string(),
+  settleAmount: z.string(),
+  rate: z.string(),
+  affiliateId: z.string(),
+  error: SideShiftErrorSchema.optional(),
+  memo: z.string().optional(),
+  expiry: z.string().optional(),
+});
+
+const SideShiftOrderDepositAddressSchema = z.union([
+  z.string(),
+  z.object({
+    address: z.string(),
+    memo: z.string(),
+  }),
+]);
+
+const SideShiftOrderSchema = z.object({
+  id: z.string(),
+  createdAt: z.string(),
+  depositCoin: z.string(),
+  depositNetwork: z.string(),
+  depositAddress: SideShiftOrderDepositAddressSchema,
+  depositAmount: z.string(),
+  settleCoin: z.string(),
+  settleNetwork: z.string(),
+  settleAddress: z.string(),
+  settleAmount: z.string(),
+  rate: z.string(),
+  expiresAt: z.string().optional(),
+  status: z.string().optional(),
+});
+
+const SideShiftOrderStatusSchema = z.object({
+  id: z.string(),
+  status: z.string(),
+  depositCoin: z.string(),
+  depositNetwork: z.string(),
+  settleCoin: z.string(),
+  settleNetwork: z.string(),
+  depositAddress: z.object({
+    address: z.string(),
+    memo: z.string().nullable(),
+  }),
+  settleAddress: z.object({
+    address: z.string(),
+    memo: z.string().nullable(),
+  }),
+  depositAmount: z.string().nullable(),
+  settleAmount: z.string().nullable(),
+  depositHash: z.string().nullable(),
+  settleHash: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  error: SideShiftErrorSchema.optional(),
+});
+
+const SideShiftCheckoutResponseSchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  settleCoin: z.string(),
+  settleNetwork: z.string(),
+  settleAddress: z.string(),
+  settleAmount: z.string(),
+  affiliateId: z.string(),
+  successUrl: z.string(),
+  cancelUrl: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  error: SideShiftErrorSchema.optional(),
+});
+
+// ============================================
+// Validation Helper Functions
+// ============================================
+
+/**
+ * Validates API response data against a Zod schema
+ * @throws Error with detailed validation issues if validation fails
+ */
+function validateResponse<T>(schema: z.ZodSchema<T>, data: unknown, context: string): T {
+  const result = schema.safeParse(data);
+  
+  if (!result.success) {
+    const issues = result.error.issues
+      .map(issue => `${issue.path.join('.')}: ${issue.message}`)
+      .join('; ');
+    throw new Error(`SideShift API response validation failed for ${context}: ${issues}`);
+  }
+  
+  return result.data;
+}
+
 export async function getCoins(userIP?: string): Promise<SideShiftCoin[]> {
   try {
     const headers: Record<string, string | undefined> = {
@@ -128,11 +267,11 @@ export async function getCoins(userIP?: string): Promise<SideShiftCoin[]> {
     const ip = userIP || DEFAULT_USER_IP;
     if (ip) headers['x-user-ip'] = ip;
 
-    const response = await axios.get<SideShiftCoin[]>(
+    const response = await axios.get(
       `${SIDESHIFT_CONFIG.BASE_URL}/coins`,
       { headers }
     );
-    return response.data;
+    return validateResponse(SideShiftCoinSchema.array(), response.data, 'getCoins');
   } catch (error) {
     if (axios.isAxiosError(error)) {
       throw new Error(error.response?.data?.error?.message || 'Failed to fetch coins');
@@ -149,11 +288,11 @@ export async function getPairs(userIP?: string): Promise<SideShiftPair[]> {
     const ip = userIP || DEFAULT_USER_IP;
     if (ip) headers['x-user-ip'] = ip;
 
-    const response = await axios.get<SideShiftPair[]>(
+    const response = await axios.get(
       `${SIDESHIFT_CONFIG.BASE_URL}/pairs`,
       { headers }
     );
-    return response.data;
+    return validateResponse(SideShiftPairSchema.array(), response.data, 'getPairs');
   } catch (error) {
     if (axios.isAxiosError(error)) {
       throw new Error(error.response?.data?.error?.message || 'Failed to fetch trading pairs');
@@ -178,7 +317,7 @@ export async function createQuote(
     const ip = userIP || DEFAULT_USER_IP;
     if (ip) headers['x-user-ip'] = ip;
 
-    const response = await axios.post<SideShiftQuote & { id?: string }>(
+    const response = await axios.post(
       `${SIDESHIFT_CONFIG.BASE_URL}/quotes`,
       {
         depositCoin: fromAsset,
@@ -191,13 +330,15 @@ export async function createQuote(
       { headers }
     );
 
-    if (response.data.error) {
-      throw new Error(response.data.error.message);
+    const validated = validateResponse(SideShiftQuoteSchema, response.data, 'createQuote');
+
+    if (validated.error) {
+      throw new Error(validated.error.message);
     }
 
     return {
-      ...response.data,
-      id: response.data.id || '' // Ensure ID is present
+      ...validated,
+      id: validated.id || ''
     };
   } catch (error) {
     if (axios.isAxiosError(error)) {
@@ -226,12 +367,12 @@ export async function createOrder(quoteId: string, settleAddress: string, refund
     const ip = userIP || DEFAULT_USER_IP;
     if (ip) headers['x-user-ip'] = ip;
 
-    const response = await axios.post<SideShiftOrder>(
+    const response = await axios.post(
       `${SIDESHIFT_CONFIG.BASE_URL}/shifts/fixed`,
       payload,
       { headers }
     );
-    return response.data;
+    return validateResponse(SideShiftOrderSchema, response.data, 'createOrder');
   } catch (error) {
     if (axios.isAxiosError(error)) {
       throw new Error(error.response?.data?.error?.message || 'Failed to create order');
@@ -249,11 +390,11 @@ export async function getOrderStatus(orderId: string, userIP?: string): Promise<
     const ip = userIP || DEFAULT_USER_IP;
     if (ip) headers['x-user-ip'] = ip;
 
-    const response = await axios.get<SideShiftOrderStatus>(
+    const response = await axios.get(
       `${SIDESHIFT_CONFIG.BASE_URL}/shifts/${orderId}`,
       { headers }
     );
-    return response.data;
+    return validateResponse(SideShiftOrderStatusSchema, response.data, 'getOrderStatus');
   } catch (error) {
     if (axios.isAxiosError(error)) {
       throw new Error(error.response?.data?.error?.message || 'Failed to get order status');
@@ -288,19 +429,21 @@ export async function createCheckout(
     const ip = userIP || DEFAULT_USER_IP;
     if (ip) headers['x-user-ip'] = ip;
 
-    const response = await axios.post<SideShiftCheckoutResponse>(
+    const response = await axios.post(
       `${SIDESHIFT_CONFIG.BASE_URL}/checkout`,
       payload,
       { headers }
     );
 
-    if (response.data.error) {
-      throw new Error(response.data.error.message);
+    const validated = validateResponse(SideShiftCheckoutResponseSchema, response.data, 'createCheckout');
+
+    if (validated.error) {
+      throw new Error(validated.error.message);
     }
 
     return {
-      ...response.data,
-      url: response.data.url || `${SIDESHIFT_CONFIG.CHECKOUT_URL}/${response.data.id}`
+      ...validated,
+      url: validated.url || `${SIDESHIFT_CONFIG.CHECKOUT_URL}/${validated.id}`
     };
   } catch (error) {
     if (axios.isAxiosError(error)) {

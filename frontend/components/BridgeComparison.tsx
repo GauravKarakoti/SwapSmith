@@ -92,7 +92,6 @@ export default function BridgeComparison({
 
   // Get best values for highlighting
   const bestOutput = Math.max(...quotes.map(q => Number(q.toAmount)));
-  const bestFee = Math.min(...quotes.map(q => Number(q.totalFee || '0')));
   const bestTime = Math.min(...quotes.map(q => q.estimatedTime?.max || 60));
   const bestReliability = Math.max(...quotes.map(q => q.confidence));
 

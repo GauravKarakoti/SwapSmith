@@ -1,6 +1,6 @@
 'use client'
 
-import { Shield, Lock, Eye, CheckCircle, AlertTriangle, AlertCircle, TrendingUp, BarChart3 } from 'lucide-react'
+import { Shield, Lock, Eye, CheckCircle, AlertTriangle, AlertCircle, BarChart3 } from 'lucide-react'
 import { useAgentReputation } from '@/hooks/useAgentReputation';
 
 interface TrustIndicatorsProps {
@@ -8,7 +8,7 @@ interface TrustIndicatorsProps {
 }
 
 export default function TrustIndicators({ confidence }: TrustIndicatorsProps) {
-  const { reputation, isLoading } = useAgentReputation();
+  const { reputation } = useAgentReputation();
   
   // Normalize confidence to 0-100 scale if it's 0-1
   const normalizedConfidence = confidence !== undefined

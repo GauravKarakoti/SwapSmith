@@ -6,9 +6,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import axios from 'axios';
-import { execFile } from 'child_process';
+import { spawn } from 'child_process';
 import express from 'express';
 import { sql } from 'drizzle-orm';
+import cors from 'cors';
+import type { Server } from 'http';
+import type { Socket } from 'net';
 
 import { transcribeAudio } from './services/groq-client';
 import logger, { Sentry, handleError } from './services/logger';
@@ -51,6 +54,22 @@ bot.use(
 );
 
 const app = express();
+
+const allowedOrigins = [MINI_APP_URL, 'http://localhost:3000', 'http://localhost:3001'];
+
+app.use(cors({
+  origin: function (origin: any, callback: any) {
+    // allow requests with no origin (like mobile apps, curl requests)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  }
+}));
+
 app.use(express.json());
 
 /* -------------------------------------------------------------------------- */
@@ -60,7 +79,10 @@ app.use(express.json());
 const orderMonitor = new OrderMonitor({
   getOrderStatus,
   updateOrderStatus: db.updateOrderStatus,
+  updateWatchedOrderStatus: db.updateWatchedOrderStatus,
   getPendingOrders: db.getPendingOrders,
+  getPendingWatchedOrders: db.getPendingWatchedOrders,
+  addWatchedOrder: db.addWatchedOrder,
   onStatusChange: async (telegramId, orderId, oldStatus, newStatus, details) => {
     const emojiMap: Record<string, string> = {
       waiting: '⏳',
@@ -153,11 +175,39 @@ bot.on(message('voice'), async (ctx) => {
     const res = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
     fs.writeFileSync(oga, res.data);
 
-    await new Promise<void>((resolve, reject) =>
-      execFile('ffmpeg', ['-i', oga, mp3, '-y'], (e) =>
-        e ? reject(e) : resolve()
-      )
-    );
+    await new Promise<void>((resolve, reject) => {
+      const ffmpeg = spawn('ffmpeg', ['-i', oga, mp3, '-y']);
+
+      let stderrData = '';
+
+      if (ffmpeg.stderr) {
+        ffmpeg.stderr.on('data', (chunk) => {
+          stderrData += chunk.toString();
+        });
+      }
+
+      if (ffmpeg.stdout) {
+        ffmpeg.stdout.on('data', () => {
+          // drain stdout to avoid blocking if ffmpeg writes to it
+        });
+      }
+
+      ffmpeg.on('error', (err) => reject(err));
+
+      ffmpeg.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(
+            new Error(
+              `FFmpeg process exited with code ${code}${
+                stderrData ? `; stderr: ${stderrData}` : ''
+              }`,
+            ),
+          );
+        }
+      });
+    });
 
     const text = await transcribeAudio(mp3);
     await handleTextMessage(ctx, text, 'voice');
@@ -371,10 +421,10 @@ bot.action('confirm_swap_and_stake', async (ctx) => {
     await ctx.editMessageText('⚙️ Creating swap & stake order...');
 
     const parsed = state.parsedCommand;
-    
+
     // Import stake client functions
     const { getZapQuote, createZapTransaction, formatZapQuote } = await import('./services/stake-client');
-    
+
     // Validate required fields
     if (!parsed.fromAsset || !parsed.toAsset || !parsed.amount || !parsed.settleAddress) {
       throw new Error('Missing required fields for swap and stake');
@@ -488,7 +538,7 @@ async function start() {
       await db.db.execute(sql`SELECT 1`);
       dcaScheduler.start();
       limitOrderWorker.start(bot);
-      
+
       try {
         initializeStakeWorker(bot);
         logger.info('✅ Stake worker initialized successfully');
@@ -501,41 +551,96 @@ async function start() {
     await orderMonitor.loadPendingOrders();
     orderMonitor.start();
 
-    const server = app.listen(PORT, () =>
+    // Schedule hourly reconciliation with an in-flight guard to prevent concurrent runs
+    let reconcileInFlight = false;
+    const reconcileInterval = setInterval(async () => {
+      if (reconcileInFlight) {
+        logger.warn('[OrderMonitor] Skipping reconciliation — previous run still in flight');
+        return;
+      }
+      reconcileInFlight = true;
+      try {
+        await orderMonitor.reconcile();
+      } finally {
+        reconcileInFlight = false;
+      }
+    }, 60 * 60_000); // every hour (60 minutes × 60 000 ms)
+
+    const sockets = new Set<Socket>();
+    const server: Server = app.listen(PORT, () =>
       logger.info(`🌍 Server running on port ${PORT}`)
     );
+    server.on('connection', (socket) => {
+      sockets.add(socket);
+      socket.on('close', () => sockets.delete(socket));
+    });
 
     await bot.launch();
     logger.info('🤖 Bot launched');
 
-    const shutdown = (signal: string) => {
-      logger.info(`Shutting down due to ${signal}...`);
-      
-      // Force exit if graceful shutdown hangs
-      setTimeout(() => {
-        logger.error('Shutdown sequence timed out. Forcing exit.');
-        process.exit(1);
-      }, 5000).unref();
+    let isShuttingDown = false;
+    const shutdown = async (signal: string) => {
+      if (isShuttingDown) return;
+      isShuttingDown = true;
+      logger.info(`🛑 Shutdown initiated (${signal})`);
 
-      dcaScheduler.stop();
-      limitOrderWorker.stop();
-      stopStakeWorker();
-      orderMonitor.stop();
-      bot.stop(signal);
-      
-      // Close server and exit
-      server.close((err) => {
-        if (err) {
-          logger.error('Error closing server:', err);
-          process.exit(1);
+      const forceExitTimer = setTimeout(() => {
+        logger.error('🧨 Forced shutdown after timeout');
+        // eslint-disable-next-line no-process-exit
+        process.exit(1);
+      }, 8_000);
+      forceExitTimer.unref?.();
+
+      try {
+        // Stop background work first so no new activity is scheduled
+        clearInterval(reconcileInterval);
+        orderMonitor.stop();
+        dcaScheduler.stop();
+        limitOrderWorker.stop();
+        stopStakeWorker();
+
+        // Stop Telegraf (polling/webhook)
+        bot.stop(signal);
+
+        // Close HTTP server and any keep-alive sockets
+        try {
+          (server as any).closeIdleConnections?.();
+          (server as any).closeAllConnections?.();
+        } catch {
+          // ignore best-effort calls
         }
-        logger.info('Server closed. Exiting process.');
+
+        sockets.forEach((s) => {
+          try {
+            s.destroy();
+          } catch {
+            // ignore
+          }
+        });
+
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+
+        clearTimeout(forceExitTimer);
+        // eslint-disable-next-line no-process-exit
         process.exit(0);
-      });
+      } catch (e) {
+        handleError('ShutdownFailed', e);
+        clearTimeout(forceExitTimer);
+        // eslint-disable-next-line no-process-exit
+        process.exit(1);
+      }
     };
 
     process.once('SIGINT', () => shutdown('SIGINT'));
     process.once('SIGTERM', () => shutdown('SIGTERM'));
+    process.once('uncaughtException', (err) => {
+      handleError('UncaughtException', err);
+      void shutdown('uncaughtException');
+    });
+    process.once('unhandledRejection', (reason) => {
+      handleError('UnhandledRejection', reason);
+      void shutdown('unhandledRejection');
+    });
   } catch (e) {
     handleError('StartupFailed', e);
     process.exit(1);

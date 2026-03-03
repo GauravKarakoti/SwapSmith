@@ -10,7 +10,7 @@ const WORKER_INTERVAL = '*/2 * * * *'; // Run every 2 minutes
 
 // Telegram bot instance (will be set from bot.ts)
 let bot: Telegraf | null = null;
-let stakeTask: any = null;
+let scheduledTask: cron.ScheduledTask | null = null;
 
 /**
  * Initialize the stake order worker with a Telegram bot instance
@@ -18,12 +18,13 @@ let stakeTask: any = null;
 export function initializeStakeWorker(telegrafBot: Telegraf) {
   bot = telegrafBot;
 
-  if (stakeTask) {
-    stakeTask.stop(); // Stop if already running
+  if (scheduledTask) {
+    logger.warn('[StakeWorker] initializeStakeWorker called but task already scheduled');
+    return;
   }
 
   // Schedule stake order checks every 2 minutes
-  stakeTask = cron.schedule(WORKER_INTERVAL, async () => {
+  scheduledTask = cron.schedule(WORKER_INTERVAL, async () => {
     logger.info('[StakeWorker] Checking stake orders...');
     await checkAndProcessStakeOrders();
   });
@@ -185,14 +186,17 @@ async function notifySwapStatusChange(order: StakeOrder, newStatus: string): Pro
  */
 export function stopStakeWorker(): void {
   logger.info('[StakeWorker] Stopping stake order worker');
+<<<<<<< HEAD
   if (stakeTask) {
     stakeTask.stop();
     stakeTask = null;
   }
-}
-
-// Export for testing
-export const _test = {
-  processStakeOrder,
-  initiateStaking,
-};
+=======
+  if (scheduledTask) {
+    scheduledTask.stop();
+    scheduledTask = null;
+  if (scheduledTask) {
+    scheduledTask.stop();
+    scheduledTask = null;
+  }
+  bot = null;

@@ -69,7 +69,7 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
   const [copiedMemo, setCopiedMemo] = useState(false)
   const [isSimulating, setIsSimulating] = useState(false);
   const [safetyCheck, setSafetyCheck] = useState<SafetyCheckResult | null>(null);
-  const [walletBalance, setWalletBalance] = useState<string | null>(null);
+  const [_walletBalance, setWalletBalance] = useState<string | null>(null);
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
 
   const { address, isConnected, chain: connectedChain } = useAccount()
