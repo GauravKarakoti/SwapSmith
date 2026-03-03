@@ -131,9 +131,6 @@ describe('ChatInterface Component', () => {
     const greeting = screen.getByText(/Hello! I can help you swap assets/i);
     expect(greeting).toBeInTheDocument();
     
-    // Check for "Tip: Try our Telegram Bot" if that's what the test expects
-    // The previous test file had: expect(screen.getByText(/Tip: Try our Telegram Bot/i)).toBeInTheDocument();
-    // But I will verify what was actually there.
     expect(screen.getByText(/Try our Telegram Bot/i)).toBeInTheDocument();
   });
 
