@@ -31,10 +31,12 @@ const NAV_ITEMS = [
   { href: "/terminal", label: "Terminal", Icon: TerminalIcon },
   { href: "/contributors", label: "Contributors", Icon: Users },
   { href: "/watchlist", label: "Watchlist", Icon: Star },
+  { href: "/strategies", label: "Strategies", Icon: BookOpen },
 ];
 
 const PROFILE_MENU = [
   { href: "/profile", label: "Profile", Icon: User },
+  { href: "/portfolio", label: "Portfolio", Icon: Users },
   { href: "/rewards", label: "Rewards", Icon: Trophy },
   { href: "/learn", label: "Learn", Icon: BookOpen },
   { href: "/about", label: "About", Icon: Info },

@@ -192,9 +192,3 @@ export function stopStakeWorker(): void {
   }
   bot = null;
 }
-
-// Export for testing
-export const _test = {
-  processStakeOrder,
-  initiateStaking,
-};

@@ -6,15 +6,15 @@ export { ParsedCommand };
 export type ParseResult =
   | ParsedCommand
   | {
-      success: false;
-      validationErrors: string[];
-      intent?: string;
-      confidence?: number;
-      parsedMessage?: string;
-      requiresConfirmation?: boolean;
-      originalInput?: string;
-      [key: string]: any;
-    };
+    success: false;
+    validationErrors: string[];
+    intent?: string;
+    confidence?: number;
+    parsedMessage?: string;
+    requiresConfirmation?: boolean;
+    originalInput?: string;
+    [key: string]: any;
+  };
 
 const REGEX_TOKENS = /([A-Z]{2,10})\s+(to|into|for)\s+([A-Z]{2,10})/i;
 const REGEX_FROM_TO = /from\s+([A-Z]{2,10})\s+to\s+([A-Z]{2,10})/i;
@@ -145,7 +145,11 @@ export async function parseUserCommand(
     };
   }
 
-  const isSwapRelated = /\b(swap|convert|send|transfer|buy|sell|move|exchange)\b/i.test(input);
+  /* ───────────── STANDARD SWAP ───────────── */
+
+  const isLimitOrDca = /\b(if|when|target|below|above|dca|every|daily|weekly|monthly)\b/i.test(input);
+  const isSwapRelated = !isLimitOrDca && /\b(swap|convert|send|transfer|buy|sell|move|exchange)\b/i.test(input);
+
   if (isSwapRelated) {
     if (/\bor\b/i.test(input)) {
       return {
