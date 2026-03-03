@@ -1,9 +1,8 @@
 import { useState } from 'react'
-import { CheckCircle, AlertCircle, ExternalLink, Copy, Check, ShieldCheck, Shield, AlertTriangle, Info, TrendingUp, Zap } from 'lucide-react'
-import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi' // Added usePublicClient
+import { CheckCircle, AlertCircle, ExternalLink, Copy, Check, ShieldCheck, Shield, AlertTriangle, Info, TrendingUp, Zap, Wallet } from 'lucide-react'
+import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi'
 import { parseEther, formatEther, type Chain, isAddress } from 'viem'
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
-import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift'
 
 export interface QuoteData {
   depositAmount: string;
@@ -37,8 +36,6 @@ const EXPLORER_URLS: { [key: string]: string } = {
   solana: 'https://solscan.io',
 }
 
-const SIDESHIFT_TRACKING_URL = SIDESHIFT_CONFIG.TRACKING_URL
-
 // Map network names from your API to wagmi chain objects
 const CHAIN_MAP: { [key: string]: Chain } = {
   ethereum: mainnet,
@@ -63,13 +60,12 @@ interface SafetyCheckResult {
   overallMessage: string;
 }
 
-// --- Main Component ---
 export default function SwapConfirmation({ quote, confidence, onAmountChange }: SwapConfirmationProps) {
   const [copiedAddress, setCopiedAddress] = useState(false)
   const [copiedMemo, setCopiedMemo] = useState(false)
   const [isSimulating, setIsSimulating] = useState(false);
   const [safetyCheck, setSafetyCheck] = useState<SafetyCheckResult | null>(null);
-  const [_walletBalance, setWalletBalance] = useState<string | null>(null);
+  const [walletBalance, setWalletBalance] = useState<string | null>(null);
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
 
   const { address, isConnected, chain: connectedChain } = useAccount()
@@ -141,7 +137,7 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
     }
   };
 
-  const handleFetchBalance = async () => {
+  const handleMaxClick = async () => {
     if (!address || !publicClient) {
       alert('Wallet not connected or network not supported');
       return;
@@ -153,9 +149,10 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
       const balanceFormatted = formatEther(balance);
       setWalletBalance(balanceFormatted);
 
-      // Call the callback to update the parent component with the max amount
       if (onAmountChange) {
         onAmountChange(balanceFormatted);
+      } else {
+        alert(`Your max balance is ${parseFloat(balanceFormatted).toFixed(4)} ${quote.depositCoin}. Please update the amount manually.`);
       }
     } catch (err) {
       console.error('Failed to fetch balance:', err);
@@ -338,9 +335,6 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
     if (hash && baseUrl) {
       return `${baseUrl}/tx/${hash}`;
     }
-    if (quote.id) {
-      return `${SIDESHIFT_TRACKING_URL}/${address}`
-    }
     if (baseUrl) {
       if (networkKey === 'bitcoin') {
         return `${baseUrl}/addresses/${address}`
@@ -385,49 +379,72 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
         )}
       </div>
 
-      <div className="space-y-3 text-sm">
-        <div className="flex justify-between items-center">
-          <span className="text-gray-600">You send:</span>
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-gray-900">{quote.depositAmount} {quote.depositCoin} on {getNetworkName(quote.depositNetwork)}</span>
+      <div className="space-y-4 text-sm">
+        {/* You Send Section */}
+        <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
+          <div className="flex justify-between items-start mb-2">
+            <div>
+              <span className="text-xs font-semibold text-blue-600 uppercase">
+                You Send
+              </span>
+              <div className="font-medium text-gray-900 mt-1">
+                {quote.depositAmount} {quote.depositCoin}
+              </div>
+              <div className="text-xs text-gray-500">
+                on {getNetworkName(quote.depositNetwork)}
+              </div>
+            </div>
+
             <button
-              onClick={handleFetchBalance}
+              onClick={handleMaxClick}
               disabled={!isConnected || isLoadingBalance}
-              className="px-2 py-1 text-xs font-semibold bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-1 text-[10px] font-bold bg-blue-600 text-white px-2 py-0.5 rounded hover:bg-blue-700 transition-all disabled:opacity-50"
               title="Set amount to your full wallet balance"
             >
-              {isLoadingBalance ? 'Loading...' : 'Max'}
+              <Wallet className="w-3 h-3" /> {isLoadingBalance ? '...' : 'USE MAX'}
             </button>
           </div>
+
+          {walletBalance && !isLoadingBalance && (
+            <div className="mt-2 text-xs text-gray-600">
+              Balance: {parseFloat(walletBalance).toFixed(4)} {quote.depositCoin}
+            </div>
+          )}
         </div>
-        <div className="border-t pt-3">
-          <div className="flex justify-between">
-            <span className="text-gray-600">You receive approx:</span>
-            <span className="font-medium text-gray-900">{quote.settleAmount} {quote.settleCoin}</span>
-          </div>
-          <div className="flex justify-between mt-1">
-            <span className="text-gray-600">At your address:</span>
-            <span className="font-mono text-xs bg-gray-100 text-gray-800 px-1 py-0.5 rounded">
-              {isConnected && address ? `${address.substring(0, 6)}...${address.substring(address.length - 4)}` : 'Wallet not connected'}
-            </span>
+
+        {/* You Receive */}
+        <div className="bg-green-50 border border-green-100 rounded-lg p-3">
+          <span className="text-xs font-semibold text-green-600 uppercase">You Receive Approx.</span>
+          <div className="flex justify-between items-end mt-1">
+            <span className="text-xl font-bold text-green-900">{quote.settleAmount}</span>
+            <span className="text-sm font-medium text-green-700">{quote.settleCoin}</span>
           </div>
         </div>
 
-        <div className="border-t pt-3 mt-3">
-          <div className="flex justify-between items-start mb-2">
-            <span className="text-gray-600 font-medium">Send funds to this address:</span>
-            <button
-              onClick={() => quote.depositAddress && copyToClipboard(quote.depositAddress, 'address')}
-              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
-              disabled={!quote.depositAddress}
-            >
-              {copiedAddress ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-              {copiedAddress ? 'Copied!' : 'Copy'}
+        {/* Deposit Address Info */}
+        <div className="pt-2">
+          <div className="flex justify-between text-[11px] text-gray-500 mb-1 px-1">
+            <span>Deposit Address</span>
+            <button onClick={() => copyToClipboard(quote.depositAddress, 'address')} className="text-blue-600 hover:underline">
+              {copiedAddress ? 'Copied!' : 'Copy Address'}
             </button>
           </div>
-          <div className="bg-gray-500 p-2 rounded text-xs font-mono break-all">
+          <div className="bg-gray-50 border border-gray-200 p-2 rounded text-[10px] font-mono break-all text-gray-600">
             {quote.depositAddress}
           </div>
+        </div>
+
+        <div className="mt-6 flex flex-col gap-2 w-full">
+          <button
+            onClick={handleConfirm}
+            disabled={!isConnected || isPending}
+            className="w-full py-3 bg-gray-900 text-white rounded-lg font-bold hover:bg-black transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
+          >
+            {isPending ? 'Confirming...' : 'Confirm and Send'}
+          </button>
+          <p className="text-[10px] text-center text-gray-400">
+            By confirming, you agree to SideShift&apos;s terms and gas fees.
+          </p>
         </div>
 
         {quote.memo && (
@@ -510,9 +527,9 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
               {/* Address Check */}
               <div className="flex items-start gap-2 text-xs">
                 {safetyCheck.checks.address.passed ? (
-                  <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                  <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
                 ) : (
-                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
                 )}
                 <div className="flex-1">
                   <div className="font-medium text-gray-900">Address Validation</div>
@@ -523,9 +540,9 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
               {/* Network Check */}
               <div className="flex items-start gap-2 text-xs">
                 {safetyCheck.checks.network.passed ? (
-                  <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                  <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
                 ) : (
-                  <AlertCircle className="w-4 h-4 text-yellow-500 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="w-4 h-4 text-yellow-500 shrink-0 mt-0.5" />
                 )}
                 <div className="flex-1">
                   <div className="font-medium text-gray-900">Network Status</div>
@@ -536,9 +553,9 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
               {/* Balance Check */}
               <div className="flex items-start gap-2 text-xs">
                 {safetyCheck.checks.balance.passed ? (
-                  <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                  <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
                 ) : (
-                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
                 )}
                 <div className="flex-1">
                   <div className="font-medium text-gray-900">Balance Check</div>
@@ -549,9 +566,9 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
               {/* Gas Check */}
               <div className="flex items-start gap-2 text-xs">
                 {safetyCheck.checks.gas.passed ? (
-                  <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                  <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
                 ) : (
-                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
                 )}
                 <div className="flex-1">
                   <div className="font-medium text-gray-900 flex items-center gap-1">
@@ -576,45 +593,33 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
         )}
       </div>
 
-      <div className="mt-4 space-y-2">
-        <button
-          onClick={handleConfirm}
-          disabled={!isConnected || isPending || !address || (safetyCheck?.riskLevel === 'unsafe') || false}
-          className={`w-full py-3 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${safetyCheck?.riskLevel === 'safe'
-            ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700'
-            : safetyCheck?.riskLevel === 'warning'
-              ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white hover:from-yellow-600 hover:to-yellow-700'
-              : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700'
-            }`}
-        >
-          {isPending ? 'Check Your Wallet...' : safetyCheck?.riskLevel === 'unsafe' ? 'Transaction Blocked (Unsafe)' : 'Confirm and Send'}
-        </button>
-
-        {explorerUrl && !isSuccess && (
-          <button
-            onClick={() => window.open(explorerUrl, '_blank', 'noopener,noreferrer')}
-            className="w-full flex items-center justify-center gap-2 py-2 text-gray-600 hover:text-gray-800 transition-colors text-sm border border-gray-300 rounded-lg hover:border-gray-400"
-          >
-            View Deposit Address <ExternalLink className="w-3 h-3" />
-          </button>
-        )}
-
-        <div className="flex gap-2 text-xs">
-          <button
-            onClick={() => window.open(SIDESHIFT_CONFIG.HELP_URL, '_blank')}
-            className="text-blue-600 hover:text-blue-800"
-          >
-            Need help?
-          </button>
-          <span className="text-gray-400">•</span>
-          <button
-            onClick={() => window.open(SIDESHIFT_CONFIG.FAQ_URL, '_blank')}
-            className="text-blue-600 hover:text-blue-800"
-          >
-            FAQ
-          </button>
+      {quote.memo && (
+        <div className="border-t pt-3">
+          <div className="flex justify-between items-start mb-2">
+            <span className="text-gray-600 font-medium">Memo/Tag:</span>
+            <button
+              onClick={() => copyToClipboard(quote.memo!, 'memo')}
+              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
+            >
+              {copiedMemo ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+              {copiedMemo ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+          <div className="bg-yellow-50 p-2 rounded text-xs font-mono break-all border border-yellow-200">
+            ⚠️ Important: Include this memo
+            <div className="mt-1 font-semibold">{quote.memo}</div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {quote.expiry && (
+        <div className="flex justify-between border-t pt-3">
+          <span className="text-gray-600">Quote expires:</span>
+          <span className="font-medium text-red-600">
+            {new Date(quote.expiry).toLocaleTimeString()} ({Math.round((new Date(quote.expiry).getTime() - Date.now()) / 60000)}min)
+          </span>
+        </div>
+      )}
 
       {error && (
         <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">

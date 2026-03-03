@@ -21,11 +21,11 @@ export interface QuoteData {
   depositAmount: string;
   depositCoin: string;
   depositNetwork: string;
+  depositAddress: string;
   rate: string;
   settleAmount: string;
   settleCoin: string;
   settleNetwork: string;
-  depositAddress?: string;
   memo?: string;
   expiry?: string;
   id?: string;
