@@ -6,15 +6,15 @@ export { ParsedCommand };
 export type ParseResult =
   | ParsedCommand
   | {
-      success: false;
-      validationErrors: string[];
-      intent?: string;
-      confidence?: number;
-      parsedMessage?: string;
-      requiresConfirmation?: boolean;
-      originalInput?: string;
-      [key: string]: any;
-    };
+    success: false;
+    validationErrors: string[];
+    intent?: string;
+    confidence?: number;
+    parsedMessage?: string;
+    requiresConfirmation?: boolean;
+    originalInput?: string;
+    [key: string]: any;
+  };
 
 /* ───────────────────────── REGEX ───────────────────────── */
 const REGEX_TOKENS = /([A-Z]+)\s+(to|into|for)\s+([A-Z]+)/i;
@@ -110,7 +110,8 @@ export async function parseUserCommand(
 
   /* ───────────── STANDARD SWAP ───────────── */
 
-  const isSwapRelated = /\b(swap|convert|send|transfer|buy|sell|move|exchange)\b/i.test(input);
+  const isLimitOrDca = /\b(if|when|target|below|above|dca|every|daily|weekly|monthly)\b/i.test(input);
+  const isSwapRelated = !isLimitOrDca && /\b(swap|convert|send|transfer|buy|sell|move|exchange)\b/i.test(input);
 
   if (isSwapRelated) {
     let intent: ParsedCommand['intent'] = 'swap';

@@ -1,4 +1,5 @@
-import { eq, desc, and, gte, lte, sql, like, or } from 'drizzle-orm'; import { 
+import { eq, desc, and, gte, lte, sql, like, or } from 'drizzle-orm';
+import { 
   tradingStrategies, 
   strategySubscriptions, 
   strategyPerformance,
@@ -6,7 +7,6 @@ import { eq, desc, and, gte, lte, sql, like, or } from 'drizzle-orm'; import {
   type TradingStrategy,
   type NewTradingStrategy,
   type StrategySubscription,
-  type NewStrategySubscription,
   type StrategyPerformance,
   type NewStrategyPerformance,
   type StrategyTrade,
@@ -91,12 +91,15 @@ export async function getStrategies(options: StrategyFilterOptions = {}): Promis
   }
 
   if (search) {
-    conditions.push(
-      or(
-        like(tradingStrategies.name, `%${search}%`),
-        like(tradingStrategies.description, `%${search}%`)
-      )
+    const searchCondition = or(
+      like(tradingStrategies.name, `%${search}%`),
+      like(tradingStrategies.description, `%${search}%`)
     );
+
+    // Defensive check for newer Drizzle typings
+    if (searchCondition) {
+      conditions.push(searchCondition);
+    }
   }
 
   const orderColumn = sortBy === 'createdAt' 
