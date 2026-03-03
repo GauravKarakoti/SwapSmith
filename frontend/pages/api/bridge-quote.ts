@@ -23,6 +23,7 @@ export interface BridgeQuoteRequest {
 
 export interface BridgeQuoteResponse {
   success: boolean;
+  error?: string; // Add the error property here
   data?: {
     quotes: BridgeQuote[];
     bestQuote: BridgeQuote | null;
@@ -32,7 +33,6 @@ export interface BridgeQuoteResponse {
     availableBridges: string[];
     errors?: Record<string, unknown>;
   };
-  error?: string;
 }
 
 export default async function handler(
