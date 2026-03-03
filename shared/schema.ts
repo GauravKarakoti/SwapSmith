@@ -480,6 +480,8 @@ export const courseProgressRelations = relations(courseProgress, ({one}) => ({
 export const usersRelations = relations(users, ({many}) => ({
 	courseProgresses: many(courseProgress),
 	rewardsLogs: many(rewardsLog),
+	createdStrategies: many(tradingStrategies),
+	subscriptions: many(strategySubscriptions),
 }));
 
 export const rewardsLogRelations = relations(rewardsLog, ({one}) => ({

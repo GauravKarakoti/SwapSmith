@@ -6,7 +6,6 @@
 import { useState } from 'react';
 import { 
   Clock, 
-  Zap, 
   Shield, 
   ChevronDown, 
   CheckCircle, 
@@ -358,11 +357,7 @@ export default function BridgeComparison({
             </div>
             <div className="flex items-center gap-2">
               <CloudLightning className="w-4 h-4 text-blue-600" />
-              <span className="text-gray-600 dark:text-gray-400">
-                Fastest: <span className="font-medium text-gray-900 dark:text-white">{bestTime}min</span>
-              </span>
             </div>
-            <div className="flex items-center gap-2">
               <Shield className="w-4 h-4 text-purple-600" />
               <span className="text-gray-600 dark:text-gray-400">
                 Most Reliable: <span className="font-medium text-gray-900 dark:text-white">{bestReliability}%</span>
