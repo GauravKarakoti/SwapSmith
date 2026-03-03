@@ -8,10 +8,6 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
-    alias: {
-      '@': path.resolve(__dirname, './'),
-      'shared': path.resolve(__dirname, '../shared'),
-    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
