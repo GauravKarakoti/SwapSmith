@@ -15,6 +15,8 @@ import {
   watchlist,
   priceAlerts,
   orders, // Import orders for reputation calculation
+  portfolioTargets,
+  rebalanceHistory,
 } from '../../shared/schema';
 
 const sql = neon(process.env.DATABASE_URL!);
@@ -862,7 +864,7 @@ export async function removeFromWatchlist(
     return false;
   }
   
-  const result = await db.delete(watchlist)
+  await db.delete(watchlist)
     .where(and(
       eq(watchlist.userId, userId),
       eq(watchlist.coin, coin),
@@ -1029,6 +1031,118 @@ export async function getAllActivePriceAlerts(): Promise<PriceAlert[]> {
   
   return await db.select().from(priceAlerts)
     .where(eq(priceAlerts.isActive, true));
+}
+
+// --- PORTFOLIO TARGET FUNCTIONS ---
+
+export type PortfolioTarget = typeof portfolioTargets.$inferSelect;
+export type RebalanceHistoryEntry = typeof rebalanceHistory.$inferSelect;
+
+export async function getPortfolioTargets(userId: string): Promise<PortfolioTarget[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
+  return await db.select().from(portfolioTargets)
+    .where(eq(portfolioTargets.userId, userId))
+    .orderBy(desc(portfolioTargets.createdAt));
+}
+
+export async function getPortfolioTargetById(id: number, userId: string): Promise<PortfolioTarget | null> {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  const result = await db.select().from(portfolioTargets)
+    .where(and(
+      eq(portfolioTargets.id, id),
+      eq(portfolioTargets.userId, userId)
+    ))
+    .limit(1);
+  
+  return result[0] || null;
+}
+
+export async function createPortfolioTarget(
+  userId: string,
+  name: string,
+  assets: Record<string, unknown>[],
+  driftThreshold: number = 5.0,
+  autoRebalance: boolean = false
+): Promise<PortfolioTarget | null> {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  const result = await db.insert(portfolioTargets).values({
+    userId,
+    name,
+    assets,
+    driftThreshold,
+    autoRebalance,
+    isActive: true,
+  }).returning();
+  
+  return result[0];
+}
+
+export async function updatePortfolioTarget(
+  id: number,
+  userId: string,
+  updates: {
+    name?: string;
+    assets?: Record<string, unknown>[];
+    driftThreshold?: number;
+    autoRebalance?: boolean;
+    isActive?: boolean;
+  }
+): Promise<PortfolioTarget | null> {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  const result = await db.update(portfolioTargets)
+    .set({
+      ...updates,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(portfolioTargets.id, id),
+      eq(portfolioTargets.userId, userId)
+    ))
+    .returning();
+  
+  return result[0] || null;
+}
+
+export async function deletePortfolioTarget(id: number, userId: string): Promise<boolean> {
+  if (!db) {
+    console.warn('Database not configured');
+    return false;
+  }
+  
+  await db.delete(portfolioTargets)
+    .where(and(
+      eq(portfolioTargets.id, id),
+      eq(portfolioTargets.userId, userId)
+    ));
+  
+  return true;
+}
+
+export async function getRebalanceHistory(portfolioTargetId: number): Promise<RebalanceHistoryEntry[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
+  return await db.select().from(rebalanceHistory)
+    .where(eq(rebalanceHistory.portfolioTargetId, portfolioTargetId))
+    .orderBy(desc(rebalanceHistory.createdAt));
 }
 
 export default db;

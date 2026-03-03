@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     build-essential \
     python3 \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory in the container

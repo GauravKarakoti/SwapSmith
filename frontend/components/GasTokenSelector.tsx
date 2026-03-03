@@ -53,6 +53,7 @@ export default function GasTokenSelector({
 
   useEffect(() => {
     fetchTokens();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chain, userId]);
 
   useEffect(() => {

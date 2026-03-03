@@ -61,6 +61,7 @@ export default function GasFeeDisplay({
     fetchGasData();
     const interval = setInterval(fetchGasData, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chain, network, userId]);
 
   const fetchGasData = async () => {

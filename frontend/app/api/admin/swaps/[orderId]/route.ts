@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth } from '@/lib/firebase-admin';
 import { getAdminByFirebaseUid, getAdminSwapById } from '@/lib/admin-service';
+import { SIDESHIFT_CONFIG } from '../../../../../../shared/config/sideshift';
 
 async function authenticate(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
@@ -34,7 +35,7 @@ export async function GET(
     // Fetch live data from SideShift API
     let sideshiftData: Record<string, unknown> | null = null;
     try {
-      const res = await fetch(`https://sideshift.ai/api/v2/orders/${orderId}`, {
+      const res = await fetch(`${SIDESHIFT_CONFIG.BASE_URL}/orders/${orderId}`, {
         headers: { 'Content-Type': 'application/json' },
         next: { revalidate: 0 },
       });
@@ -49,7 +50,7 @@ export async function GET(
     let quoteData: Record<string, unknown> | null = null;
     if (localSwap.quoteId) {
       try {
-        const qRes = await fetch(`https://sideshift.ai/api/v2/quotes/${localSwap.quoteId}`, {
+        const qRes = await fetch(`${SIDESHIFT_CONFIG.BASE_URL}/quotes/${localSwap.quoteId}`, {
           headers: { 'Content-Type': 'application/json' },
           next: { revalidate: 0 },
         });
