@@ -522,9 +522,9 @@ bot.action('confirm_swap_and_stake', async (ctx) => {
     );
 
   } catch (error) {
-    logger.error('Swap and stake error:', error);
+    handleError('SwapAndStakeError', error);
     await ctx.editMessageText(
-      `❌ Failed to create swap & stake order. Please try again later or contact support.`
+      '❌ Failed to create swap & stake order. Please try again later or contact support.',
     );
   } finally {
     await db.clearConversationState(userId);
@@ -561,7 +561,7 @@ async function start() {
         initializeStakeWorker(bot);
         logger.info('✅ Stake worker initialized successfully');
       } catch (error) {
-        logger.error('❌ Failed to initialize stake worker:', error);
+        handleError('StakeWorkerInitFailed', error);
         // Continue without stake worker rather than crashing the entire bot
       }
     }
@@ -603,7 +603,7 @@ async function start() {
       logger.info(`🛑 Shutdown initiated (${signal})`);
 
       const forceExitTimer = setTimeout(() => {
-        logger.error('🧨 Forced shutdown after timeout');
+        handleError('ForcedShutdownTimeout', new Error('Forced shutdown after timeout'));
         // eslint-disable-next-line no-process-exit
         process.exit(1);
       }, 8_000);
