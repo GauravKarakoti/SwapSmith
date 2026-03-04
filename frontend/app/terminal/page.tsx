@@ -27,6 +27,7 @@ import { useChatHistory, useChatSessions } from "@/hooks/useCachedData";
 import { useErrorHandler, ErrorType } from "@/hooks/useErrorHandler";
 import { useAudioRecorder } from "@/hooks/useAudioRecorder";
 import { usePlan } from "@/hooks/usePlan";
+import { requestJson } from "@/lib/api-client";
 
 import { ParsedCommand } from "@/utils/groq-client";
 
@@ -225,20 +226,24 @@ export default function TerminalPage() {
         const formData = new FormData();
         formData.append("file", audioFile);
 
-        const response = await fetch("/api/transcribe", { method: "POST", body: formData });
-        const data = await response.json();
-
-        if (data.error) throw new Error(data.error);
+        const data = await requestJson<{ text?: string }>("/api/transcribe", {
+          method: "POST",
+          body: formData,
+          throwOnErrorField: true,
+        });
 
         if (data.text) {
           processCommand(data.text);
         }
       }
     } catch (err) {
-      console.error("Voice processing failed:", err);
+      const errorMessage = handleError(err, ErrorType.VOICE_ERROR, {
+        operation: "voice_transcription",
+        retryable: true,
+      });
       addMessage({
         role: "assistant",
-        content: "Sorry, I couldn't process your voice command. Please try again.",
+        content: errorMessage,
         type: "message",
       });
     } finally {
@@ -280,7 +285,7 @@ export default function TerminalPage() {
 
   const executeSwap = async (command: ParsedCommand) => {
     try {
-      const quoteResponse = await fetch("/api/create-swap", {
+      const quote = await requestJson<QuoteData>("/api/create-swap", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -290,9 +295,8 @@ export default function TerminalPage() {
           fromChain: command.fromChain,
           toChain: command.toChain,
         }),
+        throwOnErrorField: true,
       });
-      const quote = await quoteResponse.json();
-      if (quote.error) throw new Error(quote.error);
 
       addMessage({
         role: "assistant",
@@ -329,12 +333,12 @@ export default function TerminalPage() {
     if (!isLoading) setIsLoading(true);
 
     try {
-      const response = await fetch("/api/parse-command", {
+      const command = await requestJson<ParsedCommand>("/api/parse-command", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text }),
+        timeoutMs: 20000,
       });
-      const command: ParsedCommand = await response.json();
 
       if (!command.success && command.intent !== "yield_scout") {
         addMessage({
@@ -347,8 +351,7 @@ export default function TerminalPage() {
       }
 
       if (command.intent === "yield_scout") {
-        const yieldRes = await fetch("/api/yields");
-        const yieldData = await yieldRes.json();
+        const yieldData = await requestJson<{ message?: string }>("/api/yields");
         addMessage({
           role: "assistant",
           content: yieldData.message || "Here are the top yields:",
@@ -373,7 +376,7 @@ export default function TerminalPage() {
           }
           finalAddress = address;
         }
-        const checkoutRes = await fetch("/api/create-checkout", {
+        const checkoutData = await requestJson<{ settleAmount: string; settleCoin: string; url: string }>("/api/create-checkout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -382,9 +385,8 @@ export default function TerminalPage() {
             settleAmount: command.settleAmount,
             settleAddress: finalAddress,
           }),
+          throwOnErrorField: true,
         });
-        const checkoutData = await checkoutRes.json();
-        if (checkoutData.error) throw new Error(checkoutData.error);
         addMessage({
           role: "assistant",
           content: `Payment Link Created for ${checkoutData.settleAmount} ${checkoutData.settleCoin} on ${command.settleNetwork}`,

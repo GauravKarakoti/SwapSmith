@@ -1,6 +1,9 @@
+'use client';
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchWithCache, CACHE_CONFIGS, invalidateCache } from '@/lib/cache-utils';
 import { CoinPrice } from '@/utils/sideshift-client';
+import toast from 'react-hot-toast';
 
 // API Response types
 interface CachedPricesResponse {
@@ -106,6 +109,7 @@ export function useCachedData<T>(
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Unknown error');
       setError(error);
+      toast.error(error.message || 'Failed to load data.', { id: `cached-data-${url}` });
       
       if (onErrorRef.current) {
         onErrorRef.current(error);

@@ -14,6 +14,7 @@ import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useAuth } from '@/hooks/useAuth';
+import { requestJson, fetchWithTimeout } from '@/lib/api-client';
 
 
 // Export QuoteData to be used in PortfolioSummary
@@ -165,15 +166,9 @@ export default function ChatInterface() {
 
       // Authenticated flow: load from PostgreSQL (via API)
       try {
-        const response = await fetch(
+        const payload = await requestJson<{ history?: Array<{ role: Message['role']; content: string; createdAt: string; metadata?: { type?: Message['type']; data?: Message['data']; timestamp?: string } | null }> }>(
           `/api/chat/history?userId=${encodeURIComponent(user.uid)}&sessionId=${encodeURIComponent(CHAT_SESSION_ID)}&limit=200`
         );
-
-        if (!response.ok) {
-          throw new Error(`Failed to load chat history: ${response.status}`);
-        }
-
-        const payload = await response.json();
         const dbHistory = Array.isArray(payload.history) ? payload.history : [];
         const normalizedDbMessages: Message[] = dbHistory
           .slice()
@@ -247,13 +242,13 @@ export default function ChatInterface() {
       // Authenticated flow persistence to PostgreSQL (snapshot strategy)
       try {
         if (sequence !== saveSequenceRef.current) return;
-        await fetch(`/api/chat/history?userId=${encodeURIComponent(user.uid)}&sessionId=${encodeURIComponent(CHAT_SESSION_ID)}`, {
+        await fetchWithTimeout(`/api/chat/history?userId=${encodeURIComponent(user.uid)}&sessionId=${encodeURIComponent(CHAT_SESSION_ID)}`, {
           method: 'DELETE'
         });
 
         for (const msg of normalizedForSave) {
           if (sequence !== saveSequenceRef.current) return;
-          await fetch('/api/chat/history', {
+          await fetchWithTimeout('/api/chat/history', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -315,14 +310,12 @@ export default function ChatInterface() {
     fromChain: string,
     toChain: string
   ): Promise<QuoteData> => {
-    const quoteResponse = await fetch('/api/create-swap', {
+    return requestJson<QuoteData>('/api/create-swap', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fromAsset, toAsset, amount, fromChain, toChain }),
+      throwOnErrorField: true,
     });
-    const quote = await quoteResponse.json();
-    if (quote.error) throw new Error(quote.error);
-    return quote;
   };
 
   const handlePortfolioRetry = (failedItems: PortfolioItem[], originalCommand: ParsedCommand) => {
@@ -406,18 +399,17 @@ export default function ChatInterface() {
     if (!isLoading) setIsLoading(true);
 
     try {
-      const response = await fetch('/api/parse-command', {
+      const command = await requestJson<ParsedCommand>('/api/parse-command', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text }),
+        timeoutMs: 20000,
       });
-
-      const command: ParsedCommand = await response.json();
 
       if (!command.success && command.intent !== 'yield_scout') {
         addMessage({
           role: 'assistant',
-          content: `I couldn't understand. ${command.validationErrors.join(', ')}`,
+          content: `I couldn't understand. ${command.validationErrors?.join(', ') || 'Please try again.'}`,
           type: 'message'
         });
         setCurrentConfidence(0);
@@ -429,11 +421,10 @@ export default function ChatInterface() {
 
       // Handle Yield Scout
       if (command.intent === 'yield_scout') {
-        const yieldRes = await fetch('/api/yields');
-        const yieldData = await yieldRes.json();
+        const yieldData = await requestJson<{ message?: string }>('/api/yields');
         addMessage({
           role: 'assistant',
-          content: yieldData.message,
+          content: yieldData.message || 'Could not fetch live yield data at the moment.',
           type: 'yield_info'
         });
         setIsLoading(false);
@@ -457,7 +448,7 @@ export default function ChatInterface() {
           finalAddress = address;
         }
 
-        const checkoutRes = await fetch('/api/create-checkout', {
+        const checkoutData = await requestJson<{ settleAmount: string; settleCoin: string; url: string }>('/api/create-checkout', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -465,11 +456,9 @@ export default function ChatInterface() {
             settleNetwork: command.settleNetwork,
             settleAmount: command.settleAmount,
             settleAddress: finalAddress
-          })
+          }),
+          throwOnErrorField: true,
         });
-        const checkoutData = await checkoutRes.json();
-
-        if (checkoutData.error) throw new Error(checkoutData.error);
 
         addMessage({
           role: 'assistant',
@@ -566,20 +555,13 @@ export default function ChatInterface() {
 
   const executeSwap = async (command: ParsedCommand) => {
     try {
-      const quoteResponse = await fetch('/api/create-swap', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fromAsset: command.fromAsset,
-          toAsset: command.toAsset,
-          amount: command.amount,
-          fromChain: command.fromChain,
-          toChain: command.toChain
-        }),
-      });
-
-      const quote = await quoteResponse.json();
-      if (quote.error) throw new Error(quote.error);
+      const quote = await executeSwapAsync(
+        command.fromAsset || '',
+        command.toAsset || '',
+        command.amount || 0,
+        command.fromChain || 'ethereum',
+        command.toChain || 'ethereum'
+      );
 
       addMessage({
         role: 'assistant',
@@ -598,7 +580,7 @@ export default function ChatInterface() {
 
   const executeDCA = async (command: ParsedCommand) => {
     try {
-      const dcaResponse = await fetch('/api/create-dca', {
+      await requestJson('/api/create-dca', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -612,10 +594,8 @@ export default function ChatInterface() {
           dayOfMonth: command.dayOfMonth,
           settleAddress: address // Use connected wallet address
         }),
+        throwOnErrorField: true,
       });
-
-      const result = await dcaResponse.json();
-      if (result.error) throw new Error(result.error);
 
       addMessage({
         role: 'assistant',
@@ -633,7 +613,7 @@ export default function ChatInterface() {
 
   const executeLimitOrder = async (command: ParsedCommand) => {
     try {
-      const limitOrderResponse = await fetch('/api/create-limit-order', {
+      await requestJson('/api/create-limit-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -647,10 +627,8 @@ export default function ChatInterface() {
           conditionAsset: command.conditionAsset,
           settleAddress: address // Use connected wallet address
         }),
+        throwOnErrorField: true,
       });
-
-      const result = await limitOrderResponse.json();
-      if (result.error) throw new Error(result.error);
 
       const operatorText = command.conditionOperator === 'gt' ? 'above' : 'below';
       addMessage({
@@ -719,14 +697,11 @@ export default function ChatInterface() {
             const formData = new FormData();
             formData.append('file', audioFile);
 
-            const response = await fetch('/api/transcribe', {
+            const data = await requestJson<{ text?: string }>('/api/transcribe', {
               method: 'POST',
-              body: formData
+              body: formData,
+              throwOnErrorField: true,
             });
-
-            const data = await response.json();
-
-            if (data.error) throw new Error(data.error);
 
             if (data.text) {
               addMessage({ role: 'user', content: data.text, type: 'message' });
@@ -734,10 +709,13 @@ export default function ChatInterface() {
             }
           }
         } catch (err) {
-          console.error("Voice processing failed:", err);
+          const errorMessage = handleError(err, ErrorType.VOICE_ERROR, {
+            operation: 'voice_transcription',
+            retryable: true
+          });
           addMessage({
             role: 'assistant',
-            content: "Sorry, I couldn't process your voice command. Please try again.",
+            content: errorMessage,
             type: 'message'
           });
           inputRef.current?.focus();
