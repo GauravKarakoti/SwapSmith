@@ -28,6 +28,13 @@ export async function GET(request: NextRequest) {
       const portfolioId = parseInt(id);
       
       if (history === 'true') {
+        const portfolio = await getPortfolioTargetById(portfolioId, userId.toString());
+        if (!portfolio) {
+          return NextResponse.json(
+            { error: 'Portfolio not found' },
+            { status: 404 }
+          );
+        }
         const historyData = await getRebalanceHistory(portfolioId);
         return NextResponse.json({ history: historyData });
       }
