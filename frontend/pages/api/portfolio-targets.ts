@@ -8,6 +8,7 @@ import {
   deletePortfolioTarget,
   getRebalanceHistory,
 } from '@/lib/database';
+import { csrfGuard } from '@/lib/csrf';
 import logger from '@/lib/logger';
 
 export default async function handler(
@@ -66,6 +67,11 @@ export default async function handler(
 
   // ➕ POST — Create new portfolio target
   if (req.method === 'POST') {
+    // CSRF Protection
+    if (!csrfGuard(req, res)) {
+      return;
+    }
+
     try {
       const { name, assets, driftThreshold, autoRebalance } = req.body;
 
@@ -109,6 +115,11 @@ export default async function handler(
 
   // ✏️ PUT — Update portfolio target
   if (req.method === 'PUT') {
+    // CSRF Protection
+    if (!csrfGuard(req, res)) {
+      return;
+    }
+
     try {
       const { id, name, assets, driftThreshold, autoRebalance, isActive } = req.body;
 
@@ -156,6 +167,11 @@ export default async function handler(
 
   // ❌ DELETE — Delete portfolio target
   if (req.method === 'DELETE') {
+    // CSRF Protection
+    if (!csrfGuard(req, res)) {
+      return;
+    }
+
     try {
       const { id } = req.body;
 

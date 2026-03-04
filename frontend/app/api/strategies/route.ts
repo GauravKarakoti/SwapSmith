@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStrategies, getStrategyById, createStrategy } from '../../../../shared/services/strategy-marketplace';
+import { csrfGuard } from '@/lib/csrf-app-router';
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,6 +30,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // CSRF Protection
+  const csrfError = csrfGuard(request);
+  if (csrfError) {
+    return csrfError;
+  }
+
   try {
     const body = await request.json();
     const { 
