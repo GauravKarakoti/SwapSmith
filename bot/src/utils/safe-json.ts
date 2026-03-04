@@ -1,4 +1,4 @@
-export function safeParseLLMJson(raw: string): any {
+export function safeParseLLMJson<T = unknown>(raw: string): T {
   if (!raw) throw new Error("Empty LLM response");
 
   let cleaned = raw.trim();
@@ -9,7 +9,7 @@ export function safeParseLLMJson(raw: string): any {
 
   // Attempt direct parse first
   try {
-    return JSON.parse(cleaned);
+    return JSON.parse(cleaned) as T;
   } catch (error) {
     // Fall through to try extracting JSON from the string
   }
@@ -21,7 +21,7 @@ export function safeParseLLMJson(raw: string): any {
   if (firstBrace !== -1 && lastBrace !== -1) {
     const jsonSubstring = cleaned.slice(firstBrace, lastBrace + 1);
     try {
-        return JSON.parse(jsonSubstring);
+        return JSON.parse(jsonSubstring) as T;
     } catch (error) {
       // Fall through to throw error below
     }

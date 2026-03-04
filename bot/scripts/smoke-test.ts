@@ -19,13 +19,13 @@ async function checkHealth(): Promise<boolean> {
         }
         console.log(`Health check status: ${response.status} ${JSON.stringify(response.data)}`);
         return false;
-    } catch (error: any) {
+    } catch (error: unknown) {
         // If connection refused (server not up yet) or 503 (starting), return false
-        if (error.code === 'ECONNREFUSED' || (error.response && error.response.status === 503)) {
+        if (axios.isAxiosError(error) && (error.code === 'ECONNREFUSED' || error.response?.status === 503)) {
             return false;
         }
         // Other errors might be fatal, but for smoke test we can retry
-        console.log(`Health check error: ${error.message}`);
+        console.log(`Health check error: ${error instanceof Error ? error.message : 'Unknown error'}`);
         return false;
     }
 }

@@ -2,11 +2,13 @@ import { createQuote, createOrder } from './sideshift-client';
 import { db, orders, watchedOrders } from './database';
 import logger from './logger';
 import type { ParsedCommand } from './parseUserCommand';
+import type { SideShiftOrder, SideShiftQuote } from './sideshift-client';
+import type { PortfolioAllocation } from '../../../shared/types';
 
 interface PortfolioExecutionResult {
   successfulOrders: Array<{
-    order: any;
-    allocation: any;
+    order: SideShiftOrder;
+    allocation: PortfolioAllocation;
     quoteId: string;
     swapAmount: number;
   }>;
@@ -17,9 +19,9 @@ interface PortfolioExecutionResult {
 }
 
 interface QuoteOrderPair {
-  quote: any;
-  order: any;
-  allocation: any;
+  quote: SideShiftQuote;
+  order: SideShiftOrder;
+  allocation: PortfolioAllocation;
   swapAmount: number;
 }
 

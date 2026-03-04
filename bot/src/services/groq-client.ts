@@ -2,6 +2,7 @@ import Groq from "groq-sdk";
 import dotenv from 'dotenv';
 import fs from 'fs';
 import logger, { handleError } from './logger';
+import type { ConversationMessage, ParsedCommand } from '../../../shared/types';
 
 import { analyzeCommand, generateContextualHelp } from './contextual-help';
 
@@ -12,74 +13,6 @@ function getGroqClient(): Groq {
     apiKey: process.env.GROQ_API_KEY,
   });
 }
-
-
-export interface ParsedCommand {
-  success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "swap_and_stake" | "unknown";
-  
-  // Single Swap Fields
-  fromAsset: string | null;
-  fromChain: string | null;
-  toAsset: string | null;
-  toChain: string | null;
-  amount: number | null;
-  amountType?: "exact" | "absolute" | "percentage" | "all" | "exclude" | null; // Extended with 'absolute'
-
-  excludeAmount?: number;
-  excludeToken?: string;
-  quoteAmount?: number;
-
-  // Conditional Fields
-  conditions?: {
-    type: "price_above" | "price_below";
-    asset: string;
-    value: number;
-  };
-  
-  // Portfolio Fields
-  portfolio?: {
-    toAsset: string;
-    toChain: string;
-    percentage: number;
-  }[];
-  driftThreshold?: number;
-  autoRebalance?: boolean;
-  portfolioName?: string;
-
-  // DCA Fields
-  frequency?: "daily" | "weekly" | "monthly" | string | null;
-  dayOfWeek?: string | null;
-  dayOfMonth?: string | null;
-  totalAmount?: number;
-  numPurchases?: number;
-
-  // Checkout Fields
-  settleAsset: string | null;
-  settleNetwork: string | null;
-  settleAmount: number | null;
-  settleAddress: string | null;
-
-  // Yield Fields
-  fromProject: string | null;
-  fromYield: number | null;
-  toProject: string | null;
-  toYield: number | null;
-
-  // Limit Order Fields (Legacy - kept for compatibility, prefer 'conditions')
-  conditionOperator?: 'gt' | 'lt';
-  conditionValue?: number;
-  conditionAsset?: string;
-  targetPrice?: number;
-  condition?: 'above' | 'below';
-
-  confidence: number;
-  validationErrors: string[];
-  parsedMessage: string;
-  requiresConfirmation?: boolean; 
-  originalInput?: string;        
-}
-
 
 const systemPrompt = `
 You are SwapSmith, an advanced DeFi AI agent.
@@ -223,7 +156,7 @@ EXAMPLES:
 // RENAMED from parseUserCommand to parseWithLLM
 export async function parseWithLLM(
   userInput: string,
-  conversationHistory: any[] = [],
+  conversationHistory: ConversationMessage[] = [],
   inputType: 'text' | 'voice' = 'text'
 ): Promise<ParsedCommand> {
   let currentSystemPrompt = systemPrompt;
@@ -237,7 +170,7 @@ export async function parseWithLLM(
   }
 
   try {
-    const messages: any[] = [
+    const messages: ConversationMessage[] = [
         { role: "system", content: currentSystemPrompt },
         ...conversationHistory,
         { role: "user", content: userInput }

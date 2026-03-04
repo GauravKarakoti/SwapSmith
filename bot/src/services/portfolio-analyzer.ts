@@ -104,11 +104,13 @@ async function fetchPrices(coins: string[]): Promise<Map<string, number>> {
         priceMap.set(asset, priceData.usd);
       }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (axios.isAxiosError(error) && error.response?.status === 429) {
       logger.warn('⏳ CoinGecko rate limit hit, using cached prices');
     } else {
-      logger.error('❌ Failed to fetch prices from CoinGecko:', error.message);
+      logger.error('❌ Failed to fetch prices from CoinGecko:', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
   }
 

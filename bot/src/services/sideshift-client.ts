@@ -350,7 +350,12 @@ export async function createQuote(
 
 export async function createOrder(quoteId: string, settleAddress: string, refundAddress: string, userIP?: string): Promise<SideShiftOrder> {
   try {
-    const payload: any = {
+    const payload: {
+      quoteId: string;
+      settleAddress: string;
+      refundAddress: string;
+      affiliateId?: string;
+    } = {
       quoteId,
       settleAddress,
       refundAddress,

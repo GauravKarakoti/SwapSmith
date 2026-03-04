@@ -4,6 +4,7 @@ import * as db from '../services/database';
 import { getOrderStatus } from '../services/sideshift-client';
 import { handleError, default as logger } from '../services/logger';
 import type { StakeOrder } from '../services/database';
+import type { SideShiftOrderStatus } from '../services/sideshift-client';
 
 // Worker configuration
 const WORKER_INTERVAL = '*/2 * * * *'; // Run every 2 minutes
@@ -105,7 +106,7 @@ async function processStakeOrder(order: StakeOrder): Promise<void> {
 /**
  * Initiate the staking process after swap completes
  */
-async function initiateStaking(order: StakeOrder, swapStatus: any): Promise<void> {
+async function initiateStaking(order: StakeOrder, swapStatus: SideShiftOrderStatus): Promise<void> {
   logger.info(`[StakeWorker] Initiating staking for order ${order.id}`);
 
   // Update status to submitted

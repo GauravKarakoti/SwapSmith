@@ -1,5 +1,5 @@
 import logger, { Logger as LoggerHelper } from '../../../shared/lib/logger';
-import { Telegraf } from 'telegraf';
+import { Context, Telegraf } from 'telegraf';
 import dotenv from 'dotenv';
 import * as Sentry from '@sentry/node';
 
@@ -10,6 +10,8 @@ const SENTRY_DSN = process.env.SENTRY_DSN;
 
 // Initialize Telegram bot for admin alerts (only if token is available)
 const bot = process.env.BOT_TOKEN ? new Telegraf(process.env.BOT_TOKEN!) : null;
+
+type ErrorContext = Pick<Context, 'from'> | null | undefined;
 
 // Initialize Sentry if DSN is provided
 if (SENTRY_DSN) {
@@ -23,8 +25,8 @@ if (SENTRY_DSN) {
 
 export async function handleError(
   errorType: string,
-  details: any,
-  ctx?: any,
+  details: unknown,
+  ctx?: ErrorContext,
   sendAlert: boolean = true
 ) {
   // Always log to Winston
@@ -45,7 +47,9 @@ export async function handleError(
         },
       });
     } catch (sentryError) {
-      logger.error('Failed to send error to Sentry', sentryError);
+      logger.error('Failed to send error to Sentry', {
+        error: sentryError instanceof Error ? sentryError.message : sentryError,
+      });
     }
   }
 
@@ -55,7 +59,9 @@ export async function handleError(
       const msg = `⚠️ *Error Alert*\n\n*Type:* ${errorType}\n*User:* ${ctx?.from?.id || 'unknown'}\n*Details:* ${JSON.stringify(details, null, 2)}`;
       await bot.telegram.sendMessage(ADMIN_CHAT_ID, msg, { parse_mode: 'Markdown' });
     } catch (alertError) {
-      logger.error('Failed to send admin alert', alertError);
+      logger.error('Failed to send admin alert', {
+        error: alertError instanceof Error ? alertError.message : alertError,
+      });
     }
   }
 }

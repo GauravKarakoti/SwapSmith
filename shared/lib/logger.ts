@@ -1,5 +1,12 @@
 import winston from 'winston';
-import path from 'path';
+import type { TransformableInfo } from 'logform';
+
+type LogMetadata = Record<string, unknown>;
+
+function formatLogLine(info: TransformableInfo): string {
+  const timestamp = typeof info.timestamp === 'string' ? info.timestamp : '';
+  return `${timestamp} ${info.level}: ${String(info.message)}`;
+}
 
 // Define log levels
 const levels = {
@@ -26,17 +33,13 @@ winston.addColors(colors);
 const consoleFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }),
   winston.format.colorize({ all: true }),
-  winston.format.printf(
-    (info: any) => `${info.timestamp} ${info.level}: ${info.message}`
-  )
+  winston.format.printf(formatLogLine)
 );
 
 // Create the format for file output (without colors)
 const fileFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }),
-  winston.format.printf(
-    (info: any) => `${info.timestamp} ${info.level}: ${info.message}`
-  )
+  winston.format.printf(formatLogLine)
 );
 
 // Determine if we're in a server-side context (Node.js)
@@ -82,7 +85,7 @@ if (isNodeJS) {
 export function logWithMetadata(
   level: 'error' | 'warn' | 'info' | 'http' | 'debug',
   message: string,
-  metadata?: Record<string, any>
+  metadata?: LogMetadata
 ) {
   if (metadata) {
     logger.log(level, `${message} ${JSON.stringify(metadata)}`);
@@ -93,11 +96,11 @@ export function logWithMetadata(
 
 // Export the logger with convenient methods
 export const Logger = {
-  error: (message: string, meta?: Record<string, any>) => logWithMetadata('error', message, meta),
-  warn: (message: string, meta?: Record<string, any>) => logWithMetadata('warn', message, meta),
-  info: (message: string, meta?: Record<string, any>) => logWithMetadata('info', message, meta),
-  http: (message: string, meta?: Record<string, any>) => logWithMetadata('http', message, meta),
-  debug: (message: string, meta?: Record<string, any>) => logWithMetadata('debug', message, meta),
+  error: (message: string, meta?: LogMetadata) => logWithMetadata('error', message, meta),
+  warn: (message: string, meta?: LogMetadata) => logWithMetadata('warn', message, meta),
+  info: (message: string, meta?: LogMetadata) => logWithMetadata('info', message, meta),
+  http: (message: string, meta?: LogMetadata) => logWithMetadata('http', message, meta),
+  debug: (message: string, meta?: LogMetadata) => logWithMetadata('debug', message, meta),
 };
 
 export default logger;

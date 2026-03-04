@@ -1,20 +1,10 @@
-import { parseWithLLM, ParsedCommand } from './groq-client';
+import { parseWithLLM } from './groq-client';
 import logger from './logger';
+import type { ConversationMessage, ParseFailureResult, ParsedCommand } from '../../../shared/types';
 
-export { ParsedCommand };
+export type { ParsedCommand };
 
-export type ParseResult =
-  | ParsedCommand
-  | {
-    success: false;
-    validationErrors: string[];
-    intent?: string;
-    confidence?: number;
-    parsedMessage?: string;
-    requiresConfirmation?: boolean;
-    originalInput?: string;
-    [key: string]: any;
-  };
+export type ParseResult = ParsedCommand | ParseFailureResult;
 
 const REGEX_TOKENS = /([A-Z]{2,10})\s+(to|into|for)\s+([A-Z]{2,10})/i;
 const REGEX_FROM_TO = /from\s+([A-Z]{2,10})\s+to\s+([A-Z]{2,10})/i;
@@ -96,7 +86,7 @@ const buildSwapResult = (
 
 export async function parseUserCommand(
   userInput: string,
-  conversationHistory: any[] = [],
+  conversationHistory: ConversationMessage[] = [],
   inputType: 'text' | 'voice' = 'text'
 ): Promise<ParseResult> {
   let input = userInput
