@@ -54,6 +54,10 @@ export const useErrorHandler = (): UseErrorHandlerReturn => {
           if (error.status && error.status >= 500) {
             return `Service temporarily unavailable${context?.retryable ? '. Please try again' : '.'}`;
           }
+
+          if (error.message.trim()) {
+            return error.message;
+          }
         }
 
         if (errorObj?.message?.includes('SideShift')) {

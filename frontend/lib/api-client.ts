@@ -63,7 +63,15 @@ async function parseResponseBody(response: Response): Promise<unknown> {
   const contentType = response.headers.get('content-type') || '';
 
   if (contentType.includes('application/json')) {
-    return response.json();
+    try {
+      return await response.json();
+    } catch (error) {
+      throw new RequestError('Invalid response from server.', {
+        kind: 'http',
+        status: response.status,
+        details: error,
+      });
+    }
   }
 
   const text = await response.text();
@@ -122,7 +130,21 @@ export async function requestJson<T>(
 ): Promise<T> {
   const { throwOnErrorField = false, ...requestOptions } = options;
   const response = await fetchWithTimeout(url, requestOptions);
-  const payload = await parseResponseBody(response);
+  let payload: unknown;
+
+  try {
+    payload = await parseResponseBody(response);
+  } catch (error) {
+    if (error instanceof RequestError) {
+      throw error;
+    }
+
+    throw new RequestError('Invalid response from server.', {
+      kind: 'http',
+      status: response.status,
+      details: error,
+    });
+  }
 
   if (!response.ok) {
     throw new RequestError(

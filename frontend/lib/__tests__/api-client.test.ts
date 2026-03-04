@@ -1,6 +1,8 @@
 import { requestJson } from '@/lib/api-client';
 
 describe('api-client requestJson', () => {
+  const originalFetch = global.fetch;
+
   beforeEach(() => {
     jest.clearAllMocks();
     global.fetch = jest.fn();
@@ -8,6 +10,7 @@ describe('api-client requestJson', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+    global.fetch = originalFetch;
   });
 
   it('returns parsed JSON for successful responses', async () => {
@@ -55,6 +58,24 @@ describe('api-client requestJson', () => {
         kind: 'http',
         status: 200,
         message: 'Quote not found',
+      })
+    );
+  });
+
+  it('wraps invalid json responses in a RequestError', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue(
+      new Response('{"broken"', {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+
+    await expect(requestJson('/api/test')).rejects.toEqual(
+      expect.objectContaining({
+        name: 'RequestError',
+        kind: 'http',
+        status: 200,
+        message: 'Invalid response from server.',
       })
     );
   });
