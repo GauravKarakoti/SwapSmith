@@ -41,8 +41,8 @@ async function transcribeHandler(req: NextRequest) {
 
 // Apply rate limiting and CSRF protection
 export async function POST(req: NextRequest) {
-  // Apply rate limiting
-  const rateLimitResponse = rateLimiters.strict(req, {} as any);
+  // Apply rate limiting using the default rate limiter
+  const rateLimitResponse = rateLimiters.default(req as any, {} as any);
   if (!rateLimitResponse) {
     const response = NextResponse.json({ error: 'Too many requests' }, { status: 429 });
     return applyAPISecurityHeaders(response);
