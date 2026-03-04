@@ -19,6 +19,7 @@
   "license": "ISC",
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
+    "axios": "^1.13.5",
     "dotenv": "^17.3.1",
     "drizzle-kit": "^0.31.7",
     "drizzle-orm": "^0.45.1",

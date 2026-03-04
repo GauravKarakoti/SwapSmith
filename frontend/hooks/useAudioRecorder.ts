@@ -1,11 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
-declare global {
-  interface Window {
-    webkitAudioContext: typeof AudioContext;
-  }
-}
-
 export interface AudioRecorderConfig {
   sampleRate?: number;
   numberOfAudioChannels?: number;
@@ -133,7 +127,6 @@ class WebAudioRecorder {
   }
 }
 
-// Cross-browser audio recording wrapper
 class AudioRecorderPolyfill {
   private mediaRecorder: MediaRecorder | null = null;
   private webAudioRecorder: WebAudioRecorder | null = null;
@@ -143,8 +136,21 @@ class AudioRecorderPolyfill {
   private browser: string = 'unknown';
   private useFallback: boolean = false;
 
+  // Add these missing properties:
+  private isSpeechToText: boolean = false;
+  private speechResult: string = '';
+  private recognition: SpeechRecognition | null = null;
+
   constructor() {
     this.detectBrowser();
+    
+    // Initialize SpeechRecognition if it exists in the window
+    if (typeof window !== 'undefined') {
+      const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognitionAPI) {
+        this.recognition = new SpeechRecognitionAPI();
+      }
+    }
   }
 
   private detectBrowser(): void {
@@ -226,7 +232,21 @@ class AudioRecorderPolyfill {
 
   async startRecording(config: AudioRecorderConfig = {}): Promise<void> {
     try {
-      this.useFallback = typeof window.MediaRecorder === 'undefined';
+      this.mimeType = this.getBestMimeType();
+      this.useFallback = typeof window.MediaRecorder === 'undefined' || !this.mimeType;
+      this.isSpeechToText = false;
+      this.speechResult = '';
+
+      // If no MediaRecorder and no AudioContext, try SpeechRecognition (iOS fallback)
+      if (this.useFallback && !(window.AudioContext || window.webkitAudioContext)) {
+        if (this.recognition) {
+          this.isSpeechToText = true;
+          this.recognition.start();
+          return;
+        }
+        throw new Error('No recording method supported');
+      }
+
       const constraints = this.getOptimalConstraints(config);
       this.stream = await navigator.mediaDevices.getUserMedia(constraints);
 
@@ -308,13 +328,26 @@ class AudioRecorderPolyfill {
   }
 
   isSupported(): boolean {
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
-      return false;
-    }
-    // Supported if MediaRecorder exists OR AudioContext exists
-    return !!(
-      (typeof window !== 'undefined' && window.MediaRecorder) || 
-      (typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext))
+    if (typeof navigator === 'undefined') return false;
+
+    const hasGetUserMedia =
+      !!navigator.mediaDevices &&
+      typeof navigator.mediaDevices.getUserMedia === 'function';
+
+    const hasMediaRecorder =
+      typeof window !== 'undefined' && !!window.MediaRecorder;
+
+    const hasAudioContext =
+      typeof window !== 'undefined' &&
+      !!(window.AudioContext || window.webkitAudioContext);
+
+    const hasSpeechRecognition =
+      typeof window !== 'undefined' &&
+      !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+
+    return (
+      hasGetUserMedia &&
+      (hasMediaRecorder || hasAudioContext || hasSpeechRecognition)
     );
   }
 
