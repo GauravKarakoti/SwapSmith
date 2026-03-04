@@ -31,33 +31,62 @@ export function middleware(request: NextRequest) {
     if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method)) {
       const originHeader = request.headers.get('origin');
       const refererHeader = request.headers.get('referer');
-      
-      // request.nextUrl.origin handles the protocol + host construction automatically
-      // e.g. http://localhost:3000 or https://my-app.com
-      const currentOrigin = request.nextUrl.origin;
-      
+
+      // Build list of allowed origins from environment, mirroring csrf.ts behavior.
+      // Example env values:
+      //   NEXT_PUBLIC_APP_URL="http://localhost:3000"
+      //   ALLOWED_ORIGINS="http://localhost:3000,http://localhost:3002"
+      const rawAllowedOrigins =
+        process.env.NEXT_PUBLIC_APP_URL || process.env.ALLOWED_ORIGINS || '';
+      const allowedOrigins = rawAllowedOrigins
+        .split(',')
+        .map((o) => o.trim())
+        .filter((o) => o.length > 0);
+
+      // Derive a default origin from protocol + Host header as a fallback when no
+      // explicit allowed origins are configured. This respects external ports in
+      // Docker / proxy setups (e.g. localhost:3002 mapped to container:3000).
+      const hostHeader = request.headers.get('host');
+      const defaultOrigin = hostHeader
+        ? `${request.nextUrl.protocol}//${hostHeader}`
+        : undefined;
+
       let isAllowed = false;
 
-      // Check Origin first (standard behavior)
+      // Decide which origin value to validate:
+      //   1. Prefer the Origin header when present.
+      //   2. Otherwise, extract the origin portion from the Referer header.
+      let originToCheck: string | null = null;
       if (originHeader) {
-        // Strict equality check against current origin
-        if (originHeader === currentOrigin) {
-          isAllowed = true;
-        }
-      } 
-      // Fallback to Referer if Origin is missing (some browsers/environments)
-      else if (refererHeader) {
-        if (refererHeader.startsWith(currentOrigin)) {
-          isAllowed = true;
+        originToCheck = originHeader;
+      } else if (refererHeader) {
+        try {
+          originToCheck = new URL(refererHeader).origin;
+        } catch {
+          originToCheck = null;
         }
       }
 
-      // If neither matches, reject the request
+      if (originToCheck) {
+        if (allowedOrigins.length > 0) {
+          // Use explicitly configured allowed origins when available.
+          if (allowedOrigins.includes(originToCheck)) {
+            isAllowed = true;
+          }
+        } else if (defaultOrigin) {
+          // Fallback to strict equality against the host-based origin.
+          if (originToCheck === defaultOrigin) {
+            isAllowed = true;
+          }
+        }
+      }
+
+      // If validation fails or we have no usable Origin/Referer, reject the request.
       if (!isAllowed) {
         return new NextResponse(
-          JSON.stringify({ 
-            message: 'CSRF validation failed', 
-            reason: 'Origin or Referer header mismatch or missing' 
+          JSON.stringify({
+            message: 'CSRF validation failed',
+            reason: 'Origin or Referer header mismatch or missing',
           }),
           { status: 403, headers: { 'Content-Type': 'application/json' } }
         );
