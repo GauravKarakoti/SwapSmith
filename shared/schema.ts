@@ -155,7 +155,9 @@ export const limitOrders = pgTable('limit_orders', {
   index("idx_limit_orders_telegram_id").on(table.telegramId),
   index("idx_limit_orders_status").on(table.status),
   index("idx_limit_orders_is_active").on(table.isActive),
-]); = pgTable('trailing_stop_orders', {
+]);
+
+export const trailingStopOrders = pgTable('trailing_stop_orders', {
   id: serial('id').primaryKey(),
   telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
   fromAsset: text('from_asset').notNull(),
@@ -179,7 +181,9 @@ export const limitOrders = pgTable('limit_orders', {
   index("idx_trailing_stop_orders_telegram_id").on(table.telegramId),
   index("idx_trailing_stop_orders_status").on(table.status),
   index("idx_trailing_stop_orders_is_active").on(table.isActive),
-]); (used by both bot and frontend) ---
+]);
+
+// --- Shared tables (used by both bot and frontend) ---
 
 export const coinPriceCache = pgTable('coin_price_cache', {
   id: serial('id').primaryKey(),
@@ -387,7 +391,9 @@ export const swapHistory = pgTable('swap_history', {
 }, (table) => [
   index("idx_swap_history_user_id").on(table.userId),
   index("idx_swap_history_status").on(table.status),
-]); = pgTable('chat_history', {
+]);
+
+export const chatHistory = pgTable('chat_history', {
   id: serial('id').primaryKey(),
   userId: text('user_id').notNull(),
   walletAddress: text('wallet_address'),
@@ -399,7 +405,9 @@ export const swapHistory = pgTable('swap_history', {
 }, (table) => [
   index("idx_chat_history_user_id").on(table.userId),
   index("idx_chat_history_session_id").on(table.sessionId),
-]); = pgTable('discussions', {
+]);
+
+export const discussions = pgTable('discussions', {
   id: serial('id').primaryKey(),
   userId: text('user_id').notNull(),
   username: text('username').notNull(),
@@ -452,7 +460,9 @@ export const rewardsLog = pgTable('rewards_log', {
 }, (table) => [
   index("idx_rewards_log_user_id").on(table.userId),
   index("idx_rewards_log_mint_status").on(table.mintStatus),
-]); SCHEMAS ---
+]);
+
+// --- GAS OPTIMIZATION SCHEMAS ---
 
 export const gasEstimates = pgTable('gas_estimates', {
   id: serial('id').primaryKey(),
@@ -552,89 +562,6 @@ export const strategyStatusType = pgEnum('strategy_status', ['active', 'paused',
 export const subscriptionStatusType = pgEnum('subscription_status', ['active', 'paused', 'cancelled']);
 export const tradeStatusType = pgEnum('trade_status', ['pending', 'completed', 'failed']);
 export const performanceStatusType = pgEnum('performance_status', ['pending', 'completed', 'failed']);
-
-export const tradingStrategies = pgTable('trading_strategies', {
-  id: serial('id').primaryKey(),
-  creatorId: integer('creator_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  creatorTelegramId: bigint('creator_telegram_id', { mode: 'number' }),
-  name: text('name').notNull(),
-  description: text('description').notNull(),
-  parameters: jsonb('parameters').notNull(),
-  riskLevel: strategyRiskLevelType('risk_level').notNull(),
-  subscriptionFee: numeric('subscription_fee', { precision: 20, scale: 2 }).notNull(),
-  performanceFee: real('performance_fee').notNull().default(0),
-  minInvestment: numeric('min_investment', { precision: 20, scale: 2 }).notNull(),
-  isPublic: boolean('is_public').notNull().default(false),
-  tags: jsonb('tags').default([]),
-  status: strategyStatusType('status').notNull().default('active'),
-  subscriberCount: integer('subscriber_count').notNull().default(0),
-  totalTrades: integer('total_trades').notNull().default(0),
-  successfulTrades: integer('successful_trades').notNull().default(0),
-  totalReturn: numeric('total_return', { precision: 20, scale: 2 }).default('0'),
-  monthlyReturn: numeric('monthly_return', { precision: 20, scale: 2 }).default('0'),
-  maxDrawdown: numeric('max_drawdown', { precision: 20, scale: 2 }).default('0'),
-  volatility: numeric('volatility', { precision: 20, scale: 2 }).default('0'),
-  sharpeRatio: numeric('sharpe_ratio', { precision: 20, scale: 2 }).default('0'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
-}, (table) => [
-  index('idx_trading_strategies_creator_id').on(table.creatorId),
-  index('idx_trading_strategies_status').on(table.status),
-  index('idx_trading_strategies_is_public').on(table.isPublic),
-  index('idx_trading_strategies_created_at').on(table.createdAt),
-]);
-
-export const strategySubscriptions = pgTable('strategy_subscriptions', {
-  id: serial('id').primaryKey(),
-  strategyId: integer('strategy_id').notNull().references(() => tradingStrategies.id, { onDelete: 'cascade' }),
-  subscriberId: integer('subscriber_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  subscriberTelegramId: bigint('subscriber_telegram_id', { mode: 'number' }),
-  subscriptionFee: numeric('subscription_fee', { precision: 20, scale: 2 }).notNull(),
-  allocationPercent: integer('allocation_percent').notNull().default(100),
-  autoRebalance: boolean('auto_rebalance').notNull().default(true),
-  stopLossPercent: numeric('stop_loss_percent', { precision: 5, scale: 2 }),
-  status: subscriptionStatusType('status').notNull().default('active'),
-  joinedAt: timestamp('joined_at').notNull().defaultNow(),
-  pausedAt: timestamp('paused_at'),
-  cancelledAt: timestamp('cancelled_at'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-}, (table) => [
-  index('idx_strategy_subscriptions_strategy_id').on(table.strategyId),
-  index('idx_strategy_subscriptions_subscriber_id').on(table.subscriberId),
-  index('idx_strategy_subscriptions_status').on(table.status),
-  unique('idx_strategy_subscriptions_unique').on(table.strategyId, table.subscriberId),
-]);
-
-export const strategyTrades = pgTable('strategy_trades', {
-  id: serial('id').primaryKey(),
-  strategyId: integer('strategy_id').notNull().references(() => tradingStrategies.id, { onDelete: 'cascade' }),
-  fromToken: text('from_token').notNull(),
-  toToken: text('to_token').notNull(),
-  swapAmount: numeric('swap_amount', { precision: 20, scale: 8 }).notNull(),
-  settleAmount: numeric('settle_amount', { precision: 20, scale: 8 }),
-  sideshiftOrderId: text('sideshift_order_id'),
-  status: tradeStatusType('status').notNull().default('pending'),
-  error: text('error'),
-  executedAt: timestamp('executed_at'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-}, (table) => [
-  index('idx_strategy_trades_strategy_id').on(table.strategyId),
-  index('idx_strategy_trades_status').on(table.status),
-  index('idx_strategy_trades_created_at').on(table.createdAt),
-]);
-
-export const strategyPerformance = pgTable('strategy_performance', {
-  id: serial('id').primaryKey(),
-  strategyId: integer('strategy_id').notNull().references(() => tradingStrategies.id, { onDelete: 'cascade' }),
-  pnl: numeric('pnl', { precision: 20, scale: 8 }).notNull(),
-  pnlPercent: numeric('pnl_percent', { precision: 20, scale: 2 }).notNull(),
-  status: performanceStatusType('status').notNull().default('pending'),
-  executedAt: timestamp('executed_at').notNull().defaultNow(),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-}, (table) => [
-  index('idx_strategy_performance_strategy_id').on(table.strategyId),
-  index('idx_strategy_performance_executed_at').on(table.executedAt),
-]);
 
 // --- TYPES ---
 
@@ -801,34 +728,3 @@ export const coinGiftLogsRelations = relations(coinGiftLogs, ({ one }) => ({
 }));
 
 export type CoinGiftLog = typeof coinGiftLogs.$inferSelect;
-
-// --- Strategy Marketplace Schema ---
-
-export const tradingStrategies = pgTable('trading_strategies', {
-  id: serial('id').primaryKey(),
-  creatorId: integer('creator_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  creatorTelegramId: bigint('creator_telegram_id', { mode: 'number' }),
-  name: text('name').notNull(),
-  description: text('description').notNull(),
-  parameters: jsonb('parameters').notNull(),
-  riskLevel: text('risk_level').notNull(), // 'low' | 'medium' | 'high' | 'aggressive'
-  subscriptionFee: text('subscription_fee').notNull(),
-  performanceFee: real('performance_fee').notNull(),
-  minInvestment: text('min_investment').notNull(),
-  isPublic: boolean('is_public').notNull().default(false),
-  tags: text('tags').array(),
-  status: text('status').notNull().default('active'),
-  totalReturn: real('total_return').notNull().default(0),
-  monthlyReturn: real('monthly_return').notNull().default(0),
-  maxDrawdown: real('max_drawdown').notNull().default(0),
-  subscriberCount: integer('subscriber_count').notNull().default(0),
-  totalTrades: integer('total_trades').notNull().default(0),
-  successfulTrades: integer('successful_trades').notNull().default(0),
-  sharpeRatio: real('sharpe_ratio').default(0),
-  volatility: real('volatility').default(0),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-}, (table) => [
-  index('idx_trading_strategies_creator').on(table.creatorId),
-  index('idx_trading_strategies_status').on(table.status),
-]);
