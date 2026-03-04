@@ -26,7 +26,9 @@ export default class GlobalErrorBoundary extends React.Component<
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('Global render error:', error, errorInfo);
-    toast.error('The app hit an unexpected error. You can retry without losing the whole page.');
+    toast.error('The app hit an unexpected error. You can retry without losing the whole page.', {
+      id: 'global-render-error',
+    });
   }
 
   handleRetry = () => {
