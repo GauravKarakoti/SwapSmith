@@ -16,6 +16,7 @@ import {
 import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi'
 import { parseEther, formatEther, isAddress, type Chain } from 'viem'
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
+import { validateDepositAddressForNetwork } from '@/utils/addressValidation'
 
 export interface QuoteData {
   depositAmount: string
@@ -71,7 +72,7 @@ interface SafetyCheckResult {
   overallMessage: string
 }
 
-export default function SwapConfirmation({ quote, onAmountChange }: SwapConfirmationProps) {
+export default function SwapConfirmation({ quote, confidence, onAmountChange }: SwapConfirmationProps) {
   const [copiedAddress, setCopiedAddress] = useState(false)
   const [copiedMemo, setCopiedMemo] = useState(false)
   const [isSimulating, setIsSimulating] = useState(false)
@@ -127,12 +128,10 @@ export default function SwapConfirmation({ quote, onAmountChange }: SwapConfirma
       }
 
       // Check 1: Address validation
-      if (isAddress(quote.depositAddress)) {
-        checks.address.passed = true
-        checks.address.message = 'Valid deposit address'
-      } else {
-        checks.address.passed = false
-        checks.address.message = 'Invalid deposit address'
+      {
+        const addressCheck = validateDepositAddressForNetwork(quote.depositNetwork, quote.depositAddress)
+        checks.address.passed = addressCheck.passed
+        checks.address.message = addressCheck.message
       }
 
       // Check 2: Network compatibility
@@ -227,9 +226,10 @@ export default function SwapConfirmation({ quote, onAmountChange }: SwapConfirma
 
     console.log('Processing swap to SideShift address:', quote.depositAddress)
 
-    if (!quote.depositAddress || !isAddress(quote.depositAddress)) {
-      console.error('Invalid deposit address from quote:', quote)
-      alert('Error: Invalid SideShift deposit address. Cannot proceed with swap.')
+    const addressCheck = validateDepositAddressForNetwork(quote.depositNetwork, quote.depositAddress)
+    if (!addressCheck.passed) {
+      console.error('SECURITY: Rejected invalid deposit address from quote:', { quoteId: quote.id, depositNetwork: quote.depositNetwork, depositAddress: quote.depositAddress })
+      alert(`Error: ${addressCheck.message}. Cannot proceed with swap.`)
       return
     }
 
