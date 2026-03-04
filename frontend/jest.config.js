@@ -1,6 +1,5 @@
-import type { Config } from 'jest';
-
-const config: Config = {
+/** @type {import('jest').Config} */
+const config = {
   testEnvironment: 'jsdom',
   roots: ['<rootDir>'],
   testMatch: ['**/__tests__/**/*.test.ts?(x)', '**/?(*.)+(spec|test).ts?(x)'],
@@ -11,7 +10,7 @@ const config: Config = {
     '^@/lib/(.*)$': '<rootDir>/lib/$1',
     '^@/utils/(.*)$': '<rootDir>/utils/$1',
   },
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   collectCoverageFrom: [
     'components/**/*.{ts,tsx}',
     'app/**/*.{ts,tsx}',
@@ -43,4 +42,4 @@ const config: Config = {
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'css'],
 };
 
-export default config;
+module.exports = config;
