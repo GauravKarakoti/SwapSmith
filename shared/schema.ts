@@ -90,6 +90,7 @@ export const checkouts = pgTable('checkouts', {
   createdAt: timestamp('created_at').defaultNow(),
 }, (table) => [
   index("idx_checkouts_telegram_id").on(table.telegramId),
+  index("idx_checkouts_status").on(table.status),
 ]);
 
 export const addressBook = pgTable('address_book', {
@@ -152,9 +153,9 @@ export const limitOrders = pgTable('limit_orders', {
   executedAt: timestamp('executed_at'),
 }, (table) => [
   index("idx_limit_orders_telegram_id").on(table.telegramId),
-]);
-
-export const trailingStopOrders = pgTable('trailing_stop_orders', {
+  index("idx_limit_orders_status").on(table.status),
+  index("idx_limit_orders_is_active").on(table.isActive),
+]); = pgTable('trailing_stop_orders', {
   id: serial('id').primaryKey(),
   telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
   fromAsset: text('from_asset').notNull(),
@@ -176,10 +177,9 @@ export const trailingStopOrders = pgTable('trailing_stop_orders', {
   createdAt: timestamp('created_at').defaultNow(),
 }, (table) => [
   index("idx_trailing_stop_orders_telegram_id").on(table.telegramId),
-]);
-
-
-// --- SHARED SCHEMAS (used by both bot and frontend) ---
+  index("idx_trailing_stop_orders_status").on(table.status),
+  index("idx_trailing_stop_orders_is_active").on(table.isActive),
+]); (used by both bot and frontend) ---
 
 export const coinPriceCache = pgTable('coin_price_cache', {
   id: serial('id').primaryKey(),
@@ -226,6 +226,7 @@ export const portfolioTargets = pgTable('portfolio_targets', {
   updatedAt: timestamp('updated_at').defaultNow(), // Added updatedAt column
 }, (table) => [
   index("idx_portfolio_targets_user_id").on(table.userId),
+  index("idx_portfolio_targets_is_active").on(table.isActive),
 ]);
 
 export const rebalanceHistory = pgTable('rebalance_history', {
@@ -244,6 +245,7 @@ export const rebalanceHistory = pgTable('rebalance_history', {
 }, (table) => [
   index("idx_rebalance_history_user_id").on(table.userId),
   index("idx_rebalance_history_target_id").on(table.portfolioTargetId),
+  index("idx_rebalance_history_status").on(table.status),
 ]);
 
 export const tradingStrategies = pgTable('trading_strategies', {
@@ -290,6 +292,7 @@ export const strategySubscriptions = pgTable('strategy_subscriptions', {
 }, (table) => [
   unique().on(table.strategyId, table.subscriberId),
   index('idx_strategy_subscriptions_subscriber').on(table.subscriberId),
+  index('idx_strategy_subscriptions_status').on(table.status),
 ]);
 
 export const strategyTrades = pgTable('strategy_trades', {
@@ -359,6 +362,7 @@ export const priceAlerts = pgTable('price_alerts', {
   index("idx_price_alerts_telegram_id").on(table.telegramId),
   index("idx_price_alerts_is_active").on(table.isActive),
   index("idx_price_alerts_coin_network").on(table.coin, table.network),
+  index("idx_price_alerts_triggered_at").on(table.triggeredAt),
 ]);
 
 // --- FRONTEND SCHEMAS ---
@@ -382,10 +386,8 @@ export const swapHistory = pgTable('swap_history', {
   updatedAt: timestamp('updated_at'),
 }, (table) => [
   index("idx_swap_history_user_id").on(table.userId),
-]);
-
-
-export const chatHistory = pgTable('chat_history', {
+  index("idx_swap_history_status").on(table.status),
+]); = pgTable('chat_history', {
   id: serial('id').primaryKey(),
   userId: text('user_id').notNull(),
   walletAddress: text('wallet_address'),
@@ -396,10 +398,8 @@ export const chatHistory = pgTable('chat_history', {
   createdAt: timestamp('created_at').defaultNow(),
 }, (table) => [
   index("idx_chat_history_user_id").on(table.userId),
-]);
-
-
-export const discussions = pgTable('discussions', {
+  index("idx_chat_history_session_id").on(table.sessionId),
+]); = pgTable('discussions', {
   id: serial('id').primaryKey(),
   userId: text('user_id').notNull(),
   username: text('username').notNull(),
@@ -451,10 +451,8 @@ export const rewardsLog = pgTable('rewards_log', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 }, (table) => [
   index("idx_rewards_log_user_id").on(table.userId),
-]);
-
-
-// --- GAS FEE OPTIMIZATION SCHEMAS ---
+  index("idx_rewards_log_mint_status").on(table.mintStatus),
+]); SCHEMAS ---
 
 export const gasEstimates = pgTable('gas_estimates', {
   id: serial('id').primaryKey(),
@@ -491,6 +489,7 @@ export const gasTokens = pgTable('gas_tokens', {
 }, (table) => [
   index("idx_gas_tokens_symbol").on(table.symbol),
   index("idx_gas_tokens_chain_network").on(table.chain, table.network),
+  index("idx_gas_tokens_is_active").on(table.isActive),
 ]);
 
 export const userGasPreferences = pgTable('user_gas_preferences', {
@@ -631,6 +630,7 @@ export const adminRequests = pgTable('admin_requests', {
   index('idx_admin_requests_email').on(table.email),
   index('idx_admin_requests_status').on(table.status),
   index('idx_admin_requests_token').on(table.approvalToken),
+  index('idx_admin_requests_created_at').on(table.createdAt),
 ]);
 
 export type AdminUser = typeof adminUsers.$inferSelect;
@@ -663,3 +663,34 @@ export const coinGiftLogsRelations = relations(coinGiftLogs, ({ one }) => ({
 }));
 
 export type CoinGiftLog = typeof coinGiftLogs.$inferSelect;
+
+// --- Strategy Marketplace Schema ---
+
+export const tradingStrategies = pgTable('trading_strategies', {
+  id: serial('id').primaryKey(),
+  creatorId: integer('creator_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  creatorTelegramId: bigint('creator_telegram_id', { mode: 'number' }),
+  name: text('name').notNull(),
+  description: text('description').notNull(),
+  parameters: jsonb('parameters').notNull(),
+  riskLevel: text('risk_level').notNull(), // 'low' | 'medium' | 'high' | 'aggressive'
+  subscriptionFee: text('subscription_fee').notNull(),
+  performanceFee: real('performance_fee').notNull(),
+  minInvestment: text('min_investment').notNull(),
+  isPublic: boolean('is_public').notNull().default(false),
+  tags: text('tags').array(),
+  status: text('status').notNull().default('active'),
+  totalReturn: real('total_return').notNull().default(0),
+  monthlyReturn: real('monthly_return').notNull().default(0),
+  maxDrawdown: real('max_drawdown').notNull().default(0),
+  subscriberCount: integer('subscriber_count').notNull().default(0),
+  totalTrades: integer('total_trades').notNull().default(0),
+  successfulTrades: integer('successful_trades').notNull().default(0),
+  sharpeRatio: real('sharpe_ratio').default(0),
+  volatility: real('volatility').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => [
+  index('idx_trading_strategies_creator').on(table.creatorId),
+  index('idx_trading_strategies_status').on(table.status),
+]);
