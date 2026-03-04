@@ -65,7 +65,6 @@ export class TrailingStopWorker {
         }
 
         await this.processTrailingStopOrder(order, currentPrice);
-
       }
     } catch (error) {
       logger.error('❌ Trailing Stop Worker loop error', error);
@@ -167,7 +166,6 @@ export class TrailingStopWorker {
         parseFloat(order.fromAmount),
         process.env.SIDESHIFT_CLIENT_IP || '127.0.0.1'
       );
-
 
       if (quote.error) {
         throw new Error(quote.error.message);

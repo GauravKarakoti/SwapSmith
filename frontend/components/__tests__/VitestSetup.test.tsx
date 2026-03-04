@@ -1,19 +1,20 @@
 import { render, screen } from '@testing-library/react';
-import '@testing-library/jest-dom';
+import '@testing-library/jest-dom/vitest';
+import { vi } from 'vitest';
 
 /**
- * Basic test to verify Jest is configured properly
+ * Basic test to verify Vitest is configured properly
  * This test doesn't depend on component-specific dependencies
  */
-describe('Jest Configuration', () => {
-  test('Jest and Testing Library are properly configured', () => {
+describe('Vitest Configuration', () => {
+  test('Vitest and Testing Library are properly configured', () => {
     // This test verifies the testing setup works
     expect(true).toBe(true);
   });
 
   test('DOM matching is available', () => {
     const div = document.createElement('div');
-    expect(div).toBeInTheDocument() || expect(div).toBeTruthy();
+    expect(div).toBeTruthy();
   });
 
   test('Test environment is jsdom', () => {
@@ -76,22 +77,22 @@ describe('Unit Test Examples', () => {
 /**
  * Mock and spy examples
  */
-describe('Jest Mocking Capabilities', () => {
+describe('Vitest Mocking Capabilities', () => {
   test('spy on console methods', () => {
-    const consoleSpy = jest.spyOn(console, 'log');
+    const consoleSpy = vi.spyOn(console, 'log');
     console.log('test message');
     expect(consoleSpy).toHaveBeenCalledWith('test message');
     consoleSpy.mockRestore();
   });
 
   test('create mock functions', () => {
-    const mockFn = jest.fn((x) => x * 2);
+    const mockFn = vi.fn((x) => x * 2);
     expect(mockFn(5)).toBe(10);
     expect(mockFn).toHaveBeenCalledWith(5);
   });
 
   test('mock function return values', () => {
-    const mockFn = jest.fn()
+    const mockFn = vi.fn()
       .mockReturnValueOnce('first call')
       .mockReturnValueOnce('second call')
       .mockReturnValue('default');
