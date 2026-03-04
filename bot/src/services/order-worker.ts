@@ -6,6 +6,9 @@ import { createQuote, createOrder } from './sideshift-client';
 import { handleError, default as logger } from './logger';
 import type { DelayedOrder } from './database';
 
+// Get configured IP or use sensible default
+const SIDESHIFT_CLIENT_IP = process.env.SIDESHIFT_CLIENT_IP || '127.0.0.1';
+
 // Worker configuration
 const WORKER_INTERVAL = '*/5 * * * *'; // Run every 5 minutes
 const DCA_CHECK_INTERVAL = '0 */6 * * *'; // Check DCA every 6 hours
@@ -190,7 +193,7 @@ async function executeDCAPurchase(order: DelayedOrder): Promise<void> {
       order.toAsset,
       toChain,
       order.amount,
-      '1.1.1.1'
+      SIDESHIFT_CLIENT_IP
     );
 
     if (quote.error) {

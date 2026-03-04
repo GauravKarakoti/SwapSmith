@@ -29,7 +29,7 @@
       "axios": ["./node_modules/axios"],
       "@neondatabase/serverless": ["./node_modules/@neondatabase/serverless"],
     },
-    "types": []
+    "types": ["vitest"]
   },
   "include": [
     "next-env.d.ts",
@@ -40,5 +40,5 @@
     "**/*.mts",
     "../shared/**/*.ts"
   ],
-  "exclude": ["node_modules", "jest.config.js", "jest.setup.js", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"]
+  "exclude": ["node_modules", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"]
 }

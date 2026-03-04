@@ -128,7 +128,7 @@ export default function ChatInterface() {
       setInput('');
     }
     prevIsNativeRecordingRef.current = isNativeRecording;
-  }, [isNativeRecording, nativeTranscript]);
+  }, [isNativeRecording, nativeTranscript]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -513,6 +513,18 @@ export default function ChatInterface() {
         return;
       }
 
+      // Handle Staking
+      if (command.intent === 'stake') {
+        if (command.requiresConfirmation || command.confidence < 80) {
+          setPendingCommand(command);
+          addMessage({ role: 'assistant', content: '', type: 'intent_confirmation', data: { parsedCommand: command } });
+        } else {
+          await executeStake(command);
+        }
+        setIsLoading(false);
+        return;
+      }
+
       // Handle DCA (Dollar Cost Averaging)
       if (command.intent === 'dca') {
         if (command.requiresConfirmation || command.confidence < 80) {
@@ -667,29 +679,78 @@ export default function ChatInterface() {
     }
   };
 
+  const executeStake = async (command: ParsedCommand) => {
+    try {
+      const stakeResponse = await fetch('/api/create-stake', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stakeAsset: command.stakeAsset || command.fromAsset,
+          amount: command.amount,
+          stakeProtocol: command.stakeProtocol,
+          stakeProvider: command.stakeProvider,
+          stakeChain: command.stakeChain || 'ethereum',
+          settleAddress: address // Use connected wallet address
+        }),
+      });
+
+      const result = await stakeResponse.json();
+      if (result.error) throw new Error(result.error);
+
+      const providerName = command.stakeProvider || command.stakeProtocol || 'Liquid Staking Provider';
+      const apr = command.stakingApr ? ` (${command.stakingApr}% APR)` : '';
+
+      addMessage({
+        role: 'assistant',
+        content: `✅ Stake Order Created!\n\n🌱 Staking Details:\n• Amount: ${command.amount} ${command.stakeAsset || command.fromAsset}\n• Provider: ${providerName}${apr}\n• Chain: ${command.stakeChain || 'ethereum'}\n\nYou'll receive liquid staking tokens representing your staked position. Your stake is now being processed!`,
+        type: 'message'
+      });
+    } catch (error: unknown) {
+      // Fallback message if API endpoint doesn't exist yet
+      const providerName = command.stakeProvider || command.stakeProtocol || 'Liquid Staking Provider';
+      const apr = command.stakingApr ? ` (${command.stakingApr}% APR)` : '';
+
+      addMessage({
+        role: 'assistant',
+        content: `🌱 Staking Intent Confirmed!\n\n📋 Staking Details:\n• Amount: ${command.amount} ${command.stakeAsset || command.fromAsset}\n• Provider: ${providerName}${apr}\n• Chain: ${command.stakeChain || 'ethereum'}\n\nNote: Staking execution will be available soon. Please use the terminal to execute this stake manually.`,
+        type: 'message'
+      });
+    }
+  };
+
   const handleIntentConfirm = async (confirmed: boolean) => {
     if (confirmed && pendingCommand) {
-      if (pendingCommand.intent === 'portfolio') {
-        const confirmedCmd = { ...pendingCommand, requiresConfirmation: false, confidence: 100 };
+        if (pendingCommand.intent === 'portfolio') {
+             const confirmedCmd = { ...pendingCommand, requiresConfirmation: false, confidence: 100 };
 
-        if (confirmedCmd.portfolio) {
-          const items: PortfolioItem[] = confirmedCmd.portfolio.map((item, index) => ({
-            id: `${item.toAsset}-${index}`,
-            fromAsset: confirmedCmd.fromAsset || 'ETH',
-            toAsset: item.toAsset,
-            amount: (confirmedCmd.amount! * item.percentage) / 100,
-            status: 'pending',
-            toChain: item.toChain
-          }));
+             if (confirmedCmd.portfolio) {
+                 const items: PortfolioItem[] = confirmedCmd.portfolio.map((item, index) => ({
+                     id: `${item.toAsset}-${index}`,
+                     fromAsset: confirmedCmd.fromAsset || 'ETH',
+                     toAsset: item.toAsset,
+                     amount: (confirmedCmd.amount! * item.percentage) / 100,
+                     status: 'pending',
+                     toChain: item.toChain
+                 }));
 
-          addMessage({
-            role: 'assistant',
-            content: `📊 **Portfolio Strategy Executing**\nSplitting ${confirmedCmd.amount} ${confirmedCmd.fromAsset}...`,
-            type: 'portfolio_summary',
-            data: { portfolioItems: items, parsedCommand: confirmedCmd }
-          });
+                 addMessage({
+                     role: 'assistant',
+                     content: `📊 **Portfolio Strategy Executing**\nSplitting ${confirmedCmd.amount} ${confirmedCmd.fromAsset}...`,
+                     type: 'portfolio_summary',
+                     data: { portfolioItems: items, parsedCommand: confirmedCmd }
+                 });
 
-          await processPortfolioBatch(items, confirmedCmd);
+                 await processPortfolioBatch(items, confirmedCmd);
+             }
+        } else if (pendingCommand.intent === 'stake') {
+             await executeStake(pendingCommand);
+        } else if (pendingCommand.intent === 'dca') {
+             await executeDCA(pendingCommand);
+        } else if (pendingCommand.conditionOperator && pendingCommand.conditionValue) {
+             // Limit Order (swap with conditions)
+             await executeLimitOrder(pendingCommand);
+        } else {
+            await executeSwap(pendingCommand);
         }
       } else if (pendingCommand.intent === 'dca') {
         await executeDCA(pendingCommand);
