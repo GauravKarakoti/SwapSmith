@@ -53,8 +53,5 @@ COPY --from=builder --chown=botuser:nodejs /usr/src/app/shared ../shared
 
 USER botuser
 
-CMD ["npm", "start"]
-
-
 # Your app's start command
 CMD [ "npm", "run", "start:render" ]
