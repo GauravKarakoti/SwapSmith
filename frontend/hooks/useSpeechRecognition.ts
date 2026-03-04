@@ -1,15 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-// Extend Window interface for Web Speech API
-declare global {
-  interface Window {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    SpeechRecognition: any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    webkitSpeechRecognition: any;
-  }
-}
-
 export interface UseSpeechRecognitionReturn {
   isListening: boolean;
   transcript: string;
@@ -25,8 +15,7 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
   const [isSupported, setIsSupported] = useState(true); // Optimistic initially, checked in useEffect
   const [error, setError] = useState<string | null>(null);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -51,8 +40,7 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
           setIsListening(false);
         };
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        recognitionRef.current.onresult = (event: any) => {
+        recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
           let finalTranscript = '';
           for (let i = event.resultIndex; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
@@ -66,8 +54,7 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
           setTranscript(finalTranscript);
         };
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        recognitionRef.current.onerror = (event: any) => {
+        recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
           console.error("Speech recognition error", event.error);
           if (event.error === 'no-speech') {
              setError("No speech was detected. Please try again.");
