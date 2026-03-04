@@ -26,6 +26,7 @@ import { OrderMonitor } from './services/order-monitor';
 import { parseUserCommand } from './services/parseUserCommand';
 import { isValidAddress } from './config/address-patterns';
 import { executePortfolioStrategy } from './services/portfolio-service';
+import type { PortfolioAllocation } from '../../shared/types';
 
 dotenv.config();
 
@@ -56,9 +57,14 @@ bot.use(
 const app = express();
 
 const allowedOrigins = [MINI_APP_URL, 'http://localhost:3000', 'http://localhost:3001'];
+type CorsCallback = (error: Error | null, allow?: boolean) => void;
+interface ClosableHttpServer extends Server {
+  closeIdleConnections?: () => void;
+  closeAllConnections?: () => void;
+}
 
 app.use(cors({
-  origin: function (origin: any, callback: any) {
+  origin: function (origin: string | undefined, callback: CorsCallback) {
     // allow requests with no origin (like mobile apps, curl requests)
     if (!origin) return callback(null, true);
 
@@ -316,7 +322,7 @@ async function handleTextMessage(
       `📊 *Portfolio Strategy*\n\n` +
       parsed.portfolio
         ?.map(
-          (p: any) => `• ${p.percentage}% → ${p.toAsset} on ${p.toChain}`
+          (p: PortfolioAllocation) => `• ${p.percentage}% → ${p.toAsset} on ${p.toChain}`
         )
         .join('\n');
 
@@ -585,7 +591,7 @@ async function start() {
     }, 60 * 60_000); // every hour (60 minutes × 60 000 ms)
 
     const sockets = new Set<Socket>();
-    const server: Server = app.listen(PORT, () =>
+    const server: ClosableHttpServer = app.listen(PORT, () =>
       logger.info(`🌍 Server running on port ${PORT}`)
     );
     server.on('connection', (socket) => {
@@ -622,8 +628,8 @@ async function start() {
 
         // Close HTTP server and any keep-alive sockets
         try {
-          (server as any).closeIdleConnections?.();
-          (server as any).closeAllConnections?.();
+          server.closeIdleConnections?.();
+          server.closeAllConnections?.();
         } catch {
           // ignore best-effort calls
         }

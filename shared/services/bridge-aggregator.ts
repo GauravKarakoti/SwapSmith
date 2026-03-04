@@ -4,6 +4,7 @@
  */
 
 import {
+  BaseBridgeAdapter,
   BridgeQuote,
   BridgeQuoteRequest,
   BridgeOrderRequest,
@@ -40,7 +41,7 @@ export interface BridgeQuoteRequestWithPrefs extends BridgeQuoteRequest {
  * Collects and normalizes quotes from multiple bridge protocols
  */
 export class BridgeAggregator {
-  private adapters: Map<string, any>;
+  private adapters: Map<string, BaseBridgeAdapter>;
   private defaultPreferences: BridgePreferences;
 
   constructor() {

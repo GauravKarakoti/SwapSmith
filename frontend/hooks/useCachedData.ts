@@ -1,6 +1,9 @@
+'use client';
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchWithCache, CACHE_CONFIGS, invalidateCache } from '@/lib/cache-utils';
 import { CoinPrice } from '@/utils/sideshift-client';
+import toast from 'react-hot-toast';
 
 // API Response types
 interface CachedPricesResponse {
@@ -64,6 +67,11 @@ interface ChatSessionsResponse {
 interface UseCachedDataOptions<T> {
   enabled?: boolean;
   refetchInterval?: number;
+<<<<<<< Updated upstream
+=======
+  notify?: boolean;
+  notifyOnRefetchError?: boolean;
+>>>>>>> Stashed changes
   onSuccess?: (data: T) => void;
   onError?: (error: Error) => void;
 }
@@ -80,11 +88,16 @@ export function useCachedData<T>(
   // Use refs for callbacks to avoid infinite loops
   const onSuccessRef = useRef(options?.onSuccess);
   const onErrorRef = useRef(options?.onError);
+  const hasShownErrorToastRef = useRef(false);
   
   useEffect(() => {
     onSuccessRef.current = options?.onSuccess;
     onErrorRef.current = options?.onError;
   }, [options?.onSuccess, options?.onError]);
+
+  useEffect(() => {
+    hasShownErrorToastRef.current = false;
+  }, [url]);
 
   const fetchData = useCallback(async (isRefetch = false) => {
     if (!url) return; // Don't fetch if URL is empty
@@ -99,6 +112,7 @@ export function useCachedData<T>(
 
       const result = await fetchWithCache<T>(url, {}, CACHE_CONFIGS.PRICES);
       setData(result);
+      hasShownErrorToastRef.current = false;
       
       if (onSuccessRef.current) {
         onSuccessRef.current(result);
@@ -106,6 +120,19 @@ export function useCachedData<T>(
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Unknown error');
       setError(error);
+<<<<<<< Updated upstream
+      toast.error(error.message || 'Failed to load data.', { id: `cached-data-${url}` });
+=======
+      const shouldNotify =
+        options?.notify !== false &&
+        (!isRefetch || options?.notifyOnRefetchError === true) &&
+        !hasShownErrorToastRef.current;
+
+      if (shouldNotify) {
+        hasShownErrorToastRef.current = true;
+        toast.error(error.message || 'Failed to load data.', { id: `cached-data-${url}` });
+      }
+>>>>>>> Stashed changes
       
       if (onErrorRef.current) {
         onErrorRef.current(error);
@@ -114,7 +141,11 @@ export function useCachedData<T>(
       setIsLoading(false);
       setIsRefetching(false);
     }
+<<<<<<< Updated upstream
   }, [url]);
+=======
+  }, [url, options?.notify, options?.notifyOnRefetchError]);
+>>>>>>> Stashed changes
 
   useEffect(() => {
     if (options?.enabled === false || !url) {

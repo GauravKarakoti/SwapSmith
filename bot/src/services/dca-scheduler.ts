@@ -3,6 +3,8 @@ import { db, dcaSchedules, orders, watchedOrders, getUser } from './database';
 import { createQuote, createOrder } from './sideshift-client';
 import logger from './logger';
 
+type DCAScheduleRow = typeof dcaSchedules.$inferSelect;
+
 const RETRY_DELAY_MINUTES = 5;
 const MAX_PROCESSING_TIME_MINUTES = 10;
 
@@ -60,7 +62,7 @@ export class DCAScheduler {
     }
   }
 
-  private async executeSchedule(schedule: any) {
+  private async executeSchedule(schedule: DCAScheduleRow) {
     try {
       const user = await getUser(Number(schedule.telegramId));
       if (!user?.walletAddress) {

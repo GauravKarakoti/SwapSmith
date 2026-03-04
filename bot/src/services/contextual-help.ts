@@ -1,4 +1,15 @@
-import { ParsedCommand } from './groq-client';
+import type { ParsedCommand } from '../../../shared/types';
+
+type RequiredField =
+  | 'fromAsset'
+  | 'toAsset'
+  | 'amount'
+  | 'portfolio'
+  | 'settleAsset'
+  | 'settleNetwork'
+  | 'settleAmount';
+
+type AnalyzedFieldValue = ParsedCommand[RequiredField];
 
 /**
  * Analysis result identifying present, missing, and invalid fields in a parsed command
@@ -7,7 +18,7 @@ export interface CommandAnalysis {
   intent: string;
   presentFields: {
     field: string;
-    value: any;
+    value: AnalyzedFieldValue;
   }[];
   missingFields: string[];
   invalidFields: {
@@ -40,12 +51,12 @@ export function analyzeCommand(parsed: ParsedCommand): CommandAnalysis {
   }
 
   const intent = parsed.intent || 'unknown';
-  const presentFields: { field: string; value: any }[] = [];
+  const presentFields: { field: string; value: AnalyzedFieldValue }[] = [];
   const missingFields: string[] = [];
   const invalidFields: { field: string; reason: string }[] = [];
 
   // Define required fields based on intent
-  const requiredFieldsByIntent: Record<string, string[]> = {
+  const requiredFieldsByIntent: Partial<Record<ParsedCommand['intent'], RequiredField[]>> = {
     swap: ['fromAsset', 'toAsset', 'amount'],
     portfolio: ['fromAsset', 'amount', 'portfolio'],
     checkout: ['settleAsset', 'settleNetwork', 'settleAmount'],
@@ -56,7 +67,7 @@ export function analyzeCommand(parsed: ParsedCommand): CommandAnalysis {
 
   // Analyze each required field
   for (const field of requiredFields) {
-    const value = (parsed as any)[field];
+    const value = parsed[field];
     
     if (value === null || value === undefined) {
       missingFields.push(field);

@@ -5,7 +5,7 @@ import { pgTable, serial, text, bigint, timestamp, integer, real, unique, pgEnum
 import dotenv from 'dotenv';
 import { safeParseJSON } from '../utils/safeParse';
 import type { SideShiftOrder, SideShiftCheckoutResponse } from './sideshift-client';
-import type { ParsedCommand } from './parseUserCommand';
+import type { ConversationState, ParsedCommand } from '../../../shared/types';
 import logger from './logger';
 import { TERMINAL_STATUSES_LIST } from '../constants';
 
@@ -304,7 +304,7 @@ const schema = {
 // --- END INLINED SCHEMA ---
 
 // In-memory fallback for development or connection issues
-const memoryState = new Map<number, any>();
+const memoryState = new Map<number, ConversationState>();
 
 const connectionString = process.env.DATABASE_URL || 'postgres://mock:mock@localhost:5432/mock';
 const client = neon(connectionString);
@@ -384,7 +384,7 @@ export async function setUserWalletAndSession(telegramId: number, walletAddress:
     });
 }
 
-export async function getConversationState(telegramId: number) {
+export async function getConversationState(telegramId: number): Promise<ConversationState | null> {
   try {
     const result = await db.select({ state: conversations.state, lastUpdated: conversations.lastUpdated })
       .from(conversations)
@@ -392,7 +392,7 @@ export async function getConversationState(telegramId: number) {
 
     if (!result[0]?.state) return null;
 
-    const state = safeParseJSON(result[0].state);
+    const state = safeParseJSON<ConversationState>(result[0].state);
     const lastUpdated = result[0].lastUpdated;
 
     // Expire state after 1 hour
@@ -406,7 +406,7 @@ export async function getConversationState(telegramId: number) {
   }
 }
 
-export async function setConversationState(telegramId: number, state: any) {
+export async function setConversationState(telegramId: number, state: ConversationState): Promise<void> {
   try {
     await db.insert(conversations)
       .values({ telegramId, state: JSON.stringify(state), lastUpdated: new Date() })
@@ -805,7 +805,13 @@ export async function updateLimitOrderStatus(
   sideshiftOrderId?: string,
   error?: string
 ) {
-  const updateData: any = { status };
+  const updateData: {
+    status: string;
+    sideShiftOrderId?: string;
+    error?: string;
+    executedAt?: Date;
+    isActive?: number;
+  } = { status };
 
   if (sideshiftOrderId) updateData.sideShiftOrderId = sideshiftOrderId;
   if (error) updateData.error = error;
@@ -938,7 +944,11 @@ export async function updateStakeOrderSwapStatus(
   swapStatus: string,
   settleAmount?: string
 ): Promise<void> {
-  const updateData: any = {
+  const updateData: {
+    swapStatus: string;
+    updatedAt: Date;
+    settleAmount?: string;
+  } = {
     swapStatus,
     updatedAt: new Date()
   };
@@ -960,7 +970,12 @@ export async function updateStakeOrderStakeStatus(
   stakeStatus: string,
   stakeTxHash?: string
 ): Promise<void> {
-  const updateData: any = {
+  const updateData: {
+    stakeStatus: string;
+    updatedAt: Date;
+    stakeTxHash?: string;
+    completedAt?: Date;
+  } = {
     stakeStatus,
     updatedAt: new Date()
   };
@@ -987,4 +1002,3 @@ export async function getStakeOrderById(id: number): Promise<StakeOrder | undefi
     .limit(1);
   return result[0];
 }
-

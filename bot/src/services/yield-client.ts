@@ -141,23 +141,34 @@ export interface StakingQuote {
   }
 }
 
+interface YieldPoolApiResponse {
+  data: Array<{
+    chain: string;
+    project: string;
+    symbol: string;
+    tvlUsd: number;
+    apy: number;
+    pool: string;
+  }>;
+}
+
 export async function getTopYieldPools(): Promise<YieldPool[]> {
   try {
     // Fetch data from yield aggregator (likely DefiLlama based on variable names)
-    const response = await axios.get('https://yields.llama.fi/pools');
-    const data = response.data;
+    const response = await axios.get<YieldPoolApiResponse>('https://yields.llama.fi/pools');
+    const data = response.data.data;
 
-    const topPools = data.filter((p: any) =>
+    const topPools = data.filter((p) =>
       ['USDC', 'USDT', 'DAI'].includes(p.symbol) &&
       p.tvlUsd > 1000000 &&
       ['Ethereum', 'Polygon', 'Arbitrum', 'Optimism', 'Base', 'Avalanche'].includes(p.chain)
     )
-      .sort((a: any, b: any) => b.apy - a.apy)
+      .sort((a, b) => b.apy - a.apy)
       .slice(0, 5);
 
     if (topPools.length === 0) throw new Error("No pools found");
 
-    return topPools.map((p: any) => ({
+    return topPools.map((p) => ({
       chain: p.chain,
       project: p.project,
       symbol: p.symbol,
@@ -167,7 +178,9 @@ export async function getTopYieldPools(): Promise<YieldPool[]> {
     }));
 
   } catch (error) {
-    logger.error("Yield fetch error, using fallback data:", error);
+    logger.error("Yield fetch error, using fallback data:", {
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
     // Fallback Mock Data for demo reliability
     return [
       { chain: 'Base', project: 'Aave', symbol: 'USDC', tvlUsd: 5000000, apy: 12.4, poolId: 'base-aave-usdc' },

@@ -1,5 +1,8 @@
 import Groq from "groq-sdk";
 import { safeParseJSON } from "@/lib/safeParse";
+import type { ParsedCommand } from "shared/types";
+
+export type { ParsedCommand } from "shared/types";
 
 // Global singleton declaration to prevent multiple instances during hot reload
 declare global {
@@ -20,49 +23,6 @@ function getGroqClient(): Groq {
     });
   }
   return global._groqClient;
-}
-
-// Type definition for the parsed command object
-export interface ParsedCommand {
-  success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "dca" | "unknown";
-
-  // Single Swap Fields
-  fromAsset: string | null;
-  fromChain: string | null;
-  toAsset: string | null;
-  toChain: string | null;
-  amount: number | null;
-  amountType?: "exact" | "percentage" | "all" | null;
-
-  // Portfolio Fields
-  portfolio?: {
-    toAsset: string;
-    toChain: string;
-    percentage: number;
-  }[];
-
-  // DCA Fields
-  frequency?: "daily" | "weekly" | "monthly";
-  dayOfWeek?: number; // 1 (Monday) - 7 (Sunday)
-  dayOfMonth?: number; // 1-31
-
-  // Limit Order Fields (Conditional Swaps)
-  conditionOperator?: "gt" | "lt"; // 'gt' for greater than, 'lt' for less than
-  conditionValue?: number;
-  conditionAsset?: string;
-
-  // Checkout Fields
-  settleAsset: string | null;
-  settleNetwork: string | null;
-  settleAmount: number | null;
-  settleAddress: string | null;
-
-  confidence: number;
-  validationErrors: string[];
-  parsedMessage: string;
-  requiresConfirmation?: boolean;
-  originalInput?: string;
 }
 
 const systemPrompt = `

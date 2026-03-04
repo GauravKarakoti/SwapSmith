@@ -2,6 +2,7 @@ import Groq from "groq-sdk";
 import dotenv from 'dotenv';
 import fs from 'fs';
 import logger, { handleError } from './logger';
+import type { ConversationMessage, ParsedCommand } from '../../../shared/types';
 
 import { analyzeCommand, generateContextualHelp } from './contextual-help';
 
@@ -13,6 +14,8 @@ function getGroqClient(): Groq {
   });
 }
 
+<<<<<<< Updated upstream
+=======
 
 export interface ParsedCommand {
   success: boolean;
@@ -48,7 +51,7 @@ export interface ParsedCommand {
   portfolioName?: string;
 
   // DCA Fields
-  frequency?: "daily" | "weekly" | "monthly" | string | null;
+  frequency?: "daily" | "weekly" | "monthly" | null;
   dayOfWeek?: string | null;
   dayOfMonth?: string | null;
   totalAmount?: number;
@@ -81,6 +84,7 @@ export interface ParsedCommand {
 }
 
 
+>>>>>>> Stashed changes
 const systemPrompt = `
 You are SwapSmith, an advanced DeFi AI agent.
 Your job is to parse natural language into specific JSON commands.
@@ -223,7 +227,7 @@ EXAMPLES:
 // RENAMED from parseUserCommand to parseWithLLM
 export async function parseWithLLM(
   userInput: string,
-  conversationHistory: any[] = [],
+  conversationHistory: ConversationMessage[] = [],
   inputType: 'text' | 'voice' = 'text'
 ): Promise<ParsedCommand> {
   let currentSystemPrompt = systemPrompt;
@@ -237,7 +241,7 @@ export async function parseWithLLM(
   }
 
   try {
-    const messages: any[] = [
+    const messages: ConversationMessage[] = [
         { role: "system", content: currentSystemPrompt },
         ...conversationHistory,
         { role: "user", content: userInput }

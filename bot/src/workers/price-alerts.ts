@@ -5,6 +5,8 @@ import { db, users, userSettings } from '../services/database';
 import { priceAlerts } from '../../../shared/schema';
 import logger from '../services/logger';
 
+type PriceAlert = typeof priceAlerts.$inferSelect;
+
 const CHECK_INTERVAL_MS = 60 * 1000; // 60 seconds
 
 // Asset ID mapping for CoinGecko
@@ -144,11 +146,13 @@ export class PriceAlertWorker {
         }
       }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (axios.isAxiosError(error) && error.response?.status === 429) {
         logger.warn('⏳ CoinGecko rate limit hit, skipping this check cycle.');
       } else {
-        logger.error('❌ Failed to fetch prices from CoinGecko:', error.message);
+        logger.error('❌ Failed to fetch prices from CoinGecko:', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
       }
     }
 
@@ -164,7 +168,7 @@ export class PriceAlertWorker {
     return false;
   }
 
-  private async triggerAlert(alert: any, currentPrice: number) {
+  private async triggerAlert(alert: PriceAlert, currentPrice: number) {
     const targetPrice = parseFloat(alert.targetPrice.toString());
     const conditionText = alert.condition === 'gt' ? 'above' : 'below';
     
