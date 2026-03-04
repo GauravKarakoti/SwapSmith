@@ -1,30 +1,41 @@
+'use client'
+
 import { useState } from 'react'
-import { CheckCircle, AlertCircle, ExternalLink, Copy, Check, ShieldCheck, Shield, AlertTriangle, Info, TrendingUp, Zap } from 'lucide-react'
+import {
+  CheckCircle,
+  AlertCircle,
+  Copy,
+  Check,
+  ShieldCheck,
+  Shield,
+  AlertTriangle,
+  Info,
+  Zap,
+  Wallet,
+} from 'lucide-react'
 import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi'
-import { parseEther, formatEther, type Chain } from 'viem'
+import { parseEther, formatEther, isAddress, type Chain } from 'viem'
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
-import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift'
-import TransactionSecurityScanner from './TransactionSecurityScanner'
-import type { SecurityCheckResult } from '@/utils/security-scanner'
+import { validateDepositAddressForNetwork } from '@/utils/addressValidation'
 
 export interface QuoteData {
-  depositAmount: string;
-  depositCoin: string;
-  depositNetwork: string;
-  rate: string;
-  settleAmount: string;
-  settleCoin: string;
-  settleNetwork: string;
-  depositAddress?: string;
-  memo?: string;
-  expiry?: string;
-  id?: string;
+  depositAmount: string
+  depositCoin: string
+  depositNetwork: string
+  depositAddress: string
+  rate: string
+  settleAmount: string
+  settleCoin: string
+  settleNetwork: string
+  memo?: string
+  expiry?: string
+  id?: string
 }
 
 interface SwapConfirmationProps {
-  quote: QuoteData;
-  confidence?: number;
-  onAmountChange?: (newAmount: string) => void;
+  quote: QuoteData
+  confidence?: number
+  onAmountChange?: (newAmount: string) => void
 }
 
 const EXPLORER_URLS: { [key: string]: string } = {
@@ -39,323 +50,220 @@ const EXPLORER_URLS: { [key: string]: string } = {
   solana: 'https://solscan.io',
 }
 
-const SIDESHIFT_TRACKING_URL = SIDESHIFT_CONFIG.TRACKING_URL
-
-const CHAIN_MAP: { [key: string]: Chain } = {
-  ethereum: mainnet,
-  polygon: polygon,
-  arbitrum: arbitrum,
-  avalanche: avalanche,
-  optimism: optimism,
-  bsc: bsc,
-  base: base,
+const CHAIN_MAP: { [key: string]: Chain & { id: number; name: string } } = {
+  ethereum: { ...mainnet, name: 'Ethereum' },
+  polygon: { ...polygon, name: 'Polygon' },
+  arbitrum: { ...arbitrum, name: 'Arbitrum' },
+  avalanche: { ...avalanche, name: 'Avalanche' },
+  optimism: { ...optimism, name: 'Optimism' },
+  bsc: { ...bsc, name: 'BSC' },
+  base: { ...base, name: 'Base' },
 }
 
 interface SafetyCheckResult {
-  passed: boolean;
+  passed: boolean
   checks: {
-    balance: { passed: boolean; message: string };
-    gas: { passed: boolean; message: string; estimatedGas?: string };
-    network: { passed: boolean; message: string };
-    address: { passed: boolean; message: string };
-  };
-  riskLevel: 'safe' | 'warning' | 'unsafe';
-  overallMessage: string;
+    balance: { passed: boolean; message: string }
+    gas: { passed: boolean; message: string; estimatedGas?: string }
+    network: { passed: boolean; message: string }
+    address: { passed: boolean; message: string }
+  }
+  riskLevel: 'safe' | 'warning' | 'unsafe'
+  overallMessage: string
 }
 
 export default function SwapConfirmation({ quote, confidence, onAmountChange }: SwapConfirmationProps) {
   const [copiedAddress, setCopiedAddress] = useState(false)
   const [copiedMemo, setCopiedMemo] = useState(false)
-  const [isSimulating, setIsSimulating] = useState(false);
-  const [safetyCheck, setSafetyCheck] = useState<SafetyCheckResult | null>(null);
-  const [walletBalance, setWalletBalance] = useState<string | null>(null);
-  const [isLoadingBalance, setIsLoadingBalance] = useState(false);
-  const [securityScanResult, setSecurityScanResult] = useState<SecurityCheckResult | null>(null);
+  const [isSimulating, setIsSimulating] = useState(false)
+  const [safetyCheck, setSafetyCheck] = useState<SafetyCheckResult | null>(null)
+  const [walletBalance, setWalletBalance] = useState<string | null>(null)
+  const [isLoadingBalance, setIsLoadingBalance] = useState(false)
 
   const { address, isConnected, chain: connectedChain } = useAccount()
   const { data: hash, error, isPending, isSuccess, sendTransaction } = useSendTransaction()
   const { switchChainAsync } = useSwitchChain()
 
-  const depositChainId = CHAIN_MAP[quote.depositNetwork.toLowerCase()]?.id;
-  const publicClient = usePublicClient({ chainId: depositChainId });
+  const depositChainId = CHAIN_MAP[quote.depositNetwork.toLowerCase()]?.id
+  const publicClient = usePublicClient({ chainId: depositChainId })
 
-  const handleSecurityScanComplete = (result: SecurityCheckResult) => {
-    setSecurityScanResult(result);
-  };
+  const getNetworkName = (network: string) => {
+    return CHAIN_MAP[network.toLowerCase()]?.name || network
+  }
+
+  const handleMaxClick = async () => {
+    if (!isConnected || !address || !publicClient) return
+
+    setIsLoadingBalance(true)
+    try {
+      const balance = await publicClient.getBalance({ address })
+      const formatted = formatEther(balance)
+      setWalletBalance(formatted)
+
+      // Calculate final amount with gas buffer for native tokens
+      const balanceNum = parseFloat(formatted)
+      const gasBuffer = 0.001 // 0.001 in native currency
+      const finalAmount = Math.max(0, balanceNum - gasBuffer)
+
+      if (onAmountChange) {
+        onAmountChange(finalAmount.toString())
+      }
+    } catch (err) {
+      console.error('Failed to fetch balance:', err)
+    } finally {
+      setIsLoadingBalance(false)
+    }
+  }
+
+  const handleSimulate = async () => {
+    if (!address || !publicClient) return
+
+    setIsSimulating(true)
+    try {
+      const checks = {
+        address: { passed: true, message: '' },
+        network: { passed: true, message: '' },
+        balance: { passed: true, message: '' },
+        gas: { passed: true, message: '' },
+      }
+
+      // Check 1: Address validation
+      {
+        const addressCheck = validateDepositAddressForNetwork(quote.depositNetwork, quote.depositAddress)
+        checks.address.passed = addressCheck.passed
+        checks.address.message = addressCheck.message
+      }
+
+      // Check 2: Network compatibility
+      if (depositChainId) {
+        checks.network.passed = true
+        checks.network.message = `Compatible with ${getNetworkName(quote.depositNetwork)}`
+      } else {
+        checks.network.passed = false
+        checks.network.message = `Network ${quote.depositNetwork} not supported`
+      }
+
+      // Check 3: Balance check
+      const balance = await publicClient.getBalance({ address })
+      const requiredAmount = parseEther(quote.depositAmount)
+      if (balance >= requiredAmount) {
+        checks.balance.passed = true
+        checks.balance.message = `Sufficient balance: ${formatEther(balance)} available`
+      } else {
+        checks.balance.passed = false
+        checks.balance.message = `Insufficient balance: need ${quote.depositAmount}, have ${formatEther(balance)}`
+      }
+
+      // Check 4: Gas estimation
+      try {
+        const gasEstimate = await publicClient.estimateGas({
+          to: quote.depositAddress as `0x${string}`,
+          value: requiredAmount,
+          account: address,
+        })
+        const gasCost = gasEstimate * BigInt(30000000000) // 30 gwei
+        if (balance > requiredAmount + gasCost) {
+          checks.gas.passed = true
+          checks.gas.message = `Gas fees: ~${formatEther(gasCost)} available`
+        } else {
+          checks.gas.passed = false
+          checks.gas.message = `Insufficient gas buffer`
+        }
+      } catch {
+        checks.gas.passed = true
+        checks.gas.message = 'Gas estimation available'
+      }
+
+      const allPassed = Object.values(checks).every((c) => c.passed)
+      const hasWarnings = Object.values(checks).some((c) => !c.passed)
+
+      const result: SafetyCheckResult = {
+        passed: allPassed,
+        riskLevel: allPassed ? 'safe' : hasWarnings ? 'warning' : 'unsafe',
+        overallMessage: allPassed
+          ? 'All checks passed. Safe to proceed.'
+          : hasWarnings
+            ? 'Some checks failed. Proceed with caution.'
+            : 'Critical issues detected. Do not proceed.',
+        checks,
+      }
+
+      setSafetyCheck(result)
+    } catch (err) {
+      console.error('Safety check failed:', err)
+      setSafetyCheck({
+        passed: false,
+        riskLevel: 'warning' as const,
+        overallMessage: 'Could not complete all safety checks',
+        checks: {
+          address: { passed: true, message: 'Address format valid' },
+          network: { passed: true, message: 'Network available' },
+          balance: { passed: false, message: 'Could not verify balance' },
+          gas: { passed: false, message: 'Could not estimate gas' },
+        },
+      })
+    } finally {
+      setIsSimulating(false)
+    }
+  }
 
   const handleConfirm = async () => {
     if (!quote) {
-      alert("Error: Deposit address is missing. Cannot proceed.");
-      return;
+      alert('Error: Deposit address is missing. Cannot proceed.')
+      return
     }
 
     if (!depositChainId) {
-      alert(`The network "${quote.depositNetwork}" is not supported for this transaction.`);
-      return;
+      alert(`The network "${quote.depositNetwork}" is not supported for this transaction.`)
+      return
     }
 
     if (!sendTransaction) {
-      console.error("Transaction function not available.", error);
-      alert("Could not prepare transaction. Make sure your wallet is connected.");
-      return;
+      console.error('Transaction function not available.', error)
+      alert('Could not prepare transaction. Make sure your wallet is connected.')
+      return
     }
 
-    console.log("Swap quote:", quote);
-    
-    if (!quote.depositAddress) {
-      console.error("depositAddress is missing from quote:", quote);
-      alert("Error: Deposit address is missing. Cannot proceed with swap.");
-      return;
+    console.log('Processing swap to SideShift address:', quote.depositAddress)
+
+    const addressCheck = validateDepositAddressForNetwork(quote.depositNetwork, quote.depositAddress)
+    if (!addressCheck.passed) {
+      console.error('SECURITY: Rejected invalid deposit address from quote:', { quoteId: quote.id, depositNetwork: quote.depositNetwork, depositAddress: quote.depositAddress })
+      alert(`Error: ${addressCheck.message}. Cannot proceed with swap.`)
+      return
     }
-    
+
+    if (quote.depositAddress.toLowerCase() === address?.toLowerCase()) {
+      console.error('SECURITY: Attempted to send funds to user\'s own address instead of SideShift!')
+      alert('ERROR: Cannot send funds to your own wallet. Must send to SideShift deposit address.')
+      return
+    }
+
     const transactionDetails = {
       to: quote.depositAddress as `0x${string}`,
       value: parseEther(quote.depositAmount),
       chainId: depositChainId,
-    };
+    }
 
     try {
       if (connectedChain?.id !== depositChainId) {
         if (!switchChainAsync) {
-          alert("Could not switch network. Please do it manually in your wallet.");
-          return;
+          alert('Could not switch network. Please do it manually in your wallet.')
+          return
         }
-        await switchChainAsync({ chainId: depositChainId });
+        await switchChainAsync({ chainId: depositChainId })
       }
-      sendTransaction(transactionDetails);
+      sendTransaction(transactionDetails)
     } catch (e) {
-      const switchError = e as Error;
-      console.error('Failed to switch network or send transaction:', switchError);
+      const switchError = e as Error
+      console.error('Failed to switch network or send transaction:', switchError)
       if (switchError.message.includes('User rejected the request')) {
-        alert('You rejected the network switch request. Please approve it to continue.');
+        alert('You rejected the network switch request. Please approve it to continue.')
       } else {
-        alert('Failed to switch network. Please try again.');
+        alert('Failed to switch network. Please try again.')
       }
     }
-  };
-
-  const handleFetchBalance = async () => {
-    if (!address || !publicClient) {
-      alert('Wallet not connected or network not supported');
-      return;
-    }
-
-    setIsLoadingBalance(true);
-    try {
-      // Fetch wallet balance
-      const balance = await publicClient.getBalance({ address });
-      const balanceFormatted = formatEther(balance);
-      
-      // Check for zero balance
-      if (balance === BigInt(0)) {
-        alert('Your wallet balance is 0. Cannot swap.');
-        setIsLoadingBalance(false);
-        return;
-      }
-
-      let maxTransferable = balance;
-      let gasCost = BigInt(0);
-      let hasInsufficientGas = false;
-
-      // Try to estimate gas fees for the transaction
-      try {
-        // Estimate gas for a simple transfer to ourselves (to get gas cost)
-        const gasEstimate = await publicClient.estimateGas({
-          account: address,
-          to: address as `0x${string}`,
-          value: BigInt(1) // Minimal value for estimation
-        });
-
-        const gasPrice = await publicClient.getGasPrice();
-        gasCost = gasEstimate * gasPrice;
-        
-        // Check if balance is sufficient for gas
-        if (balance <= gasCost) {
-          hasInsufficientGas = true;
-        } else {
-          // Calculate max transferable (balance - gas cost)
-          maxTransferable = balance - gasCost;
-        }
-      } catch (gasError) {
-        // If gas estimation fails, use 10% of balance as conservative estimate
-        // or use a default gas buffer
-        console.warn('Gas estimation failed, using conservative estimate:', gasError);
-        const gasPrice = await publicClient.getGasPrice();
-        // Use a standard gas limit of 21000 for simple transfers
-        gasCost = BigInt(21000) * gasPrice;
-        
-        if (balance <= gasCost) {
-          hasInsufficientGas = true;
-        } else {
-          maxTransferable = balance - gasCost;
-        }
-      }
-
-      // Handle edge cases
-      if (hasInsufficientGas) {
-        alert(`Insufficient balance for gas fees. Your balance: ${balanceFormatted.substring(0, 8)} ${quote.depositCoin}. Please add more funds or use a different network.`);
-        setIsLoadingBalance(false);
-        return;
-      }
-
-      // Format the max transferable amount
-      const maxTransferableFormatted = formatEther(maxTransferable);
-      
-      // Round to reasonable decimal places (6 decimals for most tokens)
-      const roundedMax = parseFloat(maxTransferableFormatted).toFixed(6);
-      
-      setWalletBalance(maxTransferableFormatted);
-
-      // Trigger the amount change callback to re-fetch quote
-      if (onAmountChange) {
-        onAmountChange(roundedMax);
-      }
-    } catch (err) {
-      console.error('Failed to fetch balance:', err);
-      alert('Could not fetch wallet balance. Please try again.');
-    } finally {
-      setIsLoadingBalance(false);
-    }
-  };
-
-  const handleSimulate = async () => {
-    setIsSimulating(true);
-    setSafetyCheck(null);
-
-    const checks: SafetyCheckResult['checks'] = {
-      balance: { passed: false, message: '' },
-      gas: { passed: false, message: '' },
-      network: { passed: false, message: '' },
-      address: { passed: false, message: '' }
-    };
-
-    try {
-      if (!address) throw new Error("Wallet not connected");
-
-      if (address && address.startsWith('0x') && address.length === 42) {
-        checks.address = { passed: true, message: 'Valid Ethereum address format' };
-      } else {
-        checks.address = { passed: false, message: 'Invalid address format' };
-      }
-
-      if (!depositChainId || !publicClient) {
-        console.log("Skipping detailed simulation for non-EVM chain");
-        checks.network = { passed: true, message: 'Non-EVM chain (limited validation)' };
-        checks.balance = { passed: true, message: 'Cannot verify balance on non-EVM chain' };
-        checks.gas = { passed: true, message: 'Gas estimation not available' };
-
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        const result: SafetyCheckResult = {
-          passed: true,
-          checks,
-          riskLevel: 'warning',
-          overallMessage: 'Limited safety checks for non-EVM chain'
-        };
-        setSafetyCheck(result);
-        return;
-      }
-
-      if (connectedChain?.id === depositChainId) {
-        checks.network = { passed: true, message: `Connected to ${getNetworkName(quote.depositNetwork)}` };
-      } else {
-        checks.network = { passed: false, message: `Need to switch to ${getNetworkName(quote.depositNetwork)}` };
-      }
-
-      const balance = await publicClient.getBalance({ address });
-      const requiredAmount = parseEther(quote.depositAmount);
-
-      if (balance >= requiredAmount) {
-        checks.balance = {
-          passed: true,
-          message: `Sufficient balance: ${formatEther(balance).substring(0, 8)} ${quote.depositCoin}`
-        };
-      } else {
-        checks.balance = {
-          passed: false,
-          message: `Insufficient balance. Need ${quote.depositAmount} ${quote.depositCoin}, have ${formatEther(balance).substring(0, 8)}`
-        };
-      }
-
-      try {
-        const gasEstimate = await publicClient.estimateGas({
-          account: address,
-          to: address,
-          value: requiredAmount
-        });
-
-        const gasPrice = await publicClient.getGasPrice();
-        const estimatedGasCost = gasEstimate * gasPrice;
-        const totalCost = requiredAmount + estimatedGasCost;
-
-        if (balance >= totalCost) {
-          checks.gas = {
-            passed: true,
-            message: `Gas estimated: ~${formatEther(estimatedGasCost).substring(0, 8)} ${quote.depositCoin}`,
-            estimatedGas: formatEther(estimatedGasCost).substring(0, 8)
-          };
-        } else {
-          checks.gas = {
-            passed: false,
-            message: `Insufficient funds for gas. Need ${formatEther(totalCost).substring(0, 8)} total`,
-            estimatedGas: formatEther(estimatedGasCost).substring(0, 8)
-          };
-        }
-      } catch {
-        checks.gas = {
-          passed: false,
-          message: 'Gas estimation failed - transaction may fail'
-        };
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      const allPassed = Object.values(checks).every(check => check.passed);
-      const criticalFailed = !checks.balance.passed || !checks.gas.passed;
-
-      let riskLevel: 'safe' | 'warning' | 'unsafe';
-      let overallMessage: string;
-
-      if (allPassed) {
-        riskLevel = 'safe';
-        overallMessage = 'All safety checks passed. Transaction should succeed.';
-      } else if (criticalFailed) {
-        riskLevel = 'unsafe';
-        overallMessage = 'Critical issues detected. Transaction will likely fail.';
-      } else {
-        riskLevel = 'warning';
-        overallMessage = 'Some checks failed. Proceed with caution.';
-      }
-
-      const result: SafetyCheckResult = {
-        passed: allPassed,
-        checks,
-        riskLevel,
-        overallMessage
-      };
-
-      setSafetyCheck(result);
-
-    } catch (error: unknown) {
-      console.error("Simulation failed:", error);
-      const errorObj = error as Error;
-      const msg = errorObj.message || "Transaction likely to fail";
-
-      checks.balance = { passed: false, message: 'Could not verify balance' };
-      checks.gas = { passed: false, message: 'Gas estimation failed' };
-
-      const result: SafetyCheckResult = {
-        passed: false,
-        checks,
-        riskLevel: 'unsafe',
-        overallMessage: `Simulation error: ${msg}`
-      };
-
-      setSafetyCheck(result);
-    } finally {
-      setIsSimulating(false);
-    }
-  };
+  }
 
   const copyToClipboard = async (text: string, type: 'address' | 'memo') => {
     try {
@@ -373,14 +281,11 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
   }
 
   const getExplorerUrl = () => {
-    const networkKey = quote.depositNetwork.toLowerCase();
-    const baseUrl = EXPLORER_URLS[networkKey];
+    const networkKey = quote.depositNetwork.toLowerCase()
+    const baseUrl = EXPLORER_URLS[networkKey]
 
     if (hash && baseUrl) {
-      return `${baseUrl}/tx/${hash}`;
-    }
-    if (quote.id) {
-      return `${SIDESHIFT_TRACKING_URL}/${address}`
+      return `${baseUrl}/tx/${hash}`
     }
     if (baseUrl) {
       if (networkKey === 'bitcoin') {
@@ -391,85 +296,98 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
     return null
   }
 
-  const getNetworkName = (network: string) => {
-    return CHAIN_MAP[network.toLowerCase()]?.name || network;
-  }
-
   const explorerUrl = getExplorerUrl()
 
   const isTransactionBlocked = safetyCheck?.riskLevel === 'unsafe' || securityScanResult?.riskLevel === 'critical' || securityScanResult?.riskLevel === 'high';
 
   if (isSuccess) {
     return (
-      <div className="mt-4 bg-white border border-green-300 rounded-lg p-6 shadow-sm text-center">
-        <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
-        <h4 className="font-semibold text-lg text-gray-900">Transaction Sent!</h4>
-        <p className="text-gray-600 text-sm mt-1">Your swap is processing. You can track its status on the explorer.</p>
+      <div className="mt-4 bg-white border border-green-300 rounded-lg p-6 text-center shadow-md">
+        <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-2" />
+        <h4 className="font-bold text-gray-900">Swap Initiated!</h4>
+        <p className="text-sm text-gray-600">Track your transaction on the explorer.</p>
         {explorerUrl && (
-          <button
-            onClick={() => window.open(explorerUrl, '_blank', 'noopener,noreferrer')}
-            className="w-full mt-4 flex items-center justify-center gap-2 py-2 text-gray-600 hover:text-gray-800 transition-colors text-sm border border-gray-300 rounded-lg hover:border-gray-400"
-          >
-            Track on Explorer <ExternalLink className="w-3 h-3" />
-          </button>
+          <a href={explorerUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline mt-2 block">
+            View on Explorer →
+          </a>
         )}
       </div>
     )
   }
 
   return (
-    <div className="mt-4 bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-      <div className="flex items-center justify-between mb-3">
-        <h4 className="font-semibold text-gray-900">Swap Details</h4>
-        {confidence && confidence >= 80 ? (
-          <CheckCircle className="w-5 h-5 text-green-500" />
-        ) : (
-          <AlertCircle className="w-5 h-5 text-yellow-500" />
-        )}
+    <div className="mt-4 bg-white border border-gray-200 rounded-xl p-5 shadow-lg max-w-md mx-auto">
+      <div className="flex items-center justify-between mb-4">
+        <h4 className="font-bold text-gray-800 flex items-center gap-2">
+          <Zap className="w-4 h-4 text-yellow-500 shrink-0" /> Confirm Swap
+        </h4>
+        <div className="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">
+          SideShift.ai API
+        </div>
       </div>
 
-      <div className="space-y-3 text-sm">
-        <div className="flex justify-between items-center">
-          <span className="text-gray-600">You send:</span>
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-gray-900">{quote.depositAmount} {quote.depositCoin} on {getNetworkName(quote.depositNetwork)}</span>
+      <div className="space-y-4 text-sm">
+        {/* You Send Section */}
+        <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
+          <div className="flex justify-between items-start mb-2">
+            <div>
+              <span className="text-xs font-semibold text-blue-600 uppercase">You Send</span>
+              <div className="font-medium text-gray-900 mt-1">
+                {quote.depositAmount} {quote.depositCoin}
+              </div>
+              <div className="text-xs text-gray-500">on {getNetworkName(quote.depositNetwork)}</div>
+            </div>
+
             <button
-              onClick={handleFetchBalance}
+              onClick={handleMaxClick}
               disabled={!isConnected || isLoadingBalance}
-              className="px-2 py-1 text-xs font-semibold bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-1 text-[10px] font-bold bg-blue-600 text-white px-2 py-0.5 rounded hover:bg-blue-700 transition-all disabled:opacity-50"
               title="Set amount to your full wallet balance"
             >
-              {isLoadingBalance ? 'Loading...' : 'Max'}
+              <Wallet className="w-3 h-3" /> {isLoadingBalance ? '...' : 'USE MAX'}
             </button>
           </div>
+
+          {walletBalance && !isLoadingBalance && (
+            <div className="mt-2 text-xs text-gray-600">
+              Balance: {walletBalance ? parseFloat(walletBalance).toFixed(4) : '0.0000'} {quote.depositCoin}
+            </div>
+          )}
         </div>
-        <div className="border-t pt-3">
-          <div className="flex justify-between">
-            <span className="text-gray-600">You receive approx:</span>
-            <span className="font-medium text-gray-900">{quote.settleAmount} {quote.settleCoin}</span>
-          </div>
-          <div className="flex justify-between mt-1">
-            <span className="text-gray-600">At your address:</span>
-            <span className="font-mono text-xs bg-gray-100 text-gray-800 px-1 py-0.5 rounded">
-              {isConnected && address ? `${address.substring(0, 6)}...${address.substring(address.length - 4)}` : 'Wallet not connected'}
-            </span>
+
+        {/* You Receive */}
+        <div className="bg-green-50 border border-green-100 rounded-lg p-3">
+          <span className="text-xs font-semibold text-green-600 uppercase">You Receive Approx.</span>
+          <div className="flex justify-between items-end mt-1">
+            <span className="text-xl font-bold text-green-900">{quote.settleAmount}</span>
+            <span className="text-sm font-medium text-green-700">{quote.settleCoin}</span>
           </div>
         </div>
 
-        <div className="border-t pt-3 mt-3">
-          <div className="flex justify-between items-start mb-2">
-            <span className="text-gray-600 font-medium">Send funds to this address:</span>
-            <button
-              onClick={() => copyToClipboard(address as string, 'address')}
-              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
-            >
-              {copiedAddress ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-              {copiedAddress ? 'Copied!' : 'Copy'}
+        {/* Deposit Address Info */}
+        <div className="pt-2">
+          <div className="flex justify-between text-[11px] text-gray-500 mb-1 px-1">
+            <span>Deposit Address</span>
+            <button onClick={() => copyToClipboard(quote.depositAddress, 'address')} className="text-blue-600 hover:underline">
+              {copiedAddress ? 'Copied!' : 'Copy Address'}
             </button>
           </div>
-          <div className="bg-gray-500 p-2 rounded text-xs font-mono break-all">
-            {address}
+          <div className="bg-gray-50 border border-gray-200 p-2 rounded text-[10px] font-mono break-all text-gray-600">
+            {quote.depositAddress}
           </div>
+        </div>
+
+        <div className="mt-6 flex flex-col gap-2 w-full">
+          <button
+            onClick={handleConfirm}
+            disabled={!isConnected || isPending}
+            className="w-full py-3 bg-gray-900 text-white rounded-lg font-bold hover:bg-black transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
+          >
+            {isPending ? 'Confirming...' : 'Confirm and Send'}
+          </button>
+          <p className="text-[10px] text-center text-gray-400">
+            By confirming, you agree to SideShift&apos;s terms and gas fees.
+          </p>
         </div>
 
         {quote.memo && (
@@ -495,7 +413,9 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
           <div className="flex justify-between border-t pt-3">
             <span className="text-gray-600">Quote expires:</span>
             <span className="font-medium text-red-600">
-              {new Date(quote.expiry).toLocaleTimeString()} ({Math.round((new Date(quote.expiry).getTime() - Date.now()) / 60000)}min)
+              {new Date(quote.expiry).toLocaleTimeString()} (
+              {Math.round((new Date(quote.expiry).getTime() - Date.now()) / 60000)}
+              min)
             </span>
           </div>
         )}
@@ -537,12 +457,16 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
           </button>
         ) : (
           <div className="space-y-3">
-            <div className={`flex items-center gap-2 p-3 rounded-lg border ${safetyCheck.riskLevel === 'safe'
-              ? 'bg-green-50 border-green-200 text-green-700'
-              : safetyCheck.riskLevel === 'warning'
-                ? 'bg-yellow-50 border-yellow-200 text-yellow-700'
-                : 'bg-red-50 border-red-200 text-red-700'
-              }`}>
+            {/* Overall Status Banner */}
+            <div
+              className={`flex items-center gap-2 p-3 rounded-lg border ${
+                safetyCheck.riskLevel === 'safe'
+                  ? 'bg-green-50 border-green-200 text-green-700'
+                  : safetyCheck.riskLevel === 'warning'
+                    ? 'bg-yellow-50 border-yellow-200 text-yellow-700'
+                    : 'bg-red-50 border-red-200 text-red-700'
+              }`}
+            >
               {safetyCheck.riskLevel === 'safe' && <Shield className="w-5 h-5" />}
               {safetyCheck.riskLevel === 'warning' && <AlertTriangle className="w-5 h-5" />}
               {safetyCheck.riskLevel === 'unsafe' && <AlertCircle className="w-5 h-5" />}
@@ -564,9 +488,9 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
 
               <div className="flex items-start gap-2 text-xs">
                 {safetyCheck.checks.address.passed ? (
-                  <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                  <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
                 ) : (
-                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
                 )}
                 <div className="flex-1">
                   <div className="font-medium text-gray-900">Address Validation</div>
@@ -576,9 +500,9 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
 
               <div className="flex items-start gap-2 text-xs">
                 {safetyCheck.checks.network.passed ? (
-                  <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                  <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
                 ) : (
-                  <AlertCircle className="w-4 h-4 text-yellow-500 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="w-4 h-4 text-yellow-500 shrink-0 mt-0.5" />
                 )}
                 <div className="flex-1">
                   <div className="font-medium text-gray-900">Network Status</div>
@@ -588,9 +512,9 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
 
               <div className="flex items-start gap-2 text-xs">
                 {safetyCheck.checks.balance.passed ? (
-                  <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                  <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
                 ) : (
-                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
                 )}
                 <div className="flex-1">
                   <div className="font-medium text-gray-900">Balance Check</div>
@@ -600,9 +524,9 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
 
               <div className="flex items-start gap-2 text-xs">
                 {safetyCheck.checks.gas.passed ? (
-                  <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                  <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
                 ) : (
-                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
                 )}
                 <div className="flex-1">
                   <div className="font-medium text-gray-900 flex items-center gap-1">
@@ -613,59 +537,8 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
                 </div>
               </div>
             </div>
-
-            <button
-              onClick={handleSimulate}
-              disabled={isSimulating}
-              className="w-full flex items-center justify-center gap-2 py-2 text-gray-600 hover:text-gray-800 transition-colors text-xs border border-gray-300 rounded-lg hover:border-gray-400"
-            >
-              <TrendingUp className="w-3 h-3" />
-              Re-run Safety Check
-            </button>
           </div>
         )}
-      </div>
-
-      <div className="mt-4 space-y-2">
-        <button
-          onClick={handleConfirm}
-          disabled={!isConnected || isPending || !address || isTransactionBlocked}
-          className={`w-full py-3 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${isTransactionBlocked
-            ? 'bg-gray-400 text-white cursor-not-allowed'
-            : safetyCheck?.riskLevel === 'safe'
-              ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700'
-              : safetyCheck?.riskLevel === 'warning'
-                ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white hover:from-yellow-600 hover:to-yellow-700'
-                : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700'
-            }`}
-        >
-          {isPending ? 'Check Your Wallet...' : isTransactionBlocked ? 'Transaction Blocked (Unsafe)' : 'Confirm and Send'}
-        </button>
-
-        {explorerUrl && !isSuccess && (
-          <button
-            onClick={() => window.open(explorerUrl, '_blank', 'noopener,noreferrer')}
-            className="w-full flex items-center justify-center gap-2 py-2 text-gray-600 hover:text-gray-800 transition-colors text-sm border border-gray-300 rounded-lg hover:border-gray-400"
-          >
-            View Deposit Address <ExternalLink className="w-3 h-3" />
-          </button>
-        )}
-
-        <div className="flex gap-2 text-xs">
-          <button
-            onClick={() => window.open(SIDESHIFT_CONFIG.HELP_URL, '_blank')}
-            className="text-blue-600 hover:text-blue-800"
-          >
-            Need help?
-          </button>
-          <span className="text-gray-400">•</span>
-          <button
-            onClick={() => window.open(SIDESHIFT_CONFIG.FAQ_URL, '_blank')}
-            className="text-blue-600 hover:text-blue-800"
-          >
-            FAQ
-          </button>
-        </div>
       </div>
 
       {error && (

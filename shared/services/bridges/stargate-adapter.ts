@@ -38,12 +38,6 @@ interface StargateQuoteResponse {
   toTokenAddress: string;
 }
 
-interface StargateOrderResponse {
-  txHash: string;
-  status: 'pending' | 'success' | 'failed';
-  message: string;
-}
-
 export class StargateAdapter extends BaseBridgeAdapter {
   private apiKey: string;
 
@@ -65,8 +59,8 @@ export class StargateAdapter extends BaseBridgeAdapter {
           `${this.config.apiBaseUrl}/quote`,
           {
             params: {
-              srcChainId,
-              dstChainId,
+              srcChainId: fromChainId,
+              dstChainId: toChainId,
               srcTokenAddress: request.fromToken,
               dstTokenAddress: request.toToken,
               amount: request.amount,

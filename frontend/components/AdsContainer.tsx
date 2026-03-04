@@ -210,16 +210,16 @@ export default function AdsContainer({
   if (!visible || !resolvedAd) return null
 
   const positionClasses = {
-    'bottom-right': 'bottom-6 right-6',
-    'bottom-left': 'bottom-6 left-6',
-    'bottom-center': 'bottom-6 left-1/2 -translate-x-1/2',
+    'bottom-right': 'bottom-3 right-3 sm:bottom-6 sm:right-6',
+    'bottom-left': 'bottom-3 left-3 sm:bottom-6 sm:left-6',
+    'bottom-center': 'bottom-3 left-1/2 -translate-x-1/2 sm:bottom-6',
   }[position]
 
   const currentAd = resolvedAd
 
   return (
     <div
-      className={`fixed ${positionClasses} z-[9999] w-80 max-w-[calc(100vw-3rem)] animate-in fade-in slide-in-from-bottom-4 duration-300`}
+      className={`fixed ${positionClasses} z-[9999] w-72 sm:w-80 max-w-[calc(100vw-1.5rem)] animate-in fade-in slide-in-from-bottom-4 duration-300`}
       role="complementary"
       aria-label="Advertisement"
     >
