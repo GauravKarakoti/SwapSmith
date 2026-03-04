@@ -311,6 +311,7 @@ export const swapHistory = pgTable('swap_history', {
   index("idx_swap_history_status").on(table.status),
 ]);
 
+
 export const chatHistory = pgTable('chat_history', {
   id: serial('id').primaryKey(),
   userId: text('user_id').notNull(),
@@ -324,6 +325,7 @@ export const chatHistory = pgTable('chat_history', {
   index("idx_chat_history_user_id").on(table.userId),
   index("idx_chat_history_session_id").on(table.sessionId),
 ]);
+
 
 export const discussions = pgTable('discussions', {
   id: serial('id').primaryKey(),
@@ -379,6 +381,7 @@ export const rewardsLog = pgTable('rewards_log', {
   index("idx_rewards_log_user_id").on(table.userId),
   index("idx_rewards_log_mint_status").on(table.mintStatus),
 ]);
+
 
 // --- GAS FEE OPTIMIZATION SCHEMAS ---
 
