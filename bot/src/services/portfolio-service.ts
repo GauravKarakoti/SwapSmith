@@ -1,6 +1,7 @@
 import { createQuote, createOrder } from './sideshift-client';
-import * as db from './database';
+import { db, orders, watchedOrders } from './database';
 import logger from './logger';
+import type { ParsedCommand } from './parseUserCommand';
 
 interface PortfolioExecutionResult {
   successfulOrders: Array<{
@@ -15,81 +16,95 @@ interface PortfolioExecutionResult {
   }>;
 }
 
+interface QuoteOrderPair {
+  quote: any;
+  order: any;
+  allocation: any;
+  swapAmount: number;
+}
+
 export async function executePortfolioStrategy(
   userId: number,
-  parsedCommand: any
+  parsedCommand: ParsedCommand
 ): Promise<PortfolioExecutionResult> {
   const { fromAsset, fromChain, amount, portfolio, settleAddress } = parsedCommand;
-  const successfulOrders: PortfolioExecutionResult['successfulOrders'] = [];
-  const failedSwaps: PortfolioExecutionResult['failedSwaps'] = [];
 
-  let remainingAmount = amount;
-
-  // Validate Input (Basic checks, handler does UI checks)
   if (!portfolio || portfolio.length === 0) {
     throw new Error('No portfolio allocation found');
   }
+
+  const quotesAndOrders: QuoteOrderPair[] = [];
+  let remainingAmount = amount!;
 
   for (let i = 0; i < portfolio.length; i++) {
     const allocation = portfolio[i];
     const isLast = i === portfolio.length - 1;
 
-    // Calculate split amount
-    let swapAmount = (amount * allocation.percentage) / 100;
+    let swapAmount = (amount! * allocation.percentage) / 100;
 
-    // Handle rounding / remainder for last asset
     if (isLast) {
       swapAmount = remainingAmount;
     } else {
       remainingAmount -= swapAmount;
     }
 
-    // Ensure positive amount
     if (swapAmount <= 0) {
-      failedSwaps.push({ asset: allocation.toAsset, reason: "Calculated amount too small" });
-      continue;
+      throw new Error(`Calculated amount too small for ${allocation.toAsset}`);
     }
 
-    try {
-      // Rate limit delay (500ms)
-      await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Create Quote
-      const quote = await createQuote(
-        fromAsset!,
-        fromChain!,
-        allocation.toAsset,
-        allocation.toChain,
-        swapAmount
-      );
+    const quote = await createQuote(
+      fromAsset!,
+      fromChain!,
+      allocation.toAsset,
+      allocation.toChain,
+      swapAmount
+    );
 
-      if (quote.error) throw new Error(quote.error.message);
+    if (quote.error) {
+      throw new Error(`Quote failed for ${allocation.toAsset}: ${quote.error.message}`);
+    }
 
-      // Execute Swap (Create Order)
-      // Using settleAddress as refundAddress for simplicity
-      const order = await createOrder(quote.id!, settleAddress!, settleAddress!);
+    const order = await createOrder(quote.id!, settleAddress!, settleAddress!);
 
-      if (!order.id) throw new Error('Failed to create order ID');
+    if (!order.id) {
+      throw new Error(`Order creation failed for ${allocation.toAsset}`);
+    }
 
-      // Store Order in DB
-      const orderCommand = {
-        ...parsedCommand,
-        toAsset: allocation.toAsset,
-        toChain: allocation.toChain,
-        amount: swapAmount
-      };
+    quotesAndOrders.push({ quote, order, allocation, swapAmount });
+  }
 
-      await db.createOrderEntry(userId, orderCommand, order, quote.settleAmount, quote.id!);
-      await db.addWatchedOrder(userId, order.id, 'pending');
+  await db.transaction(async (tx) => {
+    for (const { quote, order, allocation, swapAmount } of quotesAndOrders) {
+      const depositAddr = typeof order.depositAddress === 'string' 
+        ? order.depositAddress 
+        : order.depositAddress?.address;
+      const depositMemo = typeof order.depositAddress === 'object' 
+        ? order.depositAddress?.memo 
+        : null;
 
-      successfulOrders.push({
-        order,
-        allocation,
+      await tx.insert(orders).values({
+        telegramId: userId,
+        sideshiftOrderId: order.id,
         quoteId: quote.id!,
-        swapAmount
+        fromAsset: fromAsset!,
+        fromNetwork: fromChain!,
+        fromAmount: swapAmount.toString(),
+        toAsset: allocation.toAsset,
+        toNetwork: allocation.toChain,
+        settleAmount: quote.settleAmount.toString(),
+        depositAddress: depositAddr!,
+        depositMemo: depositMemo || null,
+        status: 'pending'
       });
 
-      // Log success
+      await tx.insert(watchedOrders).values({
+        telegramId: userId,
+        sideshiftOrderId: order.id,
+        lastStatus: 'pending',
+      }).onConflictDoNothing();
+
       logger.info('Portfolio swap executed', {
         userId,
         asset: allocation.toAsset,
@@ -97,19 +112,15 @@ export async function executePortfolioStrategy(
         quoteId: quote.id,
         orderId: order.id
       });
-
-    } catch (error) {
-      // Handle partial failure
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      failedSwaps.push({ asset: allocation.toAsset, reason: errorMessage });
-
-      logger.error('Portfolio swap failed', {
-        userId,
-        asset: allocation.toAsset,
-        error: errorMessage
-      });
     }
-  }
+  });
 
-  return { successfulOrders, failedSwaps };
+  const successfulOrders = quotesAndOrders.map(({ quote, order, allocation, swapAmount }) => ({
+    order,
+    allocation,
+    quoteId: quote.id!,
+    swapAmount
+  }));
+
+  return { successfulOrders, failedSwaps: [] };
 }
