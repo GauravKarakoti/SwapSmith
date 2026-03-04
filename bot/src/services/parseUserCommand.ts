@@ -1,4 +1,6 @@
 import { parseWithLLM, ParsedCommand } from './groq-client';
+import { detectLimitOrder } from './nl-limit-orders';
+import { detectDCA } from './nl-dca';
 import logger from './logger';
 
 export { ParsedCommand };
@@ -142,6 +144,44 @@ export async function parseUserCommand(
       fromProject: stakeProtocol,
       toProject: stakeProtocol,
       parsedMessage: `Parsed: Swap ${amount ?? '?'} ${fromAsset ?? '?'} → ${toAsset ?? 'USDC'} and stake`
+    };
+  }
+
+  /* ───────────── NATURAL LANGUAGE LIMIT ORDERS ───────────── */
+  const limitOrderNL = detectLimitOrder(input);
+  if (limitOrderNL && limitOrderNL.asset && limitOrderNL.price !== undefined && limitOrderNL.condition) {
+    return buildSwapResult(userInput, {
+      intent: 'limit_order',
+      fromAsset: limitOrderNL.asset,
+      toAsset: limitOrderNL.targetAsset ?? 'USDC',
+      amount: limitOrderNL.amount ?? null,
+      amountType: limitOrderNL.amountType ?? 'all',
+      condition: limitOrderNL.condition,
+      conditionValue: limitOrderNL.price,
+      conditionAsset: limitOrderNL.asset,
+      conditionOperator: limitOrderNL.condition === 'above' ? 'gt' : 'lt',
+      confidence: 85,
+      requiresConfirmation: true
+    });
+  }
+
+  /* ───────────── NATURAL LANGUAGE DCA ───────────── */
+  const dcaNL = detectDCA(input);
+  if (dcaNL && dcaNL.asset && dcaNL.targetAsset && dcaNL.amount !== undefined && dcaNL.frequency) {
+    return {
+      ...buildSwapResult(userInput, {
+        intent: 'dca',
+        fromAsset: dcaNL.asset,
+        toAsset: dcaNL.targetAsset,
+        amount: dcaNL.amount,
+        amountType: dcaNL.amountType ?? 'exact',
+        frequency: dcaNL.frequency,
+        dayOfWeek: dcaNL.dayOfWeek,
+        dayOfMonth: dcaNL.dayOfMonth,
+        confidence: 85,
+        requiresConfirmation: true
+      }),
+      parsedMessage: `Parsed: DCA ${dcaNL.amount} ${dcaNL.asset} → ${dcaNL.targetAsset} ${dcaNL.frequency}`
     };
   }
 
