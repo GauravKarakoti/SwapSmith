@@ -40,6 +40,10 @@ const REGEX_MULTI_SOURCE = /([A-Z]+)\s+(?:and|&)\s+([A-Z]+)\s+(?:to|into|for)/i;
 const REGEX_SWAP_STAKE = /(?:swap\s+and\s+stake|zap\s+(?:into|to)|stake\s+(?:my|after|then)|swap\s+(?:to|into)\s+(?:stake|yield))/i;
 const REGEX_STAKE_PROTOCOL = /(?:to\s+)?(aave|compound|yearn|lido|morpho|euler|spark)/i;
 
+// New Regex for direct Stake commands (e.g., "Stake 1 ETH with Lido" or "Stake my ETH")
+const REGEX_STAKE_COMMAND = /\b(stake)\b/i;
+const REGEX_LIQUID_STAKING_PROVIDER = /\b(lido|rocket\s*pool|rocketpool|stakewise|stake\s*wise)\b/i;
+
 function normalizeNumber(val: string): number {
   val = val.toLowerCase().replace(/[\$,]/g, '');
 
@@ -122,6 +126,86 @@ export async function parseUserCommand(
       confidence: 80,
       validationErrors: [],
       parsedMessage: `Parsed: Swap ${amount || '?'} ${fromAsset || '?'} to ${toAsset} and stake`,
+      requiresConfirmation: true,
+      originalInput: userInput
+     };
+  }
+
+  // Check for direct Stake Intent (e.g., "Stake 1 ETH with Lido" or "Stake my ETH")
+  if (REGEX_STAKE_COMMAND.test(input) && !REGEX_SWAP_STAKE.test(input)) {
+    const providerMatch = input.match(REGEX_LIQUID_STAKING_PROVIDER);
+    const stakeProtocol = providerMatch ? providerMatch[1].toLowerCase().replace(/\s+/g, '_') : 'lido';
+    const stakeProvider = providerMatch
+      ? providerMatch[1].replace(/\s+/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+      : 'Lido';
+
+    let amount: number | null = null;
+    let stakeAsset: string | null = null;
+
+    const amtMatch = input.match(/\b(\d+(\.\d+)?)\s*([A-Z]{2,5})?\b/i);
+    if (amtMatch) {
+      amount = parseFloat(amtMatch[1]);
+      if (amtMatch[3]) {
+        stakeAsset = amtMatch[3].toUpperCase();
+      }
+    }
+
+    // Try to find asset after "stake" keyword
+    if (!stakeAsset) {
+      const assetMatch = input.match(/stake\s+(?:my\s+)?(\d+(\.\d+)?\s+)?([A-Z]{2,5})/i);
+      if (assetMatch && assetMatch[3]) {
+        stakeAsset = assetMatch[3].toUpperCase();
+      }
+    }
+
+    // Default to ETH if no asset specified
+    if (!stakeAsset) {
+      stakeAsset = 'ETH';
+    }
+
+    // Estimated APR based on provider
+    const stakingApr = stakeProtocol === 'rocket_pool' ? 3.4 :
+                       stakeProtocol === 'stakewise' ? 3.3 : 3.5;
+
+    return {
+      success: true,
+      intent: 'stake',
+      fromAsset: stakeAsset,
+      fromChain: 'ethereum',
+      toAsset: null,
+      toChain: null,
+      amount,
+      amountType: amount ? 'exact' : null,
+      excludeAmount: undefined,
+      excludeToken: undefined,
+      quoteAmount: undefined,
+      conditions: undefined,
+      portfolio: undefined,
+      frequency: null,
+      dayOfWeek: null,
+      dayOfMonth: null,
+      settleAsset: null,
+      settleNetwork: null,
+      settleAmount: null,
+      settleAddress: null,
+      fromProject: stakeProtocol,
+      fromYield: null,
+      toProject: null,
+      toYield: null,
+      conditionOperator: undefined,
+      conditionValue: undefined,
+      conditionAsset: undefined,
+      targetPrice: undefined,
+      condition: undefined,
+      // Staking specific fields
+      stakeAsset,
+      stakeProtocol,
+      stakeChain: 'ethereum',
+      stakingApr,
+      stakeProvider,
+      confidence: 85,
+      validationErrors: [],
+      parsedMessage: `Parsed: Stake ${amount || '?'} ${stakeAsset} with ${stakeProvider} (${stakingApr}% APR)`,
       requiresConfirmation: true,
       originalInput: userInput
     };
