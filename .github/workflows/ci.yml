@@ -3,8 +3,18 @@ name: CI
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'frontend/**'
+      - 'bot/**'
+      - 'shared/**'
+      - '.github/workflows/ci.yml'
   pull_request:
     branches: [ main ]
+    paths:
+      - 'frontend/**'
+      - 'bot/**'
+      - 'shared/**'
+      - '.github/workflows/ci.yml'
 
 jobs:
   frontend:
