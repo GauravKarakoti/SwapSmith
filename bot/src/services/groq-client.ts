@@ -111,7 +111,9 @@ MODES:
      - MATIC -> stMATIC (Lido)
      - AVAX -> sAVAX (Benqi)
      - BNB -> ankrBNB (Ankr)
-   - If user says "Stake ETH", "Stake SOL" -> intent: "swap_and_stake", toAsset: "stETH"/"mSOL".
+   - If user says "Stake ETH", "Stake SOL":
+     * Map toAsset to the corresponding LST (ETH -> "stETH", SOL -> "mSOL", etc.) and set intent to "swap_and_stake".
+     * If the user did NOT specify an amount, DO NOT guess. Leave amount unset, add a validationErrors entry explaining that amount is required, and set requiresConfirmation: true so the assistant can ask how much to stake.
 
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
 
