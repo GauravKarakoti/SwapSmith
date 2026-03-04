@@ -546,6 +546,40 @@ export const gasOptimizationHistory = pgTable('gas_optimization_history', {
 ]);
 
 
+// --- SITE STATS SCHEMAS ---
+
+export const pageVisits = pgTable('page_visits', {
+  id: serial('id').primaryKey(),
+  page: text('page').notNull(),
+  userId: text('user_id'),
+  sessionId: text('session_id'),
+  userAgent: text('user_agent'),
+  referer: text('referer'),
+  visitedAt: timestamp('visited_at').defaultNow(),
+}, (table) => [
+  index('idx_page_visits_page').on(table.page),
+  index('idx_page_visits_visited_at').on(table.visitedAt),
+  index('idx_page_visits_user_id').on(table.userId),
+]);
+
+export const groqUsageLogs = pgTable('groq_usage_logs', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id'),
+  model: text('model').notNull(),
+  endpoint: text('endpoint').notNull().default('chat'),
+  promptTokens: integer('prompt_tokens').notNull().default(0),
+  completionTokens: integer('completion_tokens').notNull().default(0),
+  totalTokens: integer('total_tokens').notNull().default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => [
+  index('idx_groq_usage_logs_user_id').on(table.userId),
+  index('idx_groq_usage_logs_created_at').on(table.createdAt),
+  index('idx_groq_usage_logs_model').on(table.model),
+]);
+
+export type PageVisit = typeof pageVisits.$inferSelect;
+export type GroqUsageLog = typeof groqUsageLogs.$inferSelect;
+
 // --- RELATIONS ---
 
 
