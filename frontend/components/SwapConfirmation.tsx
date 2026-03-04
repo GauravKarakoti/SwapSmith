@@ -71,7 +71,7 @@ interface SafetyCheckResult {
   overallMessage: string
 }
 
-export default function SwapConfirmation({ quote, _confidence, onAmountChange }: SwapConfirmationProps) {
+export default function SwapConfirmation({ quote, confidence: _confidence, onAmountChange }: SwapConfirmationProps) {
   const [copiedAddress, setCopiedAddress] = useState(false)
   const [copiedMemo, setCopiedMemo] = useState(false)
   const [isSimulating, setIsSimulating] = useState(false)

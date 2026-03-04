@@ -128,7 +128,7 @@ export default function ChatInterface() {
       setInput('');
     }
     prevIsNativeRecordingRef.current = isNativeRecording;
-  }, [isNativeRecording, nativeTranscript]);
+  }, [isNativeRecording, nativeTranscript]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
