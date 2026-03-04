@@ -1,5 +1,20 @@
-// Learn more: https://github.com/testing-library/jest-dom
-import '@testing-library/jest-dom';
+import '@testing-library/jest-dom/vitest';
+import { beforeAll, afterAll, vi } from 'vitest';
+
+// Mock localStorage
+Object.defineProperty(window, 'localStorage', {
+  value: {
+    getItem: vi.fn(() => null),
+    setItem: vi.fn(),
+    removeItem: vi.fn(),
+    clear: vi.fn(),
+  },
+  writable: true,
+});
+
+// Mock scrollIntoView
+window.HTMLElement.prototype.scrollIntoView = vi.fn();
+window.scrollTo = vi.fn();
 
 // Suppress specific console errors in tests
 const originalError = console.error;

@@ -714,6 +714,87 @@ export async function updateUserAdminStatus(
     });
   }
 }
+
+// ── Admin Plan Management ──────────────────────────────────────────────────
+
+export type PlanValue = 'free' | 'premium' | 'pro';
+export const VALID_PLANS: PlanValue[] = ['free', 'premium', 'pro'];
+
+export interface PlanAuditEntry {
+  ts: string;
+  adminEmail: string;
+  previousPlan: string;
+  newPlan: string;
+}
+
+/**
+ * Update a user's subscription plan (admin-only).
+ * Applies the change to the users table and appends an entry to
+ * userSettings.preferences.planHistory for full audit trail.
+ */
+export async function updateUserPlanAsAdmin(
+  firebaseUid: string,
+  newPlan: PlanValue,
+  adminEmail: string,
+): Promise<{ previousPlan: string }> {
+  // 1. Fetch current plan so we can record it in the audit log
+  const userRows = await rawSql`
+    SELECT plan FROM users WHERE firebase_uid = ${firebaseUid} LIMIT 1
+  ` as { plan: string }[];
+
+  if (userRows.length === 0) {
+    throw new Error(`User not found: ${firebaseUid}`);
+  }
+  const previousPlan = userRows[0].plan ?? 'free';
+
+  // 2. Update the plan on the canonical users table
+  await rawSql`
+    UPDATE users
+    SET plan = ${newPlan}::plan_type, updated_at = now()
+    WHERE firebase_uid = ${firebaseUid}
+  `;
+
+  // 3. Append a plan-change entry to userSettings.preferences.planHistory
+  const settingsRows = await db
+    .select({ preferences: userSettings.preferences })
+    .from(userSettings)
+    .where(eq(userSettings.userId, firebaseUid))
+    .limit(1);
+
+  let prefs: Record<string, unknown> = {};
+  if (settingsRows[0]?.preferences) {
+    try { prefs = JSON.parse(settingsRows[0].preferences); } catch {}
+  }
+
+  const history: PlanAuditEntry[] = Array.isArray(prefs.planHistory)
+    ? (prefs.planHistory as PlanAuditEntry[])
+    : [];
+
+  history.unshift({
+    ts: new Date().toISOString(),
+    adminEmail,
+    previousPlan,
+    newPlan,
+  });
+
+  prefs.planHistory = history.slice(0, 50); // retain last 50 entries
+  const prefsStr = JSON.stringify(prefs);
+
+  if (settingsRows.length > 0) {
+    await db.update(userSettings)
+      .set({ preferences: prefsStr, updatedAt: new Date() })
+      .where(eq(userSettings.userId, firebaseUid));
+  } else {
+    await db.insert(userSettings).values({
+      userId:      firebaseUid,
+      preferences: prefsStr,
+      updatedAt:   new Date(),
+    });
+  }
+
+  return { previousPlan };
+}
+
 // ── Testnet Coin Management ────────────────────────────────────────────────
 
 /**
