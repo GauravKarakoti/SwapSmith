@@ -1,6 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
 
 /**
  * CSRF Protection Utility
@@ -31,9 +30,12 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
 
 /**
  * Generate a CSRF token for double-submit cookie pattern
+ * Uses Web Crypto API for Edge Runtime compatibility
  */
 export function generateCsrfToken(): string {
-  return crypto.randomBytes(32).toString('hex');
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
 /**
@@ -62,11 +64,8 @@ export function validateCsrfToken(request: NextRequest): boolean {
     return false;
   }
 
-  // Compare tokens (constant-time comparison to prevent timing attacks)
-  const match = crypto.timingSafeEqual(
-    Buffer.from(headerToken),
-    Buffer.from(cookieToken)
-  );
+  // Compare tokens (simple string comparison for Edge Runtime compatibility)
+  const match = headerToken === cookieToken;
 
   if (!match) {
     console.warn('[CSRF Token] Validation failed: Token mismatch');

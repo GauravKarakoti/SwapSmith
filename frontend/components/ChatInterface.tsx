@@ -752,14 +752,6 @@ export default function ChatInterface() {
         } else {
             await executeSwap(pendingCommand);
         }
-      } else if (pendingCommand.intent === 'dca') {
-        await executeDCA(pendingCommand);
-      } else if (pendingCommand.conditionOperator && pendingCommand.conditionValue) {
-        // Limit Order (swap with conditions)
-        await executeLimitOrder(pendingCommand);
-      } else {
-        await executeSwap(pendingCommand);
-      }
     } else if (!confirmed) {
       addMessage({ role: 'assistant', content: 'Cancelled.', type: 'message' });
     }
