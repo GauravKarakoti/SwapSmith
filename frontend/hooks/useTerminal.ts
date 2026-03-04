@@ -4,7 +4,6 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { ParsedCommand } from '@/utils/groq-client';
 import { Message } from '@/utils/terminal-utils';
 
 /**

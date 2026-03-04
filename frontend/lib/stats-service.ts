@@ -9,7 +9,7 @@
 
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { desc, sql as drizzleSql } from 'drizzle-orm';
+import { sql as drizzleSql } from 'drizzle-orm';
 import { pageVisits, groqUsageLogs } from '../../shared/schema';
 
 const rawSql = neon(process.env.DATABASE_URL!);
