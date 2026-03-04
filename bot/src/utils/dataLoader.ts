@@ -49,8 +49,7 @@ export async function batchLoadUsersByTelegramIds(telegramIds: number[]): Promis
     .from(users)
     .where(inArray(users.telegramId, uniqueIds));
 
-  // Create a map for O(1) lookups
-  const userMap = new Map<number, User | undefined>();
+  const userMap = new Map<number, User>();
   for (const user of loadedUsers) {
     userMap.set(user.telegramId as number, user);
   }
