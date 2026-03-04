@@ -701,6 +701,7 @@ export default function ChatInterface() {
               method: 'POST',
               body: formData,
               throwOnErrorField: true,
+              timeoutMs: 120000, // Increase timeout for potentially long-running transcription
             });
 
             if (data.text) {
