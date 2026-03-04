@@ -1,6 +1,6 @@
 'use client'
 
-import { Shield, Lock, Eye, CheckCircle, AlertTriangle, AlertCircle, BarChart3, Award } from 'lucide-react'
+import { CheckCircle, AlertTriangle, AlertCircle, Award } from 'lucide-react'
 import { useAgentReputation } from '@/hooks/useAgentReputation';
 
 interface TrustIndicatorsProps {
@@ -22,9 +22,9 @@ export default function TrustIndicators({ confidence }: TrustIndicatorsProps) {
   };
   
   const getReputationBadge = (successRate: number, totalSwaps: number) => {
-     if (successRate >= 98 && totalSwaps > 100) return { label: 'Elite', color: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20' };
-     if (successRate >= 95 && totalSwaps > 50) return { label: 'Veteran', color: 'text-purple-400 bg-purple-400/10 border-purple-400/20' };
-     if (successRate >= 90 && totalSwaps > 10) return { label: 'Reliable', color: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' };
+     if (successRate >= 98 && totalSwaps >= 100) return { label: 'Elite', color: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20' };
+     if (successRate >= 95 && totalSwaps >= 50) return { label: 'Veteran', color: 'text-purple-400 bg-purple-400/10 border-purple-400/20' };
+     if (successRate >= 90 && totalSwaps >= 10) return { label: 'Reliable', color: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' };
      return { label: 'New', color: 'text-blue-400 bg-blue-400/10 border-blue-400/20' };
   };
 
@@ -74,17 +74,3 @@ export default function TrustIndicators({ confidence }: TrustIndicatorsProps) {
     </div>
   );
 }
-
-// Helper functions moved outside or kept inside if simple
-const getConfidenceStyles = (score: number) => {
-    if (score >= 80) return 'bg-emerald-500 text-emerald-400 border-emerald-500/20';
-    if (score >= 50) return 'bg-yellow-500 text-yellow-400 border-yellow-500/20';
-    return 'bg-red-500 text-red-400 border-red-500/20';
-};
-
-
-const getConfidenceIcon = (score: number) => {
-    if (score >= 80) return <CheckCircle className="w-3.5 h-3.5" />;
-    if (score >= 50) return <AlertTriangle className="w-3.5 h-3.5" />;
-    return <AlertCircle className="w-3.5 h-3.5" />;
-};
