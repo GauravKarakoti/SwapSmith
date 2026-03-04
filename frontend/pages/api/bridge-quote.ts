@@ -32,7 +32,10 @@ export interface BridgeQuoteResponse {
     availableBridges: string[];
     errors?: Record<string, unknown>;
   };
+}
+
 export default async function handler(
+  req: NextApiRequest,
   res: NextApiResponse<BridgeQuoteResponse>
 ) {
   // Only allow POST requests
