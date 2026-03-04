@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift';
+import { validateDepositAddressForNetwork } from './addressValidation';
 const AFFILIATE_ID = process.env.NEXT_PUBLIC_AFFILIATE_ID;
 const API_KEY = process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
 
@@ -83,10 +84,16 @@ export async function createQuote(
 
     const quote = { ...response.data, id: response.data.id };
 
-    // SECURITY: Validate depositAddress is always present and properly formatted
-    if (!quote.depositAddress) {
-      console.error('SideShift API returned quote without depositAddress:', quote);
-      throw new Error('Invalid quote: SideShift deposit address is missing. Please try again.');
+    // SECURITY: Validate depositAddress presence + format for the reported network
+    const addressCheck = validateDepositAddressForNetwork(quote.depositNetwork, quote.depositAddress);
+    if (!addressCheck.passed) {
+      console.error('SECURITY: SideShift quote failed deposit address validation:', {
+        quoteId: quote.id,
+        depositNetwork: quote.depositNetwork,
+        depositAddress: quote.depositAddress,
+        message: addressCheck.message,
+      });
+      throw new Error(`Invalid quote: ${addressCheck.message}. Please try again.`);
     }
 
     return quote;
