@@ -42,21 +42,18 @@ vi.mock('@/hooks/useAuth', () => ({
 }));
 
 vi.mock('../SwapConfirmation', () => ({
-  __esModule: true,
   default: function MockSwapConfirmation() {
     return <div data-testid="swap-confirmation">Swap Confirmation</div>;
   }
 }));
 
 vi.mock('../TrustIndicators', () => ({
-  __esModule: true,
   default: function MockTrustIndicators() {
     return <div data-testid="trust-indicators">Trust Indicators</div>;
   }
 }));
 
 vi.mock('../IntentConfirmation', () => ({
-  __esModule: true,
   default: function MockIntentConfirmation() {
     return <div data-testid="intent-confirmation">Intent Confirmation</div>;
   }
@@ -142,7 +139,7 @@ describe('ChatInterface Component', () => {
   });
 
   test('accepts input without crashing', async () => {
-     const user = userEvent.setup();
+    const user = userEvent.setup();
     render(<ChatInterface />);
     const inputElement = screen.getAllByRole('textbox')[0];
     
