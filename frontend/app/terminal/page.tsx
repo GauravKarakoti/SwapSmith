@@ -230,6 +230,7 @@ export default function TerminalPage() {
           method: "POST",
           body: formData,
           throwOnErrorField: true,
+          timeoutMs: 120000, // Increase timeout for potentially long-running audio transcription
         });
 
         if (data.text) {
