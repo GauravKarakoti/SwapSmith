@@ -9,7 +9,6 @@ services:
     env_file:
       - ./frontend/.env
     environment:
-      - GROQ_API_KEY=${GROQ_API_KEY}
     restart: unless-stopped
     networks:
       - swapsmith-net
