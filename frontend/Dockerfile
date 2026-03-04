@@ -1,33 +1,66 @@
-# ---------- Builder ----------
-FROM node:20-alpine AS builder
+# ---------- Base ----------
+FROM node:20-alpine AS base
+# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
+RUN apk add --no-cache libc6-compat
 
-# Set up root working directory
+# Install dependencies only when needed
+FROM base AS deps
 WORKDIR /app
 
-# Copy the shared directory 
-COPY shared ./shared
+# Copy dependency definitions
+COPY frontend/package.json frontend/package-lock.json ./frontend/
+COPY shared/package.json shared/package-lock.json ./shared/
 
-RUN apk add --no-cache ffmpeg
-
-# ARG key removed for security; keys will be provided at runtime via env variables
-
-COPY frontend/package*.json ./
+# Install dependencies
+WORKDIR /app/frontend
 RUN npm ci
 
-COPY frontend/ ./
-RUN npm run build
-
-# ---------- Runner ----------
-FROM node:20-alpine AS runner
+# ---------- Builder ----------
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/frontend/node_modules ./frontend/node_modules
+COPY shared ./shared
+COPY frontend ./frontend
 
 WORKDIR /app/frontend
 
-ENV NODE_ENV=production
+# Next.js collects completely anonymous telemetry data about general usage.
+# Learn more here: https://nextjs.org/telemetry
+# Uncomment the following line in case you want to disable telemetry during the build.
+ENV NEXT_TELEMETRY_DISABLED 1
 
-# copy standalone output (adjust paths to accommodate the new WORKDIR)
-COPY --from=builder /app/frontend/.next/standalone ./
-COPY --from=builder /app/frontend/.next/static ./.next/static
-COPY --from=builder /app/frontend/public ./public
+RUN npm run build
+
+# ---------- Runner ----------
+FROM base AS runner
+WORKDIR /app
+
+ENV NODE_ENV production
+ENV NEXT_TELEMETRY_DISABLED 1
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+COPY --from=builder /app/frontend/public ./frontend/public
+
+# Set the correct permission for prerender cache
+RUN mkdir -p frontend/.next
+RUN chown nextjs:nodejs frontend/.next
+
+# Automatically leverage output traces to reduce image size
+# https://nextjs.org/docs/advanced-features/output-file-tracing
+COPY --from=builder --chown=nextjs:nodejs /app/frontend/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/frontend/.next/static ./frontend/.next/static
+
+USER nextjs
+
+EXPOSE 3000
+
+ENV PORT 3000
+# set hostname to localhost
+ENV HOSTNAME "0.0.0.0"
+
+CMD ["node", "frontend/server.js"]
 
 EXPOSE 3000
 
