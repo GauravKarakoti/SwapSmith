@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import Link from 'next/link'
+import { csrfFetch } from '@/hooks/useCsrfToken'
 import { auth } from '@/lib/firebase'
 import {
   createUserWithEmailAndPassword,
@@ -72,7 +73,7 @@ export default function AdminRegisterPage() {
 
       const idToken = await userCred.user.getIdToken()
 
-      const res = await fetch('/api/admin/request', {
+      const res = await csrfFetch('/api/admin/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, idToken }),

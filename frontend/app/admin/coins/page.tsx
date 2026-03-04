@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { csrfFetch } from '@/hooks/useCsrfToken'
 import { auth } from '@/lib/firebase'
 import { signOut } from 'firebase/auth'
 import {
@@ -553,7 +554,7 @@ export default function AdminCoinsPage() {
     if (!adjustUser) return
     setAdjustLoading(true); setAdjustMsg('')
     try {
-      const res = await fetch('/api/admin/coins/adjust', {
+      const res = await csrfFetch('/api/admin/coins/adjust', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ targetUserId: adjustUser.id, action, amount, note }),
@@ -576,7 +577,7 @@ export default function AdminCoinsPage() {
   const handleGlobalGift = async (amount: number, note: string) => {
     setGlobalGiftLoading(true); setGlobalGiftMsg('')
     try {
-      const res = await fetch('/api/admin/coins/gift-all', {
+      const res = await csrfFetch('/api/admin/coins/gift-all', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ amount, note }),
