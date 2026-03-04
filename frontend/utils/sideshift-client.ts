@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift';
 import { validateDepositAddressForNetwork } from './addressValidation';
-const AFFILIATE_ID = process.env.NEXT_PUBLIC_AFFILIATE_ID;
-const API_KEY = process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
+
+// API key is now server-side only - client calls backend API routes
 
 export interface SideShiftQuote {
   id?: string;
@@ -63,24 +63,14 @@ export async function createQuote(
   userIP: string
 ): Promise<SideShiftQuote> {
   try {
-    const response = await axios.post(
-      `${SIDESHIFT_CONFIG.BASE_URL}/quotes`,
-      {
-        depositCoin: fromAsset,
-        depositNetwork: fromNetwork,
-        settleCoin: toAsset,
-        settleNetwork: toNetwork,
-        depositAmount: amount.toString(),
-        affiliateId: AFFILIATE_ID,
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'x-sideshift-secret': API_KEY,
-          'x-user-ip': userIP
-        }
-      }
-    );
+    // Call backend API route instead of SideShift directly
+    const response = await axios.post('/api/sideshift/quote', {
+      depositCoin: fromAsset,
+      depositNetwork: fromNetwork,
+      settleCoin: toAsset,
+      settleNetwork: toNetwork,
+      depositAmount: amount,
+    });
 
     const quote = { ...response.data, id: response.data.id };
 
@@ -111,29 +101,17 @@ export async function createCheckout(
   userIP: string
 ): Promise<SideShiftCheckoutResponse> {
   try {
-    const response = await axios.post(
-      `${SIDESHIFT_CONFIG.BASE_URL}/checkout`,
-      {
-        settleCoin,
-        settleNetwork,
-        settleAmount: settleAmount.toString(),
-        affiliateId: AFFILIATE_ID,
-        settleAddress: settleAddress,
-        successUrl: SIDESHIFT_CONFIG.SUCCESS_URL,
-        cancelUrl: SIDESHIFT_CONFIG.CANCEL_URL,
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'x-sideshift-secret': API_KEY,
-          'x-user-ip': userIP,
-        },
-      }
-    );
+    // Call backend API route instead of SideShift directly
+    const response = await axios.post('/api/sideshift/checkout', {
+      settleCoin,
+      settleNetwork,
+      settleAmount,
+      settleAddress,
+    });
 
     return {
       id: response.data.id,
-      url: `${SIDESHIFT_CONFIG.CHECKOUT_URL}/${response.data.id}`,
+      url: response.data.url,
       settleAmount: response.data.settleAmount,
       settleCoin: response.data.settleCoin
     };
