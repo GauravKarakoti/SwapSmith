@@ -14,6 +14,77 @@ function getGroqClient(): Groq {
   });
 }
 
+<<<<<<< Updated upstream
+=======
+
+export interface ParsedCommand {
+  success: boolean;
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "swap_and_stake" | "unknown";
+  
+  // Single Swap Fields
+  fromAsset: string | null;
+  fromChain: string | null;
+  toAsset: string | null;
+  toChain: string | null;
+  amount: number | null;
+  amountType?: "exact" | "absolute" | "percentage" | "all" | "exclude" | null; // Extended with 'absolute'
+
+  excludeAmount?: number;
+  excludeToken?: string;
+  quoteAmount?: number;
+
+  // Conditional Fields
+  conditions?: {
+    type: "price_above" | "price_below";
+    asset: string;
+    value: number;
+  };
+  
+  // Portfolio Fields
+  portfolio?: {
+    toAsset: string;
+    toChain: string;
+    percentage: number;
+  }[];
+  driftThreshold?: number;
+  autoRebalance?: boolean;
+  portfolioName?: string;
+
+  // DCA Fields
+  frequency?: "daily" | "weekly" | "monthly" | null;
+  dayOfWeek?: string | null;
+  dayOfMonth?: string | null;
+  totalAmount?: number;
+  numPurchases?: number;
+
+  // Checkout Fields
+  settleAsset: string | null;
+  settleNetwork: string | null;
+  settleAmount: number | null;
+  settleAddress: string | null;
+
+  // Yield Fields
+  fromProject: string | null;
+  fromYield: number | null;
+  toProject: string | null;
+  toYield: number | null;
+
+  // Limit Order Fields (Legacy - kept for compatibility, prefer 'conditions')
+  conditionOperator?: 'gt' | 'lt';
+  conditionValue?: number;
+  conditionAsset?: string;
+  targetPrice?: number;
+  condition?: 'above' | 'below';
+
+  confidence: number;
+  validationErrors: string[];
+  parsedMessage: string;
+  requiresConfirmation?: boolean; 
+  originalInput?: string;        
+}
+
+
+>>>>>>> Stashed changes
 const systemPrompt = `
 You are SwapSmith, an advanced DeFi AI agent.
 Your job is to parse natural language into specific JSON commands.
