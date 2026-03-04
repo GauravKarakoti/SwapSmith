@@ -9,7 +9,7 @@ import TrustIndicators from './TrustIndicators';
 import IntentConfirmation from './IntentConfirmation';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
-import { useAudioRecorder } from '@/hooks/useAudioRecorder';
+import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { useAuth } from '@/hooks/useAuth';
 
 // Export QuoteData to be used in PortfolioSummary
@@ -82,15 +82,36 @@ export default function ChatInterface() {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasLoadedPersistenceRef = useRef(false);
   const saveSequenceRef = useRef(0);
-  
-  // Use cross-browser audio recorder
-  const { 
-    isRecording,
-    isSupported: isAudioSupported, 
-    startRecording, 
-    stopRecording, 
-    error: audioError
-  } = useAudioRecorder();
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Use unified voice input with fallback
+  const {
+    isListening: isRecording,
+    isSupported: isAudioSupported,
+    transcript: voiceTranscript,
+    interimTranscript,
+    inputMethod,
+    startRecording,
+    stopRecording,
+    error: audioError,
+    resetTranscript
+  } = useVoiceInput({
+    onError: (error) => {
+      addMessage({
+        role: 'assistant',
+        content: `🎤 Voice input error: ${error}. You can type your command below.`,
+        type: 'message'
+      });
+      // Auto-focus text input on voice failure
+      inputRef.current?.focus();
+    },
+    onTranscriptChange: (transcript) => {
+      // Update input with real-time transcript from Speech API
+      if (inputMethod === 'speech-api') {
+        setInput(transcript);
+      }
+    }
+  });
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -723,37 +744,54 @@ export default function ChatInterface() {
       setIsLoading(true);
       try {
         const audioBlob = await stopRecording();
+
+        // If we got an audio blob, it means we used MediaRecorder fallback
+        // Send to Whisper API for transcription
         if (audioBlob) {
-            const audioFile = new File([audioBlob], "voice_command.wav", { type: audioBlob.type || 'audio/wav' });
-            
-            const formData = new FormData();
-            formData.append('file', audioFile);
+          const audioFile = new File([audioBlob], "voice_command.webm", { type: audioBlob.type || 'audio/webm' });
 
-            const response = await fetch('/api/transcribe', {
-                method: 'POST',
-                body: formData
-            });
+          const formData = new FormData();
+          formData.append('file', audioFile);
 
-            const data = await response.json();
-            
-            if (data.error) throw new Error(data.error);
+          const response = await fetch('/api/transcribe', {
+            method: 'POST',
+            body: formData
+          });
 
-            if (data.text) {
-                addMessage({ role: 'user', content: data.text, type: 'message' });
-                processCommand(data.text);
-            }
+          const data = await response.json();
+
+          if (data.error) throw new Error(data.error);
+
+          if (data.text) {
+            addMessage({ role: 'user', content: data.text, type: 'message' });
+            processCommand(data.text);
+          }
+        } else {
+          // If no blob, we used Speech API - transcript is already in the input
+          if (voiceTranscript || input) {
+            const finalText = voiceTranscript || input;
+            addMessage({ role: 'user', content: finalText, type: 'message' });
+            processCommand(finalText);
+            setInput('');
+            resetTranscript();
+          }
         }
       } catch (err) {
         console.error("Voice processing failed:", err);
-        addMessage({ 
-            role: 'assistant', 
-            content: "Sorry, I couldn't process your voice command. Please try again.", 
-            type: 'message' 
+        addMessage({
+          role: 'assistant',
+          content: "Sorry, I couldn't process your voice command. Please type your command below.",
+          type: 'message'
         });
+        // Auto-focus text input on processing failure
+        inputRef.current?.focus();
       } finally {
         setIsLoading(false);
       }
     } else {
+      // Clear input and start fresh recording
+      setInput('');
+      resetTranscript();
       await startRecording();
     }
   };
@@ -858,12 +896,14 @@ return (
             </button>
             
             <input
+              ref={inputRef}
               type="text"
-              value={input}
+              value={isRecording && interimTranscript ? interimTranscript : input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder="Send a command (e.g., 'Swap 1 ETH to USDC')"
+              placeholder={isRecording ? "Listening..." : "Send a command (e.g., 'Swap 1 ETH to USDC')"}
               className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-white placeholder:text-gray-500 py-3"
+              readOnly={isRecording}
             />
             
             <div className="flex items-center gap-2 pr-2">
@@ -878,11 +918,16 @@ return (
           </div>
         </div>
         
-        {/* Voice Fallback */}
+        {/* Voice Status */}
+        {isRecording && inputMethod && (
+          <div className="text-blue-400 text-xs mt-2 px-1 text-center font-medium animate-pulse">
+            🎤 {inputMethod === 'speech-api' ? 'Listening with speech recognition...' : 'Recording audio for transcription...'}
+          </div>
+        )}
         {!isAudioSupported && (
-            <div className="text-red-500 text-xs mt-2 px-1 text-center font-medium">
-                🎤 Voice input is not supported in your browser. Please use Chrome or type your command.
-            </div>
+          <div className="text-amber-500 text-xs mt-2 px-1 text-center font-medium">
+            🎤 Voice input is not supported in your browser. Please type your command.
+          </div>
         )}
 
         {/* Footer Warning */}
