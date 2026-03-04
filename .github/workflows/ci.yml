@@ -69,7 +69,9 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: '**/package-lock.json'
+          cache-dependency-path: |
+            shared/package-lock.json
+            bot/package-lock.json
 
       - name: Install Shared Dependencies
         working-directory: ./shared
