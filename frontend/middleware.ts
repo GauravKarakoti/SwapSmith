@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // 1. Admin Dashboard Protection
   // Only guard the dashboard route
   if (pathname.startsWith('/admin/dashboard')) {
     // We cannot read sessionStorage in middleware (runs on the edge).
@@ -24,9 +25,52 @@ export function middleware(request: NextRequest) {
     }
   }
 
+  // 2. CSRF Protection (Origin / Referer Check) for API Routes
+  if (pathname.startsWith('/api/')) {
+    // Only check mutating requests (POST, PUT, DELETE, PATCH, etc.)
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method)) {
+      const originHeader = request.headers.get('origin');
+      const refererHeader = request.headers.get('referer');
+      
+      // request.nextUrl.origin handles the protocol + host construction automatically
+      // e.g. http://localhost:3000 or https://my-app.com
+      const currentOrigin = request.nextUrl.origin;
+      
+      let isAllowed = false;
+
+      // Check Origin first (standard behavior)
+      if (originHeader) {
+        // Strict equality check against current origin
+        if (originHeader === currentOrigin) {
+          isAllowed = true;
+        }
+      } 
+      // Fallback to Referer if Origin is missing (some browsers/environments)
+      else if (refererHeader) {
+        if (refererHeader.startsWith(currentOrigin)) {
+          isAllowed = true;
+        }
+      }
+
+      // If neither matches, reject the request
+      if (!isAllowed) {
+        return new NextResponse(
+          JSON.stringify({ 
+            message: 'CSRF validation failed', 
+            reason: 'Origin or Referer header mismatch or missing' 
+          }),
+          { status: 403, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/admin/dashboard/:path*'],
+  matcher: [
+    '/admin/dashboard/:path*',
+    '/api/:path*',
+  ],
 };
