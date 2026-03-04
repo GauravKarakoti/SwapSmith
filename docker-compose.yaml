@@ -8,6 +8,8 @@ services:
       - "3002:3000"
     env_file:
       - ./frontend/.env
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
     restart: unless-stopped
     networks:
       - swapsmith-net
@@ -22,6 +24,7 @@ services:
       - ./bot/.env
     environment:
       - DATABASE_URL=postgres://postgres:postgres@db:5432/swapsmith
+      - GROQ_API_KEY=${GROQ_API_KEY}
     command: sh -c "chmod +x ./scripts/wait-for-db-and-migrate.sh && ./scripts/wait-for-db-and-migrate.sh"
     depends_on:
       db:
