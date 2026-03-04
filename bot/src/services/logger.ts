@@ -1,5 +1,4 @@
-// Re-export from shared logger for backward compatibility
-import logger, { Logger as LoggerHelper } from '../../shared/lib/logger';
+import logger, { Logger as LoggerHelper } from '../../../shared/lib/logger';
 import { Telegraf } from 'telegraf';
 import dotenv from 'dotenv';
 import * as Sentry from '@sentry/node';

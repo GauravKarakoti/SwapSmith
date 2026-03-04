@@ -1,9 +1,15 @@
 import React from "react";
 
+interface SentimentData {
+  bullish: number;
+  neutral: number;
+  bearish: number;
+}
+
 interface SentimentDetailsModalProps {
   open: boolean;
   onClose: () => void;
-  sentiment: any; // Replace 'any' with a specific type if available
+  sentiment: SentimentData;
 }
 
 export default function SentimentDetailsModal({ open, onClose, sentiment }: SentimentDetailsModalProps) {
@@ -20,7 +26,7 @@ export default function SentimentDetailsModal({ open, onClose, sentiment }: Sent
         </button>
         <h2 className="text-xl font-bold mb-2">Market Sentiment Details</h2>
         <div className="mb-4 text-zinc-600 dark:text-zinc-300 text-sm">
-          This sentiment is calculated using CoinGecko's top 50 coins, based on 24h price and volume trends. <br />
+          This sentiment is calculated using CoinGecko&apos;s top 50 coins, based on 24h price and volume trends. <br />
           <a href="https://www.coingecko.com/en" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">View on CoinGecko</a>
         </div>
         <ul className="space-y-2">

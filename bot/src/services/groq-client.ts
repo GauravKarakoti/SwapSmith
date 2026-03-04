@@ -7,21 +7,12 @@ import { analyzeCommand, generateContextualHelp } from './contextual-help';
 
 dotenv.config();
 
-// Global singleton declaration to prevent multiple instances
-declare global {
-  var _groqClient: Groq | undefined;
-}
-
 function getGroqClient(): Groq {
-  if (!global._groqClient) {
-    global._groqClient = new Groq({
-      apiKey: process.env.GROQ_API_KEY,
-    });
-  }
-  return global._groqClient;
+  return new Groq({
+    apiKey: process.env.GROQ_API_KEY,
+  });
 }
 
-const groq = getGroqClient();
 
 export interface ParsedCommand {
   success: boolean;
@@ -59,6 +50,9 @@ export interface ParsedCommand {
     toChain: string;
     percentage: number;
   }[];
+  driftThreshold?: number;
+  autoRebalance?: boolean;
+  portfolioName?: string;
 
   // DCA Fields
   frequency?: "daily" | "weekly" | "monthly" | string | null;
@@ -275,7 +269,7 @@ export async function parseWithLLM(
         { role: "user", content: userInput }
     ];
 
-    const completion = await groq.chat.completions.create({
+    const completion = await getGroqClient().chat.completions.create({
       messages: messages,
       model: "llama-3.3-70b-versatile", 
       response_format: { type: "json_object" },
@@ -300,7 +294,7 @@ export async function parseWithLLM(
 
 export async function transcribeAudio(mp3FilePath: string): Promise<string> {
   try {
-    const transcription = await groq.audio.transcriptions.create({
+    const transcription = await getGroqClient().audio.transcriptions.create({
         file: fs.createReadStream(mp3FilePath),
         model: "whisper-large-v3",
         response_format: "json",
@@ -316,6 +310,25 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
   const errors: string[] = [];
   // ... (Keeping validation logic simple for brevity, same as before)
   if (!parsed.intent) errors.push("Could not determine intent.");
+
+  if (parsed.intent === 'portfolio' && Array.isArray(parsed.portfolio) && parsed.portfolio.length > 0) {
+    const total = parsed.portfolio.reduce((sum, item) => sum + (item?.percentage || 0), 0);
+    if (total !== 100) {
+      errors.push(`Total allocation is ${total}%, but should be 100%`);
+    }
+  }
+
+  if (parsed.intent === 'limit_order') {
+    if (parsed.targetPrice == null && parsed.conditionValue == null) {
+      errors.push('Target price not specified');
+    }
+  }
+
+  if (parsed.intent === 'dca') {
+    if (parsed.totalAmount == null) {
+      errors.push('Total investment amount not specified');
+    }
+  }
 
   const allErrors = [...(parsed.validationErrors || []), ...errors];
   const success = parsed.success !== false && allErrors.length === 0;

@@ -55,6 +55,10 @@ describe('isValidAddress', () => {
         expect(isValidAddress('bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq', 'bitcoin')).toBe(true);
     });
 
+    it('accepts a valid Bitcoin Taproot (bc1p) address', () => {
+        expect(isValidAddress('bc1p5cyxnuxmeuwuvkwfem96l9uzk3syda0s0v7kw5t9h0l62t6x4vq', 'bitcoin')).toBe(true);
+    });
+
     it('rejects an invalid Bitcoin address', () => {
         expect(isValidAddress('notabitcoinaddress', 'bitcoin')).toBe(false);
     });

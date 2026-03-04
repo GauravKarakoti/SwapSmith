@@ -1,8 +1,8 @@
 services:
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: frontend/Dockerfile
     container_name: swapsmith-frontend
     ports:
       - "3002:3000"
@@ -14,15 +14,15 @@ services:
   
   bot:
     build:
-      context: ./bot
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: bot/Dockerfile
     container_name: swapsmith-bot
     restart: unless-stopped
     env_file:
       - ./bot/.env
     environment:
       - DATABASE_URL=postgres://postgres:postgres@db:5432/swapsmith
-    command: sh -c "npm run db:migrate && npm run start"
+    command: sh -c "chmod +x ./scripts/wait-for-db-and-migrate.sh && ./scripts/wait-for-db-and-migrate.sh"
     depends_on:
       db:
         condition: service_healthy
