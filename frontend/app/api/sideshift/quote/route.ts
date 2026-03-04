@@ -49,11 +49,12 @@ export async function POST(req: NextRequest) {
     );
 
     return NextResponse.json(response.data);
-  } catch (error: any) {
-    console.error('[SideShift Quote API Error]', error.response?.data || error.message);
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: { error?: { message?: string } }; status?: number }; message?: string };
+    console.error('[SideShift Quote API Error]', err.response?.data || err.message);
     return NextResponse.json(
-      { error: error.response?.data?.error?.message || 'Failed to create quote' },
-      { status: error.response?.status || 500 }
+      { error: err.response?.data?.error?.message || 'Failed to create quote' },
+      { status: err.response?.status || 500 }
     );
   }
 }

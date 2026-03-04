@@ -60,7 +60,7 @@ export async function createQuote(
   toAsset: string,
   toNetwork: string,
   amount: number,
-  userIP: string
+  _userIP: string
 ): Promise<SideShiftQuote> {
   try {
     // Call backend API route instead of SideShift directly
@@ -98,7 +98,7 @@ export async function createCheckout(
   settleNetwork: string,
   settleAmount: number,
   settleAddress: string,
-  userIP: string
+  _userIP: string
 ): Promise<SideShiftCheckoutResponse> {
   try {
     // Call backend API route instead of SideShift directly
