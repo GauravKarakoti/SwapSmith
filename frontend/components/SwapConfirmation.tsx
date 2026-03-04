@@ -142,12 +142,73 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
 
     setIsLoadingBalance(true);
     try {
+      // Fetch wallet balance
       const balance = await publicClient.getBalance({ address });
       const balanceFormatted = formatEther(balance);
-      setWalletBalance(balanceFormatted);
+      
+      // Check for zero balance
+      if (balance === BigInt(0)) {
+        alert('Your wallet balance is 0. Cannot swap.');
+        setIsLoadingBalance(false);
+        return;
+      }
 
+      let maxTransferable = balance;
+      let gasCost = BigInt(0);
+      let hasInsufficientGas = false;
+
+      // Try to estimate gas fees for the transaction
+      try {
+        // Estimate gas for a simple transfer to ourselves (to get gas cost)
+        const gasEstimate = await publicClient.estimateGas({
+          account: address,
+          to: address as `0x${string}`,
+          value: BigInt(1) // Minimal value for estimation
+        });
+
+        const gasPrice = await publicClient.getGasPrice();
+        gasCost = gasEstimate * gasPrice;
+        
+        // Check if balance is sufficient for gas
+        if (balance <= gasCost) {
+          hasInsufficientGas = true;
+        } else {
+          // Calculate max transferable (balance - gas cost)
+          maxTransferable = balance - gasCost;
+        }
+      } catch (gasError) {
+        // If gas estimation fails, use 10% of balance as conservative estimate
+        // or use a default gas buffer
+        console.warn('Gas estimation failed, using conservative estimate:', gasError);
+        const gasPrice = await publicClient.getGasPrice();
+        // Use a standard gas limit of 21000 for simple transfers
+        gasCost = BigInt(21000) * gasPrice;
+        
+        if (balance <= gasCost) {
+          hasInsufficientGas = true;
+        } else {
+          maxTransferable = balance - gasCost;
+        }
+      }
+
+      // Handle edge cases
+      if (hasInsufficientGas) {
+        alert(`Insufficient balance for gas fees. Your balance: ${balanceFormatted.substring(0, 8)} ${quote.depositCoin}. Please add more funds or use a different network.`);
+        setIsLoadingBalance(false);
+        return;
+      }
+
+      // Format the max transferable amount
+      const maxTransferableFormatted = formatEther(maxTransferable);
+      
+      // Round to reasonable decimal places (6 decimals for most tokens)
+      const roundedMax = parseFloat(maxTransferableFormatted).toFixed(6);
+      
+      setWalletBalance(maxTransferableFormatted);
+
+      // Trigger the amount change callback to re-fetch quote
       if (onAmountChange) {
-        onAmountChange(balanceFormatted);
+        onAmountChange(roundedMax);
       }
     } catch (err) {
       console.error('Failed to fetch balance:', err);
