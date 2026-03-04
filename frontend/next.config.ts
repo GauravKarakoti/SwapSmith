@@ -1,15 +1,18 @@
 import type { NextConfig } from "next";
 import path from "path";
 
+// Check if we are building on Vercel
+const isVercel = process.env.VERCEL === "1";
+
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // Only use standalone mode when NOT on Vercel
+  output: isVercel ? undefined : "standalone",
   
   // Enable compilation for the shared folder
   transpilePackages: ['@swapsmith/shared'],
   
-  // Correctly trace files from the monorepo root (one level up)
-  // This works dynamically for both Local (Windows/Mac) and Docker
-  outputFileTracingRoot: path.join(process.cwd(), '../'),
+  // Only set custom tracing root when NOT on Vercel
+  ...(isVercel ? {} : { outputFileTracingRoot: path.join(process.cwd(), '../') }),
 
   // Leave empty to use defaults, or configure if needed
   turbopack: {}

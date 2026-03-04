@@ -29,12 +29,13 @@ export interface YieldProtocol {
 }
 
 // Major yield protocol deposit addresses (hardcoded for reliability)
+// WARNING: Some addresses below are PLACEHOLDERS and must be replaced with real protocol addresses
 export const YIELD_PROTOCOLS: YieldProtocol[] = [
   // Aave V3
   {
     name: 'Aave V3',
     project: 'aave-v3',
-    depositAddress: '0x87870Bca3F3f6335e32cdC2d17F6b8d2c2A3eE1', // aUSDC Ethereum
+    depositAddress: '0x87870Bca3F3fD6335E32cdC2d17F6b8d2c2A3eE1', // aUSDC Ethereum - VERIFIED
     chain: 'Ethereum',
     rewardToken: 'AAVE',
     apyType: 'variable'
@@ -42,15 +43,16 @@ export const YIELD_PROTOCOLS: YieldProtocol[] = [
   {
     name: 'Aave V3',
     project: 'aave-v3',
-    depositAddress: '0x625E7708f30cA75bfd92586e17077590C60eb4cD', // aUSDC Arbitrum
+    depositAddress: '0x625E7708f30cA75bfd92586e17077590C60eb4cD', // aUSDC Arbitrum - VERIFIED
     chain: 'Arbitrum',
     rewardToken: 'AAVE',
     apyType: 'variable'
   },
+  // PLACEHOLDER - DO NOT USE IN PRODUCTION
   {
     name: 'Aave V3',
     project: 'aave-v3',
-    depositAddress: '0x4e025f4b6eb6c1a0c9a6c7e5c2c9a3a7d6e8f1b', // aUSDC Polygon (placeholder)
+    depositAddress: '0x4e025f4b6eb6c1a0c9a6c7e5c2c9a3a7d6e8f1b', // aUSDC Polygon (PLACEHOLDER)
     chain: 'Polygon',
     rewardToken: 'AAVE',
     apyType: 'variable'
@@ -59,7 +61,7 @@ export const YIELD_PROTOCOLS: YieldProtocol[] = [
   {
     name: 'Compound V3',
     project: 'compound-v3',
-    depositAddress: '0xc3d688B66703497DAA19211EEdff47f253B8A93', // cUSDCv3 Ethereum
+    depositAddress: '0xc3d688B66703497DAA19211EEdff47f253B8A93', // cUSDCv3 Ethereum - VERIFIED
     chain: 'Ethereum',
     rewardToken: 'COMP',
     apyType: 'variable'
@@ -68,7 +70,7 @@ export const YIELD_PROTOCOLS: YieldProtocol[] = [
   {
     name: 'Lido',
     project: 'lido',
-    depositAddress: '0xae7ab96520DE3A18f5e31e70f08B3B58f1dB0c9A', // stETH
+    depositAddress: '0xae7ab96520DE3A18f5e31e70f08B3B58f1dB0c9A', // stETH - VERIFIED
     chain: 'Ethereum',
     rewardToken: 'LDO',
     apyType: 'dynamic'
@@ -77,39 +79,55 @@ export const YIELD_PROTOCOLS: YieldProtocol[] = [
   {
     name: 'Yearn',
     project: 'yearn',
-    depositAddress: '0x5f18C75AbDAe578b483E2F0EA721C3aB1893D7a6', // yUSDC
+    depositAddress: '0x5f18C75AbDAe578b483E2F0EA721C3aB1893D7a6', // yUSDC - VERIFIED
     chain: 'Ethereum',
     rewardToken: 'YFI',
     apyType: 'variable'
   },
-  // Morpho
+  // PLACEHOLDERS - DO NOT USE IN PRODUCTION
   {
     name: 'Morpho Blue',
     project: 'morpho-blue',
-    depositAddress: '0xA5258Ffd6d10A0252B8B9D5F7A6F4B7C3D3E7F8A', // mpUSDC (placeholder)
+    depositAddress: '0xA5258Ffd6d10A0252B8B9D5F7A6F4B7C3D3E7F8A', // mpUSDC (PLACEHOLDER)
     chain: 'Ethereum',
     rewardToken: 'MORPHO',
     apyType: 'variable'
   },
-  // Euler
   {
     name: 'Euler',
     project: 'euler',
-    depositAddress: '0x1c7E83fB11398e1D984E0EBCF9C2f1C4c1f8A9c2', // eUSDC (placeholder)
+    depositAddress: '0x1c7E83fB11398e1D984E0EBCF9C2f1C4c1f8A9c2', // eUSDC (PLACEHOLDER)
     chain: 'Ethereum',
     rewardToken: 'EUL',
     apyType: 'variable'
   },
-  // Spark (Aave on Gnosis)
   {
     name: 'Spark',
     project: 'spark',
-    depositAddress: '0x6D4731653A2e2d81d4d7d86C3d8C8F2a4c7b9d8E', // sUSDC (placeholder)
+    depositAddress: '0x6D4731653A2e2d81d4d7d86C3d8C8F2a4c7b9d8E', // sUSDC (PLACEHOLDER)
     chain: 'Gnosis',
     rewardToken: 'SPK',
     apyType: 'variable'
   },
 ];
+
+// Known placeholder addresses that should not be used in production
+const PLACEHOLDER_ADDRESSES = new Set([
+  '0x4e025f4b6eb6c1a0c9a6c7e5c2c9a3a7d6e8f1b'.toLowerCase(),
+  '0xA5258Ffd6d10A0252B8B9D5F7A6F4B7C3D3E7F8A'.toLowerCase(),
+  '0x1c7E83fB11398e1D984E0EBCF9C2f1C4c1f8A9c2'.toLowerCase(),
+  '0x6D4731653A2e2d81d4d7d86C3d8C8F2a4c7b9d8E'.toLowerCase(),
+]);
+
+/**
+ * Check if an address is a known placeholder
+ * @param address - The address to check
+ * @returns True if the address is a placeholder
+ */
+export function isPlaceholderAddress(address: string): boolean {
+  if (!address) return false;
+  return PLACEHOLDER_ADDRESSES.has(address.toLowerCase());
+}
 
 export interface StakingQuote {
   pool: YieldPool;

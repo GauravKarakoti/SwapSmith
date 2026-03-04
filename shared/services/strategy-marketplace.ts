@@ -1,4 +1,5 @@
-import { eq, desc, and, gte, lte, sql, like, or } from 'drizzle-orm'; import { 
+import { eq, desc, and, gte, lte, sql, like, or } from 'drizzle-orm';
+import { 
   tradingStrategies, 
   strategySubscriptions, 
   strategyPerformance,
@@ -6,7 +7,6 @@ import { eq, desc, and, gte, lte, sql, like, or } from 'drizzle-orm'; import {
   type TradingStrategy,
   type NewTradingStrategy,
   type StrategySubscription,
-  type NewStrategySubscription,
   type StrategyPerformance,
   type NewStrategyPerformance,
   type StrategyTrade,
@@ -83,20 +83,22 @@ export async function getStrategies(options: StrategyFilterOptions = {}): Promis
   }
 
   if (minReturn !== undefined) {
-    conditions.push(gte(tradingStrategies.totalReturn, minReturn));
+    conditions.push(gte(tradingStrategies.totalReturn, minReturn.toString()));
   }
 
   if (maxDrawdown !== undefined) {
-    conditions.push(lte(tradingStrategies.maxDrawdown, maxDrawdown));
+    conditions.push(lte(tradingStrategies.maxDrawdown, maxDrawdown.toString()));
   }
 
   if (search) {
-    conditions.push(
-      or(
-        like(tradingStrategies.name, `%${search}%`),
-        like(tradingStrategies.description, `%${search}%`)
-      )
+    const searchCondition = or(
+      like(tradingStrategies.name, `%${search}%`),
+      like(tradingStrategies.description, `%${search}%`)
     );
+    // Explicitly check to bypass the SQL | undefined TS issue in newer Drizzle versions
+    if (searchCondition) {
+      conditions.push(searchCondition);
+    }
   }
 
   const orderColumn = sortBy === 'createdAt' 
@@ -194,7 +196,7 @@ export async function subscribeToStrategy(
     subscriptionFee: strategy.subscriptionFee,
     allocationPercent: input.allocationPercent || 100,
     autoRebalance: input.autoRebalance ?? true,
-    stopLossPercent: input.stopLossPercent,
+    stopLossPercent: input.stopLossPercent ? input.stopLossPercent.toString() : null,
     status: 'active',
   }).onConflictDoUpdate({
     target: [strategySubscriptions.strategyId, strategySubscriptions.subscriberId],
@@ -202,7 +204,7 @@ export async function subscribeToStrategy(
       status: 'active',
       allocationPercent: input.allocationPercent || 100,
       autoRebalance: input.autoRebalance ?? true,
-      stopLossPercent: input.stopLossPercent,
+      stopLossPercent: input.stopLossPercent ? input.stopLossPercent.toString() : null,
       pausedAt: null,
       cancelledAt: null,
     }
@@ -395,8 +397,8 @@ export async function recordStrategyPerformance(
 
   await db.update(tradingStrategies)
     .set({ 
-      totalReturn: avgReturn,
-      monthlyReturn: avgReturn / 12, // Simplified monthly calculation
+      totalReturn: avgReturn.toString(),
+      monthlyReturn: (avgReturn / 12).toString(), // Simplified monthly calculation
       updatedAt: new Date(),
     })
     .where(eq(tradingStrategies.id, input.strategyId));
@@ -477,7 +479,7 @@ export async function updateStrategyMetrics(strategyId: number): Promise<void> {
 
   // Calculate metrics
   const totalPnL = performance.reduce((acc: number, p) => acc + Number(p.pnl), 0);
-  const pnlPercents = performance.map(p => p.pnlPercent);
+  const pnlPercents = performance.map(p => Number(p.pnlPercent));
   
   const avgReturn = pnlPercents.reduce((acc: number, p: number) => acc + p, 0) / pnlPercents.length;
   
@@ -501,11 +503,11 @@ export async function updateStrategyMetrics(strategyId: number): Promise<void> {
 
   await db.update(tradingStrategies)
     .set({
-      totalReturn: totalPnL,
-      monthlyReturn: avgReturn,
-      sharpeRatio,
-      maxDrawdown,
-      volatility,
+      totalReturn: totalPnL.toString(),
+      monthlyReturn: avgReturn.toString(),
+      sharpeRatio: sharpeRatio.toString(),
+      maxDrawdown: maxDrawdown.toString(),
+      volatility: volatility.toString(),
       updatedAt: new Date(),
     })
     .where(eq(tradingStrategies.id, strategyId));

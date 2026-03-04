@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { z } from 'zod';
 import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift';
-
+import { validateDepositAddressForNetwork } from './addressValidation';
 const AFFILIATE_ID = process.env.NEXT_PUBLIC_AFFILIATE_ID;
 const API_KEY = process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
 
@@ -15,6 +15,7 @@ export interface SideShiftQuote {
   depositNetwork: string;
   settleCoin: string;
   settleNetwork: string;
+  depositAddress: string;
   depositAmount: string;
   settleAmount: string;
   rate: string;
@@ -169,17 +170,25 @@ export async function createQuote(
       }
     );
 
+<<<<<<< HEAD
     const validated = validateResponse(SideShiftQuoteSchema, response.data, 'createQuote');
 
     if (validated.error) {
-      throw new Error(validated.error.message);
+    if (!addressCheck.passed) {
+      console.error('SECURITY: SideShift quote failed deposit address validation:', {
+        quoteId: quote.id,
+        depositNetwork: quote.depositNetwork,
+        depositAddress: quote.depositAddress,
+        message: addressCheck.message,
+      });
+      throw new Error(`Invalid quote: ${addressCheck.message}. Please try again.`);
     }
 
-    return { ...validated, id: validated.id || response.data.id };
+    return quote;
+>>>>>>> 0e4cef795c15b946e650c2cf9da1821b3a59b31a
   } catch (error: unknown) {
     if (axios.isAxiosError(error)) {
       const err = error as { response?: { data?: { error?: { message?: string } } } };
-      throw new Error(err.response?.data?.error?.message || 'Failed to create quote');
     }
     throw error;
   }
