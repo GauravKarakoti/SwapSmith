@@ -1,7 +1,13 @@
 import axios from 'axios';
+import { z } from 'zod';
 import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift';
+
 const AFFILIATE_ID = process.env.NEXT_PUBLIC_AFFILIATE_ID;
 const API_KEY = process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
+
+// ============================================
+// Type Definitions
+// ============================================
 
 export interface SideShiftQuote {
   id?: string;
@@ -52,6 +58,89 @@ export interface CoinPrice {
   available: boolean;
 }
 
+// ============================================
+// Zod Schemas for Runtime Validation
+// ============================================
+
+const SideShiftErrorSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+});
+
+const CoinNetworkSchema: z.ZodSchema<CoinNetwork> = z.object({
+  network: z.string(),
+  tokenContract: z.string().optional(),
+  depositAddressType: z.string().optional(),
+  depositOffline: z.boolean().optional(),
+  settleOffline: z.boolean().optional(),
+});
+
+const CoinSchema = z.object({
+  coin: z.string(),
+  name: z.string(),
+  networks: z.array(CoinNetworkSchema),
+  chainData: z.object({
+    chain: z.string(),
+    mainnet: z.boolean(),
+  }).optional(),
+});
+
+const CoinPriceSchema = z.object({
+  coin: z.string(),
+  name: z.string(),
+  network: z.string(),
+  usdPrice: z.string().optional(),
+  btcPrice: z.string().optional(),
+  available: z.boolean(),
+});
+
+const SideShiftQuoteSchema = z.object({
+  id: z.string().optional(),
+  depositCoin: z.string(),
+  depositNetwork: z.string(),
+  settleCoin: z.string(),
+  settleNetwork: z.string(),
+  depositAmount: z.string(),
+  settleAmount: z.string(),
+  rate: z.string(),
+  affiliateId: z.string(),
+  error: SideShiftErrorSchema.optional(),
+  memo: z.string().optional(),
+  expiry: z.string().optional(),
+});
+
+const SideShiftCheckoutResponseSchema = z.object({
+  id: z.string(),
+  url: z.string().optional(),
+  settleAmount: z.string(),
+  settleCoin: z.string(),
+});
+
+// ============================================
+// Validation Helper Functions
+// ============================================
+
+/**
+ * Validates API response data against a Zod schema
+ * @throws Error with detailed validation issues if validation fails
+ */
+function validateResponse<T>(schema: z.ZodSchema<T>, data: unknown, context: string): T {
+  const result = schema.safeParse(data);
+  
+  if (!result.success) {
+    const issues = result.error.issues
+      .map(issue => `${issue.path.join('.')}: ${issue.message}`)
+      .join('; ');
+    throw new Error(`SideShift API response validation failed for ${context}: ${issues}`);
+  }
+  
+  return result.data;
+}
+
+// ============================================
+// API Functions with Validation
+// ============================================
+
 export async function createQuote(
   fromAsset: string,
   fromNetwork: string,
@@ -79,10 +168,20 @@ export async function createQuote(
         }
       }
     );
-    return { ...response.data, id: response.data.id };
+
+    const validated = validateResponse(SideShiftQuoteSchema, response.data, 'createQuote');
+
+    if (validated.error) {
+      throw new Error(validated.error.message);
+    }
+
+    return { ...validated, id: validated.id || response.data.id };
   } catch (error: unknown) {
-    const err = error as { response?: { data?: { error?: { message?: string } } } };
-    throw new Error(err.response?.data?.error?.message || 'Failed to create quote');
+    if (axios.isAxiosError(error)) {
+      const err = error as { response?: { data?: { error?: { message?: string } } } };
+      throw new Error(err.response?.data?.error?.message || 'Failed to create quote');
+    }
+    throw error;
   }
 }
 
@@ -108,21 +207,27 @@ export async function createCheckout(
       {
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
           'x-sideshift-secret': API_KEY,
           'x-user-ip': userIP,
         },
       }
     );
 
+    const validated = validateResponse(SideShiftCheckoutResponseSchema, response.data, 'createCheckout');
+
     return {
-      id: response.data.id,
-      url: `${SIDESHIFT_CONFIG.CHECKOUT_URL}/${response.data.id}`,
-      settleAmount: response.data.settleAmount,
-      settleCoin: response.data.settleCoin
+      id: validated.id,
+      url: validated.url || `${SIDESHIFT_CONFIG.CHECKOUT_URL}/${validated.id}`,
+      settleAmount: validated.settleAmount,
+      settleCoin: validated.settleCoin
     };
   } catch (error: unknown) {
-    const err = error as { response?: { data?: { error?: { message?: string } } } };
-    throw new Error(err.response?.data?.error?.message || 'Failed to create checkout');
+    if (axios.isAxiosError(error)) {
+      const err = error as { response?: { data?: { error?: { message?: string } } } };
+      throw new Error(err.response?.data?.error?.message || 'Failed to create checkout');
+    }
+    throw error;
   }
 }
 
@@ -132,10 +237,15 @@ export async function createCheckout(
 export async function getCoins(): Promise<Coin[]> {
   try {
     const response = await axios.get(`${SIDESHIFT_CONFIG.BASE_URL}/coins`);
-    return response.data;
+    // Validate as array of CoinSchema
+    const validated = validateResponse(CoinSchema.array(), response.data, 'getCoins');
+    return validated;
   } catch (error: unknown) {
-    const err = error as { response?: { data?: { error?: { message?: string } } } };
-    throw new Error(err.response?.data?.error?.message || 'Failed to fetch coins');
+    if (axios.isAxiosError(error)) {
+      const err = error as { response?: { data?: { error?: { message?: string } } } };
+      throw new Error(err.response?.data?.error?.message || 'Failed to fetch coins');
+    }
+    throw error;
   }
 }
 
@@ -208,7 +318,12 @@ export async function getCoinPrices(): Promise<CoinPrice[]> {
 
     return results;
   } catch (error: unknown) {
-    console.error('CoinGecko API error:', error);
+    // If it's already an Error, rethrow it
+    if (error instanceof Error) {
+      console.error('CoinGecko API error:', error.message);
+    } else {
+      console.error('CoinGecko API error:', error);
+    }
 
     // Fallback: Try to fetch from SideShift with corrected calculation
     try {
@@ -248,8 +363,11 @@ export async function getCoinPrices(): Promise<CoinPrice[]> {
             }
           );
 
+          // Validate the quote response
+          const validatedQuote = validateResponse(SideShiftQuoteSchema, quoteResponse.data, 'getCoinPrices-fallback');
+
           // Rate is settleAmount / depositAmount, so for 1 unit it's the direct price
-          const settleAmount = parseFloat(quoteResponse.data.settleAmount || quoteResponse.data.rate);
+          const settleAmount = parseFloat(validatedQuote.settleAmount || validatedQuote.rate);
 
           if (settleAmount > 0) {
             return {
@@ -268,7 +386,7 @@ export async function getCoinPrices(): Promise<CoinPrice[]> {
 
       const prices = await Promise.all(pricesPromises);
       return prices.filter((p): p is CoinPrice => p !== null);
-    } catch {
+    } catch (fallbackError) {
       throw new Error('Failed to fetch coin prices from all sources');
     }
   }
@@ -295,9 +413,13 @@ export async function getCoinPrice(coin: string, network: string): Promise<strin
       }
     );
 
-    const rate = parseFloat(quoteResponse.data.rate);
+    // Validate the quote response
+    const validatedQuote = validateResponse(SideShiftQuoteSchema, quoteResponse.data, 'getCoinPrice');
+
+    const rate = parseFloat(validatedQuote.rate);
     return rate > 0 ? (1 / rate).toFixed(6) : null;
   } catch {
     return null;
   }
 }
+
