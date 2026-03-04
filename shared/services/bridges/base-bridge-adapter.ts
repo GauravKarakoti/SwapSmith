@@ -178,7 +178,8 @@ export function createBaseQuote(
 ): BridgeQuote {
   const fromAmount = BigInt(request.amount);
   const toAmountBigInt = BigInt(toAmount);
-  const rate = fromAmount > 0n 
+  // Replace `0n` with `BigInt(0)` to avoid the ES2020 target requirement
+  const rate = fromAmount > BigInt(0) 
     ? (Number(toAmount) / Number(request.amount)).toFixed(8)
     : '0';
 
@@ -205,7 +206,7 @@ export function createBaseQuote(
     ...options,
   };
 
-  return config;
+  return config as BridgeQuote;
 }
 
 /**

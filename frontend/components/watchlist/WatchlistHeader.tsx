@@ -43,7 +43,7 @@ export default function WatchlistHeader({
           
           {/* Title & Subtitle */}
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-white via-white to-gray-400 bg-clip-text text-transparent">
+            <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-primary">
               Watchlist
             </h1>
             <p className="text-[rgb(var(--text-secondary))] text-sm mt-0.5">
