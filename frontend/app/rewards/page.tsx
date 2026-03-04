@@ -178,7 +178,7 @@ export default function RewardsPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-[#050505]">
+      <div className="min-h-screen bg-gray-50 dark:bg-[#050505] transition-colors duration-300">
         <Navbar />
         <div className="pt-20 flex items-center justify-center h-screen">
           <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
@@ -209,27 +209,27 @@ export default function RewardsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#050505]">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#050505] transition-colors duration-300">
       <Navbar />
-      
+
       <main className="pt-24 pb-16 px-4 sm:px-6 max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <button
             onClick={() => router.back()}
-            className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors mb-4"
+            className="flex items-center gap-2 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white transition-colors mb-4"
           >
             <ArrowLeft className="w-4 h-4" />
             <span className="text-sm">Back</span>
           </button>
-          
+
           <div className="flex items-center gap-4 mb-2">
             <div className="p-3 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-2xl">
               <Trophy className="w-8 h-8 text-white" />
             </div>
             <div className="flex-1">
-              <h1 className="text-3xl sm:text-4xl font-bold text-white">Rewards Center</h1>
-              <p className="text-zinc-400 mt-1">Track your progress and earn rewards</p>
+              <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white">Rewards Center</h1>
+              <p className="text-gray-500 dark:text-zinc-400 mt-1">Track your progress and earn rewards</p>
             </div>
           </div>
         </div>
@@ -239,67 +239,67 @@ export default function RewardsPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-zinc-900 border border-zinc-800 rounded-xl p-6"
+            className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm dark:shadow-none"
           >
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2 bg-blue-500/10 rounded-lg">
-                <Star className="w-5 h-5 text-blue-400" />
+                <Star className="w-5 h-5 text-blue-500 dark:text-blue-400" />
               </div>
-              <h3 className="text-sm text-zinc-400">Total Points</h3>
+              <h3 className="text-sm text-gray-500 dark:text-zinc-400">Total Points</h3>
             </div>
-            <p className="text-3xl font-bold text-white">{stats?.totalPoints || 0}</p>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats?.totalPoints || 0}</p>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="bg-zinc-900 border border-zinc-800 rounded-xl p-6"
+            className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm dark:shadow-none"
           >
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2 bg-green-500/10 rounded-lg">
-                <Coins className="w-5 h-5 text-green-400" />
+                <Coins className="w-5 h-5 text-green-500 dark:text-green-400" />
               </div>
-              <h3 className="text-sm text-zinc-400">Tokens Pending</h3>
+              <h3 className="text-sm text-gray-500 dark:text-zinc-400">Tokens Pending</h3>
             </div>
-            <p className="text-3xl font-bold text-white">{parseFloat(stats?.totalTokensPending || '0').toFixed(2)}</p>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white">{parseFloat(stats?.totalTokensPending || '0').toFixed(2)}</p>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="bg-zinc-900 border border-zinc-800 rounded-xl p-6"
+            className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm dark:shadow-none"
           >
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2 bg-purple-500/10 rounded-lg">
-                <Wallet className="w-5 h-5 text-purple-400" />
+                <Wallet className="w-5 h-5 text-purple-500 dark:text-purple-400" />
               </div>
-              <h3 className="text-sm text-zinc-400">Tokens Claimed</h3>
+              <h3 className="text-sm text-gray-500 dark:text-zinc-400">Tokens Claimed</h3>
             </div>
-            <p className="text-3xl font-bold text-white">{parseFloat(stats?.totalTokensClaimed || '0').toFixed(2)}</p>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white">{parseFloat(stats?.totalTokensClaimed || '0').toFixed(2)}</p>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="bg-zinc-900 border border-zinc-800 rounded-xl p-6"
+            className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm dark:shadow-none"
           >
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2 bg-yellow-500/10 rounded-lg">
-                <Trophy className="w-5 h-5 text-yellow-400" />
+                <Trophy className="w-5 h-5 text-yellow-500 dark:text-yellow-400" />
               </div>
-              <h3 className="text-sm text-zinc-400">Rank</h3>
+              <h3 className="text-sm text-gray-500 dark:text-zinc-400">Rank</h3>
             </div>
-            <p className="text-3xl font-bold text-white">
+            <p className="text-3xl font-bold text-gray-900 dark:text-white">
               {stats?.rank ? `#${stats.rank}` : '—'}
             </p>
           </motion.div>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-6 overflow-x-auto border-b border-zinc-800">
+        <div className="flex gap-2 mb-6 overflow-x-auto border-b border-gray-200 dark:border-zinc-800">
           {[
             { id: 'overview', label: 'Overview', icon: TrendingUp },
             { id: 'courses', label: 'Learning Progress', icon: BookOpen },
@@ -311,8 +311,8 @@ export default function RewardsPage() {
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
               className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
                 activeTab === tab.id
-                  ? 'text-white border-b-2 border-blue-500'
-                  : 'text-zinc-400 hover:text-white'
+                  ? 'text-gray-900 dark:text-white border-b-2 border-blue-500'
+                  : 'text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               <tab.icon className="w-4 h-4" />
@@ -331,35 +331,35 @@ export default function RewardsPage() {
               exit={{ opacity: 0, y: -20 }}
               className="space-y-6"
             >
-              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                  <Award className="w-5 h-5 text-blue-400" />
+              <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm dark:shadow-none">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <Award className="w-5 h-5 text-blue-500 dark:text-blue-400" />
                   Recent Activities
                 </h2>
                 <div className="space-y-3">
                   {activities.length === 0 ? (
-                    <p className="text-zinc-500 text-center py-8">No activities yet. Start learning to earn rewards!</p>
+                    <p className="text-gray-500 dark:text-zinc-500 text-center py-8">No activities yet. Start learning to earn rewards!</p>
                   ) : (
                     activities.slice(0, 10).map((activity) => (
                       <div
                         key={activity.id}
-                        className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-lg border border-zinc-800 hover:border-zinc-700 transition-colors"
+                        className="flex items-center justify-between p-4 bg-gray-50 dark:bg-zinc-800/50 rounded-lg border border-gray-200 dark:border-zinc-800 hover:border-gray-300 dark:hover:border-zinc-700 transition-colors"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
+                          <div className="p-2 bg-blue-500/10 rounded-lg text-blue-500 dark:text-blue-400">
                             {getActionIcon(activity.actionType)}
                           </div>
                           <div>
-                            <p className="text-white font-medium">{getActionLabel(activity.actionType)}</p>
-                            <p className="text-xs text-zinc-500">
+                            <p className="text-gray-900 dark:text-white font-medium">{getActionLabel(activity.actionType)}</p>
+                            <p className="text-xs text-gray-500 dark:text-zinc-500">
                               {new Date(activity.createdAt).toLocaleDateString()}
                             </p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-green-400 font-bold">+{activity.pointsEarned} pts</p>
+                          <p className="text-green-600 dark:text-green-400 font-bold">+{activity.pointsEarned} pts</p>
                           {parseFloat(activity.tokensPending) > 0 && (
-                            <p className="text-xs text-yellow-400">+{parseFloat(activity.tokensPending).toFixed(2)} tokens</p>
+                            <p className="text-xs text-yellow-600 dark:text-yellow-400">+{parseFloat(activity.tokensPending).toFixed(2)} tokens</p>
                           )}
                         </div>
                       </div>
@@ -369,8 +369,8 @@ export default function RewardsPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-                  <h3 className="text-lg font-bold text-white mb-4">How to Earn Rewards</h3>
+                <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm dark:shadow-none">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">How to Earn Rewards</h3>
                   <div className="space-y-3">
                     {[
                       { icon: BookOpen, label: 'Complete Learning Modules', points: '50-100 pts' },
@@ -381,23 +381,23 @@ export default function RewardsPage() {
                     ].map((item, idx) => (
                       <div key={idx} className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <item.icon className="w-4 h-4 text-blue-400" />
-                          <span className="text-zinc-300">{item.label}</span>
+                          <item.icon className="w-4 h-4 text-blue-500 dark:text-blue-400" />
+                          <span className="text-gray-700 dark:text-zinc-300">{item.label}</span>
                         </div>
-                        <span className="text-green-400 font-medium">{item.points}</span>
+                        <span className="text-green-600 dark:text-green-400 font-medium">{item.points}</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 border border-blue-800/30 rounded-xl p-6">
-                  <h3 className="text-lg font-bold text-white mb-4">Completed Courses</h3>
+                <div className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-200/50 dark:border-blue-800/30 rounded-xl p-6">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Completed Courses</h3>
                   <div className="text-center py-8">
                     <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-500/10 mb-4">
-                      <BookOpen className="w-8 h-8 text-blue-400" />
+                      <BookOpen className="w-8 h-8 text-blue-500 dark:text-blue-400" />
                     </div>
-                    <p className="text-4xl font-bold text-white mb-2">{stats?.completedCourses || 0}</p>
-                    <p className="text-zinc-400">Courses Completed</p>
+                    <p className="text-4xl font-bold text-gray-900 dark:text-white mb-2">{stats?.completedCourses || 0}</p>
+                    <p className="text-gray-500 dark:text-zinc-400">Courses Completed</p>
                   </div>
                 </div>
               </div>
@@ -410,14 +410,14 @@ export default function RewardsPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="bg-zinc-900 border border-zinc-800 rounded-xl p-6"
+              className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm dark:shadow-none"
             >
-              <h2 className="text-xl font-bold text-white mb-6">Your Learning Journey</h2>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Your Learning Journey</h2>
               <div className="space-y-4">
                 {courses.length === 0 ? (
                   <div className="text-center py-12">
-                    <BookOpen className="w-16 h-16 text-zinc-600 mx-auto mb-4" />
-                    <p className="text-zinc-500 mb-4">No courses started yet</p>
+                    <BookOpen className="w-16 h-16 text-gray-400 dark:text-zinc-600 mx-auto mb-4" />
+                    <p className="text-gray-500 dark:text-zinc-500 mb-4">No courses started yet</p>
                     <button
                       onClick={() => router.push('/learn')}
                       className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
@@ -431,35 +431,35 @@ export default function RewardsPage() {
                     return (
                       <div
                         key={course.id}
-                        className="p-6 bg-zinc-800/50 border border-zinc-800 rounded-lg hover:border-zinc-700 transition-colors"
+                        className="p-6 bg-gray-50 dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-800 rounded-lg hover:border-gray-300 dark:hover:border-zinc-700 transition-colors"
                       >
                         <div className="flex items-start justify-between mb-4">
                           <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-white mb-1">{course.courseTitle}</h3>
-                            <p className="text-sm text-zinc-400">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">{course.courseTitle}</h3>
+                            <p className="text-sm text-gray-500 dark:text-zinc-400">
                               {course.completedModules.length} of {course.totalModules} modules completed
                             </p>
                           </div>
                           {course.isCompleted && (
                             <div className="flex items-center gap-2 px-3 py-1 bg-green-500/10 border border-green-500/20 rounded-full">
-                              <CheckCircle className="w-4 h-4 text-green-400" />
-                              <span className="text-sm text-green-400 font-medium">Completed</span>
+                              <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+                              <span className="text-sm text-green-600 dark:text-green-400 font-medium">Completed</span>
                             </div>
                           )}
                         </div>
                         <div className="mb-3">
-                          <div className="flex justify-between text-xs text-zinc-400 mb-1">
+                          <div className="flex justify-between text-xs text-gray-500 dark:text-zinc-400 mb-1">
                             <span>Progress</span>
                             <span>{Math.round(progress)}%</span>
                           </div>
-                          <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                          <div className="h-2 bg-gray-200 dark:bg-zinc-800 rounded-full overflow-hidden">
                             <div
                               className="h-full bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-300"
                               style={{ width: `${progress}%` }}
                             />
                           </div>
                         </div>
-                        <div className="flex items-center justify-between text-xs text-zinc-500">
+                        <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-500">
                           <span>Last accessed: {new Date(course.lastAccessed).toLocaleDateString()}</span>
                           {course.completionDate && (
                             <span>Completed: {new Date(course.completionDate).toLocaleDateString()}</span>
@@ -479,28 +479,28 @@ export default function RewardsPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="bg-zinc-900 border border-zinc-800 rounded-xl p-6"
+              className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm dark:shadow-none"
             >
-              <h2 className="text-xl font-bold text-white mb-6">Top Contributors</h2>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Top Contributors</h2>
               <div className="space-y-2">
                 {leaderboard.length === 0 ? (
-                  <p className="text-zinc-500 text-center py-8">No leaderboard data yet</p>
+                  <p className="text-gray-500 dark:text-zinc-500 text-center py-8">No leaderboard data yet</p>
                 ) : (
                   leaderboard.map((entry) => (
                     <div
                       key={entry.userId}
                       className={`flex items-center justify-between p-4 rounded-lg transition-colors ${
                         entry.isCurrentUser
-                          ? 'bg-blue-500/10 border border-blue-500/20'
-                          : 'bg-zinc-800/50 hover:bg-zinc-800'
+                          ? 'bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20'
+                          : 'bg-gray-50 dark:bg-zinc-800/50 hover:bg-gray-100 dark:hover:bg-zinc-800'
                       }`}
                     >
                       <div className="flex items-center gap-4">
                         <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
-                          entry.rank === 1 ? 'bg-yellow-500/20 text-yellow-400' :
-                          entry.rank === 2 ? 'bg-gray-400/20 text-gray-400' :
-                          entry.rank === 3 ? 'bg-orange-600/20 text-orange-400' :
-                          'bg-zinc-700 text-zinc-400'
+                          entry.rank === 1 ? 'bg-yellow-500/20 text-yellow-600 dark:text-yellow-400' :
+                          entry.rank === 2 ? 'bg-gray-400/20 text-gray-600 dark:text-gray-400' :
+                          entry.rank === 3 ? 'bg-orange-600/20 text-orange-600 dark:text-orange-400' :
+                          'bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-400'
                         }`}>
                           {entry.rank <= 3 ? (
                             entry.rank === 1 ? <Crown className="w-5 h-5" /> :
@@ -510,18 +510,18 @@ export default function RewardsPage() {
                           )}
                         </div>
                         <div>
-                          <p className="text-white font-medium">
+                          <p className="text-gray-900 dark:text-white font-medium">
                             {entry.userName || `User ${entry.userId}`}
-                            {entry.isCurrentUser && <span className="text-blue-400 ml-2">(You)</span>}
+                            {entry.isCurrentUser && <span className="text-blue-600 dark:text-blue-400 ml-2">(You)</span>}
                           </p>
-                          <p className="text-xs text-zinc-500">
+                          <p className="text-xs text-gray-500 dark:text-zinc-500">
                             {parseFloat(entry.totalTokensClaimed).toFixed(2)} tokens claimed
                           </p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-xl font-bold text-white">{entry.totalPoints}</p>
-                        <p className="text-xs text-zinc-500">points</p>
+                        <p className="text-xl font-bold text-gray-900 dark:text-white">{entry.totalPoints}</p>
+                        <p className="text-xs text-gray-500 dark:text-zinc-500">points</p>
                       </div>
                     </div>
                   ))
@@ -536,48 +536,48 @@ export default function RewardsPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="bg-zinc-900 border border-zinc-800 rounded-xl p-6"
+              className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm dark:shadow-none"
             >
-              <h2 className="text-xl font-bold text-white mb-6">Claim Your Tokens</h2>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Claim Your Tokens</h2>
 
               {/* Success banner */}
               {claimTxHash && (
                 <div className="mb-6 p-5 bg-green-500/10 border border-green-500/30 rounded-xl space-y-3">
-                  <p className="text-green-400 font-semibold text-lg">✅ Tokens sent to your wallet!</p>
+                  <p className="text-green-600 dark:text-green-400 font-semibold text-lg">✅ Tokens sent to your wallet!</p>
 
                   <a
                     href={`https://sepolia.etherscan.io/tx/${claimTxHash}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 underline break-all"
+                    className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline break-all"
                   >
                     <ExternalLink className="w-4 h-4 flex-shrink-0" />
                     View transaction on Sepolia Etherscan →
                   </a>
 
                   <div className="pt-2 border-t border-green-500/20">
-                    <p className="text-sm text-zinc-300 font-medium mb-2">How to see SMTH in MetaMask:</p>
-                    <ol className="text-sm text-zinc-400 space-y-1 list-decimal list-inside">
-                      <li>Open MetaMask → switch to <span className="text-white">Sepolia Testnet</span></li>
-                      <li>Click <span className="text-white">Import tokens</span> at the bottom of the Assets tab</li>
+                    <p className="text-sm text-gray-700 dark:text-zinc-300 font-medium mb-2">How to see SMTH in MetaMask:</p>
+                    <ol className="text-sm text-gray-600 dark:text-zinc-400 space-y-1 list-decimal list-inside">
+                      <li>Open MetaMask → switch to <span className="text-gray-900 dark:text-white font-medium">Sepolia Testnet</span></li>
+                      <li>Click <span className="text-gray-900 dark:text-white font-medium">Import tokens</span> at the bottom of the Assets tab</li>
                       <li>Paste this contract address:</li>
                     </ol>
                     {CONTRACT_ADDRESS ? (
-                      <div className="mt-2 flex items-center gap-2 bg-zinc-800 rounded-lg px-3 py-2">
-                        <code className="text-purple-400 text-xs break-all flex-1">{CONTRACT_ADDRESS}</code>
+                      <div className="mt-2 flex items-center gap-2 bg-gray-100 dark:bg-zinc-800 rounded-lg px-3 py-2">
+                        <code className="text-purple-600 dark:text-purple-400 text-xs break-all flex-1">{CONTRACT_ADDRESS}</code>
                         <button
                           onClick={() => navigator.clipboard.writeText(CONTRACT_ADDRESS)}
-                          className="text-xs text-zinc-400 hover:text-white whitespace-nowrap"
+                          className="text-xs text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white whitespace-nowrap"
                         >
                           Copy
                         </button>
                       </div>
                     ) : (
-                      <code className="text-purple-400 text-xs">Set NEXT_PUBLIC_REWARD_TOKEN_ADDRESS in .env.local</code>
+                      <code className="text-purple-600 dark:text-purple-400 text-xs">Set NEXT_PUBLIC_REWARD_TOKEN_ADDRESS in .env.local</code>
                     )}
-                    <ol className="text-sm text-zinc-400 space-y-1 list-decimal list-inside mt-2" start={4}>
-                      <li>Symbol <span className="text-white">SMTH</span> and decimals <span className="text-white">18</span> will auto-fill</li>
-                      <li>Click <span className="text-white">Next → Import</span> — your SMTH balance appears</li>
+                    <ol className="text-sm text-gray-600 dark:text-zinc-400 space-y-1 list-decimal list-inside mt-2" start={4}>
+                      <li>Symbol <span className="text-gray-900 dark:text-white font-medium">SMTH</span> and decimals <span className="text-gray-900 dark:text-white font-medium">18</span> will auto-fill</li>
+                      <li>Click <span className="text-gray-900 dark:text-white font-medium">Next → Import</span> — your SMTH balance appears</li>
                     </ol>
                   </div>
                 </div>
@@ -586,43 +586,43 @@ export default function RewardsPage() {
               {/* Error banner */}
               {claimError && (
                 <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
-                  <p className="text-red-400 font-semibold">❌ {claimError}</p>
+                  <p className="text-red-600 dark:text-red-400 font-semibold">❌ {claimError}</p>
                 </div>
               )}
-              
-              <div className="bg-gradient-to-br from-purple-900/20 to-blue-900/20 border border-purple-800/30 rounded-xl p-8 mb-6">
+               
+              <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border border-purple-200/50 dark:border-purple-800/30 rounded-xl p-8 mb-6">
                 <div className="text-center mb-6">
                   <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-purple-500/10 mb-4">
-                    <Coins className="w-10 h-10 text-purple-400" />
+                    <Coins className="w-10 h-10 text-purple-600 dark:text-purple-400" />
                   </div>
-                  <h3 className="text-3xl font-bold text-white mb-2">
+                  <h3 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
                     {parseFloat(stats?.totalTokensPending || '0').toFixed(2)}
                   </h3>
-                  <p className="text-zinc-400">SwapSmith Tokens Available to Claim</p>
+                  <p className="text-gray-500 dark:text-zinc-400">SwapSmith Tokens Available to Claim</p>
                 </div>
 
                 <div className="space-y-4 mb-6">
-                  <div className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-lg">
-                    <span className="text-zinc-300">Pending Tokens</span>
-                    <span className="text-white font-bold">{parseFloat(stats?.totalTokensPending || '0').toFixed(2)}</span>
+                  <div className="flex items-center justify-between p-4 bg-gray-100 dark:bg-zinc-800/50 rounded-lg">
+                    <span className="text-gray-700 dark:text-zinc-300">Pending Tokens</span>
+                    <span className="text-gray-900 dark:text-white font-bold">{parseFloat(stats?.totalTokensPending || '0').toFixed(2)}</span>
                   </div>
-                  <div className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-lg">
-                    <span className="text-zinc-300">Total Claimed</span>
-                    <span className="text-green-400 font-bold">{parseFloat(stats?.totalTokensClaimed || '0').toFixed(2)}</span>
+                  <div className="flex items-center justify-between p-4 bg-gray-100 dark:bg-zinc-800/50 rounded-lg">
+                    <span className="text-gray-700 dark:text-zinc-300">Total Claimed</span>
+                    <span className="text-green-600 dark:text-green-400 font-bold">{parseFloat(stats?.totalTokensClaimed || '0').toFixed(2)}</span>
                   </div>
                 </div>
 
                 {/* Wallet address input */}
                 <div className="mb-6">
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm text-zinc-400">
+                    <label className="text-sm text-gray-500 dark:text-zinc-400">
                       <Wallet className="inline w-4 h-4 mr-1 mb-0.5" />
                       Your Sepolia wallet address
                     </label>
                     {isConnected && connectedWallet && (
                       <button
                         onClick={() => { setWalletAddress(connectedWallet); setClaimError(null) }}
-                        className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                        className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
                       >
                         ✓ Use connected wallet
                       </button>
@@ -633,12 +633,12 @@ export default function RewardsPage() {
                     value={walletAddress}
                     onChange={e => { setWalletAddress(e.target.value); setClaimError(null) }}
                     placeholder="0x…"
-                    className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 font-mono text-sm"
+                    className="w-full px-4 py-3 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 focus:outline-none focus:border-purple-500 font-mono text-sm"
                   />
                   {isConnected && connectedWallet?.toLowerCase() === walletAddress.toLowerCase() ? (
-                    <p className="text-xs text-green-400 mt-1">✓ Connected wallet auto-filled — tokens will go here on Sepolia</p>
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">✓ Connected wallet auto-filled — tokens will go here on Sepolia</p>
                   ) : (
-                    <p className="text-xs text-zinc-500 mt-1">
+                    <p className="text-xs text-gray-500 dark:text-zinc-500 mt-1">
                       {isConnected
                         ? 'Click "Use connected wallet" above or paste any Sepolia address'
                         : 'Paste your MetaMask wallet address (Sepolia network)'}
@@ -649,7 +649,7 @@ export default function RewardsPage() {
                 <button
                   onClick={handleClaimTokens}
                   disabled={claiming || parseFloat(stats?.totalTokensPending || '0') === 0}
-                  className="w-full py-4 px-6 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-zinc-700 disabled:to-zinc-700 text-white font-bold rounded-lg transition-all flex items-center justify-center gap-2 disabled:cursor-not-allowed"
+                  className="w-full py-4 px-6 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-400 dark:disabled:from-zinc-700 dark:disabled:to-zinc-700 text-white font-bold rounded-lg transition-all flex items-center justify-center gap-2 disabled:cursor-not-allowed"
                 >
                   {claiming ? (
                     <>
@@ -665,26 +665,26 @@ export default function RewardsPage() {
                 </button>
               </div>
 
-              <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-4">
+              <div className="bg-blue-50 dark:bg-blue-500/5 border border-blue-200 dark:border-blue-500/20 rounded-lg p-4">
                 <div className="flex gap-3">
-                  <ExternalLink className="w-5 h-5 text-blue-400 flex-shrink-0" />
+                  <ExternalLink className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
                   <div className="w-full">
-                    <h4 className="text-white font-medium mb-1">How Token Claims Work</h4>
-                    <ul className="text-sm text-zinc-400 space-y-1">
+                    <h4 className="text-gray-900 dark:text-white font-medium mb-1">How Token Claims Work</h4>
+                    <ul className="text-sm text-gray-600 dark:text-zinc-400 space-y-1">
                       <li>• Earn points by completing courses, daily logins, and swaps</li>
                       <li>• Connect your MetaMask wallet on Sepolia, or paste your address</li>
-                      <li>• Click <span className="text-white">Claim Tokens</span> — SMTH is sent on-chain in seconds</li>
+                      <li>• Click <span className="text-gray-900 dark:text-white font-medium">Claim Tokens</span> — SMTH is sent on-chain in seconds</li>
                       <li>• View your transaction on Sepolia Etherscan</li>
                       <li>• Gas fees are covered by SwapSmith</li>
                     </ul>
                     {CONTRACT_ADDRESS && (
-                      <div className="mt-3 pt-3 border-t border-blue-500/20">
-                        <p className="text-xs text-zinc-400 mb-1">Add SMTH token to MetaMask — contract address:</p>
-                        <div className="flex items-center gap-2 bg-zinc-800/80 rounded-lg px-3 py-2">
-                          <code className="text-purple-400 text-xs break-all flex-1">{CONTRACT_ADDRESS}</code>
+                      <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-500/20">
+                        <p className="text-xs text-gray-500 dark:text-zinc-400 mb-1">Add SMTH token to MetaMask — contract address:</p>
+                        <div className="flex items-center gap-2 bg-white dark:bg-zinc-800/80 rounded-lg px-3 py-2">
+                          <code className="text-purple-600 dark:text-purple-400 text-xs break-all flex-1">{CONTRACT_ADDRESS}</code>
                           <button
                             onClick={() => navigator.clipboard.writeText(CONTRACT_ADDRESS)}
-                            className="text-xs text-zinc-400 hover:text-white whitespace-nowrap"
+                            className="text-xs text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white whitespace-nowrap"
                           >
                             Copy
                           </button>
