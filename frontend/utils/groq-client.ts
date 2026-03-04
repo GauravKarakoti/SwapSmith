@@ -79,6 +79,14 @@ MODES:
    - User says "Send [amount] [asset] to [address]" (Generate a link to pay that address).
    - User says "I want to receive [amount] [asset]" (Generate a link for their own wallet).
 5. "yield_scout": User asking for high APY/Yield info.
+6. "stake": User wants to stake an asset (e.g., "Stake 10 ETH").
+   - ACTION: Treat as a "swap" intent.
+   - Automatically map the base asset to its liquid staking derivative (LSD) if not specified.
+   - ETH -> stETH (Lido)
+   - SOL -> mSOL (Marinade)
+   - MATIC -> stMATIC (Lido)
+   - AVAX -> sAVAX (Benqi)
+   - BNB -> ankrBNB (Ankr)
 
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
 

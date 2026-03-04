@@ -104,7 +104,14 @@ MODES:
 8. "limit_order": Buy/Sell at specific price.
 9. "swap_and_stake": Swap assets and immediately stake them for yield.
    Example: "Swap 100 USDC for ETH and stake it"
-   Keywords: "swap and stake", "zap", "stake immediately", "swap to stake"
+   Keywords: "swap and stake", "zap", "stake immediately", "swap to stake", "stake"
+   - ACTION: Automatically map base assets to Liquid Staking Tokens (LSTs) if user says "Stake X":
+     - ETH -> stETH (Lido)
+     - SOL -> mSOL (Marinade)
+     - MATIC -> stMATIC (Lido)
+     - AVAX -> sAVAX (Benqi)
+     - BNB -> ankrBNB (Ankr)
+   - If user says "Stake ETH", "Stake SOL" -> intent: "swap_and_stake", toAsset: "stETH"/"mSOL".
 
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
 
