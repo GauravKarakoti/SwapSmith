@@ -465,6 +465,107 @@ export const gasOptimizationHistory = pgTable('gas_optimization_history', {
   index("idx_gas_optimization_history_swap_id").on(table.swapId),
 ]);
 
+// --- TRADING STRATEGY MARKETPLACE SCHEMAS ---
+
+export const strategyRiskLevelType = pgEnum('strategy_risk_level', ['low', 'medium', 'high', 'aggressive']);
+export const strategyStatusType = pgEnum('strategy_status', ['active', 'paused', 'archived']);
+export const subscriptionStatusType = pgEnum('subscription_status', ['active', 'paused', 'cancelled']);
+export const tradeStatusType = pgEnum('trade_status', ['pending', 'completed', 'failed']);
+export const performanceStatusType = pgEnum('performance_status', ['pending', 'completed', 'failed']);
+
+export const tradingStrategies = pgTable('trading_strategies', {
+  id: serial('id').primaryKey(),
+  creatorId: integer('creator_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  creatorTelegramId: bigint('creator_telegram_id', { mode: 'number' }),
+  name: text('name').notNull(),
+  description: text('description').notNull(),
+  parameters: jsonb('parameters').notNull(),
+  riskLevel: strategyRiskLevelType('risk_level').notNull(),
+  subscriptionFee: numeric('subscription_fee', { precision: 20, scale: 2 }).notNull(),
+  performanceFee: real('performance_fee').notNull().default(0),
+  minInvestment: numeric('min_investment', { precision: 20, scale: 2 }).notNull(),
+  isPublic: boolean('is_public').notNull().default(false),
+  tags: jsonb('tags').default([]),
+  status: strategyStatusType('status').notNull().default('active'),
+  subscriberCount: integer('subscriber_count').notNull().default(0),
+  totalTrades: integer('total_trades').notNull().default(0),
+  successfulTrades: integer('successful_trades').notNull().default(0),
+  totalReturn: numeric('total_return', { precision: 20, scale: 2 }).default('0'),
+  monthlyReturn: numeric('monthly_return', { precision: 20, scale: 2 }).default('0'),
+  maxDrawdown: numeric('max_drawdown', { precision: 20, scale: 2 }).default('0'),
+  volatility: numeric('volatility', { precision: 20, scale: 2 }).default('0'),
+  sharpeRatio: numeric('sharpe_ratio', { precision: 20, scale: 2 }).default('0'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (table) => [
+  index('idx_trading_strategies_creator_id').on(table.creatorId),
+  index('idx_trading_strategies_status').on(table.status),
+  index('idx_trading_strategies_is_public').on(table.isPublic),
+  index('idx_trading_strategies_created_at').on(table.createdAt),
+]);
+
+export const strategySubscriptions = pgTable('strategy_subscriptions', {
+  id: serial('id').primaryKey(),
+  strategyId: integer('strategy_id').notNull().references(() => tradingStrategies.id, { onDelete: 'cascade' }),
+  subscriberId: integer('subscriber_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  subscriberTelegramId: bigint('subscriber_telegram_id', { mode: 'number' }),
+  subscriptionFee: numeric('subscription_fee', { precision: 20, scale: 2 }).notNull(),
+  allocationPercent: integer('allocation_percent').notNull().default(100),
+  autoRebalance: boolean('auto_rebalance').notNull().default(true),
+  stopLossPercent: numeric('stop_loss_percent', { precision: 5, scale: 2 }),
+  status: subscriptionStatusType('status').notNull().default('active'),
+  joinedAt: timestamp('joined_at').notNull().defaultNow(),
+  pausedAt: timestamp('paused_at'),
+  cancelledAt: timestamp('cancelled_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => [
+  index('idx_strategy_subscriptions_strategy_id').on(table.strategyId),
+  index('idx_strategy_subscriptions_subscriber_id').on(table.subscriberId),
+  index('idx_strategy_subscriptions_status').on(table.status),
+  unique('idx_strategy_subscriptions_unique').on(table.strategyId, table.subscriberId),
+]);
+
+export const strategyTrades = pgTable('strategy_trades', {
+  id: serial('id').primaryKey(),
+  strategyId: integer('strategy_id').notNull().references(() => tradingStrategies.id, { onDelete: 'cascade' }),
+  fromToken: text('from_token').notNull(),
+  toToken: text('to_token').notNull(),
+  swapAmount: numeric('swap_amount', { precision: 20, scale: 8 }).notNull(),
+  settleAmount: numeric('settle_amount', { precision: 20, scale: 8 }),
+  sideshiftOrderId: text('sideshift_order_id'),
+  status: tradeStatusType('status').notNull().default('pending'),
+  error: text('error'),
+  executedAt: timestamp('executed_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => [
+  index('idx_strategy_trades_strategy_id').on(table.strategyId),
+  index('idx_strategy_trades_status').on(table.status),
+  index('idx_strategy_trades_created_at').on(table.createdAt),
+]);
+
+export const strategyPerformance = pgTable('strategy_performance', {
+  id: serial('id').primaryKey(),
+  strategyId: integer('strategy_id').notNull().references(() => tradingStrategies.id, { onDelete: 'cascade' }),
+  pnl: numeric('pnl', { precision: 20, scale: 8 }).notNull(),
+  pnlPercent: numeric('pnl_percent', { precision: 20, scale: 2 }).notNull(),
+  status: performanceStatusType('status').notNull().default('pending'),
+  executedAt: timestamp('executed_at').notNull().defaultNow(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => [
+  index('idx_strategy_performance_strategy_id').on(table.strategyId),
+  index('idx_strategy_performance_executed_at').on(table.executedAt),
+]);
+
+// --- TYPES ---
+
+export type TradingStrategy = typeof tradingStrategies.$inferSelect;
+export type NewTradingStrategy = typeof tradingStrategies.$inferInsert;
+export type StrategySubscription = typeof strategySubscriptions.$inferSelect;
+export type NewStrategySubscription = typeof strategySubscriptions.$inferInsert;
+export type StrategyTrade = typeof strategyTrades.$inferSelect;
+export type NewStrategyTrade = typeof strategyTrades.$inferInsert;
+export type StrategyPerformance = typeof strategyPerformance.$inferSelect;
+export type NewStrategyPerformance = typeof strategyPerformance.$inferInsert;
 
 // --- RELATIONS ---
 
@@ -487,6 +588,43 @@ export const rewardsLogRelations = relations(rewardsLog, ({ one }) => ({
   user: one(users, {
     fields: [rewardsLog.userId],
     references: [users.id]
+  }),
+}));
+
+// --- TRADING STRATEGY RELATIONS ---
+
+export const tradingStrategiesRelations = relations(tradingStrategies, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [tradingStrategies.creatorId],
+    references: [users.id],
+  }),
+  subscriptions: many(strategySubscriptions),
+  trades: many(strategyTrades),
+  performance: many(strategyPerformance),
+}));
+
+export const strategySubscriptionsRelations = relations(strategySubscriptions, ({ one }) => ({
+  strategy: one(tradingStrategies, {
+    fields: [strategySubscriptions.strategyId],
+    references: [tradingStrategies.id],
+  }),
+  subscriber: one(users, {
+    fields: [strategySubscriptions.subscriberId],
+    references: [users.id],
+  }),
+}));
+
+export const strategyTradesRelations = relations(strategyTrades, ({ one }) => ({
+  strategy: one(tradingStrategies, {
+    fields: [strategyTrades.strategyId],
+    references: [tradingStrategies.id],
+  }),
+}));
+
+export const strategyPerformanceRelations = relations(strategyPerformance, ({ one }) => ({
+  strategy: one(tradingStrategies, {
+    fields: [strategyPerformance.strategyId],
+    references: [tradingStrategies.id],
   }),
 }));
 
