@@ -162,7 +162,7 @@ bot.on(message('text'), async (ctx) => {
   }
 
   // Save state for confirmation
-  await db.updateConversationState(userId, {
+  await db.setConversationState(userId, {
     parsedCommand: parsed as any, // Cast to any to avoid strict type checks on json field if needed
     step: 'confirm'
   });
