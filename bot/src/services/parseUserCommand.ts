@@ -158,12 +158,10 @@ export async function parseUserCommand(
   }
 
   // Check for direct Stake Intent (e.g., "Stake 1 ETH with Lido" or "Stake my ETH")
+  // Mapped to 'swap_and_stake' as per new architecture
   if (REGEX_STAKE_COMMAND.test(input) && !REGEX_SWAP_STAKE.test(input)) {
     const providerMatch = input.match(REGEX_LIQUID_STAKING_PROVIDER);
     const stakeProtocol = providerMatch ? providerMatch[1].toLowerCase().replace(/\s+/g, '_') : 'lido';
-    const stakeProvider = providerMatch
-      ? providerMatch[1].replace(/\s+/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-      : 'Lido';
 
     let amount: number | null = null;
     let stakeAsset: string | null = null;
@@ -189,17 +187,20 @@ export async function parseUserCommand(
       stakeAsset = 'ETH';
     }
 
-    // Estimated APR based on provider
-    const stakingApr = stakeProtocol === 'rocket_pool' ? 3.4 :
-                       stakeProtocol === 'stakewise' ? 3.3 : 3.5;
+    // Map base asset to LST
+    let toAsset = 'stETH';
+    if (stakeAsset === 'SOL') toAsset = 'mSOL';
+    else if (stakeAsset === 'MATIC') toAsset = 'stMATIC';
+    else if (stakeAsset === 'AVAX') toAsset = 'sAVAX';
+    else if (stakeAsset === 'BNB') toAsset = 'ankrBNB';
 
     return {
       success: true,
-      intent: 'stake',
+      intent: 'swap_and_stake',
       fromAsset: stakeAsset,
       fromChain: 'ethereum',
-      toAsset: null,
-      toChain: null,
+      toAsset: toAsset,
+      toChain: 'ethereum',
       amount,
       amountType: amount ? 'exact' : null,
       excludeAmount: undefined,
@@ -223,15 +224,9 @@ export async function parseUserCommand(
       conditionAsset: undefined,
       targetPrice: undefined,
       condition: undefined,
-      // Staking specific fields
-      stakeAsset,
-      stakeProtocol,
-      stakeChain: 'ethereum',
-      stakingApr,
-      stakeProvider,
       confidence: 85,
       validationErrors: [],
-      parsedMessage: `Parsed: Stake ${amount || '?'} ${stakeAsset} with ${stakeProvider} (${stakingApr}% APR)`,
+      parsedMessage: `Parsed: Stake ${amount || '?'} ${stakeAsset} -> ${toAsset}`,
       requiresConfirmation: true,
       originalInput: userInput
     };
