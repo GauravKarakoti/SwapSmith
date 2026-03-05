@@ -136,8 +136,6 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
         ])
         balanceRaw = bal
         decimals = dec
-      } else {
-        balanceRaw = await publicClient.getBalance({ address })
       }
 
       const formatted = formatUnits(balanceRaw, decimals)
