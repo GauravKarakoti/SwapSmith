@@ -3,8 +3,10 @@ import { message } from 'telegraf/filters';
 import rateLimit from 'telegraf-ratelimit';
 import dotenv from 'dotenv';
 import * as fs from 'fs';
+import { promises as fsPromises } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { randomUUID } from 'crypto';
 import axios from 'axios';
 import { spawn, spawnSync } from 'child_process';
 import express from 'express';
@@ -23,7 +25,7 @@ import { resolveAddress, isNamingService } from './services/address-resolver';
 import { limitOrderWorker } from './workers/limitOrderWorker';
 import { initializeStakeWorker, stopStakeWorker } from './workers/stakeOrderWorker';
 import { OrderMonitor } from './services/order-monitor';
-import { parseUserCommand } from './services/parseUserCommand';
+import { ParsedCommand } from './services/parseUserCommand';
 import { isValidAddress } from './config/address-patterns';
 import { executePortfolioStrategy } from './services/portfolio-service';
 
@@ -154,6 +156,71 @@ bot.command('clear', async (ctx) => {
 });
 
 /* -------------------------------------------------------------------------- */
+/* UTILITY FUNCTIONS                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Validates that a file path is within the temp directory
+ * Prevents directory traversal attacks
+ */
+function isPathInTempDir(filePath: string, tempDir: string): boolean {
+  const relative = path.relative(tempDir, path.resolve(filePath));
+  return !relative.startsWith('..');
+}
+
+/**
+ * Converts OGA audio file to MP3 using FFmpeg
+ * Securely uses spawn() to prevent shell injection
+ */
+async function convertAudioToMp3(inputPath: string, outputPath: string): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const ffmpeg = spawn('ffmpeg', ['-i', inputPath, outputPath, '-y'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 30000, // 30 second timeout
+    });
+
+    let stderrData = '';
+
+    ffmpeg.stderr?.on('data', (chunk) => {
+      stderrData += chunk.toString();
+    });
+
+    ffmpeg.stdout?.on('data', () => {
+      // drain stdout to avoid blocking if ffmpeg writes to it
+    });
+
+    ffmpeg.on('error', reject);
+
+    ffmpeg.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(
+          new Error(
+            `FFmpeg conversion failed with exit code ${code}${
+              stderrData ? `\n${stderrData}` : ''
+            }`,
+          ),
+        );
+      }
+    });
+  });
+}
+
+/**
+ * Cleanup temporary files with error handling
+ */
+async function cleanupFiles(...filePaths: string[]): Promise<void> {
+  await Promise.allSettled(
+    filePaths.map((filePath) =>
+      fsPromises.unlink(filePath).catch(() => {
+        // Silently ignore errors if file doesn't exist
+      })
+    )
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* MESSAGE HANDLERS                                                           */
 /* -------------------------------------------------------------------------- */
 
@@ -168,70 +235,34 @@ bot.on(message('voice'), async (ctx) => {
   const fileId = ctx.message.voice.file_id;
   const fileLink = await ctx.telegram.getFileLink(fileId);
 
-  // Security: Generate safe temporary file paths to prevent shell injection
-  // Using timestamp-based naming ensures uniqueness and prevents path traversal
+  // Security: Generate safe temporary file paths using UUID
   const tempDir = os.tmpdir();
-  const safeFileName = `audio_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const oga = path.join(tempDir, `${safeFileName}.oga`);
-  const mp3 = path.join(tempDir, `${safeFileName}.mp3`);
+  const filename = `audio_${randomUUID()}`;
+  const oga = path.join(tempDir, `${filename}.oga`);
+  const mp3 = path.join(tempDir, `${filename}.mp3`);
 
   // Security: Validate file paths are within temp directory
-  const ogaNormalized = path.normalize(oga);
-  const mp3Normalized = path.normalize(mp3);
-  
-  if (!ogaNormalized.startsWith(path.normalize(tempDir)) || 
-      !mp3Normalized.startsWith(path.normalize(tempDir))) {
+  if (!isPathInTempDir(oga, tempDir) || !isPathInTempDir(mp3, tempDir)) {
     return ctx.reply('❌ Security error: Invalid file path.');
   }
 
   try {
+    // Download voice file
     const res = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
-    fs.writeFileSync(oga, res.data);
+    await fsPromises.writeFile(oga, res.data);
 
-    await new Promise<void>((resolve, reject) => {
-      // Security: Using spawn() instead of exec() prevents shell injection
-      // Arguments are passed as an array, not concatenated into a shell command string
-      const ffmpeg = spawn('ffmpeg', ['-i', oga, mp3, '-y'], {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        timeout: 30000, // 30 second timeout
-      });
+    // Convert to MP3
+    await convertAudioToMp3(oga, mp3);
 
-      let stderrData = '';
-
-      if (ffmpeg.stderr) {
-        ffmpeg.stderr.on('data', (chunk) => {
-          stderrData += chunk.toString();
-        });
-      }
-
-      if (ffmpeg.stdout) {
-        ffmpeg.stdout.on('data', () => {
-          // drain stdout to avoid blocking if ffmpeg writes to it
-        });
-      }
-
-      ffmpeg.on('error', (err) => reject(err));
-
-      ffmpeg.on('close', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(
-            new Error(
-              `FFmpeg process exited with code ${code}${
-                stderrData ? `; stderr: ${stderrData}` : ''
-              }`,
-            ),
-          );
-        }
-      });
-    });
-
+    // Transcribe
     const text = await transcribeAudio(mp3);
     await handleTextMessage(ctx, text, 'voice');
+  } catch (error) {
+    await handleError('VoiceProcessingError', error);
+    await ctx.reply('❌ Failed to process voice message.');
   } finally {
-    fs.existsSync(oga) && fs.unlinkSync(oga);
-    fs.existsSync(mp3) && fs.unlinkSync(mp3);
+    // Cleanup temporary files
+    await cleanupFiles(oga, mp3);
   }
 });
 
