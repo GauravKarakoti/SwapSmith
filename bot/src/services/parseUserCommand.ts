@@ -503,44 +503,55 @@ export async function parseUserCommand(
 
   /* ───────────── LIMIT ORDER & DCA ───────────── */
   if (isLimitOrDca) {
-    const dcaConfig = parseDCA(input);
-    if (dcaConfig && dcaConfig.amount) {
-      return {
-        success: true,
-        intent: 'dca',
-        fromAsset: 'USDC', // Default source for DCA usually
-        fromChain: null,
-        toAsset: dcaConfig.targetAsset ?? 'BTC', // Default target fallback
-        toChain: null,
-        amount: dcaConfig.amount ?? null,
-        amountType: dcaConfig.amountType ?? 'exact',
-        frequency: dcaConfig.frequency || 'daily',
-        dayOfWeek: dcaConfig.dayOfWeek !== undefined ? ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dcaConfig.dayOfWeek] : null,
-        dayOfMonth: dcaConfig.dayOfMonth?.toString() || null,
-        excludeAmount: undefined,
-        excludeToken: undefined,
-        quoteAmount: undefined,
-        conditions: undefined,
-        portfolio: undefined,
-        settleAsset: null,
-        settleNetwork: null,
-        settleAmount: null,
-        settleAddress: null,
-        fromProject: null,
-        fromYield: null,
-        toProject: null,
-        toYield: null,
-        conditionOperator: undefined,
-        conditionValue: undefined,
-        conditionAsset: undefined,
-        targetPrice: undefined,
-        condition: undefined,
-        confidence: 90,
-        validationErrors: [],
-        parsedMessage: `Parsed: DCA $${dcaConfig.amount} into ${dcaConfig.targetAsset || 'BTC'} ${dcaConfig.frequency || 'daily'}`,
-        requiresConfirmation: true,
-        originalInput: userInput
-      };
+    // Only treat as DCA if the input clearly indicates recurrence; otherwise,
+    // let limit-order parsing handle it later in this branch.
+    const hasDcaRecurrenceCue = /\b(every|daily|weekly|monthly|recurring|recurrence|dca)\b/i.test(
+      input
+    );
+
+    if (hasDcaRecurrenceCue) {
+      const dcaConfig = parseDCA(input);
+      if (dcaConfig && dcaConfig.amount) {
+        return {
+          success: true,
+          intent: 'dca',
+          fromAsset: 'USDC', // Default source for DCA usually
+          fromChain: null,
+          toAsset: dcaConfig.targetAsset ?? 'BTC', // Default target fallback
+          toChain: null,
+          amount: dcaConfig.amount ?? null,
+          amountType: dcaConfig.amountType ?? 'exact',
+          frequency: dcaConfig.frequency || 'daily',
+          dayOfWeek:
+            dcaConfig.dayOfWeek !== undefined
+              ? ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dcaConfig.dayOfWeek]
+              : null,
+          dayOfMonth: dcaConfig.dayOfMonth?.toString() || null,
+          excludeAmount: undefined,
+          excludeToken: undefined,
+          quoteAmount: undefined,
+          conditions: undefined,
+          portfolio: undefined,
+          settleAsset: null,
+          settleNetwork: null,
+          settleAmount: null,
+          settleAddress: null,
+          fromProject: null,
+          fromYield: null,
+          toProject: null,
+          toYield: null,
+          conditionOperator: undefined,
+          conditionValue: undefined,
+          conditionAsset: undefined,
+          targetPrice: undefined,
+          condition: undefined,
+          confidence: 90,
+          validationErrors: [],
+          parsedMessage: `Parsed: DCA $${dcaConfig.amount} into ${dcaConfig.targetAsset || 'BTC'} ${dcaConfig.frequency || 'daily'}`,
+          requiresConfirmation: true,
+          originalInput: userInput
+        };
+      }
     }
 
     const limitConfig = detectLimitOrder(input);
