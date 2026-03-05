@@ -42,7 +42,7 @@ export interface SwapHistoryItem {
  * Hook for managing user profile data
  */
 export function useUserProfile() {
-  const [profile, setProfile] = useState<Record<string, any> | null>(null);
+  const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,7 +62,7 @@ export function useUserProfile() {
     }
   }, []);
 
-  const updateProfile = useCallback(async (updates: Partial<Record<string, any>>) => {
+  const updateProfile = useCallback(async (updates: Partial<Record<string, unknown>>) => {
     try {
       const response = await fetch('/api/user/profile', {
         method: 'PUT',

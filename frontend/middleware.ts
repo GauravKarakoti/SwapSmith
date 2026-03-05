@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { enhancedCSRFMiddleware } from '@/lib/enhanced-csrf';
 import { rateLimitMiddleware, RATE_LIMITS } from '@/lib/rate-limiter';
 import { securityMiddleware } from '@/lib/security-headers';
+import { csrfProtectionMiddleware } from '@/lib/csrf';
 
 /**
  * Comprehensive Security Middleware
@@ -15,6 +16,14 @@ import { securityMiddleware } from '@/lib/security-headers';
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // 🔐 CSRF Protection: Validate and set CSRF tokens for API routes.
+  // Skip for /api/admin/* — those use Firebase ID token auth (inherently CSRF-safe).
+  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/admin/')) {
+    const csrfResponse = csrfProtectionMiddleware(request);
+    if (csrfResponse) {
+      return csrfResponse;
+    }
+  }
   // 🔐 Admin Dashboard Protection
   if (pathname.startsWith('/admin/dashboard')) {
     const adminSession = request.cookies.get('admin-session');
