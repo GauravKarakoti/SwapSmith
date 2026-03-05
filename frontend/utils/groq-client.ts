@@ -26,7 +26,7 @@ function getGroqClient(): Groq {
 // Type definition for the parsed command object
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "dca" | "stake" | "unknown"; // Added "stake" intent
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "dca" | "unknown"; // Removed "stake" intent
 
   // Single Swap Fields
   fromAsset: string | null;
@@ -87,23 +87,36 @@ MODES:
    - User says "Send [amount] [asset] to [address]" (Generate a link to pay that address).
    - User says "I want to receive [amount] [asset]" (Generate a link for their own wallet).
 5. "yield_scout": User asking for high APY/Yield info.
-6. "stake": User wants to stake assets with liquid staking providers (Lido, Rocket Pool, StakeWise).
-   - Example: "Stake 1 ETH with Lido" or "Stake my ETH to earn rewards"
-   - Maps to liquid staking providers: lido (stETH), rocket_pool (rETH), stakewise (osETH)
-   - For ETH staking, default to "lido" if no provider specified
-   - Include stakingApr field with estimated annual percentage rate
+6. "stake": User wants to stake an asset (e.g., "Stake 10 ETH").
+   - ACTION: Treat as a "swap" intent.
+   - Automatically map the base asset to its Liquid Staking Token (LST) if not specified.
+   - ETH -> stETH (Lido)
+   - SOL -> mSOL (Marinade)
+   - MATIC -> stMATIC (Lido)
+   - AVAX -> sAVAX (Benqi)
+   - BNB -> ankrBNB (Ankr)
 
 LIQUID STAKING PROVIDERS:
 - lido: stETH on Ethereum (~3-4% APR), most popular
 - rocket_pool: rETH on Ethereum (~3-4% APR), decentralized
 - stakewise: osETH on Ethereum (~3-4% APR)
 
+STAKING REQUESTS (MAPPED TO "swap" INTENT):
+- If the user asks to "stake" an asset (e.g., "Stake 10 ETH", "Stake all my SOL"), you MUST:
+  - Set "intent": "swap" in the JSON response (never "stake").
+  - Use the unstaked asset as "fromAsset".
+  - Set "toAsset" to the appropriate Liquid Staking Token (LST) if the user does not specify a target:
+    - ETH -> stETH (Lido)
+    - SOL -> mSOL (Marinade)
+    - MATIC -> stMATIC (Lido)
+    - AVAX -> sAVAX (Benqi)
+    - BNB -> ankrBNB (Ankr)
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
 
 RESPONSE FORMAT:
 {
   "success": boolean,
-  "intent": "swap" | "dca" | "portfolio" | "checkout" | "yield_scout" | "stake",
+  "intent": "swap" | "dca" | "portfolio" | "checkout" | "yield_scout",
 
   // SWAP & LIMIT ORDER PARAMS
   "fromAsset": string | null,
@@ -133,13 +146,6 @@ RESPONSE FORMAT:
   "settleNetwork": string | null,
   "settleAmount": number | null,
   "settleAddress": string | null,
-
-  // STAKING PARAMS (for "stake" intent)
-  "stakeAsset": string | null,       // Asset to stake (e.g., "ETH")
-  "stakeProtocol": string | null,    // Protocol to stake with (e.g., "lido", "rocket_pool", "stakewise")
-  "stakeChain": string | null,       // Chain to stake on (default: "ethereum")
-  "stakingApr": number | null,       // Estimated staking APR (e.g., 3.5 for 3.5%)
-  "stakeProvider": string | null,    // Display name of provider (e.g., "Lido", "Rocket Pool")
 
   "confidence": number, // Confidence score 0-100
   "validationErrors": string[],
@@ -242,16 +248,6 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     if (!parsed.settleAsset) errors.push("Asset to receive/send not specified");
     if (!parsed.settleAmount || parsed.settleAmount <= 0) errors.push("Invalid amount specified");
 
-  } else if (parsed.intent === "stake") {
-    // Validate staking command
-    if (!parsed.stakeAsset && !parsed.fromAsset) errors.push("Asset to stake not specified");
-    if (!parsed.amount || parsed.amount <= 0) errors.push("Invalid amount specified");
-    // If stakeProtocol not specified, default to "lido" for ETH
-    if (!parsed.stakeProtocol && (parsed.stakeAsset === "ETH" || parsed.fromAsset === "ETH")) {
-      parsed.stakeProtocol = "lido";
-      parsed.stakeProvider = "Lido";
-      parsed.stakingApr = 3.5; // Estimated APR
-    }
   }
 
   const allErrors = [...(parsed.validationErrors || []), ...errors];
@@ -283,13 +279,6 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     settleNetwork: parsed.settleNetwork || null,
     settleAmount: parsed.settleAmount || null,
     settleAddress: parsed.settleAddress || null,
-
-    // Staking fields
-    stakeAsset: parsed.stakeAsset || parsed.fromAsset || null,
-    stakeProtocol: parsed.stakeProtocol || null,
-    stakeChain: parsed.stakeChain || parsed.fromChain || 'ethereum',
-    stakingApr: parsed.stakingApr || null,
-    stakeProvider: parsed.stakeProvider || null,
 
     confidence: confidence,
     validationErrors: allErrors,
