@@ -22,6 +22,7 @@ export interface SideShiftQuote {
   id: string;
   depositCoin: string;
   depositNetwork: string;
+  depositAddress: string; // Address where user should send their deposit
   settleCoin: string;
   settleNetwork: string;
   depositAmount: string;
@@ -164,6 +165,7 @@ const SideShiftQuoteSchema = z.object({
   id: z.string(),
   depositCoin: z.string(),
   depositNetwork: z.string(),
+  depositAddress: z.string(), // Critical: Destination address for user's deposit
   settleCoin: z.string(),
   settleNetwork: z.string(),
   depositAmount: z.string(),

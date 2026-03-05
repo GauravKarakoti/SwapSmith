@@ -9,6 +9,7 @@ import { useEffect } from 'react'
 import { initializeRewards } from '@/lib/rewards-service'
 import { useAuth } from '@/hooks/useAuth'
 import GlobalPromoAdProvider from '@/components/GlobalPromoAdProvider'
+import { usePageTracking } from '@/hooks/usePageTracking'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -49,6 +50,14 @@ const config = createConfig({
 })
 
 /**
+ * Component to track page visits on every route change
+ */
+function PageTrackingInitializer() {
+  usePageTracking();
+  return null;
+}
+
+/**
  * Component to track daily login rewards
  */
 function RewardsInitializer() {
@@ -69,6 +78,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <ThemeProvider>
       <WagmiProvider config={config}>
         <QueryClientProvider client={queryClient}>
+          <PageTrackingInitializer />
           <RewardsInitializer />
           <GlobalPromoAdProvider />
           {children}

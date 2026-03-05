@@ -1,18 +1,22 @@
 import { eq, desc, and, gte, lte, sql, like, or } from 'drizzle-orm';
+import { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 import { 
   tradingStrategies, 
   strategySubscriptions, 
   strategyPerformance,
   strategyTrades,
-  type TradingStrategy,
-  type NewTradingStrategy,
-  type StrategySubscription,
-  type StrategyPerformance,
-  type NewStrategyPerformance,
-  type StrategyTrade,
-  type NewStrategyTrade
 } from '../schema';
 import { neon } from '@neondatabase/serverless';
+
+// Type definitions
+export type TradingStrategy = InferSelectModel<typeof tradingStrategies>;
+export type NewTradingStrategy = InferInsertModel<typeof tradingStrategies>;
+export type StrategySubscription = InferSelectModel<typeof strategySubscriptions>;
+export type NewStrategySubscription = InferInsertModel<typeof strategySubscriptions>;
+export type StrategyPerformance = InferSelectModel<typeof strategyPerformance>;
+export type NewStrategyPerformance = InferInsertModel<typeof strategyPerformance>;
+export type StrategyTrade = InferSelectModel<typeof strategyTrades>;
+export type NewStrategyTrade = InferInsertModel<typeof strategyTrades>;
 import { drizzle } from 'drizzle-orm/neon-http';
 
 const sqlConn = neon(process.env.DATABASE_URL!);
@@ -205,7 +209,6 @@ export async function subscribeToStrategy(
       allocationPercent: input.allocationPercent || 100,
       autoRebalance: input.autoRebalance ?? true,
       stopLossPercent: input.stopLossPercent,
-      pausedAt: null,
       cancelledAt: null,
     }
   }).returning();
@@ -478,7 +481,7 @@ export async function updateStrategyMetrics(strategyId: number): Promise<void> {
   }
 
   // Calculate metrics
-  const totalPnL = performance.reduce((acc: number, p) => acc + Number(p.pnl), 0);
+  const totalPnL = performance.reduce((acc: number, p) => acc + Number(p.pnlPercent), 0);
   const pnlPercents = performance.map(p => p.pnlPercent);
   
   const avgReturn = pnlPercents.reduce((acc: number, p: number) => acc + p, 0) / pnlPercents.length;
@@ -505,9 +508,7 @@ export async function updateStrategyMetrics(strategyId: number): Promise<void> {
     .set({
       totalReturn: totalPnL,
       monthlyReturn: avgReturn,
-      sharpeRatio,
       maxDrawdown,
-      volatility,
       updatedAt: new Date(),
     })
     .where(eq(tradingStrategies.id, strategyId));

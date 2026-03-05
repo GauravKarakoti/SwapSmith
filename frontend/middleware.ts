@@ -1,20 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { csrfProtectionMiddleware } from '@/lib/csrf';
 
 /**
- * Middleware – protects /admin/dashboard by verifying an admin session.
- * The verify check is done client-side (sessionStorage token) but we add
- * a lightweight layer here that blocks direct navigation without any token
- * by checking the cookie set after login.
+ * Middleware - handles:
+ * 1. Admin dashboard route protection
+ * 2. CSRF token protection for all API routes (financial security)
  *
- * Full server-side token verification happens in /api/admin/analytics.
+ * NOTE: /api/admin/* routes are exempt from CSRF token checking because they
+ * authenticate via Firebase ID tokens, which already provide CSRF protection
+ * (a third-party site cannot obtain the user's Firebase ID token).
  */
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Only guard the dashboard route
+  // 🔐 CSRF Protection: Validate and set CSRF tokens for API routes.
+  // Skip for /api/admin/* — those use Firebase ID token auth (inherently CSRF-safe).
+  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/admin/')) {
+    const csrfResponse = csrfProtectionMiddleware(request);
+    if (csrfResponse) {
+      return csrfResponse;
+    }
+  }
+
+  // 🔐 Admin Dashboard Protection
   if (pathname.startsWith('/admin/dashboard')) {
-    // We cannot read sessionStorage in middleware (runs on the edge).
-    // Instead we rely on a short-lived cookie set by the login page.
     const adminSession = request.cookies.get('admin-session');
 
     if (!adminSession?.value) {
@@ -28,5 +37,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/dashboard/:path*'],
+  matcher: ['/admin/dashboard/:path*', '/api/:path*'],
 };

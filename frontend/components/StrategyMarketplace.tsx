@@ -48,6 +48,7 @@ export default function StrategyMarketplace() {
 
   useEffect(() => {
     fetchStrategies();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
   const fetchStrategies = async () => {
