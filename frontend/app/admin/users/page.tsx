@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { csrfFetch } from '@/hooks/useCsrfToken'
 import { auth } from '@/lib/firebase'
 import { signOut } from 'firebase/auth'
 import {
@@ -226,7 +227,7 @@ function PlanUpdateModal({
     setLoading(true)
     setError('')
     try {
-      const res = await fetch('/api/admin/users', {
+      const res = await csrfFetch('/api/admin/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ firebaseUid: user.firebaseUid, action: 'update_plan', plan: selectedPlan }),
@@ -517,7 +518,7 @@ export default function AdminUsersPage() {
     setActionLoading(true)
     setActionMsg('')
     try {
-      const res = await fetch('/api/admin/users', {
+      const res = await csrfFetch('/api/admin/users', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

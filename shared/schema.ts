@@ -151,6 +151,8 @@ export const limitOrders = pgTable('limit_orders', {
   executedAt: timestamp('executed_at'),
 }, (table) => [
   index("idx_limit_orders_telegram_id").on(table.telegramId),
+  index("idx_limit_orders_status").on(table.status),
+  index("idx_limit_orders_is_active").on(table.isActive),
 ]);
 
 export const trailingStopOrders = pgTable('trailing_stop_orders', {
@@ -175,8 +177,9 @@ export const trailingStopOrders = pgTable('trailing_stop_orders', {
   createdAt: timestamp('created_at').defaultNow(),
 }, (table) => [
   index("idx_trailing_stop_orders_telegram_id").on(table.telegramId),
+  index("idx_trailing_stop_orders_status").on(table.status),
+  index("idx_trailing_stop_orders_is_active").on(table.isActive),
 ]);
-
 
 // --- SHARED SCHEMAS (used by both bot and frontend) ---
 
@@ -243,6 +246,7 @@ export const rebalanceHistory = pgTable('rebalance_history', {
 }, (table) => [
   index("idx_rebalance_history_user_id").on(table.userId),
   index("idx_rebalance_history_target_id").on(table.portfolioTargetId),
+  index("idx_rebalance_history_status").on(table.status),
 ]);
 
 // --- WATCHLIST SCHEMA ---
@@ -301,6 +305,7 @@ export const swapHistory = pgTable('swap_history', {
   updatedAt: timestamp('updated_at'),
 }, (table) => [
   index("idx_swap_history_user_id").on(table.userId),
+  index("idx_swap_history_status").on(table.status),
 ]);
 
 
@@ -315,6 +320,7 @@ export const chatHistory = pgTable('chat_history', {
   createdAt: timestamp('created_at').defaultNow(),
 }, (table) => [
   index("idx_chat_history_user_id").on(table.userId),
+  index("idx_chat_history_session_id").on(table.sessionId),
 ]);
 
 
@@ -370,6 +376,7 @@ export const rewardsLog = pgTable('rewards_log', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 }, (table) => [
   index("idx_rewards_log_user_id").on(table.userId),
+  index("idx_rewards_log_mint_status").on(table.mintStatus),
 ]);
 
 
@@ -651,3 +658,37 @@ export const coinGiftLogsRelations = relations(coinGiftLogs, ({ one }) => ({
 
 export type CoinGiftLog = typeof coinGiftLogs.$inferSelect;
 
+// ── PAGE VISITS ─────────────────────────────────────────────────────────────
+export const pageVisits = pgTable('page_visits', {
+  id:        serial('id').primaryKey(),
+  page:      text('page').notNull(),
+  userId:    text('user_id'),
+  sessionId: text('session_id'),
+  userAgent: text('user_agent'),
+  referer:   text('referer'),
+  visitedAt: timestamp('visited_at').notNull().defaultNow(),
+}, (table) => [
+  index('idx_page_visits_page').on(table.page),
+  index('idx_page_visits_user_id').on(table.userId),
+  index('idx_page_visits_visited_at').on(table.visitedAt),
+]);
+
+export type PageVisit = typeof pageVisits.$inferSelect;
+
+// ── GROQ USAGE LOGS ──────────────────────────────────────────────────────────
+export const groqUsageLogs = pgTable('groq_usage_logs', {
+  id:               serial('id').primaryKey(),
+  userId:           text('user_id'),
+  model:            text('model').notNull(),
+  endpoint:         text('endpoint').notNull().default('chat'),
+  promptTokens:     integer('prompt_tokens').notNull().default(0),
+  completionTokens: integer('completion_tokens').notNull().default(0),
+  totalTokens:      integer('total_tokens').notNull().default(0),
+  createdAt:        timestamp('created_at').notNull().defaultNow(),
+}, (table) => [
+  index('idx_groq_usage_logs_user_id').on(table.userId),
+  index('idx_groq_usage_logs_model').on(table.model),
+  index('idx_groq_usage_logs_created_at').on(table.createdAt),
+]);
+
+export type GroqUsageLog = typeof groqUsageLogs.$inferSelect;
