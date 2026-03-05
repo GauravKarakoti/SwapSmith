@@ -1,6 +1,4 @@
 import { parseWithLLM, ParsedCommand } from './groq-client';
-import { detectLimitOrder } from './nl-limit-orders';
-import { detectDCA } from './nl-dca';
 import logger from './logger';
 
 export { ParsedCommand };
@@ -24,18 +22,7 @@ const REGEX_AMOUNT_TOKEN = /\b(\d+(?:\.\d+)?)\s+([A-Z]{2,10})\b/i;
 const REGEX_MULTI_SOURCE =
   /(?:^|\s)([A-Z]{2,10}|(?:\d+(?:\.\d+)?\s+[A-Z]{2,10}))\s+(?:and|&)\s+([A-Z]{2,10}|(?:\d+(?:\.\d+)?\s+[A-Z]{2,10}))\s+(?:to|into|for)/i;
 
-const REGEX_SWAP_STAKE =
-  /(?:swap\s+and\s+stake|\bzap\b|stake\s+(?:my|after|then)|and\s+stake|stake\s+in)/i;
-
-const REGEX_STAKE_PROTOCOL =
-  /(?:to|on|in|into|using)\s+(aave|compound|yearn|lido|morpho|euler|spark|uniswap|curve|convex)/i;
-
-const parseScaledNumber = (raw: string): number => {
-  const cleaned = raw.replace(/[$,\s]/g, '').toLowerCase();
-  const suffix = cleaned.slice(-1);
-  const base = parseFloat(cleaned);
-
-// New Regex for Swap and Stake / Zap intents
+// Use the updated Regex for Swap and Stake / Zap intents
 const REGEX_SWAP_STAKE = /(?:swap\s+and\s+stake|zap\s+(?:into|to)|stake\s+(?:my|after|then)|swap\s+(?:to|into)\s+(?:stake|yield))/i;
 const REGEX_STAKE_PROTOCOL = /(?:to\s+)?(aave|compound|yearn|lido|morpho|euler|spark)/i;
 
@@ -43,8 +30,16 @@ const REGEX_STAKE_PROTOCOL = /(?:to\s+)?(aave|compound|yearn|lido|morpho|euler|s
 const REGEX_STAKE_COMMAND = /\b(stake)\b/i;
 const REGEX_LIQUID_STAKING_PROVIDER = /\b(lido|rocket\s*pool|rocketpool|stakewise|stake\s*wise)\b/i;
 
-function normalizeNumber(val: string): number {
-  val = val.toLowerCase().replace(/[\$,]/g, '');
+const parseScaledNumber = (raw: string): number => {
+  const cleaned = raw.replace(/[$,\s]/g, '').toLowerCase();
+  const suffix = cleaned.slice(-1);
+  const base = parseFloat(cleaned);
+  
+  if (suffix === 'k') return base * 1000;
+  if (suffix === 'm') return base * 1000000;
+  if (suffix === 'b') return base * 1000000000;
+  return base;
+};
 
 const buildSwapResult = (
   userInput: string,

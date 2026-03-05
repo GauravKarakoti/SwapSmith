@@ -27,20 +27,20 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
       } else {
         setIsSupported(true);
         recognitionRef.current = new SpeechRecognition();
-        recognitionRef.current.continuous = false; // We want single command
-        recognitionRef.current.interimResults = true; // Show results as they come
-        recognitionRef.current.lang = 'en-US';
+        recognitionRef.current!.continuous = false; // We want single command
+        recognitionRef.current!.interimResults = true; // Show results as they come
+        recognitionRef.current!.lang = 'en-US';
 
-        recognitionRef.current.onstart = () => {
+        recognitionRef.current!.onstart = () => {
           setIsListening(true);
           setError(null);
         };
 
-        recognitionRef.current.onend = () => {
+        recognitionRef.current!.onend = () => {
           setIsListening(false);
         };
 
-        recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
+        recognitionRef.current!.onresult = (event: SpeechRecognitionEvent) => {
           let finalTranscript = '';
           for (let i = event.resultIndex; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
@@ -54,7 +54,7 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
           setTranscript(finalTranscript);
         };
 
-        recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
+        recognitionRef.current!.onerror = (event: SpeechRecognitionErrorEvent) => {
           console.error("Speech recognition error", event.error);
           if (event.error === 'no-speech') {
              setError("No speech was detected. Please try again.");

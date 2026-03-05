@@ -1,5 +1,6 @@
 import Groq from "groq-sdk";
 import { safeParseJSON } from "@/lib/safeParse";
+import { logGroqUsage } from "@/lib/stats-service";
 
 // Global singleton declaration to prevent multiple instances during hot reload
 declare global {
@@ -165,19 +166,35 @@ export async function transcribeAudio(file: File): Promise<string> {
   }
 }
 
-export async function parseUserCommand(userInput: string): Promise<ParsedCommand> {
+export async function parseUserCommand(
+  userInput: string,
+  userId?: string | null,
+): Promise<ParsedCommand> {
+  const MODEL = 'llama-3.3-70b-versatile';
   try {
     const groq = getGroqClient();
     const completion = await groq.chat.completions.create({
       messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userInput }
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userInput },
       ],
-      model: "llama-3.3-70b-versatile",
-      response_format: { type: "json_object" },
+      model: MODEL,
+      response_format: { type: 'json_object' },
       temperature: 0.1,
       max_tokens: 1024,
     });
+
+    // Log token usage asynchronously – never block the main flow
+    if (completion.usage) {
+      logGroqUsage({
+        userId: userId ?? null,
+        model: MODEL,
+        endpoint: 'chat',
+        promptTokens: completion.usage.prompt_tokens,
+        completionTokens: completion.usage.completion_tokens,
+        totalTokens: completion.usage.total_tokens,
+      }).catch(() => { /* swallow */ });
+    }
 
     const parsed = safeParseJSON(completion.choices[0].message.content) || {};
     return validateParsedCommand(parsed, userInput);

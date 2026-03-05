@@ -16,4 +16,4 @@ if (!admin.apps.length) {
   }
 }
 
-export const adminAuth = admin.auth();
+export const adminAuth = admin.apps.length ? admin.auth() : {} as any;

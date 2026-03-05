@@ -1,18 +1,22 @@
 import { eq, desc, and, gte, lte, sql, like, or } from 'drizzle-orm';
+import { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 import { 
   tradingStrategies, 
   strategySubscriptions, 
   strategyPerformance,
   strategyTrades,
-  type TradingStrategy,
-  type NewTradingStrategy,
-  type StrategySubscription,
-  type StrategyPerformance,
-  type NewStrategyPerformance,
-  type StrategyTrade,
-  type NewStrategyTrade
 } from '../schema';
 import { neon } from '@neondatabase/serverless';
+
+// Type definitions
+export type TradingStrategy = InferSelectModel<typeof tradingStrategies>;
+export type NewTradingStrategy = InferInsertModel<typeof tradingStrategies>;
+export type StrategySubscription = InferSelectModel<typeof strategySubscriptions>;
+export type NewStrategySubscription = InferInsertModel<typeof strategySubscriptions>;
+export type StrategyPerformance = InferSelectModel<typeof strategyPerformance>;
+export type NewStrategyPerformance = InferInsertModel<typeof strategyPerformance>;
+export type StrategyTrade = InferSelectModel<typeof strategyTrades>;
+export type NewStrategyTrade = InferInsertModel<typeof strategyTrades>;
 import { drizzle } from 'drizzle-orm/neon-http';
 
 const sqlConn = neon(process.env.DATABASE_URL!);
@@ -83,11 +87,11 @@ export async function getStrategies(options: StrategyFilterOptions = {}): Promis
   }
 
   if (minReturn !== undefined) {
-    conditions.push(gte(tradingStrategies.totalReturn, minReturn.toString()));
+    conditions.push(gte(tradingStrategies.totalReturn, minReturn));
   }
 
   if (maxDrawdown !== undefined) {
-    conditions.push(lte(tradingStrategies.maxDrawdown, maxDrawdown.toString()));
+    conditions.push(lte(tradingStrategies.maxDrawdown, maxDrawdown));
   }
 
   if (search) {
@@ -196,7 +200,7 @@ export async function subscribeToStrategy(
     subscriptionFee: strategy.subscriptionFee,
     allocationPercent: input.allocationPercent || 100,
     autoRebalance: input.autoRebalance ?? true,
-    stopLossPercent: input.stopLossPercent ? input.stopLossPercent.toString() : null,
+    stopLossPercent: input.stopLossPercent,
     status: 'active',
   }).onConflictDoUpdate({
     target: [strategySubscriptions.strategyId, strategySubscriptions.subscriberId],
@@ -204,8 +208,7 @@ export async function subscribeToStrategy(
       status: 'active',
       allocationPercent: input.allocationPercent || 100,
       autoRebalance: input.autoRebalance ?? true,
-      stopLossPercent: input.stopLossPercent ? input.stopLossPercent.toString() : null,
-      pausedAt: null,
+      stopLossPercent: input.stopLossPercent,
       cancelledAt: null,
     }
   }).returning();
@@ -397,8 +400,8 @@ export async function recordStrategyPerformance(
 
   await db.update(tradingStrategies)
     .set({ 
-      totalReturn: avgReturn.toString(),
-      monthlyReturn: (avgReturn / 12).toString(), // Simplified monthly calculation
+      totalReturn: avgReturn,
+      monthlyReturn: avgReturn / 12, // Simplified monthly calculation
       updatedAt: new Date(),
     })
     .where(eq(tradingStrategies.id, input.strategyId));
@@ -478,8 +481,8 @@ export async function updateStrategyMetrics(strategyId: number): Promise<void> {
   }
 
   // Calculate metrics
-  const totalPnL = performance.reduce((acc: number, p) => acc + Number(p.pnl), 0);
-  const pnlPercents = performance.map(p => Number(p.pnlPercent));
+  const totalPnL = performance.reduce((acc: number, p) => acc + Number(p.pnlPercent), 0);
+  const pnlPercents = performance.map(p => p.pnlPercent);
   
   const avgReturn = pnlPercents.reduce((acc: number, p: number) => acc + p, 0) / pnlPercents.length;
   
@@ -503,11 +506,9 @@ export async function updateStrategyMetrics(strategyId: number): Promise<void> {
 
   await db.update(tradingStrategies)
     .set({
-      totalReturn: totalPnL.toString(),
-      monthlyReturn: avgReturn.toString(),
-      sharpeRatio: sharpeRatio.toString(),
-      maxDrawdown: maxDrawdown.toString(),
-      volatility: volatility.toString(),
+      totalReturn: totalPnL,
+      monthlyReturn: avgReturn,
+      maxDrawdown,
       updatedAt: new Date(),
     })
     .where(eq(tradingStrategies.id, strategyId));

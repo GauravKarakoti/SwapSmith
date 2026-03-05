@@ -6,6 +6,7 @@ import { initializeRewards } from '@/lib/rewards-service'
 import { useAuth } from '@/hooks/useAuth'
 import GlobalPromoAdProvider from '@/components/GlobalPromoAdProvider'
 import dynamic from 'next/dynamic'
+import { usePageTracking } from '@/hooks/usePageTracking'
 
 // Dynamically import heavy Web3 libraries
 const Web3Provider = dynamic(
@@ -15,6 +16,14 @@ const Web3Provider = dynamic(
     loading: () => <div className="min-h-screen bg-gray-900" />
   }
 )
+
+/**
+ * Component to track page visits on every route change
+ */
+function PageTrackingInitializer() {
+  usePageTracking();
+  return null;
+}
 
 /**
  * Component to track daily login rewards
@@ -48,12 +57,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <ThemeProvider>
       {shouldLoadWeb3 ? (
         <Web3Provider>
+          <PageTrackingInitializer />
           <RewardsInitializer />
           <GlobalPromoAdProvider />
           {children}
         </Web3Provider>
       ) : (
         <>
+          <PageTrackingInitializer />
           <GlobalPromoAdProvider />
           {children}
         </>
