@@ -26,7 +26,7 @@ const PORT = Number(process.env.PORT || 3000);
 const bot = new Telegraf(BOT_TOKEN);
 
 const orderMonitor = new OrderMonitor({
-  getOrderStatus: getOrderStatus,
+  getOrderStatus: (orderId) => getOrderStatus(orderId, process.env.SIDESHIFT_CLIENT_IP || '127.0.0.1'),
   updateOrderStatus: db.updateOrderStatus,
   updateWatchedOrderStatus: db.updateWatchedOrderStatus,
   getPendingOrders: db.getPendingOrders,
@@ -279,6 +279,8 @@ async function start() {
 
     await orderMonitor.loadPendingOrders();
     orderMonitor.start();
+
+    await bot.telegram.deleteWebhook({ drop_pending_updates: true });
 
     await bot.launch();
     logger.info('🤖 Bot launched');
