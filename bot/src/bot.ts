@@ -11,6 +11,7 @@ import { getOrderStatus } from './services/sideshift-client';
 import { getTopStablecoinYields, formatYieldPools } from './services/yield-client';
 import * as db from './services/database';
 import { OrderMonitor } from './services/order-monitor';
+import { parseUserCommand } from './services/parseUserCommand';
 
 dotenv.config();
 
@@ -132,15 +133,112 @@ bot.command('clear', async (ctx: Context) => {
 /* MESSAGE HANDLERS */
 /* -------------------------------------------------------------------------- */
 
+const FREQUENCY_TO_HOURS: Record<string, number> = {
+  'daily': 24,
+  'weekly': 24 * 7,
+  'bi-weekly': 24 * 14,
+  'monthly': 24 * 30,
+  'quarterly': 24 * 90
+};
+
 bot.on(message('text'), async (ctx) => {
-  if (!ctx.message.text.startsWith('/')) {
-    await ctx.reply('Message processed.');
+  if (ctx.message.text.startsWith('/')) return;
+
+  const userId = ctx.from.id;
+  const userInput = ctx.message.text;
+
+  // Temporary: Retrieve conversation history implementation pending
+  const conversationHistory: any[] = [];
+
+  const parsed = await parseUserCommand(userInput, conversationHistory);
+
+  if (!parsed.success) {
+    if (parsed.validationErrors && parsed.validationErrors.length > 0) {
+      await ctx.reply(`❌ I couldn't understand that completely: ${parsed.validationErrors.join(', ')}`);
+    } else {
+      await ctx.reply("🤔 I'm not sure what you mean. Could you rephrase?");
+    }
+    return;
+  }
+
+  // Save state for confirmation
+  await db.updateConversationState(userId, {
+    parsedCommand: parsed as any, // Cast to any to avoid strict type checks on json field if needed
+    step: 'confirm'
+  });
+
+  if (parsed.intent === 'dca') {
+    const message = `📅 *Confirm DCA Plan*\n\n` +
+      `Amount: $${parsed.amount}\n` +
+      `From: ${parsed.fromAsset || 'USDC'}\n` + 
+      `To: ${parsed.toAsset}\n` +
+      `Frequency: ${parsed.frequency}\n` +
+      (parsed.dayOfWeek ? `Day: ${parsed.dayOfWeek}\n` : '') +
+      `\nReady to schedule?`;
+    
+    await ctx.replyWithMarkdown(message, Markup.inlineKeyboard([
+      Markup.button.callback('✅ Confirm DCA', 'confirm_dca'),
+      Markup.button.callback('❌ Cancel', 'cancel_action')
+    ]));
+  } else if (parsed.intent === 'limit_order') {
+    const message = `🛡️ *Confirm Limit Order*\n\n` +
+      `Action: ${parsed.condition === 'above' ? 'Sell' : 'Buy'} ${parsed.fromAsset}\n` + // Logic check?
+      `Condition: Price of ${parsed.conditionAsset || parsed.toAsset} ${parsed.condition} $${parsed.targetPrice}\n` +
+      `Amount: ${parsed.amount} ${parsed.fromAsset}\n` +
+      `\nSet this order?`;
+    
+    await ctx.replyWithMarkdown(message, Markup.inlineKeyboard([
+      Markup.button.callback('✅ Confirm Order', 'confirm_limit_order'),
+      Markup.button.callback('❌ Cancel', 'cancel_action')
+    ]));
+  } else if (parsed.intent === 'swap' || parsed.intent === 'swap_and_stake') {
+    // Existing swap handling or pass through
+    await ctx.reply(`Swaps unimplemented in this snippet. Intent: ${parsed.intent}`);
+  } else {
+    // Handle other intents or default
+    await ctx.reply(`Intent detected: ${parsed.intent}. (Implementation pending)`);
   }
 });
 
 /* -------------------------------------------------------------------------- */
 /* ACTIONS */
 /* -------------------------------------------------------------------------- */
+
+bot.action('confirm_dca', async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+
+  const state = await db.getConversationState(userId);
+  if (!state?.parsedCommand || state.parsedCommand.intent !== 'dca') {
+    return ctx.answerCbQuery('Session expired.');
+  }
+
+  try {
+    const parsed = state.parsedCommand;
+    const hours = FREQUENCY_TO_HOURS[parsed.frequency as string] || 24;
+
+    await db.db.insert(db.dcaSchedules).values({
+      telegramId: userId,
+      fromAsset: parsed.fromAsset || 'USDC',
+      fromNetwork: 'ethereum', // Default
+      toAsset: parsed.toAsset || 'BTC',
+      toNetwork: 'bitcoin', // Default
+      amountPerOrder: parsed.amount?.toString() || '0',
+      intervalHours: hours,
+      totalOrders: 100, // Default infinite-ish
+      isActive: 1,
+      nextExecutionAt: new Date(Date.now() + hours * 60 * 60 * 1000)
+    });
+
+    await ctx.answerCbQuery('DCA Scheduled!');
+    await ctx.editMessageText(`✅ DCA Scheduled: $${parsed.amount} ${parsed.toAsset} every ${parsed.frequency}.`);
+  } catch (error) {
+    logger.error('DCA Creation Error', error);
+    await ctx.editMessageText('❌ Failed to schedule DCA.');
+  } finally {
+    await db.clearConversationState(userId);
+  }
+});
 
 bot.action(/deposit_(.+)/, async (ctx) => {
   const poolId = ctx.match[1];
@@ -159,13 +257,36 @@ bot.action('confirm_limit_order', async (ctx) => {
   }
 
   try {
+    const parsed = state.parsedCommand;
+    await db.db.insert(db.limitOrders).values({
+      telegramId: userId,
+      fromAsset: parsed.fromAsset || 'ETH',
+      fromNetwork: 'ethereum',
+      toAsset: parsed.toAsset || 'USDC',
+      toNetwork: 'ethereum',
+      fromAmount: parsed.amount?.toString() || '0',
+      conditionOperator: parsed.conditionOperator || (parsed.condition === 'above' ? 'gt' : 'lt'),
+      conditionValue: parsed.targetPrice || 0,
+      conditionAsset: parsed.conditionAsset || parsed.toAsset || 'ETH',
+      isActive: 1,
+      status: 'pending'
+    });
+
     await ctx.answerCbQuery('Processing...');
-    await ctx.editMessageText('✅ Limit order created!');
-  } catch {
+    await ctx.editMessageText(`✅ Limit order created! Alert when ${parsed.conditionAsset} ${parsed.condition} $${parsed.targetPrice}`);
+  } catch (error) {
+    logger.error('Limit Order Creation Error', error);
     await ctx.editMessageText('❌ Failed to create limit order.');
   } finally {
     await db.clearConversationState(userId);
   }
+});
+
+bot.action('cancel_action', async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+  await db.clearConversationState(userId);
+  await ctx.editMessageText('❌ Action Cancelled.');
 });
 
 bot.action('confirm_swap_and_stake', async (ctx) => {

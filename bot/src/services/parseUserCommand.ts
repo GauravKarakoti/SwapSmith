@@ -1,5 +1,7 @@
 import { parseWithLLM, ParsedCommand } from './groq-client';
 import logger from './logger';
+import { parseDCA } from './nl-dca';
+import { detectLimitOrder } from './nl-limit-orders';
 
 export { ParsedCommand };
 
@@ -497,6 +499,94 @@ export async function parseUserCommand(
       conditionAsset,
       confidence: Math.min(100, confidence)
     });
+  }
+
+  /* ───────────── LIMIT ORDER & DCA ───────────── */
+  if (isLimitOrDca) {
+    const dcaConfig = parseDCA(input);
+    if (dcaConfig && dcaConfig.amount) {
+      return {
+        success: true,
+        intent: 'dca',
+        fromAsset: 'USDC', // Default source for DCA usually
+        fromChain: null,
+        toAsset: dcaConfig.targetAsset ?? 'BTC', // Default target fallback
+        toChain: null,
+        amount: dcaConfig.amount ?? null,
+        amountType: dcaConfig.amountType ?? 'exact',
+        frequency: dcaConfig.frequency || 'daily',
+        dayOfWeek: dcaConfig.dayOfWeek !== undefined ? ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dcaConfig.dayOfWeek] : null,
+        dayOfMonth: dcaConfig.dayOfMonth?.toString() || null,
+        excludeAmount: undefined,
+        excludeToken: undefined,
+        quoteAmount: undefined,
+        conditions: undefined,
+        portfolio: undefined,
+        settleAsset: null,
+        settleNetwork: null,
+        settleAmount: null,
+        settleAddress: null,
+        fromProject: null,
+        fromYield: null,
+        toProject: null,
+        toYield: null,
+        conditionOperator: undefined,
+        conditionValue: undefined,
+        conditionAsset: undefined,
+        targetPrice: undefined,
+        condition: undefined,
+        confidence: 90,
+        validationErrors: [],
+        parsedMessage: `Parsed: DCA $${dcaConfig.amount} into ${dcaConfig.targetAsset || 'BTC'} ${dcaConfig.frequency || 'daily'}`,
+        requiresConfirmation: true,
+        originalInput: userInput
+      };
+    }
+
+    const limitConfig = detectLimitOrder(input);
+    if (limitConfig && limitConfig.price) {
+      return {
+        success: true,
+        intent: 'limit_order',
+        fromAsset: limitConfig.asset === 'USDC' ? 'ETH' : (limitConfig.asset ?? 'ETH'), // Heuristic
+        fromChain: null,
+        toAsset: limitConfig.targetAsset ?? (limitConfig.asset === 'USDC' ? 'ETH' : 'USDC'), // Pair heuristic
+        toChain: null,
+        amount: limitConfig.amount ?? null,
+        amountType: limitConfig.amountType ?? null,
+        targetPrice: limitConfig.price,
+        condition: limitConfig.condition,
+        // Map to new condition format
+        conditions: {
+            type: limitConfig.condition === 'above' ? 'price_above' : 'price_below',
+            asset: limitConfig.asset ?? 'ETH',
+            value: limitConfig.price
+        },
+        excludeAmount: undefined,
+        excludeToken: undefined,
+        quoteAmount: undefined,
+        portfolio: undefined,
+        frequency: null,
+        dayOfWeek: null,
+        dayOfMonth: null,
+        settleAsset: null,
+        settleNetwork: null,
+        settleAmount: null,
+        settleAddress: null,
+        fromProject: null,
+        fromYield: null,
+        toProject: null,
+        toYield: null,
+        conditionOperator: limitConfig.condition === 'above' ? 'gt' : 'lt',
+        conditionValue: limitConfig.price,
+        conditionAsset: limitConfig.asset,
+        confidence: 90,
+        validationErrors: [],
+        parsedMessage: `Parsed: Limit Order - ${limitConfig.condition} $${limitConfig.price}`,
+        requiresConfirmation: true,
+        originalInput: userInput
+      };
+    }
   }
 
   logger.info('Fallback to LLM for:', userInput);
