@@ -1,4 +1,4 @@
-import { Shield, Lock, AlertTriangle, Github } from 'lucide-react'
+import { Shield, Lock, AlertTriangle, Github, FileCode, Zap, FileText } from 'lucide-react'
 import Link from 'next/link'
 
 export default function SecurityPage() {
@@ -31,10 +31,28 @@ export default function SecurityPage() {
                 'SwapSmith never holds your private keys or funds. All transactions are signed locally in your wallet (e.g. MetaMask) and you retain full custody at all times.',
             },
             {
+              icon: FileCode,
+              title: 'Smart Contract Safety',
+              description:
+                'We integrate with established, battle-tested protocols like SideShift and major DEXs. Smart contracts are verified on block explorers, and we prioritize using audited, open-source codebases to minimize risk.',
+            },
+            {
               icon: Shield,
               title: 'Explicit Confirmation Required',
               description:
                 'No swap or transaction is ever executed without your explicit on-screen confirmation. The AI agent only suggests — you decide.',
+            },
+            {
+              icon: Zap,
+              title: 'Slippage & Market Risks',
+              description:
+                'Crypto markets are volatile. "Slippage" occurs when the price changes between confirmation and execution. We use default slippage protection, but high volatility can still impact final received amounts.',
+            },
+            {
+              icon: FileText,
+              title: 'Audit & Transparency',
+              description:
+                'Our core codebase is open-source for community verification. While we undergo rigorous internal testing, we also plan to publish external audit reports here as they become available.',
             },
             {
               icon: AlertTriangle,
