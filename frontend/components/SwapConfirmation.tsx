@@ -135,7 +135,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
           }) as Promise<number>,
         ])
         balanceRaw = bal
-        decimals = dec
+        decimals = Number(dec)
       }
 
       const formatted = formatUnits(balanceRaw, decimals)
