@@ -8,6 +8,7 @@ import Footer from '@/components/Footer'
 import Navbar from '@/components/Navbar'
 import { RandomizedTextEffect } from '@/components/RandomizedTextEffect'
 import FAQSection from '@/components/FAQSection'
+import { motion } from 'framer-motion'
 import dynamic from 'next/dynamic'
 
 // Dynamically import heavy animation libraries

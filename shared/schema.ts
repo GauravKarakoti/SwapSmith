@@ -89,6 +89,7 @@ export const checkouts = pgTable('checkouts', {
   createdAt: timestamp('created_at').defaultNow(),
 }, (table) => [
   index("idx_checkouts_telegram_id").on(table.telegramId),
+  index("idx_checkouts_status").on(table.status),
 ]);
 
 export const addressBook = pgTable('address_book', {
@@ -228,6 +229,7 @@ export const portfolioTargets = pgTable('portfolio_targets', {
   updatedAt: timestamp('updated_at').defaultNow(), // Added updatedAt column
 }, (table) => [
   index("idx_portfolio_targets_user_id").on(table.userId),
+  index("idx_portfolio_targets_is_active").on(table.isActive),
 ]);
 
 export const rebalanceHistory = pgTable('rebalance_history', {
@@ -282,6 +284,7 @@ export const priceAlerts = pgTable('price_alerts', {
   index("idx_price_alerts_telegram_id").on(table.telegramId),
   index("idx_price_alerts_is_active").on(table.isActive),
   index("idx_price_alerts_coin_network").on(table.coin, table.network),
+  index("idx_price_alerts_triggered_at").on(table.triggeredAt),
 ]);
 
 // --- FRONTEND SCHEMAS ---
@@ -414,6 +417,7 @@ export const gasTokens = pgTable('gas_tokens', {
 }, (table) => [
   index("idx_gas_tokens_symbol").on(table.symbol),
   index("idx_gas_tokens_chain_network").on(table.chain, table.network),
+  index("idx_gas_tokens_is_active").on(table.isActive),
 ]);
 
 export const userGasPreferences = pgTable('user_gas_preferences', {
@@ -469,11 +473,13 @@ export const gasOptimizationHistory = pgTable('gas_optimization_history', {
   index("idx_gas_optimization_history_swap_id").on(table.swapId),
 ]);
 
-// --- AGENT REPUTATION / STRATEGY MARKETPLACE SCHEMAS ---
+// --- TRADING STRATEGY MARKETPLACE SCHEMAS ---
 
-export const strategyStatusType = pgEnum('strategy_status_type', ['active', 'paused', 'archived']);
-export const riskLevelType = pgEnum('risk_level_type', ['low', 'medium', 'high', 'aggressive']);
-export const subscriptionStatusType = pgEnum('subscription_status_type', ['active', 'paused', 'cancelled']);
+export const strategyRiskLevelType = pgEnum('strategy_risk_level', ['low', 'medium', 'high', 'aggressive']);
+export const strategyStatusType = pgEnum('strategy_status', ['active', 'paused', 'archived']);
+export const subscriptionStatusType = pgEnum('subscription_status', ['active', 'paused', 'cancelled']);
+export const tradeStatusType = pgEnum('trade_status', ['pending', 'completed', 'failed']);
+export const performanceStatusType = pgEnum('performance_status', ['pending', 'completed', 'failed']);
 
 export const tradingStrategies = pgTable('trading_strategies', {
   id: serial('id').primaryKey(),
@@ -482,7 +488,7 @@ export const tradingStrategies = pgTable('trading_strategies', {
   name: text('name').notNull(),
   description: text('description').notNull(),
   parameters: jsonb('parameters').notNull(),
-  riskLevel: riskLevelType('risk_level').notNull().default('medium'),
+  riskLevel: strategyRiskLevelType('risk_level').notNull().default('medium'),
   subscriptionFee: text('subscription_fee').notNull().default('0'),
   performanceFee: real('performance_fee').notNull().default(0),
   minInvestment: text('min_investment').notNull().default('0'),
@@ -566,6 +572,17 @@ export type NewStrategyPerformance = typeof strategyPerformance.$inferInsert;
 export type StrategyTrade = typeof strategyTrades.$inferSelect;
 export type NewStrategyTrade = typeof strategyTrades.$inferInsert;
 
+// --- TYPES ---
+
+// Strategy types commented out until tables are implemented
+// export type TradingStrategy = typeof tradingStrategies.$inferSelect;
+// export type NewTradingStrategy = typeof tradingStrategies.$inferInsert;
+// export type StrategySubscription = typeof strategySubscriptions.$inferSelect;
+// export type NewStrategySubscription = typeof strategySubscriptions.$inferInsert;
+// export type StrategyTrade = typeof strategyTrades.$inferSelect;
+// export type NewStrategyTrade = typeof strategyTrades.$inferInsert;
+// export type StrategyPerformance = typeof strategyPerformance.$inferSelect;
+// export type NewStrategyPerformance = typeof strategyPerformance.$inferInsert;
 
 // --- RELATIONS ---
 
@@ -580,8 +597,9 @@ export const courseProgressRelations = relations(courseProgress, ({ one }) => ({
 export const usersRelations = relations(users, ({many}) => ({
 	courseProgresses: many(courseProgress),
 	rewardsLogs: many(rewardsLog),
-	createdStrategies: many(tradingStrategies),
-	subscriptions: many(strategySubscriptions),
+	// Strategy relations commented out until tables are implemented
+	// createdStrategies: many(tradingStrategies),
+	// subscriptions: many(strategySubscriptions),
 }));
 
 export const rewardsLogRelations = relations(rewardsLog, ({ one }) => ({
@@ -590,6 +608,46 @@ export const rewardsLogRelations = relations(rewardsLog, ({ one }) => ({
     references: [users.id]
   }),
 }));
+
+// --- TRADING STRATEGY RELATIONS ---
+// All strategy relations commented out until tables are implemented
+
+/*
+export const tradingStrategiesRelations = relations(tradingStrategies, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [tradingStrategies.creatorId],
+    references: [users.id],
+  }),
+  subscriptions: many(strategySubscriptions),
+  trades: many(strategyTrades),
+  performance: many(strategyPerformance),
+}));
+
+export const strategySubscriptionsRelations = relations(strategySubscriptions, ({ one }) => ({
+  strategy: one(tradingStrategies, {
+    fields: [strategySubscriptions.strategyId],
+    references: [tradingStrategies.id],
+  }),
+  subscriber: one(users, {
+    fields: [strategySubscriptions.subscriberId],
+    references: [users.id],
+  }),
+}));
+
+export const strategyTradesRelations = relations(strategyTrades, ({ one }) => ({
+  strategy: one(tradingStrategies, {
+    fields: [strategyTrades.strategyId],
+    references: [tradingStrategies.id],
+  }),
+}));
+
+export const strategyPerformanceRelations = relations(strategyPerformance, ({ one }) => ({
+  strategy: one(tradingStrategies, {
+    fields: [strategyPerformance.strategyId],
+    references: [tradingStrategies.id],
+  }),
+}));
+*/
 
 // --- PLAN PURCHASES TABLE ---
 
@@ -651,6 +709,7 @@ export const adminRequests = pgTable('admin_requests', {
   index('idx_admin_requests_email').on(table.email),
   index('idx_admin_requests_status').on(table.status),
   index('idx_admin_requests_token').on(table.approvalToken),
+  index('idx_admin_requests_created_at').on(table.createdAt),
 ]);
 
 export type AdminUser = typeof adminUsers.$inferSelect;
