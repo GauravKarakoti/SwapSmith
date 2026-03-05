@@ -143,8 +143,8 @@ export function initializeSecrets(): {
   console.log('🔐 Initializing application secrets...');
   
   const secrets = {
-    groqApiKey: AppSecrets.GROQ_API_KEY(),
-    sideshiftApiKey: AppSecrets.SIDESHIFT_API_KEY(),
+    groqApiKey: AppSecrets.GROQ_API_KEY()!,
+    sideshiftApiKey: AppSecrets.SIDESHIFT_API_KEY()!,
     brevoApiKey: AppSecrets.BREVO_API_KEY(),
     botToken: AppSecrets.BOT_TOKEN(),
     walletConnectProjectId: AppSecrets.WALLETCONNECT_PROJECT_ID(),
