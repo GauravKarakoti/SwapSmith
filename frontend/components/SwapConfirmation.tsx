@@ -14,9 +14,10 @@ import {
   Wallet,
 } from 'lucide-react'
 import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi'
-import { parseEther, formatEther, type Chain } from 'viem'
+import { parseEther, formatEther, type Chain, erc20Abi, formatUnits } from 'viem'
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
 import { validateDepositAddressForNetwork } from '@/utils/addressValidation'
+import { getCoins, type Coin, type CoinNetwork } from '@/utils/sideshift-client'
 
 export interface QuoteData {
   depositAmount: string
@@ -96,14 +97,58 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
 
     setIsLoadingBalance(true)
     try {
-      const balance = await publicClient.getBalance({ address })
-      const formatted = formatEther(balance)
+      let isNativeValue = true
+      let tokenAddress: string | undefined
+      let decimals = 18
+
+      try {
+        const coins = await getCoins()
+        const coinInfo = coins.find((c: Coin) => c.coin.toLowerCase() === quote.depositCoin.toLowerCase())
+        const networkInfo = coinInfo?.networks.find((n: CoinNetwork) => n.network.toLowerCase() === quote.depositNetwork.toLowerCase())
+
+        if (networkInfo?.tokenContract) {
+          isNativeValue = false
+          tokenAddress = networkInfo.tokenContract
+        }
+      } catch (err) {
+        console.warn('Failed to fetch coin info from SideShift, defaulting to native balance check', err)
+      }
+
+      let balanceRaw: bigint = 0n
+
+      if (isNativeValue) {
+        balanceRaw = await publicClient.getBalance({ address })
+        decimals = 18
+      } else if (tokenAddress) {
+        const [bal, dec] = await Promise.all([
+          publicClient.readContract({
+            address: tokenAddress as `0x${string}`,
+            abi: erc20Abi,
+            functionName: 'balanceOf',
+            args: [address],
+          }) as Promise<bigint>,
+          publicClient.readContract({
+            address: tokenAddress as `0x${string}`,
+            abi: erc20Abi,
+            functionName: 'decimals',
+          }) as Promise<number>,
+        ])
+        balanceRaw = bal
+        decimals = dec
+      } else {
+        balanceRaw = await publicClient.getBalance({ address })
+      }
+
+      const formatted = formatUnits(balanceRaw, decimals)
       setWalletBalance(formatted)
 
-      // Calculate final amount with gas buffer for native tokens
       const balanceNum = parseFloat(formatted)
-      const gasBuffer = 0.001 // 0.001 in native currency
-      const finalAmount = Math.max(0, balanceNum - gasBuffer)
+      let finalAmount = balanceNum
+
+      if (isNativeValue) {
+        const gasBuffer = 0.005 // 0.005 buffer for gas
+        finalAmount = Math.max(0, balanceNum - gasBuffer)
+      }
 
       if (onAmountChange) {
         onAmountChange(finalAmount.toString())
