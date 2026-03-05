@@ -71,8 +71,17 @@ export async function csrfFetch(
  * Usage: import axios from 'axios';
  *        setupCsrfInterceptor(axios);
  */
-export function setupCsrfInterceptor(axiosInstance: any) {
-  axiosInstance.interceptors.request.use((config: any) => {
+interface AxiosLikeConfig {
+  headers: Record<string, string>;
+  [key: string]: unknown;
+}
+
+interface AxiosLikeInstance {
+  interceptors: { request: { use: (fn: (config: AxiosLikeConfig) => AxiosLikeConfig) => void } };
+}
+
+export function setupCsrfInterceptor(axiosInstance: AxiosLikeInstance) {
+  axiosInstance.interceptors.request.use((config: AxiosLikeConfig) => {
     // Read CSRF token from cookie
     const cookies = document.cookie.split(';');
     const csrfCookie = cookies.find(c => c.trim().startsWith('csrf-token='));

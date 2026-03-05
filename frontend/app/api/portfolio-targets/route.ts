@@ -9,7 +9,9 @@ import {
   getRebalanceHistory 
 } from '@/lib/database';
 
-function validateAssets(assets: any[]): { valid: boolean; error?: string } {
+type AssetInput = { symbol?: unknown; allocation?: unknown; [key: string]: unknown };
+
+function validateAssets(assets: AssetInput[]): { valid: boolean; error?: string } {
   if (!Array.isArray(assets) || assets.length === 0) {
     return { valid: false, error: 'Assets must be a non-empty array' };
   }
@@ -171,7 +173,7 @@ export async function PUT(request: NextRequest) {
     }
 
     if (updates.assets) {
-      const v = validateAssets(updates.assets as any[]);
+      const v = validateAssets(updates.assets as AssetInput[]);
       if (!v.valid) {
         return NextResponse.json(
           { error: v.error },
