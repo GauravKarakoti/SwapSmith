@@ -240,6 +240,10 @@ export const rateLimiters = {
   admin: (req: NextApiRequest, res: NextApiResponse) => 
     rateLimit(req, res, { ...RATE_LIMITS.admin, message: 'Too many admin requests' }),
   
+  // Strict rate limiting
+  strict: (req: NextApiRequest, res: NextApiResponse) => 
+    rateLimit(req, res, { ...RATE_LIMITS.strict, message: 'Too many requests' }),
+  
   // Default
   default: (req: NextApiRequest, res: NextApiResponse) => 
     rateLimit(req, res, RATE_LIMITS.default),

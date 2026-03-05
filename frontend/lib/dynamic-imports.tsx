@@ -1,5 +1,6 @@
 import dynamic from 'next/dynamic'
 import { useState, useEffect } from 'react'
+import React from 'react'
 
 // Framer Motion dynamic imports
 export const MotionDiv = dynamic(

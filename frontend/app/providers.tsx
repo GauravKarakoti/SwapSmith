@@ -21,31 +21,29 @@ const Web3Provider = dynamic(
  * Component to track page visits on every route change
  */
 function PageTrackingInitializer() {
-  usePageTracking();
-  return null;
+  usePageTracking()
+  return null
 }
 
 /**
  * Component to track daily login rewards
  */
 function RewardsInitializer() {
-  const { user } = useAuth();
+  const { user } = useAuth()
 
   useEffect(() => {
     if (user) {
-      // Initialize daily login tracking when user is authenticated
-      initializeRewards();
+      initializeRewards()
     }
-  }, [user]);
+  }, [user])
 
-  return null;
+  return null
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [shouldLoadWeb3, setShouldLoadWeb3] = useState(false)
 
   useEffect(() => {
-    // Load Web3 providers after initial render
     const timer = setTimeout(() => {
       setShouldLoadWeb3(true)
     }, 100)

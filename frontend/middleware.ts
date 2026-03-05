@@ -18,8 +18,14 @@ export function middleware(request: NextRequest) {
 
   // 🔐 CSRF Protection: Validate and set CSRF tokens for API routes.
   // Skip for /api/admin/* — those use Firebase ID token auth (inherently CSRF-safe).
+  // Also validates Origin/Referer via enhanced csrfProtectionMiddleware.
   if (pathname.startsWith('/api/') && !pathname.startsWith('/api/admin/')) {
     const csrfResponse = csrfProtectionMiddleware(request);
+    // If validation failed (403), return error response immediately.
+    // If validation succeeded (200 with cookie), we return it here because for API routes
+    // there are no further checks (Admin Dashboard is disjoint).
+    // Note: If we had further logic for /api/ we would need to merge headers/cookies.
+    // Currently we assume csrfProtectionMiddleware is the primary guard for /api/.
     if (csrfResponse) {
       return csrfResponse;
     }
