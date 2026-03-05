@@ -86,6 +86,10 @@ class InMemoryStore {
     return undefined;
   }
   
+  clear(key: string): void {
+    this.store.delete(key);
+  }
+  
   cleanup() {
     clearInterval(this.cleanupInterval);
     this.store.clear();
@@ -102,16 +106,15 @@ function generateKey(request: NextRequest | NextApiRequest, prefix: string = 'rl
   // Get IP address
   let ip: string;
   
-  if ('ip' in request) {
+  if ('socket' in request) {
     // NextApiRequest
-    ip = request.ip || 
-        request.headers['x-forwarded-for'] as string ||
-        request.headers['x-real-ip'] as string ||
+    ip = (request.headers['x-forwarded-for'] as string) || 
+        (request.headers['x-real-ip'] as string) ||
+        request.socket?.remoteAddress ||
         'unknown';
   } else {
     // NextRequest
-    ip = request.ip || 
-        request.headers.get('x-forwarded-for') ||
+    ip = request.headers.get('x-forwarded-for') ||
         request.headers.get('x-real-ip') ||
         'unknown';
   }
@@ -135,7 +138,7 @@ export function rateLimitMiddleware(
   if (count > config.maxRequests) {
     const retryAfter = Math.ceil((resetTime - Date.now()) / 1000);
     
-    console.warn(`[Rate Limit] Blocked request from ${request.ip}: ${count}/${config.maxRequests}`);
+    console.warn(`[Rate Limit] Blocked request: ${count}/${config.maxRequests}`);
     
     return NextResponse.json(
       { 
@@ -185,7 +188,7 @@ export function rateLimit(
   if (count > config.maxRequests) {
     res.setHeader('Retry-After', retryAfter);
     
-    console.warn(`[Rate Limit] Blocked request from ${req.ip}: ${count}/${config.maxRequests}`);
+    console.warn(`[Rate Limit] Blocked request: ${count}/${config.maxRequests}`);
     
     res.status(429).json({
       error: config.message || 'Too many requests',
@@ -237,6 +240,10 @@ export const rateLimiters = {
   admin: (req: NextApiRequest, res: NextApiResponse) => 
     rateLimit(req, res, { ...RATE_LIMITS.admin, message: 'Too many admin requests' }),
   
+  // Strict rate limiting
+  strict: (req: NextApiRequest, res: NextApiResponse) => 
+    rateLimit(req, res, { ...RATE_LIMITS.strict, message: 'Too many requests' }),
+  
   // Default
   default: (req: NextApiRequest, res: NextApiResponse) => 
     rateLimit(req, res, RATE_LIMITS.default),
@@ -279,7 +286,7 @@ export function getRateLimitStatus(
  */
 export function clearRateLimit(request: NextRequest | NextApiRequest, prefix: string = 'api'): void {
   const key = generateKey(request, prefix);
-  store.store.delete(key);
+  store.clear(key);
 }
 
 /**
