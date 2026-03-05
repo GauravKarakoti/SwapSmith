@@ -1,14 +1,22 @@
 import { NextApiRequest, NextApiResponse } from 'next';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * CSRF Protection Utility
- * 
- * Validates requests by checking Origin/Referer headers to ensure
- * requests originate from trusted sources.
+ *
+ * Implements multiple layers of CSRF protection:
+ * 1. Token-based protection using double-submit cookie pattern
+ * 2. Origin/Referer header validation for trusted origins
+ *
+ * Uses the Web Crypto API (globalThis.crypto) for Edge Runtime compatibility.
  */
 
+// CSRF Token configuration
+export const CSRF_TOKEN_COOKIE = 'csrf-token';
+export const CSRF_TOKEN_HEADER = 'x-csrf-token';
+
 // List of allowed origins - configure based on your deployment
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS 
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
   : [
       'http://localhost:3000',
@@ -17,7 +25,114 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
       'https://www.swapsmith.ai',
     ];
 
-// Custom error class for CSRF validation failures
+/**
+ * Constant-time string comparison to prevent timing attacks.
+ * Uses XOR over every byte so no early-exit is possible.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  const encoder = new TextEncoder();
+  const aBytes = encoder.encode(a);
+  const bBytes = encoder.encode(b);
+
+  if (aBytes.length !== bBytes.length) return false;
+
+  let diff = 0;
+  for (let i = 0; i < aBytes.length; i++) {
+    diff |= aBytes[i] ^ bBytes[i];
+  }
+
+  return diff === 0;
+}
+
+/**
+ * Generate a CSRF token using the Web Crypto API (Edge-compatible).
+ */
+export function generateCsrfToken(): string {
+  const bytes = new Uint8Array(32);
+  globalThis.crypto.getRandomValues(bytes);
+
+  return Array.from(bytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/**
+ * Validate CSRF token from NextRequest.
+ * Extracts token from header and compares with cookie.
+ */
+export function validateCsrfToken(request: NextRequest): boolean {
+  const method = request.method;
+
+  // Skip validation for safe methods
+  if (['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    return true;
+  }
+
+  // Get token from header
+  const headerToken = request.headers.get(CSRF_TOKEN_HEADER);
+  if (!headerToken) {
+    console.warn('[CSRF Token] Validation failed: No token in header');
+    return false;
+  }
+
+  // Get token from cookie
+  const cookieToken = request.cookies.get(CSRF_TOKEN_COOKIE)?.value;
+  if (!cookieToken) {
+    console.warn('[CSRF Token] Validation failed: No token in cookie');
+    return false;
+  }
+
+  const match = timingSafeEqual(headerToken, cookieToken);
+
+  if (!match) {
+    console.warn('[CSRF Token] Validation failed: Token mismatch');
+  }
+
+  return match;
+}
+
+/**
+ * Create response with CSRF token cookie
+ */
+export function setCSRFTokenCookie(response: NextResponse, token?: string): NextResponse {
+  const tokenValue = token || generateCsrfToken();
+  
+  response.cookies.set(CSRF_TOKEN_COOKIE, tokenValue, {
+    httpOnly: false, // Must be accessible by JS to send in header
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 60 * 60 * 24, // 24 hours
+    path: '/',
+  });
+
+  return response;
+}
+
+/**
+ * Middleware for App Router to validate CSRF tokens
+ */
+export function csrfProtectionMiddleware(request: NextRequest): NextResponse | null {
+  const pathname = request.nextUrl.pathname;
+  const isApiRoute = pathname.startsWith('/api/');
+  const isStateChangingMethod = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method);
+
+  if (isApiRoute && isStateChangingMethod) {
+    // Validate CSRF token for state-changing requests
+    if (!validateCsrfToken(request)) {
+      return NextResponse.json(
+        { error: 'CSRF token validation failed' },
+        { status: 403 }
+      );
+    }
+  }
+
+  // Add CSRF token to response cookies for all requests
+  const response = NextResponse.next();
+  return setCSRFTokenCookie(response);
+}
+
+// ============ ORIGIN/REFERER-BASED CSRF PROTECTION (Pages Router) ============
+
 export class CSRFError extends Error {
   constructor(message: string) {
     super(message);
