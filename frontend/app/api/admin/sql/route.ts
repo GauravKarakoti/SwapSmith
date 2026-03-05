@@ -3,6 +3,8 @@ import { adminAuth } from '@/lib/firebase-admin';
 import { getAdminByFirebaseUid } from '@/lib/admin-service';
 import { Pool } from '@neondatabase/serverless';
 
+const MASTER_ADMIN_EMAIL = process.env.ADMIN_MASTER_EMAIL || '';
+
 // ── Ensure audit table exists ───────────────────────────────────────────────
 async function ensureTable(pool: Pool) {
   await pool.query(`
@@ -29,11 +31,11 @@ async function ensureTable(pool: Pool) {
 }
 
 // ── SQL safety validation ───────────────────────────────────────────────────
+// Patterns that are ALWAYS blocked (destructive schema operations)
 const BLOCKED_PATTERNS = [
   /\bDROP\b/i,
   /\bTRUNCATE\b/i,
   /\bALTER\b/i,
-  /\bCREATE\b/i,
   /\bGRANT\b/i,
   /\bREVOKE\b/i,
   /\bEXECUTE\b/i,
@@ -103,7 +105,7 @@ export async function GET(req: NextRequest) {
   try {
     await ensureTable(pool);
 
-    const isSuperAdmin = admin.role === 'super_admin';
+    const isMasterAdmin = MASTER_ADMIN_EMAIL !== '' && admin.email === MASTER_ADMIN_EMAIL;
 
     // Build query depending on role and filter
     let query: string;
@@ -111,7 +113,7 @@ export async function GET(req: NextRequest) {
     let countQuery: string;
     let countParams: unknown[];
 
-    if (isSuperAdmin) {
+    if (isMasterAdmin) {
       if (statusFilter) {
         query       = `SELECT * FROM sql_command_requests WHERE status = $1 ORDER BY submitted_at DESC LIMIT $2 OFFSET $3`;
         params      = [statusFilter, limit, offset];
@@ -148,6 +150,7 @@ export async function GET(req: NextRequest) {
       page,
       limit,
       role: admin.role,
+      isMasterAdmin,
     });
   } finally {
     await pool.end();

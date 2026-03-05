@@ -4,6 +4,8 @@ import { getAdminByFirebaseUid } from '@/lib/admin-service';
 import { Pool } from '@neondatabase/serverless';
 import { validateSQL } from '../route';
 
+const MASTER_ADMIN_EMAIL = process.env.ADMIN_MASTER_EMAIL || '';
+
 // ── Auth helper (same pattern as other admin routes) ────────────────────────
 async function requireAdmin(req: NextRequest) {
   const auth = req.headers.get('authorization') ?? '';
@@ -48,8 +50,9 @@ export async function GET(
     if (!rows.length) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const request = rows[0];
-    // Admins can only view their own requests
-    if (admin.role !== 'super_admin' && request.submitted_by_uid !== admin.firebaseUid) {
+    // Master admin can view all; others can only view their own
+    const isMasterAdmin = MASTER_ADMIN_EMAIL !== '' && admin.email === MASTER_ADMIN_EMAIL;
+    if (!isMasterAdmin && request.submitted_by_uid !== admin.firebaseUid) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     return NextResponse.json({ request });
@@ -67,9 +70,9 @@ export async function PATCH(
   try { admin = await requireAdmin(req); }
   catch { return NextResponse.json({ error: 'Unauthorized' }, { status: 401 }); }
 
-  if (admin.role !== 'super_admin') {
+  if (admin.email !== MASTER_ADMIN_EMAIL) {
     return NextResponse.json(
-      { error: 'Only super-admins can approve or reject SQL requests' },
+      { error: 'Only the master admin can approve or reject SQL requests' },
       { status: 403 },
     );
   }
@@ -214,7 +217,8 @@ export async function DELETE(
     if (!rows.length) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const sqlRequest = rows[0];
-    if (admin.role !== 'super_admin' && sqlRequest.submitted_by_uid !== admin.firebaseUid) {
+    const isMasterAdmin = MASTER_ADMIN_EMAIL !== '' && admin.email === MASTER_ADMIN_EMAIL;
+    if (!isMasterAdmin && sqlRequest.submitted_by_uid !== admin.firebaseUid) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     if (sqlRequest.status !== 'pending') {
