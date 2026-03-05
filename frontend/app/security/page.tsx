@@ -34,7 +34,7 @@ export default function SecurityPage() {
               icon: FileCode,
               title: 'Smart Contract Safety',
               description:
-                'We integrate with established, battle-tested protocols like SideShift and major DEXs. Smart contracts are verified on block explorers, and we prioritize using audited, open-source codebases to minimize risk.',
+                'We integrate with established, battle-tested protocols like SideShift, and plan to add major DEX integrations. Smart contracts are verified on block explorers, and we prioritize using audited, open-source codebases to minimize risk.',
             },
             {
               icon: Shield,
