@@ -182,9 +182,9 @@ bot.on(message('text'), async (ctx) => {
     ]));
   } else if (parsed.intent === 'limit_order') {
     const message = `🛡️ *Confirm Limit Order*\n\n` +
-      `Action: ${parsed.condition === 'above' ? 'Sell' : 'Buy'} ${parsed.fromAsset}\n` + // Logic check?
+      `Action: ${parsed.condition === 'above' ? `Sell ${parsed.fromAsset}` : `Buy ${parsed.toAsset}`}\n` +
       `Condition: Price of ${parsed.conditionAsset || parsed.toAsset} ${parsed.condition} $${parsed.targetPrice}\n` +
-      `Amount: ${parsed.amount} ${parsed.fromAsset}\n` +
+      `Amount: ${parsed.amount} ${parsed.condition === 'above' ? parsed.fromAsset : parsed.toAsset}\n` +
       `\nSet this order?`;
     
     await ctx.replyWithMarkdown(message, Markup.inlineKeyboard([
