@@ -86,7 +86,7 @@ echo
 echo "📋 Next steps:"
 echo "1. Review the created secret files in $SECRETS_DIR"
 echo "2. Ensure the secrets directory is added to .gitignore"
-echo "3. Use docker-compose.secure.yaml for production deployments"
+echo "3. Use docker-compose.yaml for production deployments"
 echo "4. Consider using external secret management for production"
 echo
 echo "⚠️  Security reminders:"
