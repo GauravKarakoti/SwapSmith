@@ -1,3 +1,5 @@
+'use client'
+
 import Image from 'next/image'
 import Link from 'next/link'
 import { Shield, Database, BarChart2, Users, ArrowLeftRight, Coins, LineChart } from 'lucide-react'
