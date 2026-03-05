@@ -483,14 +483,15 @@ export const performanceStatusType = pgEnum('performance_status', ['pending', 'c
 
 // --- TYPES ---
 
-export type TradingStrategy = typeof tradingStrategies.$inferSelect;
-export type NewTradingStrategy = typeof tradingStrategies.$inferInsert;
-export type StrategySubscription = typeof strategySubscriptions.$inferSelect;
-export type NewStrategySubscription = typeof strategySubscriptions.$inferInsert;
-export type StrategyTrade = typeof strategyTrades.$inferSelect;
-export type NewStrategyTrade = typeof strategyTrades.$inferInsert;
-export type StrategyPerformance = typeof strategyPerformance.$inferSelect;
-export type NewStrategyPerformance = typeof strategyPerformance.$inferInsert;
+// Strategy types commented out until tables are implemented
+// export type TradingStrategy = typeof tradingStrategies.$inferSelect;
+// export type NewTradingStrategy = typeof tradingStrategies.$inferInsert;
+// export type StrategySubscription = typeof strategySubscriptions.$inferSelect;
+// export type NewStrategySubscription = typeof strategySubscriptions.$inferInsert;
+// export type StrategyTrade = typeof strategyTrades.$inferSelect;
+// export type NewStrategyTrade = typeof strategyTrades.$inferInsert;
+// export type StrategyPerformance = typeof strategyPerformance.$inferSelect;
+// export type NewStrategyPerformance = typeof strategyPerformance.$inferInsert;
 
 // --- RELATIONS ---
 
@@ -505,8 +506,9 @@ export const courseProgressRelations = relations(courseProgress, ({ one }) => ({
 export const usersRelations = relations(users, ({many}) => ({
 	courseProgresses: many(courseProgress),
 	rewardsLogs: many(rewardsLog),
-	createdStrategies: many(tradingStrategies),
-	subscriptions: many(strategySubscriptions),
+	// Strategy relations commented out until tables are implemented
+	// createdStrategies: many(tradingStrategies),
+	// subscriptions: many(strategySubscriptions),
 }));
 
 export const rewardsLogRelations = relations(rewardsLog, ({ one }) => ({
@@ -517,7 +519,9 @@ export const rewardsLogRelations = relations(rewardsLog, ({ one }) => ({
 }));
 
 // --- TRADING STRATEGY RELATIONS ---
+// All strategy relations commented out until tables are implemented
 
+/*
 export const tradingStrategiesRelations = relations(tradingStrategies, ({ one, many }) => ({
   creator: one(users, {
     fields: [tradingStrategies.creatorId],
@@ -552,6 +556,7 @@ export const strategyPerformanceRelations = relations(strategyPerformance, ({ on
     references: [tradingStrategies.id],
   }),
 }));
+*/
 
 // --- PLAN PURCHASES TABLE ---
 
