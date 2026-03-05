@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
 import { useAccount } from "wagmi";
 import {
   MessageCircle,
@@ -14,6 +13,7 @@ import {
   Activity,
   Trash2,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 
 import Navbar from "@/components/Navbar";
 import ClaudeChatInput from "@/components/ClaudeChatInput";
@@ -27,6 +27,17 @@ import { useChatHistory, useChatSessions } from "@/hooks/useCachedData";
 import { useErrorHandler, ErrorType } from "@/hooks/useErrorHandler";
 import { useAudioRecorder } from "@/hooks/useAudioRecorder";
 import { usePlan } from "@/hooks/usePlan";
+
+// Dynamically import Framer Motion components
+const MotionDiv = dynamic(
+  () => import('framer-motion').then(mod => ({ default: mod.motion.div })),
+  { ssr: false }
+)
+
+const AnimatePresence = dynamic(
+  () => import('framer-motion').then(mod => ({ default: mod.AnimatePresence })),
+  { ssr: false }
+)
 
 import { ParsedCommand } from "@/utils/groq-client";
 
@@ -456,7 +467,7 @@ export default function TerminalPage() {
         {/* Sidebar */}
         <AnimatePresence>
           {isSidebarOpen && (
-            <motion.aside
+            <MotionDiv
               initial={{ width: 0 }}
               animate={{ width: 320 }}
               exit={{ width: 0 }}
@@ -554,7 +565,7 @@ export default function TerminalPage() {
                   <Settings className="w-4 h-4" /> Settings
                 </Link>
               </div>
-            </motion.aside>
+            </MotionDiv>
           )}
         </AnimatePresence>
 
