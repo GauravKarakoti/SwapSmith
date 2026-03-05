@@ -12,12 +12,6 @@ import { csrfProtectionMiddleware } from '@/lib/csrf';
  * 2. Enhanced CSRF protection
  * 3. Security headers
  * 4. Admin dashboard protection
- *
- * NOTE: /api/admin/* routes are exempt from CSRF token checking because they
- * authenticate via Firebase ID tokens, which already provide CSRF protection
- * (a third-party site cannot obtain the user's Firebase ID token).
- * 
- * JSDoc Updated: Includes Origin/Referer validation details.
  */
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
