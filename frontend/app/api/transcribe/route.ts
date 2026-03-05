@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { transcribeAudio } from '@/utils/groq-client';
-import { withEnhancedCSRF } from '@/lib/enhanced-csrf';
-import { rateLimiters } from '@/lib/rate-limiter';
+import { getRateLimitStatus } from '@/lib/rate-limiter';
 import { applyAPISecurityHeaders } from '@/lib/security-headers';
 
 export const runtime = 'nodejs';
@@ -41,9 +40,8 @@ async function transcribeHandler(req: NextRequest) {
 
 // Apply rate limiting and CSRF protection
 export async function POST(req: NextRequest) {
-  // Apply rate limiting using the default rate limiter
-  const rateLimitResponse = rateLimiters.default(req as any, {} as any);
-  if (!rateLimitResponse) {
+  const { isLimited } = getRateLimitStatus(req);
+  if (isLimited) {
     const response = NextResponse.json({ error: 'Too many requests' }, { status: 429 });
     return applyAPISecurityHeaders(response);
   }
