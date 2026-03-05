@@ -111,18 +111,65 @@ export function setCSRFTokenCookie(response: NextResponse, token?: string): Next
 /**
  * Middleware for App Router to validate CSRF tokens
  */
-export function csrfProtectionMiddleware(request: NextRequest): NextResponse | null {
+export function csrfProtectionMiddleware(request: NextRequest): NextResponse {
   const pathname = request.nextUrl.pathname;
   const isApiRoute = pathname.startsWith('/api/');
   const isStateChangingMethod = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method);
 
   if (isApiRoute && isStateChangingMethod) {
-    // Validate CSRF token for state-changing requests
+    // 1. Validate CSRF token
     if (!validateCsrfToken(request)) {
       return NextResponse.json(
         { error: 'CSRF token validation failed' },
         { status: 403 }
       );
+    }
+
+    // 2. Validate Origin/Referer
+    const origin = request.headers.get('origin');
+    const referer = request.headers.get('referer');
+    const isDevelopment = process.env.NODE_ENV === 'development';
+
+    // Bypass if development and no origin/referer (e.g. curl/postman)
+    if (!origin && !referer) {
+      if (!isDevelopment) {
+        return NextResponse.json(
+          { error: 'Missing Origin or Referer header' },
+          { status: 403 }
+        );
+      }
+    } else {
+      let isAllowed = false;
+      
+      // Check Origin header first
+      if (origin) {
+        isAllowed = ALLOWED_ORIGINS.some(allowed => 
+          origin === allowed || origin.startsWith(allowed.replace(/\/$/, ''))
+        );
+      } 
+      // Fallback to Referer header
+      else if (referer) {
+        try {
+          const refererHost = new URL(referer).host;
+          isAllowed = ALLOWED_ORIGINS.some(allowed => {
+            try {
+              return refererHost === new URL(allowed).host;
+            } catch {
+              // Handle cases where allowed origin might not be a full URL
+              return refererHost === allowed;
+            }
+          });
+        } catch {
+          isAllowed = false;
+        }
+      }
+
+      if (!isAllowed) {
+        return NextResponse.json(
+          { error: 'CSRF Origin Validation Failed' }, 
+          { status: 403 }
+        );
+      }
     }
   }
 
