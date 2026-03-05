@@ -1,5 +1,6 @@
 import Groq from "groq-sdk";
 import { safeParseJSON } from "@/lib/safeParse";
+import { logGroqUsage } from "@/lib/stats-service";
 
 // Global singleton declaration to prevent multiple instances during hot reload
 declare global {
@@ -25,7 +26,7 @@ function getGroqClient(): Groq {
 // Type definition for the parsed command object
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "dca" | "unknown";
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "dca" | "stake" | "unknown"; // Added "stake" intent
 
   // Single Swap Fields
   fromAsset: string | null;
@@ -58,6 +59,13 @@ export interface ParsedCommand {
   settleAmount: number | null;
   settleAddress: string | null;
 
+  // Staking Fields (for "stake" intent)
+  stakeAsset?: string | null;        // Asset to stake (e.g., "ETH")
+  stakeProtocol?: string | null;   // Protocol to stake with (e.g., "lido", "rocket_pool", "stakewise")
+  stakeChain?: string | null;        // Chain to stake on (default: "ethereum")
+  stakingApr?: number | null;        // Estimated staking APR (e.g., 3.5 for 3.5%) - SHOWN IN CONFIRMATION BOX
+  stakeProvider?: string | null;     // Display name of provider (e.g., "Lido", "Rocket Pool")
+
   confidence: number;
   validationErrors: string[];
   parsedMessage: string;
@@ -74,19 +82,29 @@ MODES:
    - Can include CONDITIONS for Limit Orders (e.g., "Swap ETH to USDC when ETH price is above 4000").
 2. "dca": User wants to set up recurring swaps (e.g., "DCA 100 USDC to BTC every Friday" or "Buy ETH daily").
 3. "portfolio": User wants to split one input asset into multiple output assets (e.g., "Split 1 ETH into 50% BTC and 50% SOL").
-4. "checkout": 
+4. "checkout":
    - User wants to create a payment link.
    - User says "Send [amount] [asset] to [address]" (Generate a link to pay that address).
    - User says "I want to receive [amount] [asset]" (Generate a link for their own wallet).
 5. "yield_scout": User asking for high APY/Yield info.
+6. "stake": User wants to stake assets with liquid staking providers (Lido, Rocket Pool, StakeWise).
+   - Example: "Stake 1 ETH with Lido" or "Stake my ETH to earn rewards"
+   - Maps to liquid staking providers: lido (stETH), rocket_pool (rETH), stakewise (osETH)
+   - For ETH staking, default to "lido" if no provider specified
+   - Include stakingApr field with estimated annual percentage rate
+
+LIQUID STAKING PROVIDERS:
+- lido: stETH on Ethereum (~3-4% APR), most popular
+- rocket_pool: rETH on Ethereum (~3-4% APR), decentralized
+- stakewise: osETH on Ethereum (~3-4% APR)
 
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
 
 RESPONSE FORMAT:
 {
   "success": boolean,
-  "intent": "swap" | "dca" | "portfolio" | "checkout" | "yield_scout",
-  
+  "intent": "swap" | "dca" | "portfolio" | "checkout" | "yield_scout" | "stake",
+
   // SWAP & LIMIT ORDER PARAMS
   "fromAsset": string | null,
   "fromChain": string | null,
@@ -116,6 +134,13 @@ RESPONSE FORMAT:
   "settleAmount": number | null,
   "settleAddress": string | null,
 
+  // STAKING PARAMS (for "stake" intent)
+  "stakeAsset": string | null,       // Asset to stake (e.g., "ETH")
+  "stakeProtocol": string | null,    // Protocol to stake with (e.g., "lido", "rocket_pool", "stakewise")
+  "stakeChain": string | null,       // Chain to stake on (default: "ethereum")
+  "stakingApr": number | null,       // Estimated staking APR (e.g., 3.5 for 3.5%)
+  "stakeProvider": string | null,    // Display name of provider (e.g., "Lido", "Rocket Pool")
+
   "confidence": number, // Confidence score 0-100
   "validationErrors": string[],
   "parsedMessage": "Human readable summary",
@@ -141,19 +166,35 @@ export async function transcribeAudio(file: File): Promise<string> {
   }
 }
 
-export async function parseUserCommand(userInput: string): Promise<ParsedCommand> {
+export async function parseUserCommand(
+  userInput: string,
+  userId?: string | null,
+): Promise<ParsedCommand> {
+  const MODEL = 'llama-3.3-70b-versatile';
   try {
     const groq = getGroqClient();
     const completion = await groq.chat.completions.create({
       messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userInput }
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userInput },
       ],
-      model: "llama-3.3-70b-versatile",
-      response_format: { type: "json_object" },
+      model: MODEL,
+      response_format: { type: 'json_object' },
       temperature: 0.1,
       max_tokens: 1024,
     });
+
+    // Log token usage asynchronously – never block the main flow
+    if (completion.usage) {
+      logGroqUsage({
+        userId: userId ?? null,
+        model: MODEL,
+        endpoint: 'chat',
+        promptTokens: completion.usage.prompt_tokens,
+        completionTokens: completion.usage.completion_tokens,
+        totalTokens: completion.usage.total_tokens,
+      }).catch(() => { /* swallow */ });
+    }
 
     const parsed = safeParseJSON(completion.choices[0].message.content) || {};
     return validateParsedCommand(parsed, userInput);
@@ -200,6 +241,17 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
 
     if (!parsed.settleAsset) errors.push("Asset to receive/send not specified");
     if (!parsed.settleAmount || parsed.settleAmount <= 0) errors.push("Invalid amount specified");
+
+  } else if (parsed.intent === "stake") {
+    // Validate staking command
+    if (!parsed.stakeAsset && !parsed.fromAsset) errors.push("Asset to stake not specified");
+    if (!parsed.amount || parsed.amount <= 0) errors.push("Invalid amount specified");
+    // If stakeProtocol not specified, default to "lido" for ETH
+    if (!parsed.stakeProtocol && (parsed.stakeAsset === "ETH" || parsed.fromAsset === "ETH")) {
+      parsed.stakeProtocol = "lido";
+      parsed.stakeProvider = "Lido";
+      parsed.stakingApr = 3.5; // Estimated APR
+    }
   }
 
   const allErrors = [...(parsed.validationErrors || []), ...errors];
@@ -231,6 +283,14 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     settleNetwork: parsed.settleNetwork || null,
     settleAmount: parsed.settleAmount || null,
     settleAddress: parsed.settleAddress || null,
+
+    // Staking fields
+    stakeAsset: parsed.stakeAsset || parsed.fromAsset || null,
+    stakeProtocol: parsed.stakeProtocol || null,
+    stakeChain: parsed.stakeChain || parsed.fromChain || 'ethereum',
+    stakingApr: parsed.stakingApr || null,
+    stakeProvider: parsed.stakeProvider || null,
+
     confidence: confidence,
     validationErrors: allErrors,
     parsedMessage: parsed.parsedMessage || '',
