@@ -8,7 +8,7 @@ import Footer from '@/components/Footer'
 import Navbar from '@/components/Navbar'
 import { RandomizedTextEffect } from '@/components/RandomizedTextEffect'
 import FAQSection from '@/components/FAQSection'
-import { motion } from 'framer-motion'
+import { motion, useMotionValue, useSpring } from 'framer-motion'
 import dynamic from 'next/dynamic'
 
 // Dynamically import heavy animation libraries
@@ -32,61 +32,12 @@ const ReactLenis = dynamic(
   { ssr: false }
 )
 
-// Dynamically import scroll and animate utilities
-const useScrollAnimations = () => {
-  const [scrollUtils, setScrollUtils] = useState<any>(null)
-  
-  useEffect(() => {
-    Promise.all([
-      import('framer-motion'),
-      import('framer-motion/dom')
-    ]).then(([framerMotion, framerMotionDom]) => {
-      setScrollUtils({
-        motion: framerMotion.motion,
-        animate: framerMotionDom.animate,
-        scroll: framerMotionDom.scroll,
-        useMotionValue: framerMotion.useMotionValue,
-        useSpring: framerMotion.useSpring
-      })
-    })
-  }, [])
-  
-  return scrollUtils
-}
-
 // Dashboard Preview Component - Customized for SwapSmith (Crypto Theme)
 const DashboardPreview = () => {
-  const [MotionComponent, setMotionComponent] = useState<any>(null)
-
-  useEffect(() => {
-    import('framer-motion').then(mod => {
-      setMotionComponent(mod.motion)
-    })
-  }, [])
-
-  if (!MotionComponent) {
-    return (
-      <div className="absolute inset-0 pointer-events-none z-0">
-        {/* Static fallback content */}
-        <div className="absolute left-[5%] top-[20%] hidden xl:block p-6 bg-white/90 dark:bg-[#0a0a12]/90 backdrop-blur-md rounded-3xl shadow-2xl w-[320px] text-slate-800 dark:text-white border border-slate-200/50 dark:border-white/10">
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-cyan-100 dark:bg-cyan-900/30 flex items-center justify-center border border-cyan-500/30">
-                <BarChart3 className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
-              </div>
-              <span className="font-bold text-sm text-slate-600 dark:text-zinc-200">Portfolio Value</span>
-            </div>
-          </div>
-          <div className="text-4xl font-black mb-1 text-slate-900 dark:text-white tracking-tight">$42,853.21</div>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="absolute inset-0 pointer-events-none z-0">
     {/* Left Card - Portfolio Analytics */}
-    <MotionComponent.div 
+    <motion.div 
       initial={{ opacity: 0, x: -100, rotate: -12 }}
       animate={{ 
         opacity: 1, 
@@ -156,10 +107,10 @@ const DashboardPreview = () => {
           <span>Route: Best</span>
         </div>
       </div>
-    </MotionComponent.div>
+    </motion.div>
 
     {/* Right Card - Active Swaps / Operations */}
-    <MotionComponent.div 
+    <motion.div 
       initial={{ opacity: 0, x: 100, rotate: 12 }}
       animate={{ 
         opacity: 1, 
@@ -221,10 +172,10 @@ const DashboardPreview = () => {
             </div>
         ))}
       </div>
-    </MotionComponent.div>
+    </motion.div>
 
     {/* Bottom Left Card - 'Expert Level' / AI Status */}
-    <MotionComponent.div
+    <motion.div
         initial={{ opacity: 0, scale: 0.8, rotate: -5 }}
         animate={{ 
             opacity: 1, 
@@ -250,49 +201,32 @@ const DashboardPreview = () => {
         <h4 className="font-black text-lg text-slate-900 dark:text-white mb-1">SwapSmith Pro</h4>
         <p className="text-[10px] text-slate-500 dark:text-zinc-400 mb-3">Auto-routing optimization enabled</p>
         <div className="w-full h-1 bg-slate-200 dark:bg-zinc-800 rounded-full overflow-hidden">
-            <MotionComponent.div 
+            <motion.div 
                 className="h-full bg-gradient-to-r from-pink-500 to-rose-500"
                 animate={{ width: ["0%", "100%"] }}
                 transition={{ duration: 2, repeat: Infinity }}
             />
         </div>
-    </MotionComponent.div>
+    </motion.div>
     
     {/* Floating Background Words - Crypto Themed */}
-     <MotionComponent.div animate={{ rotate: 360 }} transition={{ duration: 150, repeat: Infinity, ease: 'linear' }} className="absolute left-[10%] top-[15%] text-slate-900/[0.03] dark:text-white/[0.03] font-black text-7xl select-none -z-10 blur-[2px] pointer-events-none tracking-tighter">
+     <motion.div animate={{ rotate: 360 }} transition={{ duration: 150, repeat: Infinity, ease: 'linear' }} className="absolute left-[10%] top-[15%] text-slate-900/[0.03] dark:text-white/[0.03] font-black text-7xl select-none -z-10 blur-[2px] pointer-events-none tracking-tighter">
         LIQUIDITY
-     </MotionComponent.div>
-     <MotionComponent.div animate={{ rotate: -360 }} transition={{ duration: 180, repeat: Infinity, ease: 'linear' }} className="absolute right-[8%] bottom-[25%] text-slate-900/[0.03] dark:text-white/[0.03] font-black text-7xl select-none -z-10 blur-[2px] pointer-events-none tracking-tighter">
+     </motion.div>
+     <motion.div animate={{ rotate: -360 }} transition={{ duration: 180, repeat: Infinity, ease: 'linear' }} className="absolute right-[8%] bottom-[25%] text-slate-900/[0.03] dark:text-white/[0.03] font-black text-7xl select-none -z-10 blur-[2px] pointer-events-none tracking-tighter">
         PROTOCOL
-     </MotionComponent.div>
-     <MotionComponent.div animate={{ y: [-20, 20, -20] }} transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }} className="absolute left-[20%] bottom-[30%] text-cyan-600/5 dark:text-cyan-500/5 font-black text-5xl select-none -z-10 transform -rotate-12 pointer-events-none">
+     </motion.div>
+     <motion.div animate={{ y: [-20, 20, -20] }} transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }} className="absolute left-[20%] bottom-[30%] text-cyan-600/5 dark:text-cyan-500/5 font-black text-5xl select-none -z-10 transform -rotate-12 pointer-events-none">
         GAS
-     </MotionComponent.div>
+     </motion.div>
   </div>
 )
 }
 
 // Floating particles component
 const FloatingParticle = ({ delay, duration, x, y }: { delay: number; duration: number; x: number; y: number }) => {
-  const [MotionComponent, setMotionComponent] = useState<any>(null)
-
-  useEffect(() => {
-    import('framer-motion').then(mod => {
-      setMotionComponent(mod.motion)
-    })
-  }, [])
-
-  if (!MotionComponent) {
-    return (
-      <div
-        className="absolute w-1 h-1 bg-gradient-to-r from-cyan-400 to-purple-500 rounded-full opacity-20"
-        style={{ left: `${x}%`, top: `${y}%` }}
-      />
-    )
-  }
-
   return (
-    <MotionComponent.div
+    <motion.div
       className="absolute w-1 h-1 bg-gradient-to-r from-cyan-400 to-purple-500 rounded-full"
       style={{ left: `${x}%`, top: `${y}%` }}
       animate={{
@@ -313,42 +247,22 @@ const FloatingParticle = ({ delay, duration, x, y }: { delay: number; duration: 
 
 // Magnetic button component
 const MagneticButton = ({ children, onClick, className }: { children: React.ReactNode; onClick: () => void; className?: string }) => {
-  const [motionValues, setMotionValues] = useState<any>(null)
-
-  useEffect(() => {
-    import('framer-motion').then(mod => {
-      const x = mod.useMotionValue(0)
-      const y = mod.useMotionValue(0)
-      const springX = mod.useSpring(x, { stiffness: 300, damping: 20 })
-      const springY = mod.useSpring(y, { stiffness: 300, damping: 20 })
-      
-      setMotionValues({ x, y, springX, springY })
-    })
-  }, [])
+  const x = useMotionValue(0)
+  const y = useMotionValue(0)
+  const springX = useSpring(x, { stiffness: 300, damping: 20 })
+  const springY = useSpring(y, { stiffness: 300, damping: 20 })
 
   const handleMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (!motionValues) return
-    
     const rect = e.currentTarget.getBoundingClientRect()
     const centerX = rect.left + rect.width / 2
     const centerY = rect.top + rect.height / 2
-    motionValues.x.set((e.clientX - centerX) * 0.15)
-    motionValues.y.set((e.clientY - centerY) * 0.15)
+    x.set((e.clientX - centerX) * 0.15)
+    y.set((e.clientY - centerY) * 0.15)
   }
 
   const handleMouseLeave = () => {
-    if (!motionValues) return
-    
-    motionValues.x.set(0)
-    motionValues.y.set(0)
-  }
-
-  if (!motionValues) {
-    return (
-      <button onClick={onClick} className={className}>
-        {children}
-      </button>
-    )
+    x.set(0)
+    y.set(0)
   }
 
   return (
@@ -356,7 +270,7 @@ const MagneticButton = ({ children, onClick, className }: { children: React.Reac
       onClick={onClick}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      style={{ x: motionValues.springX, y: motionValues.springY }}
+      style={{ x: springX, y: springY }}
       className={className}
       whileTap={{ scale: 0.95 }}
     >
@@ -369,13 +283,6 @@ const MagneticButton = ({ children, onClick, className }: { children: React.Reac
 const GlowCard = ({ children, className, glowColor = "cyan" }: { children: React.ReactNode; className?: string; glowColor?: string }) => {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
   const [isHovered, setIsHovered] = useState(false)
-  const [MotionComponent, setMotionComponent] = useState<any>(null)
-
-  useEffect(() => {
-    import('framer-motion').then(mod => {
-      setMotionComponent(mod.motion)
-    })
-  }, [])
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -394,31 +301,8 @@ const GlowCard = ({ children, className, glowColor = "cyan" }: { children: React
     blue: "rgba(59, 130, 246, 0.15)",
   }
 
-  if (!MotionComponent) {
-    return (
-      <div
-        className={`relative overflow-hidden ${className}`}
-        onMouseMove={handleMouseMove}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
-        {isHovered && (
-          <div
-            className="absolute pointer-events-none w-[300px] h-[300px] rounded-full blur-[80px]"
-            style={{
-              background: glowColors[glowColor] || glowColors.cyan,
-              left: mousePosition.x - 150,
-              top: mousePosition.y - 150,
-            }}
-          />
-        )}
-        {children}
-      </div>
-    )
-  }
-
   return (
-    <MotionComponent.div
+    <motion.div
       className={`relative overflow-hidden ${className}`}
       onMouseMove={handleMouseMove}
       onMouseEnter={() => setIsHovered(true)}
@@ -427,7 +311,7 @@ const GlowCard = ({ children, className, glowColor = "cyan" }: { children: React
       transition={{ duration: 0.3, ease: "easeOut" }}
     >
       {isHovered && (
-        <MotionComponent.div
+        <motion.div
           className="absolute pointer-events-none w-[300px] h-[300px] rounded-full blur-[80px]"
           style={{
             background: glowColors[glowColor] || glowColors.cyan,
@@ -440,7 +324,7 @@ const GlowCard = ({ children, className, glowColor = "cyan" }: { children: React
         />
       )}
       {children}
-    </MotionComponent.div>
+    </motion.div>
   )
 }
 

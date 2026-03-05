@@ -38,6 +38,7 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
   const [error, setError] = useState<string | null>(null);
 
   // Refs for Speech Recognition
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
   const hasSpeechApi = useRef(false);
 
@@ -80,7 +81,7 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
       setIsListening(false);
     };
 
-    recognitionRef.current.onresult = (event: any) => {
+    recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
       let finalText = '';
       let interimText = '';
 
@@ -105,7 +106,7 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
       }
     };
 
-    recognitionRef.current.onerror = (event: any) => {
+    recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error('Speech recognition error:', event.error);
 
       // Don't treat 'no-speech' as a hard error, just stop listening

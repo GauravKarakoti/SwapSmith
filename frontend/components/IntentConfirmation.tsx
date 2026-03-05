@@ -1,6 +1,6 @@
 'use client'
 
-import { CheckCircle, XCircle, AlertTriangle, Sprout, TrendingUp } from 'lucide-react'
+import { CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 import { ParsedCommand } from '@/utils/groq-client'; // Import the new type
 
 interface IntentConfirmationProps {

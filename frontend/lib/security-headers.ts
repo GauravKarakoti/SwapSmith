@@ -176,7 +176,7 @@ export function applyFinancialSecurityHeaders(response: NextResponse): NextRespo
  */
 export function applyCORSHeaders(
   response: NextResponse,
-  allowedOrigins: string[] = ALLOWED_ORIGINS
+  _allowedOrigins: string[] = ALLOWED_ORIGINS
 ): NextResponse {
   // Note: In production, implement proper origin checking
   const origin = process.env.NODE_ENV === 'development' 

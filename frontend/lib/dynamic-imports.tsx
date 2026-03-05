@@ -114,8 +114,16 @@ export const CryptoChart = dynamic(
 )
 
 // Animation utilities
+interface FramerMotionUtils {
+  motion: typeof import('framer-motion').motion
+  AnimatePresence: typeof import('framer-motion').AnimatePresence
+  useMotionValue: typeof import('framer-motion').useMotionValue
+  useSpring: typeof import('framer-motion').useSpring
+  useTransform: typeof import('framer-motion').useTransform
+  useScroll: typeof import('framer-motion').useScroll
+}
 export const useFramerMotion = () => {
-  const [motion, setMotion] = useState<any>(null)
+  const [motion, setMotion] = useState<FramerMotionUtils | null>(null)
   
   useEffect(() => {
     import('framer-motion').then(mod => {

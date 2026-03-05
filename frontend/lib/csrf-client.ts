@@ -141,7 +141,7 @@ export class SecureAPIClient {
   
   async post<T>(
     endpoint: string, 
-    data?: any, 
+    data?: unknown, 
     headers?: Record<string, string>
   ): Promise<T> {
     return this.request<T>(endpoint, {
@@ -153,7 +153,7 @@ export class SecureAPIClient {
   
   async put<T>(
     endpoint: string, 
-    data?: any, 
+    data?: unknown, 
     headers?: Record<string, string>
   ): Promise<T> {
     return this.request<T>(endpoint, {
@@ -175,7 +175,7 @@ export class SecureAPIClient {
   
   async patch<T>(
     endpoint: string, 
-    data?: any, 
+    data?: unknown, 
     headers?: Record<string, string>
   ): Promise<T> {
     return this.request<T>(endpoint, {
