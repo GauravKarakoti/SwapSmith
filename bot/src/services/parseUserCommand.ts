@@ -545,12 +545,15 @@ export async function parseUserCommand(
 
     const limitConfig = detectLimitOrder(input);
     if (limitConfig && limitConfig.price) {
+      const tradeAsset = limitConfig.asset ?? 'ETH';
+      const quoteAsset = limitConfig.targetAsset ?? (tradeAsset === 'USDC' ? 'ETH' : 'USDC');
+      const isBuyBelow = limitConfig.condition === 'below';
       return {
         success: true,
         intent: 'limit_order',
-        fromAsset: limitConfig.asset === 'USDC' ? 'ETH' : (limitConfig.asset ?? 'ETH'), // Heuristic
+        fromAsset: isBuyBelow ? quoteAsset : tradeAsset,
         fromChain: null,
-        toAsset: limitConfig.targetAsset ?? (limitConfig.asset === 'USDC' ? 'ETH' : 'USDC'), // Pair heuristic
+        toAsset: isBuyBelow ? tradeAsset : quoteAsset,
         toChain: null,
         amount: limitConfig.amount ?? null,
         amountType: limitConfig.amountType ?? null,
