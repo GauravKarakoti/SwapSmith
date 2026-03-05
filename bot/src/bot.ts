@@ -3,24 +3,14 @@ import { message } from 'telegraf/filters';
 import rateLimit from 'telegraf-ratelimit';
 
 import dotenv from 'dotenv';
-import * as fs from 'fs';
-import { promises as fsPromises } from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-import { randomUUID } from 'crypto';
-import axios from 'axios';
-import { spawn } from 'child_process';
 import express from 'express';
 import cors from 'cors';
 
-import { transcribeAudio } from './services/groq-client';
 import logger, { Sentry, handleError } from './services/logger';
 import { getOrderStatus } from './services/sideshift-client';
 import { getTopStablecoinYields, formatYieldPools } from './services/yield-client';
 import * as db from './services/database';
-import { resolveAddress, isNamingService } from './services/address-resolver';
 import { OrderMonitor } from './services/order-monitor';
-import { isValidAddress } from './config/address-patterns';
 
 dotenv.config();
 
@@ -34,7 +24,26 @@ const MINI_APP_URL =
 const PORT = Number(process.env.PORT || 3000);
 
 const bot = new Telegraf(BOT_TOKEN);
-const orderMonitor = new OrderMonitor(bot);
+
+const orderMonitor = new OrderMonitor({
+  getOrderStatus: (orderId) => getOrderStatus(orderId, process.env.SIDESHIFT_CLIENT_IP || '127.0.0.1'),
+  updateOrderStatus: db.updateOrderStatus,
+  updateWatchedOrderStatus: db.updateWatchedOrderStatus,
+  getPendingOrders: db.getPendingOrders,
+  getPendingWatchedOrders: db.getPendingWatchedOrders,
+  addWatchedOrder: db.addWatchedOrder,
+  onStatusChange: async (telegramId, orderId, oldStatus, newStatus, orderDetails) => {
+    try {
+      await bot.telegram.sendMessage(
+        telegramId,
+        `🔔 *Order Status Update*\n\nOrder \`${orderId}\` status changed to: *${newStatus.toUpperCase()}*`,
+        { parse_mode: 'Markdown' }
+      );
+    } catch (error) {
+      logger.error(`[Bot] Failed to send status update to ${telegramId}:`, error);
+    }
+  }
+});
 
 /* ---------------- Rate Limit ---------------- */
 
@@ -270,6 +279,8 @@ async function start() {
 
     await orderMonitor.loadPendingOrders();
     orderMonitor.start();
+
+    await bot.telegram.deleteWebhook({ drop_pending_updates: true });
 
     await bot.launch();
     logger.info('🤖 Bot launched');

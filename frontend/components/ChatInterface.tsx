@@ -79,13 +79,13 @@ export default function ChatInterface() {
   const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
   const [currentConfidence, setCurrentConfidence] = useState<number | undefined>(undefined);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
   const { address, isConnected } = useAccount();
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const { handleError } = useErrorHandler();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasLoadedPersistenceRef = useRef(false);
   const saveSequenceRef = useRef(0);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Use unified voice input with fallback
   const {
@@ -116,7 +116,19 @@ export default function ChatInterface() {
     }
   });
 
-
+  const prevIsRecordingRef = useRef(isRecording);
+  
+  useEffect(() => {
+    // If recording just stopped and we have a transcript, send it
+    if (prevIsRecordingRef.current && !isRecording && voiceTranscript.trim()) {
+      const text = voiceTranscript.trim();
+      addMessage({ role: 'user', content: text, type: 'message' });
+      setTimeout(() => processCommand(text), 500);
+      setInput('');
+      resetTranscript(); // Clear the transcript after sending
+    }
+    prevIsRecordingRef.current = isRecording;
+  }, [isRecording, voiceTranscript, resetTranscript]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -274,7 +286,13 @@ export default function ChatInterface() {
     };
   }, [messages, isAuthenticated, isAuthLoading, user?.uid, address]);
 
-
+  useEffect(() => {
+    if (audioError) {
+      // The error message is already being added by the `onError` callback 
+      // passed into `useVoiceInput` at the top of the file.
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [audioError]);
 
   const formatTime = (date: Date) => {
     const hours = date.getHours();
