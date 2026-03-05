@@ -111,7 +111,8 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
           tokenAddress = networkInfo.tokenContract
         }
       } catch (err) {
-        console.warn('Failed to fetch coin info from SideShift, defaulting to native balance check', err)
+        console.error('Failed to fetch coin info from SideShift; aborting max balance calculation', err)
+        throw err
       }
 
       let balanceRaw: bigint = 0n
