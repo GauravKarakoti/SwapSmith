@@ -1,6 +1,9 @@
+'use client';
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchWithCache, CACHE_CONFIGS, invalidateCache } from '@/lib/cache-utils';
 import { CoinPrice } from '@/utils/sideshift-client';
+import toast from 'react-hot-toast';
 
 // API Response types
 interface CachedPricesResponse {
@@ -64,6 +67,7 @@ interface ChatSessionsResponse {
 interface UseCachedDataOptions<T> {
   enabled?: boolean;
   refetchInterval?: number;
+  notifyOnRefetchError?: boolean;
   onSuccess?: (data: T) => void;
   onError?: (error: Error) => void;
 }
@@ -106,6 +110,10 @@ export function useCachedData<T>(
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Unknown error');
       setError(error);
+      const shouldNotify = !isRefetch || options?.notifyOnRefetchError === true;
+      if (shouldNotify) {
+        toast.error(error.message || 'Failed to load data.', { id: `cached-data-${url}` });
+      }
       
       if (onErrorRef.current) {
         onErrorRef.current(error);
@@ -114,7 +122,7 @@ export function useCachedData<T>(
       setIsLoading(false);
       setIsRefetching(false);
     }
-  }, [url]);
+  }, [url, options?.notifyOnRefetchError]);
 
   useEffect(() => {
     if (options?.enabled === false || !url) {

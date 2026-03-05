@@ -1,4 +1,8 @@
+'use client';
+
 import { useCallback } from 'react';
+import toast from 'react-hot-toast';
+import { RequestError } from '@/lib/api-client';
 
 export enum ErrorType {
   API_FAILURE = 'api_failure',
@@ -13,6 +17,7 @@ export interface ErrorContext {
   operation?: string;
   retryable?: boolean;
   technical?: string;
+  notify?: boolean;
 }
 
 export interface UseErrorHandlerReturn {
@@ -33,6 +38,28 @@ export const useErrorHandler = (): UseErrorHandlerReturn => {
     // Return user-friendly messages based on error type
     switch (type) {
       case ErrorType.API_FAILURE:
+        if (error instanceof RequestError) {
+          if (error.kind === 'timeout') {
+            return 'The request timed out. Please try again in a moment.';
+          }
+
+          if (error.kind === 'network') {
+            return 'Network connection issue. Please check your internet connection and try again.';
+          }
+
+          if (error.status === 429) {
+            return 'Too many requests right now. Please wait a moment and try again.';
+          }
+
+          if (error.status && error.status >= 500) {
+            return `Service temporarily unavailable${context?.retryable ? '. Please try again' : '.'}`;
+          }
+
+          if (error.message.trim()) {
+            return error.message;
+          }
+        }
+
         if (errorObj?.message?.includes('SideShift')) {
           return "Unable to get swap quote. Please try again or check if the trading pair is supported.";
         }
@@ -42,6 +69,9 @@ export const useErrorHandler = (): UseErrorHandlerReturn => {
         return `Service temporarily unavailable${context?.retryable ? '. Please try again' : ''}.`;
 
       case ErrorType.NETWORK_ERROR:
+        if (error instanceof RequestError && error.kind === 'timeout') {
+          return 'The request timed out. Please try again.';
+        }
         if (errorObj?.message?.includes('fetch')) {
           return "Network connection issue. Please check your internet connection and try again.";
         }
@@ -79,10 +109,14 @@ export const useErrorHandler = (): UseErrorHandlerReturn => {
 
   const handleError = useCallback((error: unknown, type: ErrorType, context?: ErrorContext): string => {
     const message = getErrorMessage(error, type, context);
-    
+
+    if (context?.notify !== false) {
+      toast.error(message);
+    }
+
     // Additional error tracking could be added here
     // e.g., send to analytics service, error reporting service
-    
+
     return message;
   }, [getErrorMessage]);
 

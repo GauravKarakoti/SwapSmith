@@ -2,6 +2,8 @@
  * Cache utilities for managing cached data with TTL
  */
 
+import { requestJson } from '@/lib/api-client';
+
 export interface CacheConfig {
   ttl: number; // Time to live in milliseconds
   staleWhileRevalidate?: number; // Additional time to serve stale data while revalidating
@@ -38,11 +40,7 @@ export async function fetchWithCache<T>(
   
   // Check if we're in browser
   if (typeof window === 'undefined') {
-    const response = await fetch(url, options);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return response.json();
+    return requestJson<T>(url, options);
   }
 
   // Try to get from localStorage cache
@@ -70,12 +68,7 @@ export async function fetchWithCache<T>(
   }
 
   // Cache miss or expired - fetch fresh data
-  const response = await fetch(url, options);
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
-  }
-  
-  const data = await response.json();
+  const data = await requestJson<T>(url, options);
   
   // Store in cache
   const cacheEntry = {
@@ -103,10 +96,7 @@ async function revalidateCache(
   cacheKey: string
 ) {
   try {
-    const response = await fetch(url, options);
-    if (!response.ok) return;
-    
-    const data = await response.json();
+    const data = await requestJson(url, options);
     
     const cacheEntry = {
       data,
