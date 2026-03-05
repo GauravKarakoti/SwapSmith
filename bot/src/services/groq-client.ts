@@ -16,14 +16,7 @@ function getGroqClient(): Groq {
 
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "stake" | "unknown"; // Added "stake" intent
-  
-  // Staking Fields
-  stakeAsset?: string | null;
-  stakeProtocol?: string | null;
-  stakeChain?: string | null;
-  stakingApr?: number | null; // Estimated APR for display in confirmation box
-  stakeProvider?: string | null; // Selected liquid staking provider (e.g., "lido", "rocket_pool", "stakewise")
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "swap_and_stake" | "unknown"; // Added "swap_and_stake" intent
   
   // Single Swap Fields
   fromAsset: string | null;
@@ -109,12 +102,18 @@ MODES:
 6. "yield_migrate": Move funds between pools.
 7. "dca": Dollar Cost Averaging.
 8. "limit_order": Buy/Sell at specific price.
-9. "stake": Stake assets with liquid staking providers (Lido, Rocket Pool, StakeWise).
-   Example: "Stake 1 ETH with Lido" or "Stake my ETH to earn rewards"
-   - Maps to liquid staking providers: lido (stETH), rocket_pool (rETH), stakewise (osETH)
-   - For ETH staking, automatically select best provider based on APR
-   - Include stakingApr field with estimated annual percentage rate
- 
+9. "swap_and_stake": Swap assets and immediately stake them for yield.
+   Example: "Swap 100 USDC for ETH and stake it"
+   Keywords: "swap and stake", "zap", "stake immediately", "swap to stake", "stake"
+   - ACTION: Automatically map base assets to Liquid Staking Tokens (LSTs) if user says "Stake X":
+     - ETH -> stETH (Lido)
+     - SOL -> mSOL (Marinade)
+     - MATIC -> stMATIC (Lido)
+     - AVAX -> sAVAX (Benqi)
+     - BNB -> ankrBNB (Ankr)
+   - If user says "Stake ETH", "Stake SOL":
+     * Map toAsset to the corresponding LST (ETH -> "stETH", SOL -> "mSOL", etc.) and set intent to "swap_and_stake".
+     * If the user did NOT specify an amount, DO NOT guess. Leave amount unset, add a validationErrors entry explaining that amount is required, and set requiresConfirmation: true so the assistant can ask how much to stake.
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
 
 LIQUID STAKING PROVIDERS:
@@ -149,7 +148,7 @@ AMBIGUITY HANDLING:
 RESPONSE FORMAT:
 {
   "success": boolean,
-  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "stake",
+  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "swap_and_stake",
   "fromAsset": string | null,
   "fromChain": string | null,
   "amount": number | null,
@@ -176,13 +175,6 @@ RESPONSE FORMAT:
   "conditionOperator": "gt" | "lt" | null,
   "conditionValue": number | null,
   "conditionAsset": string | null,
-  
-  // STAKING FIELDS (for "stake" intent)
-  "stakeAsset": string | null,       // Asset to stake (e.g., "ETH")
-  "stakeProtocol": string | null,    // Protocol to stake with (e.g., "lido", "rocket_pool", "stakewise")
-  "stakeChain": string | null,       // Chain to stake on (default: "ethereum")
-  "stakingApr": number | null,       // Estimated staking APR (e.g., 3.5 for 3.5%)
-  "stakeProvider": string | null,    // Display name of provider (e.g., "Lido", "Rocket Pool")
   
   "confidence": number,
   "validationErrors": string[],
@@ -234,16 +226,16 @@ EXAMPLES:
     -> intent: "dca", fromAsset: "USDC", toAsset: "ETH", amount: 200, frequency: "monthly", dayOfMonth: "1", confidence: 95
 
 15. "Stake 2 ETH with Lido"
-    -> intent: "stake", fromAsset: "ETH", amount: 2, stakeAsset: "ETH", stakeProtocol: "lido", stakeProvider: "Lido", stakeChain: "ethereum", stakingApr: 3.5, confidence: 95
+    -> intent: "swap_and_stake", fromAsset: "ETH", toAsset: "stETH", amount: 2, confidence: 95
 
-16. "Stake my ETH to earn rewards"
-    -> intent: "stake", fromAsset: "ETH", stakeAsset: "ETH", stakeProtocol: "lido", stakeProvider: "Lido", stakeChain: "ethereum", stakingApr: 3.5, confidence: 90
+16. "Stake my ETH to earn rewards" (amount missing)
+    -> intent: "swap_and_stake", fromAsset: "ETH", toAsset: "stETH", amount: null, validationErrors: ["Amount not specified"], requiresConfirmation: true, confidence: 90
 
 17. "Stake 1 ETH with Rocket Pool"
-    -> intent: "stake", fromAsset: "ETH", amount: 1, stakeAsset: "ETH", stakeProtocol: "rocket_pool", stakeProvider: "Rocket Pool", stakeChain: "ethereum", stakingApr: 3.4, confidence: 95
+    -> intent: "swap_and_stake", fromAsset: "ETH", toAsset: "rETH", amount: 1, confidence: 95
 
 18. "Stake 0.5 ETH"
-    -> intent: "stake", fromAsset: "ETH", amount: 0.5, stakeAsset: "ETH", stakeProtocol: "lido", stakeProvider: "Lido", stakeChain: "ethereum", stakingApr: 3.5, confidence: 90
+    -> intent: "swap_and_stake", fromAsset: "ETH", toAsset: "stETH", amount: 0.5, confidence: 90
 `;
 
 // RENAMED from parseUserCommand to parseWithLLM

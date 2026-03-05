@@ -1,22 +1,77 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { motion, useMotionValue, useSpring } from 'framer-motion'
 import { Zap, Mic, Shield, ArrowRight, Wallet, MessageSquare, CheckCircle, ListChecks, BarChart3, Sparkles, TrendingUp } from 'lucide-react'
 import { useEffect, useState, useRef } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-import { ReactLenis } from 'lenis/react'
-import { animate, scroll } from 'motion' 
 import Footer from '@/components/Footer'
 import Navbar from '@/components/Navbar'
 import { RandomizedTextEffect } from '@/components/RandomizedTextEffect'
 import FAQSection from '@/components/FAQSection'
+import { motion } from 'framer-motion'
+import dynamic from 'next/dynamic'
+
+// Dynamically import heavy libraries
+const ReactLenis = dynamic(
+  () => import('lenis/react').then(mod => ({ default: mod.ReactLenis })),
+  { ssr: false }
+)
+
+// Dynamically import scroll and animate utilities
+const useScrollAnimations = () => {
+  const [scrollUtils, setScrollUtils] = useState<any>(null)
+  
+  useEffect(() => {
+    Promise.all([
+      import('framer-motion'),
+      import('framer-motion/dom')
+    ]).then(([framerMotion, framerMotionDom]) => {
+      setScrollUtils({
+        motion: framerMotion.motion,
+        animate: framerMotionDom.animate,
+        scroll: framerMotionDom.scroll,
+        useMotionValue: framerMotion.useMotionValue,
+        useSpring: framerMotion.useSpring
+      })
+    })
+  }, [])
+  
+  return scrollUtils
+}
 
 // Dashboard Preview Component - Customized for SwapSmith (Crypto Theme)
-const DashboardPreview = () => (
-  <div className="absolute inset-0 pointer-events-none z-0">
+const DashboardPreview = () => {
+  const [MotionComponent, setMotionComponent] = useState<any>(null)
+
+  useEffect(() => {
+    import('framer-motion').then(mod => {
+      setMotionComponent(mod.motion)
+    })
+  }, [])
+
+  if (!MotionComponent) {
+    return (
+      <div className="absolute inset-0 pointer-events-none z-0">
+        {/* Static fallback content */}
+        <div className="absolute left-[5%] top-[20%] hidden xl:block p-6 bg-white/90 dark:bg-[#0a0a12]/90 backdrop-blur-md rounded-3xl shadow-2xl w-[320px] text-slate-800 dark:text-white border border-slate-200/50 dark:border-white/10">
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-cyan-100 dark:bg-cyan-900/30 flex items-center justify-center border border-cyan-500/30">
+                <BarChart3 className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
+              </div>
+              <span className="font-bold text-sm text-slate-600 dark:text-zinc-200">Portfolio Value</span>
+            </div>
+          </div>
+          <div className="text-4xl font-black mb-1 text-slate-900 dark:text-white tracking-tight">$42,853.21</div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="absolute inset-0 pointer-events-none z-0">
     {/* Left Card - Portfolio Analytics */}
-    <motion.div 
+    <MotionComponent.div 
       initial={{ opacity: 0, x: -100, rotate: -12 }}
       animate={{ 
         opacity: 1, 
@@ -86,10 +141,10 @@ const DashboardPreview = () => (
           <span>Route: Best</span>
         </div>
       </div>
-    </motion.div>
+    </MotionComponent.div>
 
     {/* Right Card - Active Swaps / Operations */}
-    <motion.div 
+    <MotionComponent.div 
       initial={{ opacity: 0, x: 100, rotate: 12 }}
       animate={{ 
         opacity: 1, 
@@ -151,10 +206,10 @@ const DashboardPreview = () => (
             </div>
         ))}
       </div>
-    </motion.div>
+    </MotionComponent.div>
 
     {/* Bottom Left Card - 'Expert Level' / AI Status */}
-    <motion.div
+    <MotionComponent.div
         initial={{ opacity: 0, scale: 0.8, rotate: -5 }}
         animate={{ 
             opacity: 1, 
@@ -180,65 +235,105 @@ const DashboardPreview = () => (
         <h4 className="font-black text-lg text-slate-900 dark:text-white mb-1">SwapSmith Pro</h4>
         <p className="text-[10px] text-slate-500 dark:text-zinc-400 mb-3">Auto-routing optimization enabled</p>
         <div className="w-full h-1 bg-slate-200 dark:bg-zinc-800 rounded-full overflow-hidden">
-            <motion.div 
+            <MotionComponent.div 
                 className="h-full bg-gradient-to-r from-pink-500 to-rose-500"
                 animate={{ width: ["0%", "100%"] }}
                 transition={{ duration: 2, repeat: Infinity }}
             />
         </div>
-    </motion.div>
+    </MotionComponent.div>
     
     {/* Floating Background Words - Crypto Themed */}
-     <motion.div animate={{ rotate: 360 }} transition={{ duration: 150, repeat: Infinity, ease: 'linear' }} className="absolute left-[10%] top-[15%] text-slate-900/[0.03] dark:text-white/[0.03] font-black text-7xl select-none -z-10 blur-[2px] pointer-events-none tracking-tighter">
+     <MotionComponent.div animate={{ rotate: 360 }} transition={{ duration: 150, repeat: Infinity, ease: 'linear' }} className="absolute left-[10%] top-[15%] text-slate-900/[0.03] dark:text-white/[0.03] font-black text-7xl select-none -z-10 blur-[2px] pointer-events-none tracking-tighter">
         LIQUIDITY
-     </motion.div>
-     <motion.div animate={{ rotate: -360 }} transition={{ duration: 180, repeat: Infinity, ease: 'linear' }} className="absolute right-[8%] bottom-[25%] text-slate-900/[0.03] dark:text-white/[0.03] font-black text-7xl select-none -z-10 blur-[2px] pointer-events-none tracking-tighter">
+     </MotionComponent.div>
+     <MotionComponent.div animate={{ rotate: -360 }} transition={{ duration: 180, repeat: Infinity, ease: 'linear' }} className="absolute right-[8%] bottom-[25%] text-slate-900/[0.03] dark:text-white/[0.03] font-black text-7xl select-none -z-10 blur-[2px] pointer-events-none tracking-tighter">
         PROTOCOL
-     </motion.div>
-     <motion.div animate={{ y: [-20, 20, -20] }} transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }} className="absolute left-[20%] bottom-[30%] text-cyan-600/5 dark:text-cyan-500/5 font-black text-5xl select-none -z-10 transform -rotate-12 pointer-events-none">
+     </MotionComponent.div>
+     <MotionComponent.div animate={{ y: [-20, 20, -20] }} transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }} className="absolute left-[20%] bottom-[30%] text-cyan-600/5 dark:text-cyan-500/5 font-black text-5xl select-none -z-10 transform -rotate-12 pointer-events-none">
         GAS
-     </motion.div>
+     </MotionComponent.div>
   </div>
 )
+}
 
 // Floating particles component
-const FloatingParticle = ({ delay, duration, x, y }: { delay: number; duration: number; x: number; y: number }) => (
-  <motion.div
-    className="absolute w-1 h-1 bg-gradient-to-r from-cyan-400 to-purple-500 rounded-full"
-    style={{ left: `${x}%`, top: `${y}%` }}
-    animate={{
-      y: [-20, 20, -20],
-      x: [-10, 10, -10],
-      opacity: [0.2, 0.8, 0.2],
-      scale: [1, 1.5, 1],
-    }}
-    transition={{
-      duration,
-      delay,
-      repeat: Infinity,
-      ease: "easeInOut",
-    }}
-  />
-)
+const FloatingParticle = ({ delay, duration, x, y }: { delay: number; duration: number; x: number; y: number }) => {
+  const [MotionComponent, setMotionComponent] = useState<any>(null)
+
+  useEffect(() => {
+    import('framer-motion').then(mod => {
+      setMotionComponent(mod.motion)
+    })
+  }, [])
+
+  if (!MotionComponent) {
+    return (
+      <div
+        className="absolute w-1 h-1 bg-gradient-to-r from-cyan-400 to-purple-500 rounded-full opacity-20"
+        style={{ left: `${x}%`, top: `${y}%` }}
+      />
+    )
+  }
+
+  return (
+    <MotionComponent.div
+      className="absolute w-1 h-1 bg-gradient-to-r from-cyan-400 to-purple-500 rounded-full"
+      style={{ left: `${x}%`, top: `${y}%` }}
+      animate={{
+        y: [-20, 20, -20],
+        x: [-10, 10, -10],
+        opacity: [0.2, 0.8, 0.2],
+        scale: [1, 1.5, 1],
+      }}
+      transition={{
+        duration,
+        delay,
+        repeat: Infinity,
+        ease: "easeInOut",
+      }}
+    />
+  )
+}
 
 // Magnetic button component
 const MagneticButton = ({ children, onClick, className }: { children: React.ReactNode; onClick: () => void; className?: string }) => {
-  const x = useMotionValue(0)
-  const y = useMotionValue(0)
-  const springX = useSpring(x, { stiffness: 300, damping: 20 })
-  const springY = useSpring(y, { stiffness: 300, damping: 20 })
+  const [motionValues, setMotionValues] = useState<any>(null)
+
+  useEffect(() => {
+    import('framer-motion').then(mod => {
+      const x = mod.useMotionValue(0)
+      const y = mod.useMotionValue(0)
+      const springX = mod.useSpring(x, { stiffness: 300, damping: 20 })
+      const springY = mod.useSpring(y, { stiffness: 300, damping: 20 })
+      
+      setMotionValues({ x, y, springX, springY })
+    })
+  }, [])
 
   const handleMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (!motionValues) return
+    
     const rect = e.currentTarget.getBoundingClientRect()
     const centerX = rect.left + rect.width / 2
     const centerY = rect.top + rect.height / 2
-    x.set((e.clientX - centerX) * 0.15)
-    y.set((e.clientY - centerY) * 0.15)
+    motionValues.x.set((e.clientX - centerX) * 0.15)
+    motionValues.y.set((e.clientY - centerY) * 0.15)
   }
 
   const handleMouseLeave = () => {
-    x.set(0)
-    y.set(0)
+    if (!motionValues) return
+    
+    motionValues.x.set(0)
+    motionValues.y.set(0)
+  }
+
+  if (!motionValues) {
+    return (
+      <button onClick={onClick} className={className}>
+        {children}
+      </button>
+    )
   }
 
   return (
@@ -246,7 +341,7 @@ const MagneticButton = ({ children, onClick, className }: { children: React.Reac
       onClick={onClick}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      style={{ x: springX, y: springY }}
+      style={{ x: motionValues.springX, y: motionValues.springY }}
       className={className}
       whileTap={{ scale: 0.95 }}
     >
@@ -259,6 +354,13 @@ const MagneticButton = ({ children, onClick, className }: { children: React.Reac
 const GlowCard = ({ children, className, glowColor = "cyan" }: { children: React.ReactNode; className?: string; glowColor?: string }) => {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
   const [isHovered, setIsHovered] = useState(false)
+  const [MotionComponent, setMotionComponent] = useState<any>(null)
+
+  useEffect(() => {
+    import('framer-motion').then(mod => {
+      setMotionComponent(mod.motion)
+    })
+  }, [])
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -277,8 +379,31 @@ const GlowCard = ({ children, className, glowColor = "cyan" }: { children: React
     blue: "rgba(59, 130, 246, 0.15)",
   }
 
+  if (!MotionComponent) {
+    return (
+      <div
+        className={`relative overflow-hidden ${className}`}
+        onMouseMove={handleMouseMove}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        {isHovered && (
+          <div
+            className="absolute pointer-events-none w-[300px] h-[300px] rounded-full blur-[80px]"
+            style={{
+              background: glowColors[glowColor] || glowColors.cyan,
+              left: mousePosition.x - 150,
+              top: mousePosition.y - 150,
+            }}
+          />
+        )}
+        {children}
+      </div>
+    )
+  }
+
   return (
-    <motion.div
+    <MotionComponent.div
       className={`relative overflow-hidden ${className}`}
       onMouseMove={handleMouseMove}
       onMouseEnter={() => setIsHovered(true)}
@@ -287,7 +412,7 @@ const GlowCard = ({ children, className, glowColor = "cyan" }: { children: React
       transition={{ duration: 0.3, ease: "easeOut" }}
     >
       {isHovered && (
-        <motion.div
+        <MotionComponent.div
           className="absolute pointer-events-none w-[300px] h-[300px] rounded-full blur-[80px]"
           style={{
             background: glowColors[glowColor] || glowColors.cyan,
@@ -300,7 +425,7 @@ const GlowCard = ({ children, className, glowColor = "cyan" }: { children: React
         />
       )}
       {children}
-    </motion.div>
+    </MotionComponent.div>
   )
 }
 
@@ -363,29 +488,43 @@ export default function LandingPage() {
   }
 
   useEffect(() => {
-    // Add a delay to ensure DOM is fully ready
-    const timer = setTimeout(() => {
-      const items = document.querySelectorAll('.horizontal-scroll-item')
-      const section = document.querySelector('.horizontal-section')
+    // Dynamically import scroll animation utilities
+    const loadScrollAnimations = async () => {
+      try {
+        const [{ animate }, { scroll }] = await Promise.all([
+          import('framer-motion'),
+          import('framer-motion/dom')
+        ])
 
-      if (ulRef.current && items.length > 0 && section) {
-        // Animate the horizontal scroll
-        const controls = animate(
-          ulRef.current,
-          {
-            transform: ['translateX(0vw)', `translateX(-${(items.length - 1) * 100}vw)`],
-          },
-          { duration: 1 }
-        )
-        
-        scroll(controls, { 
-          target: section,
-          offset: ['start start', 'end end']
-        })
+        // Add a delay to ensure DOM is fully ready
+        const timer = setTimeout(() => {
+          const items = document.querySelectorAll('.horizontal-scroll-item')
+          const section = document.querySelector('.horizontal-section')
+
+          if (ulRef.current && items.length > 0 && section) {
+            // Animate the horizontal scroll
+            const controls = animate(
+              ulRef.current,
+              {
+                transform: ['translateX(0vw)', `translateX(-${(items.length - 1) * 100}vw)`],
+              },
+              { duration: 1 }
+            )
+            
+            scroll(controls, { 
+              target: section,
+              offset: ['start start', 'end end']
+            })
+          }
+        }, 100)
+
+        return () => clearTimeout(timer)
+      } catch (error) {
+        console.warn('Failed to load scroll animations:', error)
       }
-    }, 100)
+    }
 
-    return () => clearTimeout(timer)
+    loadScrollAnimations()
   }, [])
 
   const features = [
@@ -501,7 +640,7 @@ export default function LandingPage() {
             </motion.div>
           </motion.div>
 
-          <motion.h1
+          <motion.div
             variants={itemVariants}
             className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter leading-[0.9]"
           >
@@ -509,7 +648,7 @@ export default function LandingPage() {
               YOUR VOICE-ACTIVATED
             </span>
             <br />
-            <motion.span
+            <motion.div
               className="bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 dark:from-cyan-400 dark:via-purple-400 dark:to-pink-400 bg-clip-text text-transparent"
               animate={{
                 backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
@@ -518,16 +657,16 @@ export default function LandingPage() {
               style={{ backgroundSize: "200% 200%" }}
             >
               TRADING ASSISTANT.
-            </motion.span>
-          </motion.h1>
+            </motion.div>
+          </motion.div>
 
-          <motion.p
+          <motion.div
             variants={itemVariants}
             className="text-base sm:text-lg md:text-xl lg:text-2xl text-slate-500 dark:text-zinc-400 max-w-2xl mx-auto font-medium"
           >
             Execute complex, cross-chain cryptocurrency swaps using{" "}
             <span className="text-cyan-600 dark:text-cyan-400">simple natural language</span>.
-          </motion.p>
+          </motion.div>
 
           <motion.div
             variants={itemVariants}
@@ -566,12 +705,12 @@ export default function LandingPage() {
               />
               <span className="relative flex items-center gap-2">
                 Start Trading Now
-                <motion.span
+                <motion.div
                   animate={{ x: [0, 5, 0] }}
                   transition={{ duration: 1.5, repeat: Infinity }}
                 >
                   <ArrowRight className="w-5 h-5" />
-                </motion.span>
+                </motion.div>
               </span>
             </MagneticButton>
           </motion.div>

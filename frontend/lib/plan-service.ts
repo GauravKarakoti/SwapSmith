@@ -148,9 +148,7 @@ export async function incrementChatUsage(userId: number): Promise<{ count: numbe
     throw new Error('User not found');
   }
   
-  // 2 & 3: Changed PlanType to Plan and PLAN_LIMITS to PLAN_CONFIGS
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const plan: Plan = (userResult[0] as any).plan || 'free';
+  const plan = (userResult[0].plan ?? 'free') as Plan;
   const dailyChatLimit = PLAN_CONFIGS[plan].dailyChatLimit;
 
   // 🔒 ATOMIC OPERATION: Check limit and increment in a single query
@@ -192,9 +190,7 @@ export async function incrementTerminalUsage(userId: number): Promise<{ count: n
     throw new Error('User not found');
   }
   
-  // 2 & 3: Changed PlanType to Plan and PLAN_LIMITS to PLAN_CONFIGS
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const plan: Plan = (userResult[0] as any).plan || 'free';
+  const plan = (userResult[0].plan ?? 'free') as Plan;
   const dailyTerminalLimit = PLAN_CONFIGS[plan].dailyTerminalLimit;
 
   // 🔒 ATOMIC OPERATION: Check limit and increment in a single query
@@ -235,11 +231,11 @@ export async function resetDailyCounters(): Promise<void> {
  */
 // 3: Changed PlanType to Plan
 export async function updateUserPlan(userId: number, plan: Plan): Promise<void> {
-  await db.update(users)
+  await db
+    .update(users)
     .set({
       plan,
       updatedAt: new Date(),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any)
+    })
     .where(eq(users.id, userId));
 }

@@ -3,6 +3,13 @@
  * Separates data processing and business logic from UI components
  */
 
+type SwapRecord = {
+  status?: string;
+  createdAt?: string | Date;
+  settleAmount?: number | string;
+  [key: string]: unknown;
+};
+
 /**
  * Validate password strength
  * @param password - The password to validate
@@ -56,7 +63,7 @@ export function validateEmail(email: string): boolean {
  * @param swaps - Array of swap history items
  * @returns Total volume in USD (estimated)
  */
-export function calculateTotalSwapVolume(swaps: Array<{ settleAmount?: number | string }>): number {
+export function calculateTotalSwapVolume(swaps: SwapRecord[]): number {
   return swaps.reduce((total, swap) => {
     const amount = typeof swap.settleAmount === 'string' 
       ? parseFloat(swap.settleAmount) 
@@ -70,7 +77,7 @@ export function calculateTotalSwapVolume(swaps: Array<{ settleAmount?: number | 
  * @param swaps - Array of swap history items
  * @returns Statistics object
  */
-export function analyzeSwapStatistics(swaps: any[]): {
+export function analyzeSwapStatistics(swaps: SwapRecord[]): {
   totalSwaps: number;
   successfulSwaps: number;
   failedSwaps: number;
@@ -89,7 +96,7 @@ export function analyzeSwapStatistics(swaps: any[]): {
   const averageSwapSize = totalSwaps > 0 ? totalVolume / totalSwaps : 0;
 
   const lastSwap = swaps[swaps.length - 1];
-  const lastSwapDate = lastSwap ? new Date(lastSwap.createdAt) : null;
+  const lastSwapDate = lastSwap?.createdAt ? new Date(lastSwap.createdAt as string | number | Date) : null;
 
   return {
     totalSwaps,
@@ -140,12 +147,13 @@ export function isAdmin(roles: string[] | string): boolean {
  * @returns Filtered swaps
  */
 export function filterSwapsByDateRange(
-  swaps: any[],
+  swaps: SwapRecord[],
   startDate: Date,
   endDate: Date
-): any[] {
+): SwapRecord[] {
   return swaps.filter((swap) => {
-    const swapDate = new Date(swap.createdAt);
+    if (!swap.createdAt) return false;
+    const swapDate = new Date(swap.createdAt as string | number | Date);
     return swapDate >= startDate && swapDate <= endDate;
   });
 }
@@ -158,14 +166,16 @@ export function filterSwapsByDateRange(
  * @returns Sorted swaps
  */
 export function sortSwaps(
-  swaps: any[],
+  swaps: SwapRecord[],
   field: string,
   ascending: boolean = false
-): any[] {
+): SwapRecord[] {
   return [...swaps].sort((a, b) => {
-    const valueA = a[field];
-    const valueB = b[field];
+    const valueA = a[field] as string | number | null | undefined;
+    const valueB = b[field] as string | number | null | undefined;
 
+    if (valueA == null) return ascending ? 1 : -1;
+    if (valueB == null) return ascending ? -1 : 1;
     if (valueA < valueB) return ascending ? -1 : 1;
     if (valueA > valueB) return ascending ? 1 : -1;
     return 0;
