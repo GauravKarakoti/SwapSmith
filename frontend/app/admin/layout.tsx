@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import AdminFooter from '@/components/AdminFooter'
 
 export const metadata: Metadata = {
   title: 'Admin – SwapSmith',
@@ -7,5 +8,10 @@ export const metadata: Metadata = {
 }
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  return <div>{children}</div>
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#09090b' }}>
+      <div style={{ flex: 1 }}>{children}</div>
+      <AdminFooter />
+    </div>
+  )
 }
