@@ -1,16 +1,14 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
 
 /**
  * CSRF Protection Utility
- * 
+ *
  * Implements multiple layers of CSRF protection:
  * 1. Token-based protection using double-submit cookie pattern
  * 2. Origin/Referer header validation for trusted origins
- * 
- * For modern Next.js 13+ App Router, use token-based protection
- * For legacy Pages Router, use origin/referer validation
+ *
+ * Uses the Web Crypto API (globalThis.crypto) for Edge Runtime compatibility.
  */
 
 // CSRF Token configuration
@@ -18,7 +16,7 @@ export const CSRF_TOKEN_COOKIE = 'csrf-token';
 export const CSRF_TOKEN_HEADER = 'x-csrf-token';
 
 // List of allowed origins - configure based on your deployment
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS 
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
   : [
       'http://localhost:3000',
@@ -30,19 +28,39 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
 // ============ TOKEN-BASED CSRF PROTECTION (Next.js 13+ App Router) ============
 
 /**
- * Generate a CSRF token for double-submit cookie pattern
+ * Constant-time string comparison to prevent timing attacks.
+ * Uses XOR over every byte so no early-exit is possible.
  */
-export function generateCsrfToken(): string {
-  return crypto.randomBytes(32).toString('hex');
+function timingSafeEqual(a: string, b: string): boolean {
+  const encoder = new TextEncoder();
+  const aBytes = encoder.encode(a);
+  const bBytes = encoder.encode(b);
+  if (aBytes.length !== bBytes.length) return false;
+  let diff = 0;
+  for (let i = 0; i < aBytes.length; i++) {
+    diff |= aBytes[i] ^ bBytes[i];
+  }
+  return diff === 0;
 }
 
 /**
- * Validate CSRF token from NextRequest
- * Extracts token from header and compares with cookie
+ * Generate a CSRF token using the Web Crypto API (Edge-compatible).
+ */
+export function generateCsrfToken(): string {
+  const bytes = new Uint8Array(32);
+  globalThis.crypto.getRandomValues(bytes);
+  return Array.from(bytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/**
+ * Validate CSRF token from NextRequest.
+ * Extracts token from header and compares with cookie.
  */
 export function validateCsrfToken(request: NextRequest): boolean {
   const method = request.method;
-  
+
   // Skip validation for safe methods
   if (['GET', 'HEAD', 'OPTIONS'].includes(method)) {
     return true;
@@ -62,11 +80,8 @@ export function validateCsrfToken(request: NextRequest): boolean {
     return false;
   }
 
-  // Compare tokens (constant-time comparison to prevent timing attacks)
-  const match = crypto.timingSafeEqual(
-    Buffer.from(headerToken),
-    Buffer.from(cookieToken)
-  );
+  // Constant-time comparison to prevent timing attacks
+  const match = timingSafeEqual(headerToken, cookieToken);
 
   if (!match) {
     console.warn('[CSRF Token] Validation failed: Token mismatch');
