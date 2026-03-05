@@ -11,8 +11,7 @@ import GasFeeDisplay from './GasFeeDisplay';
 import GasComparisonChart from './GasComparisonChart';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
-import { useAudioRecorder } from '@/hooks/useAudioRecorder';
-import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
+import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { useAuth } from '@/hooks/useAuth';
 
 
@@ -87,25 +86,36 @@ export default function ChatInterface() {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasLoadedPersistenceRef = useRef(false);
   const saveSequenceRef = useRef(0);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Native Speech Recognition
+  // Use unified voice input with fallback
   const {
-    isListening: isNativeRecording,
-    transcript: nativeTranscript,
-    isSupported: isNativeSupported,
-    startRecording: startNativeRecording,
-    stopRecording: stopNativeRecording,
-    error: nativeAudioError
-  } = useSpeechRecognition();
-
-  // Use cross-browser audio recorder (Whisper API Fallback)
-  const {
-    isRecording: isWhisperRecording,
-    isSupported: isWhisperSupported,
-    startRecording: startWhisperRecording,
-    stopRecording: stopWhisperRecording,
-    error: whisperAudioError
-  } = useAudioRecorder();
+    isListening: isRecording,
+    isSupported: isAudioSupported,
+    transcript: voiceTranscript,
+    interimTranscript,
+    inputMethod,
+    startRecording,
+    stopRecording,
+    error: audioError,
+    resetTranscript
+  } = useVoiceInput({
+    onError: (error) => {
+      addMessage({
+        role: 'assistant',
+        content: `🎤 Voice input error: ${error}. You can type your command below.`,
+        type: 'message'
+      });
+      // Auto-focus text input on voice failure
+      inputRef.current?.focus();
+    },
+    onTranscriptChange: (transcript) => {
+      // Update input with real-time transcript from Speech API
+      if (inputMethod === 'speech-api') {
+        setInput(transcript);
+      }
+    }
+  });
 
   const isRecording = isNativeRecording || isWhisperRecording;
   const isAudioSupported = isNativeSupported || isWhisperSupported;
@@ -513,6 +523,18 @@ export default function ChatInterface() {
         return;
       }
 
+      // Handle Staking
+      if (command.intent === 'stake') {
+        if (command.requiresConfirmation || command.confidence < 80) {
+          setPendingCommand(command);
+          addMessage({ role: 'assistant', content: '', type: 'intent_confirmation', data: { parsedCommand: command } });
+        } else {
+          await executeStake(command);
+        }
+        setIsLoading(false);
+        return;
+      }
+
       // Handle DCA (Dollar Cost Averaging)
       if (command.intent === 'dca') {
         if (command.requiresConfirmation || command.confidence < 80) {
@@ -667,38 +689,79 @@ export default function ChatInterface() {
     }
   };
 
+  const executeStake = async (command: ParsedCommand) => {
+    try {
+      const stakeResponse = await fetch('/api/create-stake', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stakeAsset: command.stakeAsset || command.fromAsset,
+          amount: command.amount,
+          stakeProtocol: command.stakeProtocol,
+          stakeProvider: command.stakeProvider,
+          stakeChain: command.stakeChain || 'ethereum',
+          settleAddress: address // Use connected wallet address
+        }),
+      });
+
+      const result = await stakeResponse.json();
+      if (result.error) throw new Error(result.error);
+
+      const providerName = command.stakeProvider || command.stakeProtocol || 'Liquid Staking Provider';
+      const apr = command.stakingApr ? ` (${command.stakingApr}% APR)` : '';
+
+      addMessage({
+        role: 'assistant',
+        content: `✅ Stake Order Created!\n\n🌱 Staking Details:\n• Amount: ${command.amount} ${command.stakeAsset || command.fromAsset}\n• Provider: ${providerName}${apr}\n• Chain: ${command.stakeChain || 'ethereum'}\n\nYou'll receive liquid staking tokens representing your staked position. Your stake is now being processed!`,
+        type: 'message'
+      });
+    } catch (error: unknown) {
+      // Fallback message if API endpoint doesn't exist yet
+      const providerName = command.stakeProvider || command.stakeProtocol || 'Liquid Staking Provider';
+      const apr = command.stakingApr ? ` (${command.stakingApr}% APR)` : '';
+
+      addMessage({
+        role: 'assistant',
+        content: `🌱 Staking Intent Confirmed!\n\n📋 Staking Details:\n• Amount: ${command.amount} ${command.stakeAsset || command.fromAsset}\n• Provider: ${providerName}${apr}\n• Chain: ${command.stakeChain || 'ethereum'}\n\nNote: Staking execution will be available soon. Please use the terminal to execute this stake manually.`,
+        type: 'message'
+      });
+    }
+  };
+
   const handleIntentConfirm = async (confirmed: boolean) => {
     if (confirmed && pendingCommand) {
-      if (pendingCommand.intent === 'portfolio') {
-        const confirmedCmd = { ...pendingCommand, requiresConfirmation: false, confidence: 100 };
+        if (pendingCommand.intent === 'portfolio') {
+             const confirmedCmd = { ...pendingCommand, requiresConfirmation: false, confidence: 100 };
 
-        if (confirmedCmd.portfolio) {
-          const items: PortfolioItem[] = confirmedCmd.portfolio.map((item, index) => ({
-            id: `${item.toAsset}-${index}`,
-            fromAsset: confirmedCmd.fromAsset || 'ETH',
-            toAsset: item.toAsset,
-            amount: (confirmedCmd.amount! * item.percentage) / 100,
-            status: 'pending',
-            toChain: item.toChain
-          }));
+             if (confirmedCmd.portfolio) {
+                 const items: PortfolioItem[] = confirmedCmd.portfolio.map((item, index) => ({
+                     id: `${item.toAsset}-${index}`,
+                     fromAsset: confirmedCmd.fromAsset || 'ETH',
+                     toAsset: item.toAsset,
+                     amount: (confirmedCmd.amount! * item.percentage) / 100,
+                     status: 'pending',
+                     toChain: item.toChain
+                 }));
 
-          addMessage({
-            role: 'assistant',
-            content: `📊 **Portfolio Strategy Executing**\nSplitting ${confirmedCmd.amount} ${confirmedCmd.fromAsset}...`,
-            type: 'portfolio_summary',
-            data: { portfolioItems: items, parsedCommand: confirmedCmd }
-          });
+                 addMessage({
+                     role: 'assistant',
+                     content: `📊 **Portfolio Strategy Executing**\nSplitting ${confirmedCmd.amount} ${confirmedCmd.fromAsset}...`,
+                     type: 'portfolio_summary',
+                     data: { portfolioItems: items, parsedCommand: confirmedCmd }
+                 });
 
-          await processPortfolioBatch(items, confirmedCmd);
+                 await processPortfolioBatch(items, confirmedCmd);
+             }
+        } else if (pendingCommand.intent === 'stake') {
+             await executeStake(pendingCommand);
+        } else if (pendingCommand.intent === 'dca') {
+             await executeDCA(pendingCommand);
+        } else if (pendingCommand.conditionOperator && pendingCommand.conditionValue) {
+             // Limit Order (swap with conditions)
+             await executeLimitOrder(pendingCommand);
+        } else {
+            await executeSwap(pendingCommand);
         }
-      } else if (pendingCommand.intent === 'dca') {
-        await executeDCA(pendingCommand);
-      } else if (pendingCommand.conditionOperator && pendingCommand.conditionValue) {
-        // Limit Order (swap with conditions)
-        await executeLimitOrder(pendingCommand);
-      } else {
-        await executeSwap(pendingCommand);
-      }
     } else if (!confirmed) {
       addMessage({ role: 'assistant', content: 'Cancelled.', type: 'message' });
     }
@@ -707,50 +770,58 @@ export default function ChatInterface() {
 
   const handleVoiceRecording = async () => {
     if (isRecording) {
-      if (isNativeRecording) {
-        stopNativeRecording();
-      } else if (isWhisperRecording) {
-        setIsLoading(true);
-        try {
-          const audioBlob = await stopWhisperRecording();
-          if (audioBlob) {
-            const audioFile = new File([audioBlob], "voice_command.wav", { type: audioBlob.type || 'audio/wav' });
+      setIsLoading(true);
+      try {
+        const audioBlob = await stopRecording();
 
-            const formData = new FormData();
-            formData.append('file', audioFile);
+        // If we got an audio blob, it means we used MediaRecorder fallback
+        // Send to Whisper API for transcription
+        if (audioBlob) {
+          const audioFile = new File([audioBlob], "voice_command.webm", { type: audioBlob.type || 'audio/webm' });
 
-            const response = await fetch('/api/transcribe', {
-              method: 'POST',
-              body: formData
-            });
+          const formData = new FormData();
+          formData.append('file', audioFile);
 
-            const data = await response.json();
-
-            if (data.error) throw new Error(data.error);
-
-            if (data.text) {
-              addMessage({ role: 'user', content: data.text, type: 'message' });
-              processCommand(data.text);
-            }
-          }
-        } catch (err) {
-          console.error("Voice processing failed:", err);
-          addMessage({
-            role: 'assistant',
-            content: "Sorry, I couldn't process your voice command. Please try again.",
-            type: 'message'
+          const response = await fetch('/api/transcribe', {
+            method: 'POST',
+            body: formData
           });
-          inputRef.current?.focus();
-        } finally {
-          setIsLoading(false);
+
+          const data = await response.json();
+
+          if (data.error) throw new Error(data.error);
+
+          if (data.text) {
+            addMessage({ role: 'user', content: data.text, type: 'message' });
+            processCommand(data.text);
+          }
+        } else {
+          // If no blob, we used Speech API - transcript is already in the input
+          if (voiceTranscript || input) {
+            const finalText = voiceTranscript || input;
+            addMessage({ role: 'user', content: finalText, type: 'message' });
+            processCommand(finalText);
+            setInput('');
+            resetTranscript();
+          }
         }
+      } catch (err) {
+        console.error("Voice processing failed:", err);
+        addMessage({
+          role: 'assistant',
+          content: "Sorry, I couldn't process your voice command. Please type your command below.",
+          type: 'message'
+        });
+        // Auto-focus text input on processing failure
+        inputRef.current?.focus();
+      } finally {
+        setIsLoading(false);
       }
     } else {
-      if (isNativeSupported) {
-        startNativeRecording();
-      } else if (isWhisperSupported) {
-        await startWhisperRecording();
-      }
+      // Clear input and start fresh recording
+      setInput('');
+      resetTranscript();
+      await startRecording();
     }
   };
 
@@ -893,11 +964,12 @@ export default function ChatInterface() {
             <input
               ref={inputRef}
               type="text"
-              value={input}
+              value={isRecording && interimTranscript ? interimTranscript : input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder="Send a command (e.g., 'Swap 1 ETH to USDC')"
+              placeholder={isRecording ? "Listening..." : "Send a command (e.g., 'Swap 1 ETH to USDC')"}
               className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-white placeholder:text-gray-500 py-3"
+              readOnly={isRecording}
             />
 
             <div className="flex items-center gap-2 pr-2">
@@ -911,11 +983,16 @@ export default function ChatInterface() {
             </div>
           </div>
         </div>
-
-        {/* Voice Fallback */}
+        
+        {/* Voice Status */}
+        {isRecording && inputMethod && (
+          <div className="text-blue-400 text-xs mt-2 px-1 text-center font-medium animate-pulse">
+            🎤 {inputMethod === 'speech-api' ? 'Listening with speech recognition...' : 'Recording audio for transcription...'}
+          </div>
+        )}
         {!isAudioSupported && (
-          <div className="text-red-500 text-xs mt-2 px-1 text-center font-medium">
-            🎤 Voice input is not supported in your browser. Please use Chrome or type your command.
+          <div className="text-amber-500 text-xs mt-2 px-1 text-center font-medium">
+            🎤 Voice input is not supported in your browser. Please type your command.
           </div>
         )}
 
