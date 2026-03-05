@@ -86,7 +86,6 @@ export default function ChatInterface() {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasLoadedPersistenceRef = useRef(false);
   const saveSequenceRef = useRef(0);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   // Use unified voice input with fallback
   const {
@@ -117,28 +116,7 @@ export default function ChatInterface() {
     }
   });
 
-  const isRecording = isNativeRecording || isWhisperRecording;
-  const isAudioSupported = isNativeSupported || isWhisperSupported;
 
-  // Sync native transcript to input state only while native recording is active
-  useEffect(() => {
-    if (isNativeRecording && nativeTranscript) {
-      setInput(nativeTranscript);
-    }
-  }, [isNativeRecording, nativeTranscript]);
-
-  const prevIsNativeRecordingRef = useRef(isNativeRecording);
-  
-  useEffect(() => {
-    // If recording just stopped and we have a transcript, send it
-    if (prevIsNativeRecordingRef.current && !isNativeRecording && nativeTranscript.trim()) {
-      const text = nativeTranscript.trim();
-      addMessage({ role: 'user', content: text, type: 'message' });
-      setTimeout(() => processCommand(text), 500);
-      setInput('');
-    }
-    prevIsNativeRecordingRef.current = isNativeRecording;
-  }, [isNativeRecording, nativeTranscript]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -296,14 +274,7 @@ export default function ChatInterface() {
     };
   }, [messages, isAuthenticated, isAuthLoading, user?.uid, address]);
 
-  // Show audio error if any, and auto-focus the text input on failure
-  useEffect(() => {
-    const errorMsg = nativeAudioError || whisperAudioError;
-    if (errorMsg) {
-      addMessage({ role: 'assistant', content: errorMsg, type: 'message' });
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  }, [nativeAudioError, whisperAudioError]);
+
 
   const formatTime = (date: Date) => {
     const hours = date.getHours();
