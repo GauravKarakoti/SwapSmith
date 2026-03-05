@@ -83,7 +83,6 @@ export const checkouts = pgTable('checkouts', {
   checkoutId: text('checkout_id').notNull().unique(),
   settleAsset: text('settle_asset').notNull(),
   settleNetwork: text('settle_network').notNull(),
-  settleAmount: text('settle_amount').notNull(),
   settleAmount: numeric('settle_amount', { precision: 30, scale: 18 }).notNull(),
   settleAddress: text('settle_address').notNull(),
   status: text('status').notNull().default('pending'),
@@ -183,7 +182,7 @@ export const trailingStopOrders = pgTable('trailing_stop_orders', {
   index("idx_trailing_stop_orders_is_active").on(table.isActive),
 ]);
 
-// --- Shared tables (used by both bot and frontend) ---
+// --- SHARED SCHEMAS (used by both bot and frontend) ---
 
 export const coinPriceCache = pgTable('coin_price_cache', {
   id: serial('id').primaryKey(),
@@ -251,87 +250,6 @@ export const rebalanceHistory = pgTable('rebalance_history', {
   index("idx_rebalance_history_target_id").on(table.portfolioTargetId),
   index("idx_rebalance_history_status").on(table.status),
 ]);
-
-export const tradingStrategies = pgTable('trading_strategies', {
-  id: serial('id').primaryKey(),
-  creatorId: integer('creator_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  creatorTelegramId: bigint('creator_telegram_id', { mode: 'number' }),
-  name: text('name').notNull(),
-  description: text('description').notNull(),
-  parameters: jsonb('parameters').notNull(),
-  riskLevel: text('risk_level').notNull(), // 'low' | 'medium' | 'high' | 'aggressive'
-  subscriptionFee: text('subscription_fee').notNull(),
-  performanceFee: real('performance_fee').notNull(),
-  minInvestment: text('min_investment').notNull(),
-  isPublic: boolean('is_public').notNull().default(false),
-  tags: text('tags').array(),
-  status: text('status').notNull().default('active'),
-  totalReturn: real('total_return').notNull().default(0),
-  monthlyReturn: real('monthly_return').notNull().default(0),
-  maxDrawdown: real('max_drawdown').notNull().default(0),
-  subscriberCount: integer('subscriber_count').notNull().default(0),
-  totalTrades: integer('total_trades').notNull().default(0),
-  successfulTrades: integer('successful_trades').notNull().default(0),
-  sharpeRatio: real('sharpe_ratio').default(0),
-  volatility: real('volatility').default(0),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-}, (table) => [
-  index('idx_trading_strategies_creator').on(table.creatorId),
-  index('idx_trading_strategies_status').on(table.status),
-]);
-
-export const strategySubscriptions = pgTable('strategy_subscriptions', {
-  strategyId: integer('strategy_id').notNull().references(() => tradingStrategies.id, { onDelete: 'cascade' }),
-  subscriberId: integer('subscriber_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  subscriberTelegramId: bigint('subscriber_telegram_id', { mode: 'number' }),
-  subscriptionFee: text('subscription_fee').notNull(),
-  allocationPercent: real('allocation_percent').notNull().default(100),
-  autoRebalance: boolean('auto_rebalance').notNull().default(true),
-  stopLossPercent: real('stop_loss_percent'),
-  status: text('status').notNull().default('active'), // 'active' | 'paused' | 'cancelled'
-  joinedAt: timestamp('joined_at').defaultNow(),
-  pausedAt: timestamp('paused_at'),
-  cancelledAt: timestamp('cancelled_at'),
-}, (table) => [
-  unique().on(table.strategyId, table.subscriberId),
-  index('idx_strategy_subscriptions_subscriber').on(table.subscriberId),
-  index('idx_strategy_subscriptions_status').on(table.status),
-]);
-
-export const strategyTrades = pgTable('strategy_trades', {
-  id: serial('id').primaryKey(),
-  strategyId: integer('strategy_id').notNull().references(() => tradingStrategies.id, { onDelete: 'cascade' }),
-  status: text('status').notNull().default('pending'), // 'completed' | 'failed' | 'pending'
-  settleAmount: text('settle_amount'),
-  sideshiftOrderId: text('sideshift_order_id'),
-  error: text('error'),
-  executedAt: timestamp('executed_at'),
-  createdAt: timestamp('created_at').defaultNow(),
-}, (table) => [
-  index('idx_strategy_trades_strategy').on(table.strategyId),
-]);
-
-export const strategyPerformance = pgTable('strategy_performance', {
-  id: serial('id').primaryKey(),
-  strategyId: integer('strategy_id').notNull().references(() => tradingStrategies.id, { onDelete: 'cascade' }),
-  pnl: real('pnl').notNull(),
-  pnlPercent: real('pnl_percent').notNull(),
-  status: text('status').notNull().default('completed'),
-  executedAt: timestamp('executed_at').defaultNow(),
-  createdAt: timestamp('created_at').defaultNow(),
-}, (table) => [
-  index('idx_strategy_performance_strategy').on(table.strategyId),
-]);
-
-// Type exports
-export type TradingStrategy = typeof tradingStrategies.$inferSelect;
-export type NewTradingStrategy = typeof tradingStrategies.$inferInsert;
-export type StrategySubscription = typeof strategySubscriptions.$inferSelect;
-export type StrategyTrade = typeof strategyTrades.$inferSelect;
-export type NewStrategyTrade = typeof strategyTrades.$inferInsert;
-export type StrategyPerformance = typeof strategyPerformance.$inferSelect;
-export type NewStrategyPerformance = typeof strategyPerformance.$inferInsert;
 
 // --- WATCHLIST SCHEMA ---
 
@@ -462,7 +380,7 @@ export const rewardsLog = pgTable('rewards_log', {
   index("idx_rewards_log_mint_status").on(table.mintStatus),
 ]);
 
-// --- GAS OPTIMIZATION SCHEMAS ---
+// --- GAS FEE OPTIMIZATION SCHEMAS ---
 
 export const gasEstimates = pgTable('gas_estimates', {
   id: serial('id').primaryKey(),
@@ -728,3 +646,38 @@ export const coinGiftLogsRelations = relations(coinGiftLogs, ({ one }) => ({
 }));
 
 export type CoinGiftLog = typeof coinGiftLogs.$inferSelect;
+
+// ── PAGE VISITS ─────────────────────────────────────────────────────────────
+export const pageVisits = pgTable('page_visits', {
+  id:        serial('id').primaryKey(),
+  page:      text('page').notNull(),
+  userId:    text('user_id'),
+  sessionId: text('session_id'),
+  userAgent: text('user_agent'),
+  referer:   text('referer'),
+  visitedAt: timestamp('visited_at').notNull().defaultNow(),
+}, (table) => [
+  index('idx_page_visits_page').on(table.page),
+  index('idx_page_visits_user_id').on(table.userId),
+  index('idx_page_visits_visited_at').on(table.visitedAt),
+]);
+
+export type PageVisit = typeof pageVisits.$inferSelect;
+
+// ── GROQ USAGE LOGS ──────────────────────────────────────────────────────────
+export const groqUsageLogs = pgTable('groq_usage_logs', {
+  id:               serial('id').primaryKey(),
+  userId:           text('user_id'),
+  model:            text('model').notNull(),
+  endpoint:         text('endpoint').notNull().default('chat'),
+  promptTokens:     integer('prompt_tokens').notNull().default(0),
+  completionTokens: integer('completion_tokens').notNull().default(0),
+  totalTokens:      integer('total_tokens').notNull().default(0),
+  createdAt:        timestamp('created_at').notNull().defaultNow(),
+}, (table) => [
+  index('idx_groq_usage_logs_user_id').on(table.userId),
+  index('idx_groq_usage_logs_model').on(table.model),
+  index('idx_groq_usage_logs_created_at').on(table.createdAt),
+]);
+
+export type GroqUsageLog = typeof groqUsageLogs.$inferSelect;

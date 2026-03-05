@@ -15,7 +15,7 @@ export default function TrustIndicators({ confidence }: TrustIndicatorsProps) {
     ? (confidence <= 1 ? confidence * 100 : confidence)
     : undefined;
 
-  const getConfidenceLevel = (score: number) => {
+  const _getConfidenceLevel = (score: number) => {
     if (score >= 80) return 'High';
     if (score >= 50) return 'Medium';
     return 'Low';
@@ -37,7 +37,7 @@ export default function TrustIndicators({ confidence }: TrustIndicatorsProps) {
     return 'bg-red-500/10 text-red-400 border-red-500/20';
   };
 
-  const getSuccessRateColor = (rate: number) => {
+  const _getSuccessRateColor = (rate: number) => {
     if (rate >= 90) return 'text-emerald-400';
     if (rate >= 70) return 'text-yellow-400';
     return 'text-red-400';
