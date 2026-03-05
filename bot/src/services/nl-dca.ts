@@ -132,7 +132,8 @@ export function parseDCA(input: string): Partial<DCAScheduleNLConfig> | null {
 
   // Extract specific day (e.g. "every Friday")
   for (const [day, index] of Object.entries(DAY_OF_WEEK_MAP)) {
-    if (normalizedInput.includes(day)) {
+    const dayRegex = new RegExp(`\\b${day}\\b`, 'i');
+    if (dayRegex.test(normalizedInput)) {
       config.dayOfWeek = index;
       if (!config.frequency) config.frequency = 'weekly';
       break;
