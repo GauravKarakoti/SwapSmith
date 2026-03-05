@@ -121,7 +121,7 @@ export function validateEnhancedCSRF(request: NextRequest): {
   const method = request.method;
   
   // Skip validation for safe methods
-  if (['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+  if (!method || ['GET', 'HEAD', 'OPTIONS'].includes(method)) {
     return { isValid: true };
   }
   
@@ -217,7 +217,7 @@ export function enhancedCSRFMiddleware(request: NextRequest): NextResponse | nul
     
     if (!validation.isValid) {
       console.warn(`[Enhanced CSRF] Blocked request: ${validation.reason}`, {
-        ip: request.ip,
+        ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
         origin: request.headers.get('origin'),
         referer: request.headers.get('referer'),
         userAgent: request.headers.get('user-agent'),
@@ -264,7 +264,7 @@ export function validateEnhancedCSRFPages(req: NextApiRequest): {
   const method = req.method;
   
   // Skip validation for safe methods
-  if (['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+  if (!method || ['GET', 'HEAD', 'OPTIONS'].includes(method)) {
     return { isValid: true };
   }
   
@@ -317,7 +317,7 @@ export function enhancedCSRFGuard(req: NextApiRequest, res: NextApiResponse): bo
   
   if (!validation.isValid) {
     console.warn(`[Enhanced CSRF] Blocked Pages API request: ${validation.reason}`, {
-      ip: req.ip || req.socket.remoteAddress,
+      ip: (req.headers['x-forwarded-for'] as string) || (req.headers['x-real-ip'] as string) || req.socket?.remoteAddress || 'unknown',
       origin: req.headers.origin,
       referer: req.headers.referer,
       userAgent: req.headers['user-agent'],

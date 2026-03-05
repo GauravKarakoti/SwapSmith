@@ -47,7 +47,7 @@ async function parseCommandHandler(req: NextApiRequest, res: NextApiResponse) {
   ];
 
   if (suspiciousPatterns.some(pattern => pattern.test(trimmedMessage))) {
-    logger.warn('Suspicious input detected:', { message: trimmedMessage, ip: req.ip });
+    logger.warn('Suspicious input detected:', { message: trimmedMessage, ip: req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || 'unknown' });
     return res.status(400).json({
       success: false,
       error: 'Invalid input detected',
@@ -63,7 +63,7 @@ async function parseCommandHandler(req: NextApiRequest, res: NextApiResponse) {
       input: trimmedMessage,
       output: parsedCommand,
       timestamp: new Date().toISOString(),
-      ip: req.ip
+      ip: req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || 'unknown'
     });
 
     // Add security headers
@@ -73,7 +73,7 @@ async function parseCommandHandler(req: NextApiRequest, res: NextApiResponse) {
 
     res.status(200).json(parsedCommand);
   } catch (error: unknown) {
-    logger.error('Error parsing command:', { error, ip: req.ip });
+    logger.error('Error parsing command:', { error, ip: req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || 'unknown' });
     
     // Differentiate between Groq API errors and other errors
     const errorMessage = error instanceof Error ? error.message : 'Internal server error';
