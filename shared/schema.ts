@@ -155,7 +155,9 @@ export const limitOrders = pgTable('limit_orders', {
   index("idx_limit_orders_telegram_id").on(table.telegramId),
   index("idx_limit_orders_status").on(table.status),
   index("idx_limit_orders_is_active").on(table.isActive),
-]); = pgTable('trailing_stop_orders', {
+]);
+
+export const trailingStopOrders = pgTable('trailing_stop_orders', {
   id: serial('id').primaryKey(),
   telegramId: bigint('telegram_id', { mode: 'number' }).notNull(),
   fromAsset: text('from_asset').notNull(),
