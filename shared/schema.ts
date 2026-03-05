@@ -488,7 +488,7 @@ export const tradingStrategies = pgTable('trading_strategies', {
   name: text('name').notNull(),
   description: text('description').notNull(),
   parameters: jsonb('parameters').notNull(),
-  riskLevel: riskLevelType('risk_level').notNull().default('medium'),
+  riskLevel: strategyRiskLevelType('risk_level').notNull().default('medium'),
   subscriptionFee: text('subscription_fee').notNull().default('0'),
   performanceFee: real('performance_fee').notNull().default(0),
   minInvestment: text('min_investment').notNull().default('0'),
