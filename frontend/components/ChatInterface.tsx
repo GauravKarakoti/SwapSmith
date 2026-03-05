@@ -79,7 +79,6 @@ export default function ChatInterface() {
   const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
   const [currentConfidence, setCurrentConfidence] = useState<number | undefined>(undefined);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
   const { address, isConnected } = useAccount();
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const { handleError } = useErrorHandler();
@@ -117,28 +116,19 @@ export default function ChatInterface() {
     }
   });
 
-  const isRecording = isNativeRecording || isWhisperRecording;
-  const isAudioSupported = isNativeSupported || isWhisperSupported;
-
-  // Sync native transcript to input state only while native recording is active
-  useEffect(() => {
-    if (isNativeRecording && nativeTranscript) {
-      setInput(nativeTranscript);
-    }
-  }, [isNativeRecording, nativeTranscript]);
-
-  const prevIsNativeRecordingRef = useRef(isNativeRecording);
+  const prevIsRecordingRef = useRef(isRecording);
   
   useEffect(() => {
     // If recording just stopped and we have a transcript, send it
-    if (prevIsNativeRecordingRef.current && !isNativeRecording && nativeTranscript.trim()) {
-      const text = nativeTranscript.trim();
+    if (prevIsRecordingRef.current && !isRecording && voiceTranscript.trim()) {
+      const text = voiceTranscript.trim();
       addMessage({ role: 'user', content: text, type: 'message' });
       setTimeout(() => processCommand(text), 500);
       setInput('');
+      resetTranscript(); // Clear the transcript after sending
     }
-    prevIsNativeRecordingRef.current = isNativeRecording;
-  }, [isNativeRecording, nativeTranscript]); // eslint-disable-line react-hooks/exhaustive-deps
+    prevIsRecordingRef.current = isRecording;
+  }, [isRecording, voiceTranscript, resetTranscript]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -296,14 +286,13 @@ export default function ChatInterface() {
     };
   }, [messages, isAuthenticated, isAuthLoading, user?.uid, address]);
 
-  // Show audio error if any, and auto-focus the text input on failure
   useEffect(() => {
-    const errorMsg = nativeAudioError || whisperAudioError;
-    if (errorMsg) {
-      addMessage({ role: 'assistant', content: errorMsg, type: 'message' });
+    if (audioError) {
+      // The error message is already being added by the `onError` callback 
+      // passed into `useVoiceInput` at the top of the file.
       setTimeout(() => inputRef.current?.focus(), 100);
     }
-  }, [nativeAudioError, whisperAudioError]);
+  }, [audioError]);
 
   const formatTime = (date: Date) => {
     const hours = date.getHours();
