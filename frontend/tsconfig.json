@@ -40,5 +40,5 @@
     "**/*.mts",
     "../shared/**/*.ts"
   ],
-  "exclude": ["node_modules", "vitest.config.mts", "vitest.setup.ts"]
+  "exclude": ["node_modules", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "vitest.config.mts", "vitest.setup.ts"]
 }

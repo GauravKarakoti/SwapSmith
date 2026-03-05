@@ -25,8 +25,6 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
       'https://www.swapsmith.ai',
     ];
 
-// ============ TOKEN-BASED CSRF PROTECTION (Next.js 13+ App Router) ============
-
 /**
  * Constant-time string comparison to prevent timing attacks.
  * Uses XOR over every byte so no early-exit is possible.
@@ -35,11 +33,14 @@ function timingSafeEqual(a: string, b: string): boolean {
   const encoder = new TextEncoder();
   const aBytes = encoder.encode(a);
   const bBytes = encoder.encode(b);
+
   if (aBytes.length !== bBytes.length) return false;
+
   let diff = 0;
   for (let i = 0; i < aBytes.length; i++) {
     diff |= aBytes[i] ^ bBytes[i];
   }
+
   return diff === 0;
 }
 
@@ -49,6 +50,7 @@ function timingSafeEqual(a: string, b: string): boolean {
 export function generateCsrfToken(): string {
   const bytes = new Uint8Array(32);
   globalThis.crypto.getRandomValues(bytes);
+
   return Array.from(bytes)
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
@@ -80,7 +82,6 @@ export function validateCsrfToken(request: NextRequest): boolean {
     return false;
   }
 
-  // Constant-time comparison to prevent timing attacks
   const match = timingSafeEqual(headerToken, cookieToken);
 
   if (!match) {

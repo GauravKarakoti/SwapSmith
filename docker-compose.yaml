@@ -20,8 +20,6 @@ services:
     restart: unless-stopped
     env_file:
       - ./bot/.env
-    environment:
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/swapsmith
     command: sh -c "chmod +x ./scripts/wait-for-db-and-migrate.sh && ./scripts/wait-for-db-and-migrate.sh"
     depends_on:
       db:
