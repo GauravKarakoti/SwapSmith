@@ -115,7 +115,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
         throw err
       }
 
-      let balanceRaw: bigint = 0n
+      let balanceRaw: bigint = BigInt(0)
 
       if (isNativeValue) {
         balanceRaw = await publicClient.getBalance({ address })
