@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { loadSecret } from '../../../../shared/utils/secrets-loader';
 
 /**
  * Health Check API Route
@@ -117,11 +118,19 @@ async function checkDatabaseConnection() {
 function checkSecretsAvailability() {
   try {
     const requiredSecrets = [
-      'GROQ_API_KEY',
-      'NEXT_PUBLIC_SIDESHIFT_API_KEY'
+      { name: 'groq_api_key', env: 'GROQ_API_KEY' },
+      { name: 'sideshift_api_key', env: 'NEXT_PUBLIC_SIDESHIFT_API_KEY' }
     ];
     
-    const missingSecrets = requiredSecrets.filter(secret => !process.env[secret]);
+    const missingSecrets = [];
+    
+    for (const secret of requiredSecrets) {
+      try {
+        loadSecret(secret.name, secret.env, false);
+      } catch (error) {
+        missingSecrets.push(secret.name);
+      }
+    }
     
     if (missingSecrets.length > 0) {
       return {

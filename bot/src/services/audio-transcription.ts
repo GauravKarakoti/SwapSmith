@@ -145,7 +145,10 @@ async function callTranscriptionAPI(audioFile: File, language: string, model: st
   
   // Example for Groq integration:
   /*
-  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  import { loadSecret } from '../../../shared/utils/secrets-loader';
+  
+  const apiKey = loadSecret('groq_api_key', 'GROQ_API_KEY');
+  const groq = new Groq({ apiKey });
   
   const transcription = await groq.audio.transcriptions.create({
     file: audioFile,
