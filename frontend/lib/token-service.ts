@@ -18,6 +18,7 @@ import {
 } from 'viem'
 import { sepolia } from 'viem/chains'
 import { privateKeyToAccount } from 'viem/accounts'
+import logger from './logger';
 
 // Minimal ABI – only the functions we call from the backend.
 const REWARD_TOKEN_ABI = [
@@ -112,10 +113,12 @@ export async function mintTokens(
 
   const { walletClient, publicClient, contractAddress } = getConfig()
 
-  console.log(
-    `[Token Service] Sending ${amount} SMTH to ${recipientAddress} ` +
-    `via contract ${contractAddress} on Sepolia`
-  )
+  logger.info('[Token Service] Sending tokens', {
+    amount,
+    recipient: recipientAddress,
+    contract: contractAddress,
+    network: 'Sepolia'
+  });
 
   // Send transaction
   const hash = await walletClient.writeContract({
@@ -125,7 +128,7 @@ export async function mintTokens(
     args: [recipientAddress as `0x${string}`, parseEther(amount)],
   })
 
-  console.log(`[Token Service] Transaction submitted: ${hash}`)
+  logger.info('[Token Service] Transaction submitted', { txHash: hash });
 
   // Wait for confirmation (1 block)
   const receipt = await publicClient.waitForTransactionReceipt({
@@ -134,10 +137,11 @@ export async function mintTokens(
   })
 
   const success = receipt.status === 'success'
-  console.log(
-    `[Token Service] Transaction ${success ? 'confirmed ✅' : 'failed ❌'} ` +
-    `| block ${receipt.blockNumber} | tx ${hash}`
-  )
+  logger.info('[Token Service] Transaction result', {
+    success,
+    blockNumber: receipt.blockNumber,
+    txHash: hash
+  });
 
   return {
     txHash:      hash,
