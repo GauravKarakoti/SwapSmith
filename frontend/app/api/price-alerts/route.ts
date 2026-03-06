@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth-helpers';
 import { 
-  getPriceAlerts, 
+  getPriceAlerts,
+  getActivePriceAlerts,
   createPriceAlert, 
   deletePriceAlert, 
-  togglePriceAlert 
+  togglePriceAlert,
+  getCachedPrice
 } from '@/lib/database';
 import logger from '@/lib/logger';
 
@@ -20,11 +22,28 @@ export async function GET(request: NextRequest) {
       );
     }
     
-    const alerts = await getPriceAlerts(authResult.firebaseUid);
+    const { searchParams } = new URL(request.url);
+    const activeOnly = searchParams.get('active') === 'true';
+    
+    const alerts = activeOnly 
+      ? await getActivePriceAlerts(authResult.firebaseUid)
+      : await getPriceAlerts(authResult.firebaseUid);
+    
+    // Enrich alerts with current prices
+    const alertsWithPrices = await Promise.all(
+      alerts.map(async (alert) => {
+        const priceData = await getCachedPrice(alert.coin, alert.network);
+        return {
+          ...alert,
+          currentPrice: priceData?.usdPrice ?? null,
+          lastUpdated: priceData?.updatedAt ?? null,
+        };
+      })
+    );
     
     return NextResponse.json({ 
       success: true, 
-      alerts 
+      alerts: alertsWithPrices 
     });
     
   } catch (error) {
@@ -94,6 +113,9 @@ export async function POST(request: NextRequest) {
       );
     }
     
+    // Enrich with current price
+    const priceData = await getCachedPrice(coin, network);
+    
     logger.info('Price alert created', {
       userId: authResult.firebaseUid,
       alertId: alert.id,
@@ -104,7 +126,10 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json({ 
       success: true, 
-      alert 
+      alert: {
+        ...alert,
+        currentPrice: priceData?.usdPrice ?? null
+      }
     });
     
   } catch (error) {
