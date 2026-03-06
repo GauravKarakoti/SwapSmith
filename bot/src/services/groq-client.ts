@@ -381,7 +381,7 @@ CRITICAL PARSING RULES:
 7. Default to most conservative interpretation when unsure
 8. Preserve user intent even with imperfect phrasing
 
-Remember: It's better to ask for clarification than to make incorrect assumptions with user funds.`;
+Remember: It's better to ask for clarification than to make incorrect assumptions with user funds.
 
 6. "Deposit 1 ETH to yield"
    -> intent: "yield_deposit", fromAsset: "ETH", amount: 1, confidence: 95

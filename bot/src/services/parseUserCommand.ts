@@ -101,9 +101,8 @@ const preprocessInput = (input: string): string => {
     processed = processed.replace(regex, correction);
   });
   
-  // Normalize common separators
   processed = processed.replace(/[-–—]/g, ' to ');
-  processed = processed.replace(/[→->]/g, ' to ');
+  processed = processed.replace(/→|->/g, ' to ');
   
   return processed;
 };
@@ -115,17 +114,6 @@ const REGEX_STAKE_PROTOCOL = /(?:to\s+)?(aave|compound|yearn|lido|morpho|euler|s
 // New Regex for direct Stake commands (e.g., "Stake 1 ETH with Lido" or "Stake my ETH")
 const REGEX_STAKE_COMMAND = /\b(stake)\b/i;
 const REGEX_LIQUID_STAKING_PROVIDER = /\b(lido|rocket\s*pool|rocketpool|stakewise|stake\s*wise)\b/i;
-
-const parseScaledNumber = (raw: string): number => {
-  const cleaned = raw.replace(/[$,\s]/g, '').toLowerCase();
-  const suffix = cleaned.slice(-1);
-  const base = parseFloat(cleaned);
-  
-  if (suffix === 'k') return base * 1000;
-  if (suffix === 'm') return base * 1000000;
-  if (suffix === 'b') return base * 1000000000;
-  return base;
-};
 
 const buildSwapResult = (
   userInput: string,
@@ -184,8 +172,14 @@ const buildSwapResult = (
 
 export async function parseUserCommand(
   userInput: string,
-  fallbackToLLM: boolean = true
+  conversationHistory: any = [], // Replaced fallbackToLLM to fix "Cannot find name" errors
+  inputType: 'text' | 'voice' = 'text'
 ): Promise<ParseResult> {
+  // Graceful handling if someone passes a boolean for legacy fallbackToLLM
+  if (typeof conversationHistory === 'boolean') {
+    conversationHistory = [];
+  }
+
   if (!userInput?.trim()) {
     return {
       success: false,
@@ -208,7 +202,7 @@ export async function parseUserCommand(
   if (hasAmbiguousOr || hasMultipleDestinations) {
     const destinations = preprocessedInput.match(REGEX_MULTIPLE_DESTINATIONS);
     return {
-      success: true,
+      success: false, // <-- FIXED: Must be false for partial/ambiguous results
       intent: 'swap',
       validationErrors: destinations 
         ? [`Multiple destination assets detected: ${destinations[1]}, ${destinations[2]}. Please specify one.`]
@@ -242,10 +236,10 @@ export async function parseUserCommand(
           amount: amountMatch ? parseScaledNumber(amountMatch[1]) : null,
           amountType: amountMatch ? 'exact' : null,
           conditions: {
-            type: conditionType,
+            type: conditionType as "price_above" | "price_below",
             asset: tokenMatch?.[3] || 'BTC', // Default to BTC if not specified
-            value,
-            operator: conditionType === 'price_above' ? 'gt' : 'lt'
+            value
+            // <-- FIXED: Removed invalid 'operator' property from this object
           },
           confidence: 75,
           requiresConfirmation: true
@@ -253,9 +247,7 @@ export async function parseUserCommand(
       }
     }
   }
-  conversationHistory: any[] = [],
-  inputType: 'text' | 'voice' = 'text'
-): Promise<ParseResult> {
+
   let input = userInput
     .trim()
     .replace(/^(hey|hi|hello|please|kindly|can you)\s+/i, '')

@@ -333,15 +333,6 @@ class AudioRecorderPolyfill {
   }
 
   isSupported(): boolean {
-<<<<<<< HEAD
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
-      return false;
-    }
-    // Supported if MediaRecorder exists OR AudioContext exists
-    return !!(
-      (typeof window !== 'undefined' && window.MediaRecorder) ||
-      (typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext))
-=======
     if (typeof navigator === 'undefined') return false;
 
     const hasGetUserMedia =
@@ -362,7 +353,6 @@ class AudioRecorderPolyfill {
     return (
       hasGetUserMedia &&
       (hasMediaRecorder || hasAudioContext || hasSpeechRecognition)
->>>>>>> origin/main
     );
   }
 
