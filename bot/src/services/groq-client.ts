@@ -478,7 +478,7 @@ export async function transcribeAudio(mp3FilePath: string): Promise<string> {
     });
     return transcription.text;
   } catch (error) {
-    await handleError('TranscriptionError', { error: error instanceof Error ? error.message : 'Unknown error', filePath: mp3FilePath }, null, false);
+    await handleError('TranscriptionError', { error: error instanceof Error ? error.message : 'Unknown error', filePath: mp3FilePath }, null, false, 'low');
     throw error;
   }
 }

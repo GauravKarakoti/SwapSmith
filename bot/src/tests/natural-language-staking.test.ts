@@ -18,4 +18,8 @@ describe('Natural Language Staking Commands', () => {
       const result = await parseUserCommand('Stake my ETH');
       
       expect(result.success).toBe(true);
-      expect(result.intent
+      expect(result.intent).toBe('swap_and_stake');
+    });
+  });
+
+});
