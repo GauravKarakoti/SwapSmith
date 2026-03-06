@@ -34,7 +34,11 @@ export default function YieldScoutPage() {
       const response = await fetch('https://yields.llama.fi/pools');
       const data = await response.json();
 
-      const filtered = data.filter((p: any) =>
+      const filtered = data.filter((p: {
+        symbol: string;
+        tvlUsd: number;
+        chain: string;
+      }) =>
         ['USDC', 'USDT', 'DAI', 'ETH', 'WETH', 'WBTC'].includes(p.symbol) &&
         p.tvlUsd > 100000 &&
         ['Ethereum', 'Polygon', 'Arbitrum', 'Optimism', 'Base', 'Avalanche'].includes(p.chain)
