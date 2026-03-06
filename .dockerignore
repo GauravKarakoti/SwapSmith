@@ -1,0 +1,39 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Git
+.git
+.gitignore
+
+# Testing
+coverage
+test-results.json
+
+# Build outputs
+dist
+out
+build
+.next
+
+# Environment variables
+.env
+.env*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Misc
+.DS_Store
+*.pem
+.vscode
+.antigravityignore
+
+# Docker
+Dockerfile
+.dockerignore
+

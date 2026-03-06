@@ -1,7 +1,8 @@
 import type { SideShiftOrderStatus } from './sideshift-client';
 import type { Order } from './database';
+import { TERMINAL_STATUSES_LIST } from '../constants';
 import logger from './logger';
-
+import { reputationService } from './reputation-service';
 
 // --- Types ---
 
@@ -23,18 +24,29 @@ export type StatusChangeCallback = (
     orderDetails: SideShiftOrderStatus
 ) => void;
 
+/** Structural type for records returned by getPendingWatchedOrders */
+export interface WatchedOrderRecord {
+    sideshiftOrderId: string;
+    telegramId: number;
+    lastStatus: string;
+    createdAt?: Date | null;
+}
+
 /** Dependencies injected into the monitor (makes it testable) */
 export interface OrderMonitorDeps {
     getOrderStatus: (orderId: string) => Promise<SideShiftOrderStatus>;
     updateOrderStatus: (orderId: string, newStatus: string) => Promise<void>;
+    updateWatchedOrderStatus: (orderId: string, newStatus: string) => Promise<void>;
     getPendingOrders: () => Promise<Order[]>;
+    getPendingWatchedOrders: () => Promise<WatchedOrderRecord[]>;
+    addWatchedOrder: (telegramId: number, orderId: string, initialStatus: string) => Promise<void>;
     onStatusChange: StatusChangeCallback;
 }
 
 // --- Constants ---
 
 /** Terminal statuses — orders in these states stop being tracked */
-export const TERMINAL_STATUSES = new Set(['settled', 'expired', 'refunded', 'failed']);
+export const TERMINAL_STATUSES = new Set(TERMINAL_STATUSES_LIST);
 
 /** Maximum concurrent API calls to SideShift */
 const MAX_CONCURRENT = 5;
@@ -92,7 +104,7 @@ export class OrderMonitor {
 
     }
 
-    /** Add a new order to the tracking map. */
+    /** Add a new order to the tracking map and persist it. */
     trackOrder(orderId: string, telegramId: number, createdAt?: Date): void {
         if (this.tracked.has(orderId)) return;
         this.tracked.set(orderId, {
@@ -102,6 +114,12 @@ export class OrderMonitor {
             lastChecked: 0,
             lastStatus: 'pending',
         });
+
+        // Persist to watched_orders database table for crash recovery
+        this.deps.addWatchedOrder(telegramId, orderId, 'pending').catch(err => {
+            logger.error(`[OrderMonitor] Failed to persist watched order ${orderId}:`, err);
+        });
+
         logger.info(`[OrderMonitor] Now tracking order ${orderId} (total: ${this.tracked.size})`);
     }
 
@@ -114,22 +132,64 @@ export class OrderMonitor {
     /** Reload all non-terminal orders from the database (call on startup). */
     async loadPendingOrders(): Promise<void> {
         try {
+            // Load from original orders table
             const pendingOrders = await this.deps.getPendingOrders();
+            let loadedCount = 0;
+
             for (const order of pendingOrders) {
-                this.trackOrder(
-                    order.sideshiftOrderId,
-                    order.telegramId,
-                    order.createdAt ? new Date(order.createdAt) : undefined
-                );
-                // Preserve the DB status
-                const tracked = this.tracked.get(order.sideshiftOrderId);
-                if (tracked) tracked.lastStatus = order.status;
+                if (!this.tracked.has(order.sideshiftOrderId)) {
+                    this.tracked.set(order.sideshiftOrderId, {
+                        orderId: order.sideshiftOrderId,
+                        telegramId: order.telegramId,
+                        createdAt: order.createdAt ? new Date(order.createdAt) : new Date(),
+                        lastChecked: 0,
+                        lastStatus: order.status,
+                    });
+                    loadedCount++;
+                }
             }
-            logger.info(`[OrderMonitor] Loaded ${pendingOrders.length} pending order(s) from DB`);
+
+            // Also load from watched_orders table (which captures mid-flight swaps)
+            const pendingWatched = await this.deps.getPendingWatchedOrders();
+            for (const order of pendingWatched) {
+                if (!this.tracked.has(order.sideshiftOrderId)) {
+                    this.tracked.set(order.sideshiftOrderId, {
+                        orderId: order.sideshiftOrderId,
+                        telegramId: order.telegramId,
+                        createdAt: order.createdAt ? new Date(order.createdAt) : new Date(),
+                        lastChecked: 0,
+                        lastStatus: order.lastStatus,
+                    });
+                    loadedCount++;
+                }
+            }
+
+            logger.info(`[OrderMonitor] Loaded ${loadedCount} pending order(s) from DB`);
         } catch (error) {
             logger.error('[OrderMonitor] Failed to load pending orders:', error);
         }
 
+    }
+
+    /** Reconcile in-memory state with the database and API. Useful for missed webhooks or crashed states. */
+    async reconcile(): Promise<void> {
+        logger.info(`[OrderMonitor] Running hourly reconciliation...`);
+        try {
+            await this.loadPendingOrders(); // Reload any missing from DB
+
+            // Force a poll on all pending orders immediately, but respect MAX_CONCURRENT
+            const allTracked = Array.from(this.tracked.values());
+            const total = allTracked.length;
+            const batchSize = MAX_CONCURRENT;
+
+            for (let i = 0; i < total; i += batchSize) {
+                const batch = allTracked.slice(i, i + batchSize);
+                await Promise.allSettled(batch.map(order => this.pollOrder(order)));
+            }
+            logger.info(`[OrderMonitor] Reconciliation complete for ${allTracked.length} orders.`);
+        } catch (error) {
+            logger.error(`[OrderMonitor] Reconciliation failed:`, error);
+        }
     }
 
     /** Returns the number of orders currently being tracked. */
@@ -179,15 +239,32 @@ export class OrderMonitor {
             const oldStatus = order.lastStatus;
 
             if (newStatus !== oldStatus) {
-                // Status changed — update DB and notify
+                // Status changed — persist to DB first, then notify
                 order.lastStatus = newStatus;
-                await this.deps.updateOrderStatus(order.orderId, newStatus);
+
+                try {
+                    await Promise.all([
+                        this.deps.updateOrderStatus(order.orderId, newStatus),
+                        this.deps.updateWatchedOrderStatus(order.orderId, newStatus)
+                    ]);
+                } catch (err) {
+                    logger.error(`[OrderMonitor] Failed to persist status update for ${order.orderId}:`, err);
+                    return; // Don't notify when DB write failed — the next polling cycle will retry
+                }
+
                 this.deps.onStatusChange(order.telegramId, order.orderId, oldStatus, newStatus, status);
 
                 // If terminal, stop tracking
                 if (TERMINAL_STATUSES.has(newStatus)) {
                     this.untrackOrder(order.orderId);
                     logger.info(`[OrderMonitor] Order ${order.orderId} reached terminal state: ${newStatus}`);
+
+                    // Hook into reputation system
+                    if (newStatus === 'settled') {
+                        reputationService.recordSwapOutcome(order.telegramId.toString(), true);
+                    } else if (newStatus === 'failed' || newStatus === 'return_completed') {
+                        reputationService.recordSwapOutcome(order.telegramId.toString(), false);
+                    }
                 }
             }
         } catch (error) {

@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
+    "target": "ES2020",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
@@ -20,12 +20,16 @@
     ],
     "paths": {
       "@/*": ["./*"],
+      "shared/*": ["../shared/*"],
       "dotenv": ["./node_modules/dotenv"],
       "drizzle-kit": ["./node_modules/drizzle-kit"],
       "drizzle-orm": ["./node_modules/drizzle-orm"],
-      "drizzle-orm/*": ["./node_modules/drizzle-orm/*"]
+      "drizzle-orm/*": ["./node_modules/drizzle-orm/*"],
+      "winston": ["./node_modules/winston"],
+      "axios": ["./node_modules/axios"],
+      "@neondatabase/serverless": ["./node_modules/@neondatabase/serverless"],
     },
-    "types": ["jest"]
+    "types": ["vitest"]
   },
   "include": [
     "next-env.d.ts",

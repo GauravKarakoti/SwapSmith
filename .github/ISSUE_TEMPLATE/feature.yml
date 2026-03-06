@@ -13,6 +13,23 @@ body:
       required: true
 
   - type: textarea
+    id: user_story
+    attributes:
+      label: User Story
+      description: As a [type of user], I want [goal], so that [benefit]
+      placeholder: |
+        As a [type of user],
+        I want [goal],
+        So that [benefit].
+
+        Example:
+        As a crypto trader,
+        I want to set limit orders for token swaps,
+        So that I can automate my trading strategy and not miss price targets.
+    validations:
+      required: true
+
+  - type: textarea
     id: motivation
     attributes:
       label: Why this feature?
