@@ -231,7 +231,13 @@ export default function TerminalPage() {
     try {
       const audioBlob = await stopRecording();
       if (audioBlob) {
-        const audioFile = new File([audioBlob], "voice_command.wav", { type: audioBlob.type || 'audio/wav' });
+        let ext = 'wav';
+        const type = audioBlob.type.toLowerCase();
+        if (type.includes('webm')) ext = 'webm';
+        else if (type.includes('mp4')) ext = 'mp4';
+        else if (type.includes('ogg')) ext = 'ogg';
+
+        const audioFile = new File([audioBlob], `voice_command.${ext}`, { type: audioBlob.type || 'audio/wav' });
 
         const formData = new FormData();
         formData.append("file", audioFile);

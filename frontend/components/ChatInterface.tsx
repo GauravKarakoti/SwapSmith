@@ -78,6 +78,7 @@ export default function ChatInterface() {
   const [isLoading, setIsLoading] = useState(false);
   const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
   const [currentConfidence, setCurrentConfidence] = useState<number | undefined>(undefined);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { address, isConnected } = useAccount();
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
@@ -94,10 +95,12 @@ export default function ChatInterface() {
     transcript: voiceTranscript,
     interimTranscript,
     inputMethod,
+    compatibility,
     startRecording,
     stopRecording,
     error: audioError,
-    resetTranscript
+    resetTranscript,
+    retryCount
   } = useVoiceInput({
     onError: (error) => {
       addMessage({
@@ -117,7 +120,7 @@ export default function ChatInterface() {
   });
 
   const prevIsRecordingRef = useRef(isRecording);
-  
+
   useEffect(() => {
     // If recording just stopped and we have a transcript, send it
     if (prevIsRecordingRef.current && !isRecording && voiceTranscript.trim()) {
@@ -329,10 +332,8 @@ export default function ChatInterface() {
     setMessages(prev => {
       const msgIndex = prev.findLastIndex(m => m.type === 'portfolio_summary');
       if (msgIndex === -1) return prev;
-
       const msg = prev[msgIndex];
       if (!msg.data?.portfolioItems) return prev;
-
       const newItems = msg.data.portfolioItems.map(item => {
         if (failedItems.some(f => f.id === item.id)) {
           return { ...item, status: 'pending' as const, error: undefined };
@@ -668,36 +669,36 @@ export default function ChatInterface() {
 
   const handleIntentConfirm = async (confirmed: boolean) => {
     if (confirmed && pendingCommand) {
-        if (pendingCommand.intent === 'portfolio') {
-             const confirmedCmd = { ...pendingCommand, requiresConfirmation: false, confidence: 100 };
+      if (pendingCommand.intent === 'portfolio') {
+        const confirmedCmd = { ...pendingCommand, requiresConfirmation: false, confidence: 100 };
 
-             if (confirmedCmd.portfolio) {
-                 const items: PortfolioItem[] = confirmedCmd.portfolio.map((item, index) => ({
-                     id: `${item.toAsset}-${index}`,
-                     fromAsset: confirmedCmd.fromAsset || 'ETH',
-                     toAsset: item.toAsset,
-                     amount: (confirmedCmd.amount! * item.percentage) / 100,
-                     status: 'pending',
-                     toChain: item.toChain
-                 }));
+        if (confirmedCmd.portfolio) {
+          const items: PortfolioItem[] = confirmedCmd.portfolio.map((item, index) => ({
+            id: `${item.toAsset}-${index}`,
+            fromAsset: confirmedCmd.fromAsset || 'ETH',
+            toAsset: item.toAsset,
+            amount: (confirmedCmd.amount! * item.percentage) / 100,
+            status: 'pending',
+            toChain: item.toChain
+          }));
 
-                 addMessage({
-                     role: 'assistant',
-                     content: `📊 **Portfolio Strategy Executing**\nSplitting ${confirmedCmd.amount} ${confirmedCmd.fromAsset}...`,
-                     type: 'portfolio_summary',
-                     data: { portfolioItems: items, parsedCommand: confirmedCmd }
-                 });
+          addMessage({
+            role: 'assistant',
+            content: `📊 **Portfolio Strategy Executing**\nSplitting ${confirmedCmd.amount} ${confirmedCmd.fromAsset}...`,
+            type: 'portfolio_summary',
+            data: { portfolioItems: items, parsedCommand: confirmedCmd }
+          });
 
-                 await processPortfolioBatch(items, confirmedCmd);
-             }
-        } else if (pendingCommand.intent === 'dca') {
-             await executeDCA(pendingCommand);
-        } else if (pendingCommand.conditionOperator && pendingCommand.conditionValue) {
-             // Limit Order (swap with conditions)
-             await executeLimitOrder(pendingCommand);
-        } else {
-            await executeSwap(pendingCommand);
+          await processPortfolioBatch(items, confirmedCmd);
         }
+      } else if (pendingCommand.intent === 'dca') {
+        await executeDCA(pendingCommand);
+      } else if (pendingCommand.conditionOperator && pendingCommand.conditionValue) {
+        // Limit Order (swap with conditions)
+        await executeLimitOrder(pendingCommand);
+      } else {
+        await executeSwap(pendingCommand);
+      }
     } else if (!confirmed) {
       addMessage({ role: 'assistant', content: 'Cancelled.', type: 'message' });
     }
@@ -713,7 +714,14 @@ export default function ChatInterface() {
         // If we got an audio blob, it means we used MediaRecorder fallback
         // Send to Whisper API for transcription
         if (audioBlob) {
-          const audioFile = new File([audioBlob], "voice_command.webm", { type: audioBlob.type || 'audio/webm' });
+          // Determine the file extension based on the actual recorded MIME type
+          let ext = 'wav';
+          const type = audioBlob.type.toLowerCase();
+          if (type.includes('webm')) ext = 'webm';
+          else if (type.includes('mp4')) ext = 'mp4';
+          else if (type.includes('ogg')) ext = 'ogg';
+
+          const audioFile = new File([audioBlob], `voice_command.${ext}`, { type: audioBlob.type || 'audio/wav' });
 
           const formData = new FormData();
           formData.append('file', audioFile);
@@ -919,16 +927,21 @@ export default function ChatInterface() {
             </div>
           </div>
         </div>
-        
         {/* Voice Status */}
         {isRecording && inputMethod && (
           <div className="text-blue-400 text-xs mt-2 px-1 text-center font-medium animate-pulse">
             🎤 {inputMethod === 'speech-api' ? 'Listening with speech recognition...' : 'Recording audio for transcription...'}
+            {retryCount > 0 && ` (Retry ${retryCount}/3)`}
           </div>
         )}
         {!isAudioSupported && (
           <div className="text-amber-500 text-xs mt-2 px-1 text-center font-medium">
             🎤 Voice input is not supported in your browser. Please type your command.
+          </div>
+        )}
+        {isAudioSupported && compatibility.warnings.length > 0 && !isRecording && (
+          <div className="text-amber-400 text-xs mt-2 px-1 text-center">
+            ⚠️ {compatibility.warnings[0]}
           </div>
         )}
 
@@ -943,6 +956,6 @@ export default function ChatInterface() {
           </div>
         )}
       </div>
-    </div>
+    </div >
   );
 }

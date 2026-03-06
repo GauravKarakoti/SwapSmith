@@ -16,11 +16,96 @@ export type ParseResult =
     [key: string]: any;
   };
 
-const REGEX_TOKENS = /([A-Z]{2,10})\s+(to|into|for)\s+([A-Z]{2,10})/i;
+const REGEX_TOKENS = /([A-Z]{2,10})\s+(to|into|for|→|->)\s+([A-Z]{2,10})/i;
 const REGEX_FROM_TO = /from\s+([A-Z]{2,10})\s+to\s+([A-Z]{2,10})/i;
-const REGEX_AMOUNT_TOKEN = /\b(\d+(?:\.\d+)?)\s+([A-Z]{2,10})\b/i;
+const REGEX_AMOUNT_TOKEN = /\b(\d+(?:\.\d+)?[kmb]?)\s+([A-Z]{2,10})\b/i;
 const REGEX_MULTI_SOURCE =
-  /(?:^|\s)([A-Z]{2,10}|(?:\d+(?:\.\d+)?\s+[A-Z]{2,10}))\s+(?:and|&)\s+([A-Z]{2,10}|(?:\d+(?:\.\d+)?\s+[A-Z]{2,10}))\s+(?:to|into|for)/i;
+  /(?:^|\s)([A-Z]{2,10}|(?:\d+(?:\.\d+)?[kmb]?\s+[A-Z]{2,10}))\s+(?:and|&|\+)\s+([A-Z]{2,10}|(?:\d+(?:\.\d+)?[kmb]?\s+[A-Z]{2,10}))\s+(?:to|into|for)/i;
+
+// Enhanced patterns for better ambiguity detection
+const REGEX_AMBIGUOUS_OR = /\b(or|either|maybe)\b/i;
+const REGEX_MULTIPLE_DESTINATIONS = /(?:to|into|for)\s+([A-Z]{2,10})(?:\s+(?:or|and|\+|,)\s+([A-Z]{2,10}))+/i;
+const REGEX_CONDITIONAL = /\b(if|when|only\s+if|provided|assuming)\b/i;
+const REGEX_PRICE_CONDITION = /(?:price|value)\s*(?:is|goes|hits|reaches)?\s*(above|below|over|under|>|<|>=|<=)\s*\$?(\d+(?:\.\d+)?[kmb]?)/i;
+
+// Enhanced abbreviation handling
+const COMMON_TYPOS = {
+  'swp': 'swap',
+  'cnvrt': 'convert',
+  'exchng': 'exchange',
+  'trd': 'trade',
+  'pls': 'please',
+  '2': 'to',
+  '4': 'for',
+  'u': 'you',
+  'ur': 'your',
+  'btc': 'BTC',
+  'eth': 'ETH',
+  'usdc': 'USDC',
+  'usdt': 'USDT',
+  'bnb': 'BNB',
+  'sol': 'SOL',
+  'ada': 'ADA',
+  'dot': 'DOT',
+  'matic': 'MATIC',
+  'avax': 'AVAX'
+};
+
+// Voice input phonetic corrections
+const PHONETIC_CORRECTIONS = {
+  'eeth': 'ETH',
+  'bit coin': 'BTC',
+  'bitcoin': 'BTC',
+  'ethereum': 'ETH',
+  'you es dee see': 'USDC',
+  'tether': 'USDT',
+  'solana': 'SOL',
+  'cardano': 'ADA',
+  'polkadot': 'DOT',
+  'polygon': 'MATIC',
+  'avalanche': 'AVAX',
+  'won': '1',
+  'too': '2',
+  'tree': '3',
+  'for': '4',
+  'fiv': '5'
+};
+
+// Enhanced number parsing with better scaling
+const parseScaledNumber = (raw: string): number => {
+  const cleaned = raw.replace(/[$,\s]/g, '').toLowerCase();
+  const numPart = cleaned.replace(/[kmb]/g, '');
+  const base = parseFloat(numPart);
+  
+  if (isNaN(base)) return NaN;
+  
+  if (cleaned.includes('k')) return base * 1000;
+  if (cleaned.includes('m')) return base * 1000000;
+  if (cleaned.includes('b')) return base * 1000000000;
+  return base;
+};
+
+// Enhanced input preprocessing
+const preprocessInput = (input: string): string => {
+  let processed = input.toLowerCase().trim();
+  
+  // Apply common typo corrections
+  Object.entries(COMMON_TYPOS).forEach(([typo, correction]) => {
+    const regex = new RegExp(`\\b${typo}\\b`, 'gi');
+    processed = processed.replace(regex, correction);
+  });
+  
+  // Apply phonetic corrections for voice input
+  Object.entries(PHONETIC_CORRECTIONS).forEach(([phonetic, correction]) => {
+    const regex = new RegExp(`\\b${phonetic}\\b`, 'gi');
+    processed = processed.replace(regex, correction);
+  });
+  
+  processed = processed.replace(/[-–—]/g, ' to ');
+  processed = processed.replace(/→|->/g, ' to ');
+  
+  return processed;
+};
 
 // Use the updated Regex for Swap and Stake / Zap intents
 const REGEX_SWAP_STAKE = /(?:swap\s+and\s+stake|zap\s+(?:into|to)|stake\s+(?:my|after|then)|swap\s+(?:to|into)\s+(?:stake|yield))/i;
@@ -29,17 +114,6 @@ const REGEX_STAKE_PROTOCOL = /(?:to\s+)?(aave|compound|yearn|lido|morpho|euler|s
 // New Regex for direct Stake commands (e.g., "Stake 1 ETH with Lido" or "Stake my ETH")
 const REGEX_STAKE_COMMAND = /\b(stake)\b/i;
 const REGEX_LIQUID_STAKING_PROVIDER = /\b(lido|rocket\s*pool|rocketpool|stakewise|stake\s*wise)\b/i;
-
-const parseScaledNumber = (raw: string): number => {
-  const cleaned = raw.replace(/[$,\s]/g, '').toLowerCase();
-  const suffix = cleaned.slice(-1);
-  const base = parseFloat(cleaned);
-  
-  if (suffix === 'k') return base * 1000;
-  if (suffix === 'm') return base * 1000000;
-  if (suffix === 'b') return base * 1000000000;
-  return base;
-};
 
 const buildSwapResult = (
   userInput: string,
@@ -98,9 +172,82 @@ const buildSwapResult = (
 
 export async function parseUserCommand(
   userInput: string,
-  conversationHistory: any[] = [],
+  conversationHistory: any = [], // Replaced fallbackToLLM to fix "Cannot find name" errors
   inputType: 'text' | 'voice' = 'text'
 ): Promise<ParseResult> {
+  // Graceful handling if someone passes a boolean for legacy fallbackToLLM
+  if (typeof conversationHistory === 'boolean') {
+    conversationHistory = [];
+  }
+
+  if (!userInput?.trim()) {
+    return {
+      success: false,
+      validationErrors: ['Input cannot be empty'],
+      confidence: 0,
+      parsedMessage: 'No input provided',
+      requiresConfirmation: false,
+      originalInput: userInput
+    };
+  }
+
+  const originalInput = userInput;
+  const preprocessedInput = preprocessInput(userInput);
+  
+  // Enhanced ambiguity detection
+  const hasAmbiguousOr = REGEX_AMBIGUOUS_OR.test(preprocessedInput);
+  const hasMultipleDestinations = REGEX_MULTIPLE_DESTINATIONS.test(preprocessedInput);
+  const hasConditionals = REGEX_CONDITIONAL.test(preprocessedInput);
+  
+  if (hasAmbiguousOr || hasMultipleDestinations) {
+    const destinations = preprocessedInput.match(REGEX_MULTIPLE_DESTINATIONS);
+    return {
+      success: false, // <-- FIXED: Must be false for partial/ambiguous results
+      intent: 'swap',
+      validationErrors: destinations 
+        ? [`Multiple destination assets detected: ${destinations[1]}, ${destinations[2]}. Please specify one.`]
+        : ['Command contains ambiguous language. Please be more specific.'],
+      confidence: 20,
+      parsedMessage: 'Ambiguous command detected - clarification needed',
+      requiresConfirmation: true,
+      originalInput
+    };
+  }
+
+  // Enhanced conditional parsing
+  if (hasConditionals) {
+    const priceCondition = preprocessedInput.match(REGEX_PRICE_CONDITION);
+    if (priceCondition) {
+      const [, operator, rawValue] = priceCondition;
+      const value = parseScaledNumber(rawValue);
+      
+      if (!isNaN(value)) {
+        const conditionType = ['above', 'over', '>', '>='].includes(operator.toLowerCase()) 
+          ? 'price_above' : 'price_below';
+        
+        // Try to extract basic swap info
+        const tokenMatch = preprocessedInput.match(REGEX_TOKENS);
+        const amountMatch = preprocessedInput.match(REGEX_AMOUNT_TOKEN);
+        
+        return buildSwapResult(originalInput, {
+          intent: 'swap',
+          fromAsset: tokenMatch?.[1] || (amountMatch?.[2]),
+          toAsset: tokenMatch?.[3],
+          amount: amountMatch ? parseScaledNumber(amountMatch[1]) : null,
+          amountType: amountMatch ? 'exact' : null,
+          conditions: {
+            type: conditionType as "price_above" | "price_below",
+            asset: tokenMatch?.[3] || 'BTC', // Default to BTC if not specified
+            value
+            // <-- FIXED: Removed invalid 'operator' property from this object
+          },
+          confidence: 75,
+          requiresConfirmation: true
+        });
+      }
+    }
+  }
+
   let input = userInput
     .trim()
     .replace(/^(hey|hi|hello|please|kindly|can you)\s+/i, '')
