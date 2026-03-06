@@ -54,17 +54,17 @@ interface Message {
   content: string;
   timestamp: Date;
   type?:
-    | "message"
-    | "intent_confirmation"
-    | "swap_confirmation"
-    | "yield_info"
-    | "checkout_link";
+  | "message"
+  | "intent_confirmation"
+  | "swap_confirmation"
+  | "yield_info"
+  | "checkout_link";
   data?:
-    | ParsedCommand
-    | { quoteData: QuoteData; confidence: number }
-    | { url: string }
-    | { parsedCommand: ParsedCommand }
-    | Record<string, unknown>;
+  | ParsedCommand
+  | { quoteData: QuoteData; confidence: number }
+  | { url: string }
+  | { parsedCommand: ParsedCommand }
+  | Record<string, unknown>;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -240,7 +240,13 @@ export default function TerminalPage() {
     try {
       const audioBlob = await stopRecording();
       if (audioBlob) {
-        const audioFile = new File([audioBlob], "voice_command.wav", { type: audioBlob.type || 'audio/wav' });
+        let ext = 'wav';
+        const type = audioBlob.type.toLowerCase();
+        if (type.includes('webm')) ext = 'webm';
+        else if (type.includes('mp4')) ext = 'mp4';
+        else if (type.includes('ogg')) ext = 'ogg';
+
+        const audioFile = new File([audioBlob], `voice_command.${ext}`, { type: audioBlob.type || 'audio/wav' });
 
         const formData = new FormData();
         formData.append("file", audioFile);
@@ -313,7 +319,7 @@ export default function TerminalPage() {
       });
       const quote = await quoteResponse.json();
       if (quote.error) throw new Error(quote.error);
-      
+
       addMessage({
         role: "assistant",
         content: `Swap Prepared: ${quote.depositAmount} ${quote.depositCoin} → ${quote.settleAmount} ${quote.settleCoin}`,
@@ -338,16 +344,16 @@ export default function TerminalPage() {
       setLimitBannerVisible(true);
       return;
     }
-    
+
     // Add user message first
     addMessage({
-        role: "user",
-        content: text,
-        type: "message",
+      role: "user",
+      content: text,
+      type: "message",
     });
 
     if (!isLoading) setIsLoading(true);
-    
+
     try {
       const response = await fetch("/api/parse-command", {
         method: "POST",
@@ -617,21 +623,19 @@ export default function TerminalPage() {
               {messages.map((msg, i) => (
                 <div
                   key={i}
-                  className={`flex ${
-                    msg.role === "user" ? "justify-end" : "justify-start"
-                  }`}
+                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"
+                    }`}
                 >
                   <div className="max-w-[80%]">
                     <div
-                      className={`px-4 py-3 rounded-2xl text-sm ${
-                        msg.role === "user"
+                      className={`px-4 py-3 rounded-2xl text-sm ${msg.role === "user"
                           ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg"
                           : "panel"
-                      }`}
+                        }`}
                     >
                       {msg.type === "swap_confirmation" &&
-                      msg.data &&
-                      "quoteData" in msg.data ? (
+                        msg.data &&
+                        "quoteData" in msg.data ? (
                         <SwapConfirmation
                           quote={(msg.data as { quoteData: QuoteData }).quoteData}
                           confidence={(msg.data as { confidence: number }).confidence}
