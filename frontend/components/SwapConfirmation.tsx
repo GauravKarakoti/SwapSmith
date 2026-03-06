@@ -145,7 +145,8 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
       let finalAmount = balanceNum
 
       if (isNativeValue) {
-        const gasBuffer = 0.005 // 0.005 buffer for gas
+        // Buffer for gas fees (0.005 ETH ≈ $15 at 3000/ETH, covers high gas spikes)
+        const gasBuffer = 0.005
         finalAmount = Math.max(0, balanceNum - gasBuffer)
       }
 
