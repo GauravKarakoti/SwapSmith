@@ -1,21 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { addRewardActivity, getUserRewardActivities } from '@/lib/database';
+import { verifyAuth } from '@/lib/auth-helpers';
 
 const TERMINAL_USAGE_POINTS = 25;
 const TERMINAL_USAGE_TOKENS = '0.25';
 
 export async function POST(request: NextRequest) {
   try {
-    const userId = request.headers.get('x-user-id');
-    
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+    // Verify Firebase authentication token
+    const authResult = await verifyAuth(request);
+    if (!authResult.success) {
+      return authResult.error!;
     }
 
-    const userIdNum = parseInt(userId);
+    const userIdNum = authResult.userId!;
 
     // Check if user already received terminal usage reward
     const recentActivities = await getUserRewardActivities(userIdNum, 100);
