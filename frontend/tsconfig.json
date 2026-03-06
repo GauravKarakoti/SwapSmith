@@ -40,7 +40,5 @@
     "**/*.mts",
     "../shared/**/*.ts"
   ],
-<<<<<<< HEAD
   "exclude": ["node_modules"]
 }
-=======
