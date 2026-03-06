@@ -199,7 +199,7 @@ export async function createSwapHistoryEntry(
     quoteId?: string;
     fromAsset: string;
     fromNetwork: string;
-    fromAmount: number;
+    fromAmount: string; // Changed from number to string for numeric precision
     toAsset: string;
     toNetwork: string;
     settleAmount: string;
@@ -1081,7 +1081,7 @@ export async function createPortfolioTarget(
     userId,
     name,
     assets,
-    driftThreshold,
+    driftThreshold: driftThreshold.toString(), // Convert to string for numeric precision
     autoRebalance,
     isActive: true,
   }).returning();
@@ -1105,9 +1105,18 @@ export async function updatePortfolioTarget(
     return null;
   }
   
+  // Convert driftThreshold to string if provided
+  const processedUpdates: any = {
+    ...updates,
+  };
+  
+  if (updates.driftThreshold !== undefined) {
+    processedUpdates.driftThreshold = updates.driftThreshold.toString();
+  }
+  
   const result = await db.update(portfolioTargets)
     .set({
-      ...updates,
+      ...processedUpdates,
       updatedAt: new Date(),
     })
     .where(and(

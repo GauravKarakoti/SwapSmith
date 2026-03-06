@@ -122,7 +122,7 @@ export interface PlatformAnalytics {
     toAsset: string;
     fromNetwork: string;
     toNetwork: string;
-    fromAmount: number;
+    fromAmount: string; // Changed from number to string for numeric precision
     status: string;
     createdAt: Date | null;
   }[];
@@ -374,7 +374,7 @@ export interface AdminSwapRow {
   quoteId: string | null;
   fromAsset: string;
   fromNetwork: string;
-  fromAmount: number;
+  fromAmount: string; // Changed from number to string for numeric precision
   toAsset: string;
   toNetwork: string;
   settleAmount: string;
