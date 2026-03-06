@@ -94,10 +94,12 @@ export default function ChatInterface() {
     transcript: voiceTranscript,
     interimTranscript,
     inputMethod,
+    compatibility,
     startRecording,
     stopRecording,
     error: audioError,
-    resetTranscript
+    resetTranscript,
+    retryCount
   } = useVoiceInput({
     onError: (error) => {
       addMessage({
@@ -924,11 +926,17 @@ export default function ChatInterface() {
         {isRecording && inputMethod && (
           <div className="text-blue-400 text-xs mt-2 px-1 text-center font-medium animate-pulse">
             🎤 {inputMethod === 'speech-api' ? 'Listening with speech recognition...' : 'Recording audio for transcription...'}
+            {retryCount > 0 && ` (Retry ${retryCount}/3)`}
           </div>
         )}
         {!isAudioSupported && (
           <div className="text-amber-500 text-xs mt-2 px-1 text-center font-medium">
             🎤 Voice input is not supported in your browser. Please type your command.
+          </div>
+        )}
+        {isAudioSupported && compatibility.warnings.length > 0 && !isRecording && (
+          <div className="text-amber-400 text-xs mt-2 px-1 text-center">
+            ⚠️ {compatibility.warnings[0]}
           </div>
         )}
 
