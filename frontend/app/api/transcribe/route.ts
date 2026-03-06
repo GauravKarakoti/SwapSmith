@@ -102,9 +102,3 @@ export async function POST(req: NextRequest) {
   const response = await transcribeHandler(req);
   return applyAPISecurityHeaders(response);
 }
-
-export const config = {
-  api: {
-    bodyParser: false, // Disable default body parser for file uploads
-  },
-};
