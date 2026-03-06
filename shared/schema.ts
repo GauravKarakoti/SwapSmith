@@ -801,34 +801,3 @@ export const coinGiftLogsRelations = relations(coinGiftLogs, ({ one }) => ({
 }));
 
 export type CoinGiftLog = typeof coinGiftLogs.$inferSelect;
-
-// --- Strategy Marketplace Schema ---
-
-export const tradingStrategies = pgTable('trading_strategies', {
-  id: serial('id').primaryKey(),
-  creatorId: integer('creator_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  creatorTelegramId: bigint('creator_telegram_id', { mode: 'number' }),
-  name: text('name').notNull(),
-  description: text('description').notNull(),
-  parameters: jsonb('parameters').notNull(),
-  riskLevel: text('risk_level').notNull(), // 'low' | 'medium' | 'high' | 'aggressive'
-  subscriptionFee: text('subscription_fee').notNull(),
-  performanceFee: real('performance_fee').notNull(),
-  minInvestment: text('min_investment').notNull(),
-  isPublic: boolean('is_public').notNull().default(false),
-  tags: text('tags').array(),
-  status: text('status').notNull().default('active'),
-  totalReturn: real('total_return').notNull().default(0),
-  monthlyReturn: real('monthly_return').notNull().default(0),
-  maxDrawdown: real('max_drawdown').notNull().default(0),
-  subscriberCount: integer('subscriber_count').notNull().default(0),
-  totalTrades: integer('total_trades').notNull().default(0),
-  successfulTrades: integer('successful_trades').notNull().default(0),
-  sharpeRatio: real('sharpe_ratio').default(0),
-  volatility: real('volatility').default(0),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-}, (table) => [
-  index('idx_trading_strategies_creator').on(table.creatorId),
-  index('idx_trading_strategies_status').on(table.status),
-]);

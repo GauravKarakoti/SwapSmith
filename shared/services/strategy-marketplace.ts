@@ -91,13 +91,12 @@ export async function getStrategies(options: StrategyFilterOptions = {}): Promis
   }
 
   if (search) {
-    const searchCondition = or(
+    const searchConditions = or(
       like(tradingStrategies.name, `%${search}%`),
       like(tradingStrategies.description, `%${search}%`)
     );
-    // Explicitly check to bypass the SQL | undefined TS issue in newer Drizzle versions
-    if (searchCondition) {
-      conditions.push(searchCondition);
+    if (searchConditions) {
+      conditions.push(searchConditions);
     }
   }
 

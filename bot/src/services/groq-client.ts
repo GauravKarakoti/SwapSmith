@@ -16,7 +16,7 @@ function getGroqClient(): Groq {
 
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "swap_and_stake" | "unknown";
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "swap_and_stake" | "stake" | "trailing_stop" | "unknown";
   
   // Single Swap Fields
   fromAsset: string | null;
@@ -66,6 +66,11 @@ export interface ParsedCommand {
   toProject: string | null;
   toYield: number | null;
 
+  // Stake Fields
+  estimatedApy?: number | null;
+  stakeProtocol?: string | null;
+  stakePool?: string | null;
+
   // Limit Order Fields (Legacy - kept for compatibility, prefer 'conditions')
   conditionOperator?: 'gt' | 'lt';
   conditionValue?: number;
@@ -106,7 +111,19 @@ MODES:
    Example: "Swap 100 USDC for ETH and stake it"
    Keywords: "swap and stake", "zap", "stake immediately", "swap to stake"
 
+9. "stake": Stake assets directly to earn yield. For liquid staking.
+   Example: "Stake 1000 USDC to earn yield"
+   Example: "Stake my ETH for staking rewards"
+   Example: "Stake ETH on Lido for yield"
+
+10. "swap_and_stake": Swap one asset and stake the result in one transaction (Zap).
+    Example: "Swap 1 ETH to USDC and stake it"
+    Example: "Zap 100 ETH into aave for yield"
+    Example: "Swap and stake 500 USDC to get best APY"
+
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
+
+STAKING PROTOCOLS: aave, compound, lido, yearn, morpho, spark, euler.
 
 ADDRESS RESOLUTION:
 - Users can specify addresses as raw wallet addresses (0x...), ENS names (ending in .eth), Lens handles (ending in .lens), Unstoppable Domains (ending in .crypto, .nft, .blockchain, etc.), or nicknames from their address book.
@@ -134,7 +151,7 @@ AMBIGUITY HANDLING:
 RESPONSE FORMAT:
 {
   "success": boolean,
-  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order",
+  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "stake" | "swap_and_stake",
   "fromAsset": string | null,
   "fromChain": string | null,
   "amount": number | null,
@@ -158,6 +175,13 @@ RESPONSE FORMAT:
   "settleNetwork": null,
   "settleAmount": null,
   "settleAddress": null,
+  
+  // Staking Fields (for stake and swap_and_stake intents)
+  "estimatedApy": number | null,
+  "stakeProtocol": "aave" | "compound" | "lido" | "yearn" | "morpho" | "spark" | "euler" | null,
+  "stakePool": string | null,
+  "toProject": string | null,
+  
   "conditionOperator": "gt" | "lt" | null,
   "conditionValue": number | null,
   "conditionAsset": string | null,
@@ -333,6 +357,11 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     fromYield: parsed.fromYield || null,
     toProject: parsed.toProject || null,
     toYield: parsed.toYield || null,
+    
+    // Stake fields
+    estimatedApy: parsed.estimatedApy || null,
+    stakeProtocol: parsed.stakeProtocol || null,
+    stakePool: parsed.stakePool || null,
     
     // New fields
     targetPrice: parsed.targetPrice,
