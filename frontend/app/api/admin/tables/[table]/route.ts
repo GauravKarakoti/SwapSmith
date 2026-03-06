@@ -43,14 +43,45 @@ async function tableExists(tableName: string): Promise<boolean> {
   return rows.length > 0;
 }
 
-/** Get column names for a table. */
-async function getColumns(tableName: string): Promise<{ column_name: string; data_type: string; is_nullable: string }[]> {
+/** Get column names for a table (including column_default for insert hints). */
+async function getColumns(tableName: string): Promise<{ column_name: string; data_type: string; is_nullable: string; column_default: string | null }[]> {
   return await sql`
-    SELECT column_name, data_type, is_nullable
+    SELECT column_name, data_type, is_nullable, column_default
     FROM information_schema.columns
     WHERE table_schema = 'public' AND table_name = ${tableName}
     ORDER BY ordinal_position ASC
-  ` as { column_name: string; data_type: string; is_nullable: string }[];
+  ` as { column_name: string; data_type: string; is_nullable: string; column_default: string | null }[];
+}
+
+/** Get primary key column names for a table. */
+async function getPrimaryKeys(tableName: string): Promise<string[]> {
+  const rows = await sql`
+    SELECT kcu.column_name
+    FROM information_schema.table_constraints tc
+    JOIN information_schema.key_column_usage kcu
+      ON tc.constraint_name = kcu.constraint_name
+     AND tc.table_schema = kcu.table_schema
+    WHERE tc.constraint_type = 'PRIMARY KEY'
+      AND tc.table_schema = 'public'
+      AND tc.table_name = ${tableName}
+    ORDER BY kcu.ordinal_position ASC
+  `;
+  return rows.map((r: Record<string, unknown>) => r.column_name as string);
+}
+
+/** Validate admin access; returns decoded jwt or sends an error response. */
+async function requireAdmin(req: NextRequest): Promise<{ uid: string } | null> {
+  const decoded = await verifyAdmin(req);
+  if (!decoded) return null;
+  const admin = await getAdminByFirebaseUid(decoded.uid);
+  return admin ? decoded : null;
+}
+
+/** Validate table name format and existence. */
+async function resolveTable(rawTable: string): Promise<string | null> {
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(rawTable)) return null;
+  const name = rawTable.toLowerCase();
+  return (await tableExists(name)) ? name : null;
 }
 
 /**
@@ -102,8 +133,11 @@ export async function GET(req: NextRequest, context: RouteContext) {
     const sortDir   = searchParams.get('sortDir') === 'desc' ? 'DESC' : 'ASC';
     const columnsParam = searchParams.get('columns') ?? '';
 
-    // ── Get column metadata ────────────────────────────────────────────────
-    const allColumns = await getColumns(tableName);
+    // ── Get column metadata + primary keys ────────────────────────────────
+    const [allColumns, primaryKeys] = await Promise.all([
+      getColumns(tableName),
+      getPrimaryKeys(tableName),
+    ]);
     const allColNames = allColumns.map(c => c.column_name);
 
     // Validate requested columns
@@ -128,10 +162,6 @@ export async function GET(req: NextRequest, context: RouteContext) {
       .map(c => c.column_name);
 
     // ── Build the query dynamically ───────────────────────────────────────
-    // For safety we use parameterized queries for values, and identifier quoting for names.
-    // neon() doesn't support full dynamic SQL with identifiers easily, so we build raw SQL
-    // strings for identifiers (which are validated above) and use parameterized values.
-
     const quotedSelect = selectCols.map(c => `"${c}"`).join(', ');
     const quotedTable = `"${tableName}"`;
 
@@ -191,6 +221,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
       success: true,
       table: tableName,
       columns: allColumns,
+      primaryKeys,
       selectedColumns: selectCols,
       rows,
       pagination: {
@@ -205,5 +236,166 @@ export async function GET(req: NextRequest, context: RouteContext) {
   } catch (err) {
     console.error('[Admin Table Data API]', err);
     return NextResponse.json({ error: 'Internal server error.' }, { status: 500 });
+  }
+}
+
+/**
+ * POST /api/admin/tables/[table]
+ * Insert a new row into the table.
+ * Body: { row: Record<string, unknown> }
+ */
+export async function POST(req: NextRequest, context: RouteContext) {
+  try {
+    const decoded = await requireAdmin(req);
+    if (!decoded) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { table: rawTable } = await context.params;
+    const tableName = await resolveTable(rawTable);
+    if (!tableName) return NextResponse.json({ error: 'Invalid or unknown table.' }, { status: 400 });
+
+    const body = await req.json().catch(() => null);
+    const row: Record<string, unknown> = body?.row;
+    if (!row || typeof row !== 'object' || Array.isArray(row)) {
+      return NextResponse.json({ error: 'Body must be { row: { col: value, ... } }' }, { status: 400 });
+    }
+
+    const allColumns = await getColumns(tableName);
+    const allColNames = allColumns.map(c => c.column_name);
+
+    // Filter to valid column names only (prevents injection via key names)
+    const validKeys = Object.keys(row).filter(k => allColNames.includes(k));
+    if (validKeys.length === 0) {
+      return NextResponse.json({ error: 'No valid columns provided.' }, { status: 400 });
+    }
+
+    const colList = validKeys.map(k => `"${k}"`).join(', ');
+    const placeholders = validKeys.map((_, i) => `$${i + 1}`).join(', ');
+    const values = validKeys.map(k => row[k] === '' ? null : row[k]);
+
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
+    try {
+      const result = await pool.query(
+        `INSERT INTO "${tableName}" (${colList}) VALUES (${placeholders}) RETURNING *`,
+        values,
+      );
+      return NextResponse.json({ success: true, row: result.rows[0] }, { status: 201 });
+    } finally {
+      await pool.end();
+    }
+  } catch (err) {
+    console.error('[Admin Table Insert API]', err);
+    const msg = err instanceof Error ? err.message : 'Internal server error.';
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}
+
+/**
+ * PATCH /api/admin/tables/[table]
+ * Update a row identified by its primary key.
+ * Body: { pkColumn: string; pkValue: unknown; updates: Record<string, unknown> }
+ */
+export async function PATCH(req: NextRequest, context: RouteContext) {
+  try {
+    const decoded = await requireAdmin(req);
+    if (!decoded) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { table: rawTable } = await context.params;
+    const tableName = await resolveTable(rawTable);
+    if (!tableName) return NextResponse.json({ error: 'Invalid or unknown table.' }, { status: 400 });
+
+    const body = await req.json().catch(() => null);
+    const { pkColumn, pkValue, updates } = body ?? {};
+
+    if (typeof pkColumn !== 'string' || pkValue === undefined || !updates || typeof updates !== 'object') {
+      return NextResponse.json({ error: 'Body must be { pkColumn, pkValue, updates }' }, { status: 400 });
+    }
+
+    const allColumns = await getColumns(tableName);
+    const allColNames = allColumns.map(c => c.column_name);
+
+    if (!allColNames.includes(pkColumn)) {
+      return NextResponse.json({ error: 'Invalid pkColumn.' }, { status: 400 });
+    }
+
+    // Exclude the PK itself from update fields; validate all keys
+    const validUpdateKeys = Object.keys(updates as Record<string, unknown>)
+      .filter(k => allColNames.includes(k) && k !== pkColumn);
+
+    if (validUpdateKeys.length === 0) {
+      return NextResponse.json({ error: 'No valid columns to update.' }, { status: 400 });
+    }
+
+    const setClause = validUpdateKeys.map((k, i) => `"${k}" = $${i + 1}`).join(', ');
+    const pkPlaceholder = `$${validUpdateKeys.length + 1}`;
+    const values = [
+      ...validUpdateKeys.map(k => (updates as Record<string, unknown>)[k] === '' ? null : (updates as Record<string, unknown>)[k]),
+      pkValue,
+    ];
+
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
+    try {
+      const result = await pool.query(
+        `UPDATE "${tableName}" SET ${setClause} WHERE "${pkColumn}" = ${pkPlaceholder} RETURNING *`,
+        values,
+      );
+      if (result.rows.length === 0) {
+        return NextResponse.json({ error: 'Row not found.' }, { status: 404 });
+      }
+      return NextResponse.json({ success: true, row: result.rows[0] });
+    } finally {
+      await pool.end();
+    }
+  } catch (err) {
+    console.error('[Admin Table Update API]', err);
+    const msg = err instanceof Error ? err.message : 'Internal server error.';
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}
+
+/**
+ * DELETE /api/admin/tables/[table]
+ * Delete one or more rows by primary key values.
+ * Body: { pkColumn: string; pkValues: unknown[] }
+ */
+export async function DELETE(req: NextRequest, context: RouteContext) {
+  try {
+    const decoded = await requireAdmin(req);
+    if (!decoded) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { table: rawTable } = await context.params;
+    const tableName = await resolveTable(rawTable);
+    if (!tableName) return NextResponse.json({ error: 'Invalid or unknown table.' }, { status: 400 });
+
+    const body = await req.json().catch(() => null);
+    const { pkColumn, pkValues } = body ?? {};
+
+    if (typeof pkColumn !== 'string' || !Array.isArray(pkValues) || pkValues.length === 0) {
+      return NextResponse.json({ error: 'Body must be { pkColumn: string; pkValues: unknown[] }' }, { status: 400 });
+    }
+    if (pkValues.length > 500) {
+      return NextResponse.json({ error: 'Cannot delete more than 500 rows at once.' }, { status: 400 });
+    }
+
+    const allColumns = await getColumns(tableName);
+    const allColNames = allColumns.map(c => c.column_name);
+    if (!allColNames.includes(pkColumn)) {
+      return NextResponse.json({ error: 'Invalid pkColumn.' }, { status: 400 });
+    }
+
+    const placeholders = pkValues.map((_, i) => `$${i + 1}`).join(', ');
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
+    try {
+      const result = await pool.query(
+        `DELETE FROM "${tableName}" WHERE "${pkColumn}" IN (${placeholders}) RETURNING "${pkColumn}"`,
+        pkValues,
+      );
+      return NextResponse.json({ success: true, deleted: result.rows.length });
+    } finally {
+      await pool.end();
+    }
+  } catch (err) {
+    console.error('[Admin Table Delete API]', err);
+    const msg = err instanceof Error ? err.message : 'Internal server error.';
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

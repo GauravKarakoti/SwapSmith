@@ -561,6 +561,8 @@ export const strategyTrades = pgTable('strategy_trades', {
   index("idx_strategy_trades_strategy_id").on(table.strategyId),
 ]);
 
+// --- TYPES ---
+
 export type TradingStrategy = typeof tradingStrategies.$inferSelect;
 export type NewTradingStrategy = typeof tradingStrategies.$inferInsert;
 export type StrategySubscription = typeof strategySubscriptions.$inferSelect;

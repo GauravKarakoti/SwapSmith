@@ -111,11 +111,12 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
           tokenAddress = networkInfo.tokenContract
         }
       } catch (err) {
-        console.warn('Failed to fetch coin info from SideShift, defaulting to native balance check', err)
+        console.error('Failed to fetch coin info from SideShift; aborting max balance calculation', err)
+        throw err
       }
 
-      let balanceRaw: bigint = 0n
-BigInt(0)
+      let balanceRaw: bigint = BigInt(0)
+
       if (isNativeValue) {
         balanceRaw = await publicClient.getBalance({ address })
         decimals = 18
@@ -134,9 +135,7 @@ BigInt(0)
           }) as Promise<number>,
         ])
         balanceRaw = bal
-        decimals = dec
-      } else {
-        balanceRaw = await publicClient.getBalance({ address })
+        decimals = Number(dec)
       }
 
       const formatted = formatUnits(balanceRaw, decimals)

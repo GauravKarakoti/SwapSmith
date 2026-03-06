@@ -78,6 +78,7 @@ export function validateCsrfToken(request: NextRequest): boolean {
     return false;
   }
 
+  // Compare tokens (constant-time comparison to prevent timing attacks)
   const match = timingSafeEqual(headerToken, cookieToken);
 
   if (!match) {

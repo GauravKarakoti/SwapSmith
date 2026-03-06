@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ArrowDownUp,
   ArrowUpDown,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -17,9 +18,12 @@ import {
   Eye,
   EyeOff,
   Filter,
+  Pencil,
+  Plus,
   RefreshCw,
   Search,
   Table2,
+  Trash2,
   X,
 } from 'lucide-react'
 
@@ -40,6 +44,7 @@ interface ColumnMeta {
   column_name: string
   data_type: string
   is_nullable: string
+  column_default: string | null
 }
 
 interface Pagination {
@@ -53,6 +58,7 @@ interface Pagination {
 
 interface TableData {
   columns: ColumnMeta[]
+  primaryKeys: string[]
   rows: Record<string, unknown>[]
   pagination: Pagination
 }
@@ -83,6 +89,14 @@ function downloadCSV(columns: string[], rows: Record<string, unknown>[], filenam
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
+}
+
+function inputTypeForDataType(dt: string): string {
+  if (['integer', 'bigint', 'smallint', 'numeric', 'real', 'double precision', 'serial', 'bigserial'].includes(dt)) return 'number'
+  if (['date'].includes(dt)) return 'date'
+  if (['timestamp without time zone', 'timestamp with time zone', 'timestamptz'].includes(dt)) return 'datetime-local'
+  if (['boolean'].includes(dt)) return 'checkbox'
+  return 'text'
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -165,6 +179,261 @@ function ColumnTogglePopover({ allColumns, visibleCols, onToggle, onShowAll, onH
   )
 }
 
+// ─── Row Form Modal (Insert / Edit) ───────────────────────────────────────────
+
+interface RowFormModalProps {
+  mode: 'insert' | 'edit'
+  tableName: string
+  columns: ColumnMeta[]
+  primaryKeys: string[]
+  initialValues?: Record<string, unknown>
+  onConfirm: (values: Record<string, string | boolean>) => Promise<void>
+  onClose: () => void
+}
+
+function RowFormModal({ mode, tableName, columns, primaryKeys, initialValues, onConfirm, onClose }: RowFormModalProps) {
+  const [values, setValues] = useState<Record<string, string | boolean>>(() => {
+    const init: Record<string, string | boolean> = {}
+    for (const col of columns) {
+      if (mode === 'edit' && initialValues) {
+        const v = initialValues[col.column_name]
+        if (col.data_type === 'boolean') {
+          init[col.column_name] = v === true || v === 'true' || v === 't'
+        } else {
+          init[col.column_name] = v == null ? '' : String(v)
+        }
+      } else {
+        init[col.column_name] = col.data_type === 'boolean' ? false : ''
+      }
+    }
+    return init
+  })
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = async () => {
+    setSubmitting(true)
+    setError(null)
+    try {
+      await onConfirm(values)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // Columns to show in the form: for edit, skip auto-filled PK columns (serial/sequence)
+  const formCols = columns.filter(col => {
+    if (mode === 'insert') {
+      // Skip columns with a sequence default (auto-increment PKs)
+      const hasSequenceDefault = col.column_default?.includes('nextval') ?? false
+      return !hasSequenceDefault
+    }
+    return true
+  })
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 200,
+      background: '#000a', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+    }}>
+      <div style={{
+        background: '#18181b', border: '1px solid #27272a', borderRadius: 14,
+        width: '100%', maxWidth: 560, maxHeight: '90vh', display: 'flex', flexDirection: 'column',
+        boxShadow: '0 24px 80px #0009',
+      }}>
+        {/* Header */}
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #27272a', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ background: mode === 'insert' ? '#14532d22' : '#1e3a5f22', borderRadius: 7, padding: 7 }}>
+              {mode === 'insert' ? <Plus size={15} style={{ color: '#4ade80' }} /> : <Pencil size={15} style={{ color: '#93c5fd' }} />}
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#e4e4e7' }}>
+                {mode === 'insert' ? 'Insert Row' : 'Edit Row'}
+              </div>
+              <div style={{ fontSize: 11, color: '#52525b', fontFamily: 'monospace' }}>{tableName}</div>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#52525b', display: 'flex', padding: 4, borderRadius: 6 }}>
+            <X size={15} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={{ overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {formCols.map(col => {
+            const isPK = primaryKeys.includes(col.column_name)
+            const inputType = inputTypeForDataType(col.data_type)
+            const isReadOnly = mode === 'edit' && isPK
+            const val = values[col.column_name]
+            return (
+              <div key={col.column_name}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: isReadOnly ? '#52525b' : '#a1a1aa', fontFamily: 'monospace' }}>
+                    {col.column_name}
+                  </label>
+                  <span style={{ fontSize: 10, color: '#3f3f46', background: '#27272a', borderRadius: 4, padding: '1px 5px' }}>{col.data_type}</span>
+                  {isPK && <span style={{ fontSize: 9, color: '#f59e0b', background: '#78350f22', border: '1px solid #f59e0b33', borderRadius: 4, padding: '1px 5px', fontWeight: 700 }}>PK</span>}
+                  {col.is_nullable === 'YES' && <span style={{ fontSize: 9, color: '#52525b', background: '#27272a', borderRadius: 4, padding: '1px 5px' }}>nullable</span>}
+                </div>
+                {inputType === 'checkbox' ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button
+                      type="button"
+                      disabled={isReadOnly}
+                      onClick={() => !isReadOnly && setValues(v => ({ ...v, [col.column_name]: !v[col.column_name] }))}
+                      style={{
+                        width: 20, height: 20, borderRadius: 5,
+                        border: `1px solid ${val ? '#2563eb' : '#27272a'}`,
+                        background: val ? '#2563eb' : '#09090b',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: isReadOnly ? 'not-allowed' : 'pointer', flexShrink: 0,
+                      }}
+                    >
+                      {val && <Check size={12} style={{ color: '#fff' }} />}
+                    </button>
+                    <span style={{ fontSize: 12, color: '#71717a' }}>{val ? 'true' : 'false'}</span>
+                  </div>
+                ) : (
+                  <input
+                    type={inputType}
+                    readOnly={isReadOnly}
+                    value={typeof val === 'boolean' ? String(val) : (val ?? '')}
+                    onChange={e => !isReadOnly && setValues(v => ({ ...v, [col.column_name]: e.target.value }))}
+                    placeholder={col.column_default ? `default: ${col.column_default}` : `Enter ${col.column_name}…`}
+                    style={{
+                      width: '100%', boxSizing: 'border-box',
+                      background: isReadOnly ? '#09090b88' : '#09090b',
+                      border: `1px solid ${isReadOnly ? '#1c1c1c' : '#27272a'}`,
+                      color: isReadOnly ? '#52525b' : '#e4e4e7',
+                      borderRadius: 7, padding: '8px 12px', fontSize: 13,
+                      fontFamily: 'monospace', outline: 'none',
+                      cursor: isReadOnly ? 'not-allowed' : 'text',
+                    }}
+                  />
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '14px 20px', borderTop: '1px solid #27272a', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {error && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#450a0a22', border: '1px solid #dc262644', borderRadius: 8, padding: '8px 12px' }}>
+              <AlertTriangle size={13} style={{ color: '#f87171', flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: '#f87171' }}>{error}</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button onClick={onClose} style={{ background: '#27272a', border: 'none', color: '#a1a1aa', borderRadius: 8, padding: '8px 18px', cursor: 'pointer', fontSize: 13 }}>
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={submitting}
+              style={{
+                background: mode === 'insert' ? '#14532d' : '#1e3a5f',
+                border: `1px solid ${mode === 'insert' ? '#16a34a44' : '#2563eb44'}`,
+                color: mode === 'insert' ? '#4ade80' : '#93c5fd',
+                borderRadius: 8, padding: '8px 18px', cursor: submitting ? 'not-allowed' : 'pointer',
+                fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
+                opacity: submitting ? 0.6 : 1,
+              }}
+            >
+              {submitting
+                ? <RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                : mode === 'insert' ? <Plus size={13} /> : <Check size={13} />}
+              {mode === 'insert' ? 'Insert' : 'Save Changes'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Confirm Delete Modal ─────────────────────────────────────────────────────
+
+interface ConfirmDeleteModalProps {
+  count: number
+  tableName: string
+  onConfirm: () => Promise<void>
+  onClose: () => void
+}
+
+function ConfirmDeleteModal({ count, tableName, onConfirm, onClose }: ConfirmDeleteModalProps) {
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    setError(null)
+    try {
+      await onConfirm()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Delete failed')
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 200,
+      background: '#000a', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+    }}>
+      <div style={{
+        background: '#18181b', border: '1px solid #450a0a', borderRadius: 14,
+        width: '100%', maxWidth: 420, boxShadow: '0 24px 80px #0009',
+      }}>
+        <div style={{ padding: '20px 24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+            <div style={{ background: '#450a0a', borderRadius: 10, padding: 10 }}>
+              <Trash2 size={18} style={{ color: '#f87171' }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#f87171' }}>Confirm Delete</div>
+              <div style={{ fontSize: 12, color: '#52525b', fontFamily: 'monospace' }}>{tableName}</div>
+            </div>
+          </div>
+          <p style={{ fontSize: 14, color: '#a1a1aa', lineHeight: 1.6, margin: '0 0 4px' }}>
+            You are about to permanently delete{' '}
+            <strong style={{ color: '#fca5a5' }}>{count} row{count !== 1 ? 's' : ''}</strong> from{' '}
+            <code style={{ background: '#27272a', color: '#f87171', borderRadius: 4, padding: '1px 6px', fontSize: 12 }}>{tableName}</code>.
+          </p>
+          <p style={{ fontSize: 12, color: '#52525b', margin: '8px 0 0' }}>This action cannot be undone.</p>
+        </div>
+        {error && (
+          <div style={{ margin: '0 24px', display: 'flex', alignItems: 'center', gap: 8, background: '#450a0a22', border: '1px solid #dc262644', borderRadius: 8, padding: '8px 12px' }}>
+            <AlertTriangle size={13} style={{ color: '#f87171', flexShrink: 0 }} />
+            <span style={{ fontSize: 12, color: '#f87171' }}>{error}</span>
+          </div>
+        )}
+        <div style={{ padding: '16px 24px', borderTop: '1px solid #27272a', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button onClick={onClose} style={{ background: '#27272a', border: 'none', color: '#a1a1aa', borderRadius: 8, padding: '8px 18px', cursor: 'pointer', fontSize: 13 }}>
+            Cancel
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            style={{
+              background: '#450a0a', border: '1px solid #dc262644',
+              color: '#f87171', borderRadius: 8, padding: '8px 18px',
+              cursor: deleting ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600,
+              display: 'flex', alignItems: 'center', gap: 6, opacity: deleting ? 0.6 : 1,
+            }}
+          >
+            {deleting ? <RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Trash2 size={13} />}
+            {deleting ? 'Deleting…' : `Delete ${count} Row${count !== 1 ? 's' : ''}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function AdminTableList() {
@@ -190,6 +459,15 @@ export default function AdminTableList() {
   const [visibleCols, setVisibleCols] = useState<Set<string>>(new Set())
   const [showFilter, setShowFilter] = useState(false)
 
+  // ── CRUD UI state ──
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
+  const [showInsert, setShowInsert] = useState(false)
+  const [editRow, setEditRow] = useState<Record<string, unknown> | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<'selected' | Record<string, unknown> | null>(null)
+  const [mutating, setMutating] = useState(false)
+  const [mutateSuccess, setMutateSuccess] = useState<string | null>(null)
+
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ── Auth helper ──
@@ -197,6 +475,7 @@ export default function AdminTableList() {
     const user = auth?.currentUser
     return (await user?.getIdToken()) ?? ''
   }
+
 
   // ── Fetch table list ──
   const fetchTables = useCallback(async () => {
@@ -260,6 +539,7 @@ export default function AdminTableList() {
       }
       const json: TableData & { columns: ColumnMeta[] } = await res.json()
       setData(json)
+      setSelectedRows(new Set())
       // Initialize visible columns on first load for this table
       setVisibleCols(prev => {
         const cols: string[] = json.columns?.map((c: ColumnMeta) => c.column_name) ?? []
@@ -272,6 +552,72 @@ export default function AdminTableList() {
       setDataLoading(false)
     }
   }, [])
+
+  // ── CRUD API helpers ──
+  const getAuthHeader = async () => {
+    const token = await getToken()
+    return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  }
+
+  const apiMutate = async (method: 'POST' | 'PATCH' | 'DELETE', body: unknown): Promise<void> => {
+    if (!selected) return
+    const headers = await getAuthHeader()
+    const res = await fetch(`/api/admin/tables/${encodeURIComponent(selected.table_name)}`, {
+      method,
+      headers,
+      body: JSON.stringify(body),
+    })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
+  }
+
+  const handleInsert = async (values: Record<string, string | boolean>) => {
+    setMutating(true)
+    try {
+      await apiMutate('POST', { row: values })
+      setShowInsert(false)
+      setMutateSuccess('Row inserted successfully.')
+      await fetchData({ table: selected!.table_name, page, limit: pageSize, search: globalSearch, filterCol, filterVal, sortCol, sortDir })
+      setTimeout(() => setMutateSuccess(null), 3000)
+    } finally {
+      setMutating(false)
+    }
+  }
+
+  const handleEdit = async (values: Record<string, string | boolean>) => {
+    if (!data || !editRow) return
+    setMutating(true)
+    try {
+      const pk = data.primaryKeys[0] ?? 'id'
+      await apiMutate('PATCH', { pkColumn: pk, pkValue: editRow[pk], updates: values })
+      setEditRow(null)
+      setMutateSuccess('Row updated successfully.')
+      await fetchData({ table: selected!.table_name, page, limit: pageSize, search: globalSearch, filterCol, filterVal, sortCol, sortDir })
+      setTimeout(() => setMutateSuccess(null), 3000)
+    } finally {
+      setMutating(false)
+    }
+  }
+
+  const handleDeleteConfirmed = async () => {
+    if (!data) return
+    const pk = data.primaryKeys[0] ?? 'id'
+    let pkValues: unknown[]
+    if (deleteTarget === 'selected') {
+      pkValues = Array.from(selectedRows)
+    } else if (deleteTarget && typeof deleteTarget === 'object') {
+      pkValues = [deleteTarget[pk]]
+    } else {
+      return
+    }
+    await apiMutate('DELETE', { pkColumn: pk, pkValues })
+    setShowDeleteConfirm(false)
+    setDeleteTarget(null)
+    setSelectedRows(new Set())
+    setMutateSuccess(`Deleted ${pkValues.length} row${pkValues.length !== 1 ? 's' : ''}.`)
+    await fetchData({ table: selected!.table_name, page, limit: pageSize, search: globalSearch, filterCol, filterVal, sortCol, sortDir })
+    setTimeout(() => setMutateSuccess(null), 3000)
+  }
 
   // ── Effect: fetch tables on mount ──
   useEffect(() => { fetchTables() }, [fetchTables])
@@ -298,7 +644,7 @@ export default function AdminTableList() {
     setPage(1)
   }
   const selectTable = (t: TableMeta) => {
-    setSelected(t); setPage(1); setData(null); setGlobalSearch(''); setFilterCol(''); setFilterVal(''); setSortCol(''); setSortDir('asc'); setVisibleCols(new Set())
+    setSelected(t); setPage(1); setData(null); setGlobalSearch(''); setFilterCol(''); setFilterVal(''); setSortCol(''); setSortDir('asc'); setVisibleCols(new Set()); setSelectedRows(new Set())
   }
   const toggleCol = (col: string) => setVisibleCols(prev => {
     const next = new Set(prev)
@@ -306,41 +652,126 @@ export default function AdminTableList() {
     return next
   })
 
+  // ── Row selection helpers ──
+  const pk = data?.primaryKeys[0] ?? ''
+  const rowKey = (row: Record<string, unknown>) => String(row[pk] ?? JSON.stringify(row))
+  const toggleRowSelect = (row: Record<string, unknown>) => {
+    const key = rowKey(row)
+    setSelectedRows(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) { next.delete(key) } else { next.add(key) }
+      return next
+    })
+  }
+  const toggleSelectAll = () => {
+    if (!data) return
+    const allKeys = data.rows.map(rowKey)
+    const allSelected = allKeys.every(k => selectedRows.has(k))
+    setSelectedRows(allSelected ? new Set() : new Set(allKeys))
+  }
+  const canMutate = (data?.primaryKeys?.length ?? 0) > 0 && !dataLoading
+
   // ── Derived ──
   const filteredTables = tables.filter(t => t.table_name.toLowerCase().includes(sidebarSearch.toLowerCase()))
   const colMeta = data?.columns ?? []
   const displayCols = colMeta.map(c => c.column_name).filter(c => visibleCols.has(c))
   const { pagination } = data ?? { pagination: null }
+  const hasSelection = selectedRows.size > 0
 
   // ───────────────────────────────────────────────────────────────────────────
   return (
     <div>
+      {/* ── Modals ── */}
+      {showInsert && data && (
+        <RowFormModal
+          mode="insert"
+          tableName={selected!.table_name}
+          columns={data.columns}
+          primaryKeys={data.primaryKeys}
+          onConfirm={handleInsert}
+          onClose={() => setShowInsert(false)}
+        />
+      )}
+      {editRow && data && (
+        <RowFormModal
+          mode="edit"
+          tableName={selected!.table_name}
+          columns={data.columns}
+          primaryKeys={data.primaryKeys}
+          initialValues={editRow}
+          onConfirm={handleEdit}
+          onClose={() => setEditRow(null)}
+        />
+      )}
+      {showDeleteConfirm && deleteTarget !== null && (
+        <ConfirmDeleteModal
+          count={deleteTarget === 'selected' ? selectedRows.size : 1}
+          tableName={selected!.table_name}
+          onConfirm={handleDeleteConfirmed}
+          onClose={() => { setShowDeleteConfirm(false); setDeleteTarget(null) }}
+        />
+      )}
+
       {/* ── Top header ── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ background: '#1e3a5f', borderRadius: 8, padding: 8 }}>
-            <Database size={18} style={{ color: '#93c5fd' }} />
-          </div>
           <div>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#e4e4e7', margin: 0 }}>Neon Postgres Tables</h2>
             <p style={{ fontSize: 12, color: '#52525b', margin: 0 }}>
               {lastRefresh ? `Last updated ${lastRefresh.toLocaleTimeString()}` : 'Loading...'}
             </p>
           </div>
         </div>
-        <button
-          onClick={fetchTables}
-          disabled={tablesLoading}
-          style={{
-            background: '#18181b', border: '1px solid #27272a', color: '#a1a1aa',
-            borderRadius: 8, padding: '7px 14px', cursor: tablesLoading ? 'not-allowed' : 'pointer',
-            display: 'flex', alignItems: 'center', gap: 6, fontSize: 13,
-          }}
-        >
-          <RefreshCw size={14} style={tablesLoading ? { animation: 'spin 1s linear infinite' } : {}} />
-          Refresh
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          {/* Insert Row */}
+          {selected && canMutate && (
+            <button
+              onClick={() => setShowInsert(true)}
+              style={{
+                background: '#14532d', border: '1px solid #16a34a44', color: '#4ade80',
+                borderRadius: 8, padding: '7px 14px', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600,
+              }}
+            >
+              <Plus size={14} />
+              Insert Row
+            </button>
+          )}
+          {/* Delete Selected */}
+          {hasSelection && canMutate && (
+            <button
+              onClick={() => { setDeleteTarget('selected'); setShowDeleteConfirm(true) }}
+              style={{
+                background: '#450a0a', border: '1px solid #dc262644', color: '#f87171',
+                borderRadius: 8, padding: '7px 14px', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600,
+              }}
+            >
+              <Trash2 size={14} />
+              Delete Selected ({selectedRows.size})
+            </button>
+          )}
+          <button
+            onClick={fetchTables}
+            disabled={tablesLoading}
+            style={{
+              background: '#18181b', border: '1px solid #27272a', color: '#a1a1aa',
+              borderRadius: 8, padding: '7px 14px', cursor: tablesLoading ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', gap: 6, fontSize: 13,
+            }}
+          >
+            <RefreshCw size={14} style={tablesLoading ? { animation: 'spin 1s linear infinite' } : {}} />
+            Refresh
+          </button>
+        </div>
       </div>
+
+      {/* ── Success toast ── */}
+      {mutateSuccess && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#14532d22', border: '1px solid #16a34a44', borderRadius: 10, padding: '10px 16px', marginBottom: 16 }}>
+          <Check size={15} style={{ color: '#4ade80', flexShrink: 0 }} />
+          <span style={{ color: '#4ade80', fontSize: 13 }}>{mutateSuccess}</span>
+        </div>
+      )}
 
       {/* ── Summary cards ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
@@ -615,6 +1046,23 @@ export default function AdminTableList() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'monospace' }}>
                       <thead>
                         <tr style={{ background: '#09090b', borderBottom: '2px solid #27272a' }}>
+                          {/* Select-all checkbox */}
+                          {canMutate && (
+                            <th style={{ padding: '8px 12px', textAlign: 'center', width: 40, borderRight: '1px solid #1c1c1c' }}>
+                              <button
+                                onClick={toggleSelectAll}
+                                style={{
+                                  width: 16, height: 16, borderRadius: 4,
+                                  border: `1px solid ${data.rows.length > 0 && data.rows.every(r => selectedRows.has(rowKey(r))) ? '#2563eb' : '#3f3f46'}`,
+                                  background: data.rows.length > 0 && data.rows.every(r => selectedRows.has(rowKey(r))) ? '#2563eb' : 'transparent',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  cursor: 'pointer', padding: 0,
+                                }}
+                              >
+                                {data.rows.length > 0 && data.rows.every(r => selectedRows.has(rowKey(r))) && <Check size={10} style={{ color: '#fff' }} />}
+                              </button>
+                            </th>
+                          )}
                           <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, color: '#3f3f46', fontWeight: 600, width: 48, borderRight: '1px solid #1c1c1c' }}>#</th>
                           {displayCols.map(col => {
                             const isSort = sortCol === col
@@ -640,43 +1088,97 @@ export default function AdminTableList() {
                               </th>
                             )
                           })}
+                          {canMutate && (
+                            <th style={{ padding: '8px 12px', textAlign: 'center', fontSize: 10, color: '#3f3f46', fontWeight: 600, width: 90 }}>ACTIONS</th>
+                          )}
                         </tr>
                       </thead>
                       <tbody>
                         {data.rows.length === 0 ? (
                           <tr>
-                            <td colSpan={displayCols.length + 1} style={{ padding: 32, textAlign: 'center', color: '#52525b', fontSize: 13 }}>
+                            <td colSpan={displayCols.length + (canMutate ? 3 : 1)} style={{ padding: 32, textAlign: 'center', color: '#52525b', fontSize: 13 }}>
                               No rows match the current filters
                             </td>
                           </tr>
                         ) : (
-                          data.rows.map((row, ri) => (
-                            <tr key={ri} style={{ borderBottom: '1px solid #1c1c1c', background: ri % 2 === 0 ? 'transparent' : '#0d0d0f' }}>
-                              <td style={{ padding: '7px 12px', color: '#3f3f46', fontSize: 11, borderRight: '1px solid #1c1c1c', textAlign: 'right', userSelect: 'none' }}>
-                                {(page - 1) * pageSize + ri + 1}
-                              </td>
-                              {displayCols.map(col => {
-                                const raw = row[col]
-                                const isNull = raw === null || raw === undefined
-                                const cell = formatCell(raw)
-                                return (
-                                  <td
-                                    key={col}
-                                    title={isNull ? 'NULL' : cell}
-                                    style={{
-                                      padding: '7px 14px', color: isNull ? '#3f3f46' : '#d4d4d8',
-                                      fontSize: 12, borderRight: '1px solid #1c1c1c',
-                                      maxWidth: CELL_MAX_WIDTH, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                    }}
-                                  >
-                                    {isNull
-                                      ? <span style={{ color: '#3f3f46', fontStyle: 'italic', fontFamily: 'monospace' }}>null</span>
-                                      : cell}
+                          data.rows.map((row, ri) => {
+                            const key = rowKey(row)
+                            const isSelected = selectedRows.has(key)
+                            return (
+                              <tr key={ri} style={{ borderBottom: '1px solid #1c1c1c', background: isSelected ? '#1e1e4022' : ri % 2 === 0 ? 'transparent' : '#0d0d0f' }}>
+                                {/* Row checkbox */}
+                                {canMutate && (
+                                  <td style={{ padding: '7px 12px', textAlign: 'center', borderRight: '1px solid #1c1c1c' }}>
+                                    <button
+                                      onClick={() => toggleRowSelect(row)}
+                                      style={{
+                                        width: 16, height: 16, borderRadius: 4,
+                                        border: `1px solid ${isSelected ? '#2563eb' : '#3f3f46'}`,
+                                        background: isSelected ? '#2563eb' : 'transparent',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        cursor: 'pointer', padding: 0,
+                                      }}
+                                    >
+                                      {isSelected && <Check size={10} style={{ color: '#fff' }} />}
+                                    </button>
                                   </td>
-                                )
-                              })}
-                            </tr>
-                          ))
+                                )}
+                                <td style={{ padding: '7px 12px', color: '#3f3f46', fontSize: 11, borderRight: '1px solid #1c1c1c', textAlign: 'right', userSelect: 'none' }}>
+                                  {(page - 1) * pageSize + ri + 1}
+                                </td>
+                                {displayCols.map(col => {
+                                  const raw = row[col]
+                                  const isNull = raw === null || raw === undefined
+                                  const cell = formatCell(raw)
+                                  return (
+                                    <td
+                                      key={col}
+                                      title={isNull ? 'NULL' : cell}
+                                      style={{
+                                        padding: '7px 14px', color: isNull ? '#3f3f46' : '#d4d4d8',
+                                        fontSize: 12, borderRight: '1px solid #1c1c1c',
+                                        maxWidth: CELL_MAX_WIDTH, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                      }}
+                                    >
+                                      {isNull
+                                        ? <span style={{ color: '#3f3f46', fontStyle: 'italic', fontFamily: 'monospace' }}>null</span>
+                                        : cell}
+                                    </td>
+                                  )
+                                })}
+                                {/* Row actions: Edit + Delete */}
+                                {canMutate && (
+                                  <td style={{ padding: '4px 10px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                    <button
+                                      onClick={() => setEditRow(row)}
+                                      disabled={mutating}
+                                      title="Edit row"
+                                      style={{
+                                        background: '#1e3a5f22', border: '1px solid #2563eb33',
+                                        color: '#93c5fd', borderRadius: 6, padding: '4px 7px',
+                                        cursor: 'pointer', display: 'inline-flex', alignItems: 'center',
+                                        marginRight: 4,
+                                      }}
+                                    >
+                                      <Pencil size={11} />
+                                    </button>
+                                    <button
+                                      onClick={() => { setDeleteTarget(row); setShowDeleteConfirm(true) }}
+                                      disabled={mutating}
+                                      title="Delete row"
+                                      style={{
+                                        background: '#450a0a22', border: '1px solid #dc262633',
+                                        color: '#f87171', borderRadius: 6, padding: '4px 7px',
+                                        cursor: 'pointer', display: 'inline-flex', alignItems: 'center',
+                                      }}
+                                    >
+                                      <Trash2 size={11} />
+                                    </button>
+                                  </td>
+                                )}
+                              </tr>
+                            )
+                          })
                         )}
                       </tbody>
                     </table>

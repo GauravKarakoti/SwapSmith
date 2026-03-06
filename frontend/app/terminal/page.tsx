@@ -231,7 +231,13 @@ export default function TerminalPage() {
     try {
       const audioBlob = await stopRecording();
       if (audioBlob) {
-        const audioFile = new File([audioBlob], "voice_command.wav", { type: audioBlob.type || 'audio/wav' });
+        let ext = 'wav';
+        const type = audioBlob.type.toLowerCase();
+        if (type.includes('webm')) ext = 'webm';
+        else if (type.includes('mp4')) ext = 'mp4';
+        else if (type.includes('ogg')) ext = 'ogg';
+
+        const audioFile = new File([audioBlob], `voice_command.${ext}`, { type: audioBlob.type || 'audio/wav' });
 
         const formData = new FormData();
         formData.append("file", audioFile);
@@ -314,6 +320,44 @@ export default function TerminalPage() {
     } catch (error: unknown) {
       const errorMessage = handleError(error, ErrorType.API_FAILURE, {
         operation: "swap_quote",
+        retryable: true,
+      });
+      addMessage({ role: "assistant", content: errorMessage, type: "message" });
+    }
+  };
+
+  const executeStake = async (command: ParsedCommand) => {
+    try {
+      const stakeResponse = await fetch("/api/create-stake", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fromAsset: command.fromAsset,
+          fromChain: command.fromChain,
+          amount: command.amount,
+          amountType: command.amountType,
+          protocol: command.fromProject || 'lido',
+          settleAddress: command.settleAddress,
+        }),
+      });
+      const stakeQuote = await stakeResponse.json();
+      if (stakeQuote.error) throw new Error(stakeQuote.error);
+
+      addMessage({
+        role: "assistant",
+        content: `🔥 **Staking Quote Generated**\n\n` +
+          `**Stake:** ${stakeQuote.amount} ${stakeQuote.fromAsset} → ${stakeQuote.estimatedOutput.toFixed(6)} ${stakeQuote.toAsset}\n` +
+          `**Protocol:** ${stakeQuote.protocol.name} (${stakeQuote.protocol.apy} APY)\n` +
+          `**Network:** ${stakeQuote.fromChain}\n` +
+          `**Fees:** ${stakeQuote.fees.total.toFixed(6)} ${stakeQuote.fromAsset}\n` +
+          `**Time:** ${stakeQuote.timeToStake}\n\n` +
+          `**Risks:** ${stakeQuote.risks.join(', ')}\n\n` +
+          `**Instructions:**\n${stakeQuote.instructions.join('\n')}`,
+        type: "message",
+      });
+    } catch (error: unknown) {
+      const errorMessage = handleError(error, ErrorType.API_FAILURE, {
+        operation: "stake_quote",
         retryable: true,
       });
       addMessage({ role: "assistant", content: errorMessage, type: "message" });
@@ -424,6 +468,22 @@ export default function TerminalPage() {
             confidence: 100,
           };
           await executeSwap(subCommand);
+        }
+        setIsLoading(false);
+        return;
+      }
+
+      // Handle staking commands (swap_and_stake intent)
+      if (command.intent === "swap_and_stake") {
+        if (command.requiresConfirmation || command.confidence < 80) {
+          addMessage({
+            role: "assistant",
+            content: "",
+            type: "intent_confirmation",
+            data: { parsedCommand: command },
+          });
+        } else {
+          await executeStake(command);
         }
         setIsLoading(false);
         return;
@@ -653,7 +713,14 @@ export default function TerminalPage() {
                         "parsedCommand" in msg.data ? (
                         <IntentConfirmation
                           command={(msg.data as { parsedCommand: ParsedCommand }).parsedCommand}
-                          onConfirm={() => executeSwap((msg.data as { parsedCommand: ParsedCommand }).parsedCommand)}
+                          onConfirm={() => {
+                            const cmd = (msg.data as { parsedCommand: ParsedCommand }).parsedCommand;
+                            if (cmd.intent === "swap_and_stake") {
+                              executeStake(cmd);
+                            } else {
+                              executeSwap(cmd);
+                            }
+                          }}
                         />
                       ) : msg.type === "yield_info" ? (
                         <pre className="whitespace-pre-wrap text-xs text-cyan-400">

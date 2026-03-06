@@ -89,6 +89,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // 🔐 Rate limiting
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rateLimitResponse = rateLimiters.profile(request as any, {} as any);
     if (!rateLimitResponse) {
       const response = NextResponse.json({ error: 'Too many profile requests' }, { status: 429 });
