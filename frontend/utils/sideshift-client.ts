@@ -2,12 +2,8 @@ import axios from 'axios';
 import { z } from 'zod';
 import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift';
 import { validateDepositAddressForNetwork } from './addressValidation';
-const AFFILIATE_ID = process.env.NEXT_PUBLIC_AFFILIATE_ID;
-const API_KEY = process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
 
-// ============================================
-// Type Definitions
-// ============================================
+// API key is now server-side only - client calls backend API routes
 
 export interface SideShiftQuote {
   id?: string;
@@ -148,32 +144,22 @@ export async function createQuote(
   toAsset: string,
   toNetwork: string,
   amount: number,
-  userIP: string
+  _userIP: string
 ): Promise<SideShiftQuote> {
   try {
-    const response = await axios.post(
-      `${SIDESHIFT_CONFIG.BASE_URL}/quotes`,
-      {
-        depositCoin: fromAsset,
-        depositNetwork: fromNetwork,
-        settleCoin: toAsset,
-        settleNetwork: toNetwork,
-        depositAmount: amount.toString(),
-        affiliateId: AFFILIATE_ID,
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'x-sideshift-secret': API_KEY,
-          'x-user-ip': userIP
-        }
-      }
-    );
+    // Call backend API route instead of SideShift directly
+    const response = await axios.post('/api/sideshift/quote', {
+      depositCoin: fromAsset,
+      depositNetwork: fromNetwork,
+      settleCoin: toAsset,
+      settleNetwork: toNetwork,
+      depositAmount: amount,
+    });
 
-<<<<<<< HEAD
-    const validated = validateResponse(SideShiftQuoteSchema, response.data, 'createQuote');
+    const quote = { ...response.data, id: response.data.id };
 
-    if (validated.error) {
+    // SECURITY: Validate depositAddress presence + format for the reported network
+    const addressCheck = validateDepositAddressForNetwork(quote.depositNetwork, quote.depositAddress);
     if (!addressCheck.passed) {
       console.error('SECURITY: SideShift quote failed deposit address validation:', {
         quoteId: quote.id,
@@ -199,37 +185,22 @@ export async function createCheckout(
   settleNetwork: string,
   settleAmount: number,
   settleAddress: string,
-  userIP: string
+  _userIP: string
 ): Promise<SideShiftCheckoutResponse> {
   try {
-    const response = await axios.post(
-      `${SIDESHIFT_CONFIG.BASE_URL}/checkout`,
-      {
-        settleCoin,
-        settleNetwork,
-        settleAmount: settleAmount.toString(),
-        affiliateId: AFFILIATE_ID,
-        settleAddress: settleAddress,
-        successUrl: SIDESHIFT_CONFIG.SUCCESS_URL,
-        cancelUrl: SIDESHIFT_CONFIG.CANCEL_URL,
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'x-sideshift-secret': API_KEY,
-          'x-user-ip': userIP,
-        },
-      }
-    );
-
-    const validated = validateResponse(SideShiftCheckoutResponseSchema, response.data, 'createCheckout');
+    // Call backend API route instead of SideShift directly
+    const response = await axios.post('/api/sideshift/checkout', {
+      settleCoin,
+      settleNetwork,
+      settleAmount,
+      settleAddress,
+    });
 
     return {
-      id: validated.id,
-      url: validated.url || `${SIDESHIFT_CONFIG.CHECKOUT_URL}/${validated.id}`,
-      settleAmount: validated.settleAmount,
-      settleCoin: validated.settleCoin
+      id: response.data.id,
+      url: response.data.url,
+      settleAmount: response.data.settleAmount,
+      settleCoin: response.data.settleCoin
     };
   } catch (error: unknown) {
     if (axios.isAxiosError(error)) {
@@ -240,15 +211,24 @@ export async function createCheckout(
   }
 }
 
+let coinsCache: Coin[] | null = null;
+let coinsCacheTimestamp = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Fetches all available coins from SideShift API
+ * Results are cached for 5 minutes
  */
 export async function getCoins(): Promise<Coin[]> {
+  if (coinsCache && Date.now() - coinsCacheTimestamp < CACHE_TTL) {
+    return coinsCache;
+  }
+
   try {
     const response = await axios.get(`${SIDESHIFT_CONFIG.BASE_URL}/coins`);
-    // Validate as array of CoinSchema
-    const validated = validateResponse(CoinSchema.array(), response.data, 'getCoins');
-    return validated;
+    coinsCache = response.data;
+    coinsCacheTimestamp = Date.now();
+    return response.data;
   } catch (error: unknown) {
     if (axios.isAxiosError(error)) {
       const err = error as { response?: { data?: { error?: { message?: string } } } };
