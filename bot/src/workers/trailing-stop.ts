@@ -86,7 +86,7 @@ export class TrailingStopWorker {
       }
 
       const triggerPrice =
-        peakPrice * (1 - parseFloat(order.trailingPercentage) / 100); // Convert string to number
+        peakPrice * (1 - order.trailingPercentage / 100);
 
       await db
         .update(trailingStopOrders)
@@ -131,10 +131,10 @@ export class TrailingStopWorker {
         await this.bot.telegram.sendMessage(
           Number(order.telegramId),
           `🚨 *Trailing Stop Triggered!*\n\n` +
-            `*${order.fromAsset} → ${order.toAsset}*\n` +
-            `Amount: ${order.fromAmount}\n` +
-            `Peak: $${peakPrice.toLocaleString()}\n` +
-            `Trigger: $${triggerPrice.toLocaleString()}`,
+          `*${order.fromAsset} → ${order.toAsset}*\n` +
+          `Amount: ${order.fromAmount}\n` +
+          `Peak: $${peakPrice.toLocaleString()}\n` +
+          `Trigger: $${triggerPrice.toLocaleString()}`,
           { parse_mode: 'Markdown' }
         );
       }
@@ -189,8 +189,8 @@ export class TrailingStopWorker {
         await this.bot.telegram.sendMessage(
           Number(order.telegramId),
           `✅ *Trailing Stop Executed!*\n\n` +
-            `Deposit: ${quote.depositAmount} ${quote.depositCoin}\n` +
-            `To: \`${sideshiftOrder.depositAddress}\``,
+          `Deposit: ${quote.depositAmount} ${quote.depositCoin}\n` +
+          `To: \`${sideshiftOrder.depositAddress}\``,
           { parse_mode: 'Markdown' }
         );
       }
