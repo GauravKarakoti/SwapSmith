@@ -3,8 +3,8 @@ import { z } from 'zod';
 import dotenv from 'dotenv';
 import { SIDESHIFT_CONFIG } from '../../../shared/config/sideshift';
 dotenv.config();
-const AFFILIATE_ID = process.env.SIDESHIFT_AFFILIATE_ID || process.env.NEXT_PUBLIC_AFFILIATE_ID || '';
-const API_KEY = process.env.SIDESHIFT_API_KEY || process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
+const AFFILIATE_ID = process.env.SIDESHIFT_AFFILIATE_ID || process.env.AFFILIATE_ID || '';
+const API_KEY = process.env.SIDESHIFT_API_KEY || process.env.SIDESHIFT_API_KEY;
 const DEFAULT_USER_IP = process.env.SIDESHIFT_CLIENT_IP;
 
 export interface SideShiftPair {
@@ -22,6 +22,7 @@ export interface SideShiftQuote {
   id: string;
   depositCoin: string;
   depositNetwork: string;
+  depositAddress: string; // Address where user should send their deposit
   settleCoin: string;
   settleNetwork: string;
   depositAmount: string;
@@ -164,6 +165,7 @@ const SideShiftQuoteSchema = z.object({
   id: z.string(),
   depositCoin: z.string(),
   depositNetwork: z.string(),
+  depositAddress: z.string(), // Critical: Destination address for user's deposit
   settleCoin: z.string(),
   settleNetwork: z.string(),
   depositAmount: z.string(),

@@ -108,44 +108,118 @@ async function processStakeOrder(order: StakeOrder): Promise<void> {
 async function initiateStaking(order: StakeOrder, swapStatus: any): Promise<void> {
   logger.info(`[StakeWorker] Initiating staking for order ${order.id}`);
 
-  // Update status to submitted
-  await db.updateStakeOrderStakeStatus(
-    order.sideshiftOrderId,
-    'submitted'
+  try {
+    const {
+      buildStakingTransaction,
+      formatStakingInstructions,
+      isAutoStakingAvailable,
+      getEstimatedStakingFee,
+      executeStakingTransaction
+    } = await import('../services/stake-client');
+
+    const settleAmount = swapStatus.settleAmount || order.settleAmount || '0';
+
+    // Check if auto-staking is available for this protocol
+    const canAutoStake = isAutoStakingAvailable(order.stakeProtocol, order.stakeNetwork);
+
+    if (canAutoStake && order.stakeAddress) {
+      logger.info(
+        `[StakeWorker] Attempting auto-stake for order ${order.id} on ${order.stakeProtocol}`
+      );
+
+      try {
+        // Build the staking transaction
+        const stakeTx = await buildStakingTransaction(
+          order.stakeProtocol,
+          settleAmount,
+          order.stakeAddress,
+          order.depositAddress
+        );
+
+        // Mark as submitted and ready for execution
+        await db.updateStakeOrderStakeStatus(
+          order.sideshiftOrderId,
+          'submitted'
+        );
+
+        // Calculate gas fee estimate
+        const estimatedFee = getEstimatedStakingFee(order.stakeProtocol, settleAmount);
+
+        // Notify user of staking in progress
+        await notifyStakingProcessing(order, settleAmount, estimatedFee, stakeTx);
+      } catch (stakingError) {
+        logger.error(`[StakeWorker] Error building staking tx: ${stakingError}`);
+        // Fall back to manual instructions
+        await provideManualStakingInstructions(order, settleAmount);
+      }
+    } else {
+      // Provide manual staking instructions
+      await provideManualStakingInstructions(order, settleAmount);
+    }
+  } catch (error) {
+    logger.error(`[StakeWorker] Error in initiateStaking: ${error}`);
+    
+    // Still notify user with instructions as fallback
+    try {
+      const settleAmount = swapStatus.settleAmount || order.settleAmount || '0';
+      await provideManualStakingInstructions(order, settleAmount);
+    } catch (fallbackError) {
+      logger.error(`[StakeWorker] Fallback instruction failed: ${fallbackError}`);
+    }
+  }
+}
+
+/**
+ * Provide manual staking instructions to the user
+ */
+async function provideManualStakingInstructions(
+  order: StakeOrder,
+  settleAmount: string
+): Promise<void> {
+  if (!bot) return;
+
+  const { formatStakingInstructions } = await import('../services/stake-client');
+
+  const instructionsMessage = formatStakingInstructions(order, settleAmount);
+
+  await bot.telegram.sendMessage(
+    order.telegramId,
+    instructionsMessage,
+    { parse_mode: 'Markdown' }
   );
 
-  // In a real implementation, this would:
-  // 1. Generate the staking transaction calldata
-  // 2. Either:
-  //    a) Send the transaction if we have custody (not recommended)
-  //    b) Generate a transaction for the user to sign
-  //    c) Use a smart contract to auto-stake on receipt
-  
-  // For now, we'll provide instructions to the user
-  if (bot) {
-    const settleAmount = swapStatus.settleAmount || order.settleAmount || '0';
-    
-    await bot.telegram.sendMessage(
-      order.telegramId,
-      `✅ *Swap Complete - Ready to Stake!*\n\n` +
-      `*Order ID:* \`${order.sideshiftOrderId}\`\n\n` +
-      `*Received:* ${settleAmount} ${order.stakeAsset}\n` +
-      `*Protocol:* ${order.stakeProtocol}\n` +
-      `*Network:* ${order.stakeNetwork}\n\n` +
-      `📋 *Next Steps:*\n` +
-      `1. Your ${order.stakeAsset} has been sent to your wallet\n` +
-      `2. Visit the ${order.stakeProtocol} platform to stake your tokens\n` +
-      `3. Deposit address: \`${order.depositAddress}\`\n\n` +
-      `💡 *Tip:* You can also stake directly through the protocol's website for the best rates!`,
-      { parse_mode: 'Markdown' }
-    );
+  // Mark as awaiting user action
+  await db.updateStakeOrderStakeStatus(
+    order.sideshiftOrderId,
+    'pending'
+  );
+}
 
-    // Mark as confirmed (user needs to manually stake)
-    await db.updateStakeOrderStakeStatus(
-      order.sideshiftOrderId,
-      'confirmed'
-    );
-  }
+/**
+ * Notify user of staking being processed
+ */
+async function notifyStakingProcessing(
+  order: StakeOrder,
+  settleAmount: string,
+  estimatedFee: number,
+  stakeTx: { to: string; data: string; value: string }
+): Promise<void> {
+  if (!bot) return;
+
+  await bot.telegram.sendMessage(
+    order.telegramId,
+    `⚙️ *Staking in Progress*\n\n` +
+    `*Order:* \`${order.sideshiftOrderId}\`\n` +
+    `*Amount:* ${settleAmount} ${order.stakeAsset}\n` +
+    `*Protocol:* ${order.stakeProtocol}\n` +
+    `*Network:* ${order.stakeNetwork}\n\n` +
+    `📊 *Transaction Details:*\n` +
+    `To: \`${stakeTx.to}\`\n` +
+    `Est. Fee: $${estimatedFee.toFixed(2)}\n\n` +
+    `⏳ Processing your staking transaction...\n` +
+    `I'll notify you when it completes!`,
+    { parse_mode: 'Markdown' }
+  );
 }
 
 /**
@@ -167,18 +241,71 @@ async function notifySwapStatusChange(order: StakeOrder, newStatus: string): Pro
 
   const emoji = emojiMap[newStatus] || '🔔';
 
+  // Build message based on status
+  let statusMessage = '';
+  if (newStatus === 'settled') {
+    statusMessage = `\n\nGreat news! Your swap is complete. Preparing to stake your tokens...`;
+  } else if (newStatus === 'failed') {
+    statusMessage = `\n\n⚠️ Your swap failed. Funds will be refunded to your original address.`;
+  } else if (newStatus === 'refunded') {
+    statusMessage = `\n\n✅ Refund initiated. You'll receive your original tokens shortly.`;
+  }
+
   await bot.telegram.sendMessage(
     order.telegramId,
     `${emoji} *Swap & Stake Update*\n\n` +
     `*Order:* \`${order.sideshiftOrderId}\`\n` +
-    `*Swap Status:* ${newStatus.toUpperCase()}\n` +
+    `*Status:* ${newStatus.toUpperCase()}\n` +
     `*From:* ${order.fromAmount} ${order.fromAsset}\n` +
-    `*To:* ${order.stakeAsset} (${order.stakeProtocol})\n\n` +
-    (newStatus === 'settled' 
-      ? `Next: Preparing to stake your tokens... 📈` 
-      : `Waiting for swap to complete...`),
+    `*To:* ${order.stakeAsset} (${order.stakeProtocol})\n` +
+    `*Network:* ${order.stakeNetwork}` +
+    statusMessage,
     { parse_mode: 'Markdown' }
   );
+}
+
+/**
+ * Notify user of staking completion
+ */
+async function notifyStakingCompletion(
+  order: StakeOrder,
+  stakeTxHash: string,
+  settleAmount: string
+): Promise<void> {
+  if (!bot) return;
+
+  const explorerUrl = getExplorerUrl(order.stakeNetwork, stakeTxHash);
+
+  await bot.telegram.sendMessage(
+    order.telegramId,
+    `✅ *Staking Complete!*\n\n` +
+    `*Order:* \`${order.sideshiftOrderId}\`\n` +
+    `*Amount Staked:* ${settleAmount} ${order.stakeAsset}\n` +
+    `*Protocol:* ${order.stakeProtocol}\n` +
+    `*Network:* ${order.stakeNetwork}\n\n` +
+    `🔗 *Transaction:* [View on Explorer](${explorerUrl})\n\n` +
+    `📈 You'll now earn staking rewards automatically!\n` +
+    `You can manage your stake on the ${order.stakeProtocol} platform anytime.`,
+    { parse_mode: 'Markdown' }
+  );
+}
+
+/**
+ * Get block explorer URL for a transaction
+ */
+function getExplorerUrl(network: string, txHash: string): string {
+  const explorers: Record<string, string> = {
+    ethereum: 'https://etherscan.io/tx/',
+    mainnet: 'https://etherscan.io/tx/',
+    arbitrum: 'https://arbiscan.io/tx/',
+    optimism: 'https://optimistic.etherscan.io/tx/',
+    polygon: 'https://polygonscan.com/tx/',
+    base: 'https://basescan.org/tx/',
+    avalanche: 'https://snowtrace.io/tx/',
+  };
+
+  const baseUrl = explorers[network.toLowerCase()] || 'https://etherscan.io/tx/';
+  return baseUrl + txHash;
 }
 
 /**
@@ -192,9 +319,3 @@ export function stopStakeWorker(): void {
   }
   bot = null;
 }
-
-// Export for testing
-export const _test = {
-  processStakeOrder,
-  initiateStaking,
-};

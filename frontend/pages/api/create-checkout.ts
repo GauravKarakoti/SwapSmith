@@ -1,10 +1,16 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { createCheckout } from '@/utils/sideshift-client';
+import { csrfGuard } from '@/lib/csrf';
 
 const SIDESHIFT_CLIENT_IP = process.env.SIDESHIFT_CLIENT_IP || "127.0.0.1";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
+  
+  // CSRF Protection - Critical for financial operations
+  if (!csrfGuard(req, res)) {
+    return;
+  }
   
   // ✅ Added settleAddress to destructuring
   const { settleAsset, settleNetwork, settleAmount, settleAddress } = req.body;

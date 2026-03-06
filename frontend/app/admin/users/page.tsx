@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { csrfFetch } from '@/hooks/useCsrfToken'
 import { auth } from '@/lib/firebase'
 import { signOut } from 'firebase/auth'
 import {
   Users, Search,
   AlertTriangle, CheckCircle2, Ban, Flag, Eye,
   ChevronLeft, ChevronRight, ArrowLeftRight, Clock, X,
-  ShieldAlert, ShieldOff, Unlock, Lock,
+  ShieldAlert, ShieldOff, Unlock, Lock, Package,
 } from 'lucide-react'
 import AdminNavbar from '@/components/AdminNavbar'
 
@@ -199,7 +200,137 @@ function SwapHistoryModal({
     </div>
   )
 }
+// ── Plan update modal ─────────────────────────────────────────────────────
 
+const PLAN_OPTIONS: { value: string; label: string; color: string }[] = [
+  { value: 'free',    label: 'Free',    color: '#52525b' },
+  { value: 'premium', label: 'Premium', color: '#d97706' },
+  { value: 'pro',     label: 'Pro',     color: '#7c3aed' },
+]
+
+function PlanUpdateModal({
+  user, token, onSuccess, onClose,
+}: {
+  user: AdminUserRow
+  token: string
+  onSuccess: (newPlan: string) => void
+  onClose: () => void
+}) {
+  const [selectedPlan, setSelectedPlan] = useState(user.plan)
+  const [loading, setLoading]           = useState(false)
+  const [error, setError]               = useState('')
+
+  const changed = selectedPlan !== user.plan
+
+  const handleConfirm = async () => {
+    if (!changed) return
+    setLoading(true)
+    setError('')
+    try {
+      const res = await csrfFetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ firebaseUid: user.firebaseUid, action: 'update_plan', plan: selectedPlan }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        onSuccess(selectedPlan)
+      } else {
+        setError(data.error ?? 'Failed to update plan')
+        setLoading(false)
+      }
+    } catch {
+      setError('Network error')
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 300, background: '#00000099',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+    }}>
+      <div style={{
+        background: '#0f0f1a', border: '1px solid #27272a', borderRadius: 14,
+        width: '100%', maxWidth: 440, padding: 28,
+      }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <Package size={18} style={{ color: '#7c3aed' }} />
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Update Subscription Plan</h3>
+        </div>
+
+        <p style={{ color: '#71717a', fontSize: 13, marginBottom: 20 }}>
+          User:&nbsp;
+          <span style={{ color: '#e4e4e7', fontFamily: 'monospace', fontSize: 12 }}>
+            {user.email ?? user.walletAddress ?? user.firebaseUid ?? `#${user.id}`}
+          </span>
+        </p>
+
+        {/* Current plan */}
+        <div style={{ marginBottom: 16 }}>
+          <span style={{ fontSize: 12, color: '#71717a' }}>Current plan:&nbsp;</span>
+          {badge(user.plan, PLAN_COLOR[user.plan] ?? '#52525b')}
+        </div>
+
+        {/* Plan selector */}
+        <div style={{ marginBottom: 24 }}>
+          <label style={{ display: 'block', fontSize: 12, color: '#71717a', marginBottom: 8 }}>New plan</label>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {PLAN_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setSelectedPlan(opt.value)}
+                style={{
+                  flex: 1, padding: '10px 0', borderRadius: 8, cursor: 'pointer',
+                  fontWeight: 600, fontSize: 13, transition: 'all 0.15s',
+                  background: selectedPlan === opt.value ? `${opt.color}22` : '#18181b',
+                  border: `2px solid ${selectedPlan === opt.value ? opt.color : '#27272a'}`,
+                  color: selectedPlan === opt.value ? opt.color : '#71717a',
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {error && (
+          <div style={{
+            background: '#450a0a33', border: '1px solid #dc262655', borderRadius: 8,
+            padding: '8px 12px', marginBottom: 16, color: '#f87171', fontSize: 12,
+          }}>
+            <AlertTriangle size={12} style={{ display: 'inline', marginRight: 6 }} />{error}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} disabled={loading} style={{
+            background: '#18181b', border: '1px solid #27272a', color: '#a1a1aa',
+            borderRadius: 8, padding: '8px 18px', cursor: 'pointer', fontSize: 13,
+          }}>
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={!changed || loading}
+            style={{
+              background: changed ? '#7c3aed22' : '#18181b',
+              border: `1px solid ${changed ? '#7c3aed66' : '#27272a'}`,
+              color: changed ? '#a78bfa' : '#52525b',
+              borderRadius: 8, padding: '8px 18px',
+              cursor: changed ? 'pointer' : 'not-allowed', fontSize: 13, fontWeight: 600,
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            {loading ? 'Saving…' : 'Apply Change'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 // ── Action modal (suspend / flag) ──────────────────────────────────────
 
 function ActionModal({
@@ -314,6 +445,7 @@ export default function AdminUsersPage() {
   } | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [actionMsg, setActionMsg]   = useState('')
+  const [planModal, setPlanModal]   = useState<AdminUserRow | null>(null)
 
   // Audit log (session-local)
   const [auditLog, setAuditLog]     = useState<AuditEntry[]>([])
@@ -386,7 +518,7 @@ export default function AdminUsersPage() {
     setActionLoading(true)
     setActionMsg('')
     try {
-      const res = await fetch('/api/admin/users', {
+      const res = await csrfFetch('/api/admin/users', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -423,6 +555,29 @@ export default function AdminUsersPage() {
   }
 
   // ── Logout ───────────────────────────────────────────────────────────
+
+  // ── Plan update handler ───────────────────────────────────────
+
+  const handlePlanSuccess = (newPlan: string) => {
+    if (!planModal) return
+    const targetUid = planModal.firebaseUid ?? `#${planModal.id}`
+    // Update local state immediately (optimistic)
+    setUsers(prev => prev.map(u =>
+      u.id === planModal.id ? { ...u, plan: newPlan } : u,
+    ))
+    // Append to session audit log
+    setAuditLog(prev => [{
+      ts:     new Date().toLocaleString(),
+      admin:  adminInfo?.email ?? 'admin',
+      action: `update_plan → ${newPlan}`,
+      target: planModal.walletAddress ?? targetUid,
+    }, ...prev].slice(0, 50))
+    setActionMsg(`✅ Plan updated to ${newPlan}`)
+    setPlanModal(null)
+    setTimeout(() => setActionMsg(''), 3000)
+  }
+
+  // ── Logout ──────────────────────────────────────────────────
 
   const handleLogout = async () => {
     sessionStorage.removeItem('admin-token')
@@ -645,6 +800,14 @@ export default function AdminUsersPage() {
                           <Eye size={13} /> Swaps
                         </button>
 
+                        {/* Set Plan */}
+                        <button
+                          onClick={() => setPlanModal(u)}
+                          title="Update subscription plan"
+                          style={{ background: '#1e0a3c', border: '1px solid #7c3aed44', color: '#a78bfa', borderRadius: 6, padding: '5px 9px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+                          <Package size={13} /> Plan
+                        </button>
+
                         {/* Suspend / Unsuspend */}
                         {u.suspended ? (
                           <button
@@ -736,7 +899,13 @@ export default function AdminUsersPage() {
                 <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, fontSize: 12, borderBottom: i < auditLog.length - 1 ? '1px solid #18182a' : 'none', paddingBottom: i < auditLog.length - 1 ? 8 : 0 }}>
                   <span style={{ color: '#3f3f46', whiteSpace: 'nowrap', flexShrink: 0 }}>{e.ts}</span>
                   <span style={{ color: '#71717a', flexShrink: 0 }}>{e.admin}</span>
-                  <span style={{ color: e.action.includes('suspend') ? '#fbbf24' : e.action.includes('flag') ? '#f87171' : '#4ade80', fontWeight: 600 }}>
+                  <span style={{
+                    color: e.action.includes('suspend') ? '#fbbf24'
+                      : e.action.includes('flag') ? '#f87171'
+                      : e.action.includes('plan') ? '#a78bfa'
+                      : '#4ade80',
+                    fontWeight: 600,
+                  }}>
                     {e.action}
                   </span>
                   <span style={{ color: '#a1a1aa', fontFamily: 'monospace' }}>{truncate(e.target, 24)}</span>
@@ -763,6 +932,15 @@ export default function AdminUsersPage() {
           action={actionModal.action}
           onConfirm={handleActionConfirm}
           onClose={() => { setActionModal(null); setActionMsg('') }}
+        />
+      )}
+
+      {planModal && (
+        <PlanUpdateModal
+          user={planModal}
+          token={token}
+          onSuccess={handlePlanSuccess}
+          onClose={() => setPlanModal(null)}
         />
       )}
 
