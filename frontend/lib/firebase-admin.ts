@@ -6,8 +6,14 @@ if (!admin.apps.length) {
       ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)
       : undefined;
 
+    const isServiceAccountValid =
+      serviceAccount &&
+      serviceAccount.project_id &&
+      serviceAccount.client_email &&
+      serviceAccount.private_key;
+
     admin.initializeApp({
-      credential: serviceAccount
+      credential: isServiceAccountValid
         ? admin.credential.cert(serviceAccount)
         : admin.credential.applicationDefault(),
     });
@@ -16,4 +22,4 @@ if (!admin.apps.length) {
   }
 }
 
-export const adminAuth = admin.auth();
+export const adminAuth = admin.apps.length > 0 ? admin.auth() : ({} as admin.auth.Auth);

@@ -4,9 +4,10 @@
  */
 
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getAggregatedQuotes, getSingleBridgeQuote, getSupportedBridgeList } from '../../shared/services/bridge-aggregator';
-import { optimizeRoutes, compareRoutes } from '../../shared/services/route-optimizer';
-import { DEFAULT_BRIDGE_PREFERENCES, BridgePreferences } from '../../shared/config/bridge-config';
+import { getAggregatedQuotes, getSingleBridgeQuote } from '../../../shared/services/bridge-aggregator';
+import { optimizeRoutes, compareRoutes, OptimizedRoute, RouteComparison } from '../../../shared/services/route-optimizer';
+import { DEFAULT_BRIDGE_PREFERENCES, BridgePreferences } from '../../../shared/config/bridge-config';
+import { BridgeQuote } from '../../../shared/services/bridges/base-bridge-adapter';
 import { csrfGuard } from '@/lib/csrf';
 import logger from '@/lib/logger';
 
@@ -22,15 +23,16 @@ export interface BridgeQuoteRequest {
 
 export interface BridgeQuoteResponse {
   success: boolean;
+  error?: string; // Add the error property here
   data?: {
-    quotes: any[];
-    bestQuote: any;
-    recommendedQuote: any;
-    optimizedRoutes?: any[];
-    comparison?: any;
+    quotes: BridgeQuote[];
+    bestQuote: BridgeQuote | null;
+    recommendedQuote: BridgeQuote | null;
+    optimizedRoutes?: OptimizedRoute[];
+    comparison?: RouteComparison;
     availableBridges: string[];
+    errors?: Record<string, unknown>;
   };
-  error?: string;
 }
 
 export default async function handler(

@@ -20,14 +20,16 @@
     ],
     "paths": {
       "@/*": ["./*"],
+      "shared/*": ["../shared/*"],
       "dotenv": ["./node_modules/dotenv"],
       "drizzle-kit": ["./node_modules/drizzle-kit"],
       "drizzle-orm": ["./node_modules/drizzle-orm"],
       "drizzle-orm/*": ["./node_modules/drizzle-orm/*"],
       "winston": ["./node_modules/winston"],
       "axios": ["./node_modules/axios"],
+      "@neondatabase/serverless": ["./node_modules/@neondatabase/serverless"],
     },
-    "types": ["jest"]
+    "types": ["vitest"]
   },
   "include": [
     "next-env.d.ts",
@@ -38,5 +40,5 @@
     "**/*.mts",
     "../shared/**/*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "vitest.config.mts", "vitest.setup.ts"]
 }

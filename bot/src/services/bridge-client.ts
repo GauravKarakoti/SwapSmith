@@ -12,8 +12,8 @@ import { SIDESHIFT_CONFIG } from '../../../shared/config/sideshift';
 
 dotenv.config();
 
-const AFFILIATE_ID = process.env.SIDESHIFT_AFFILIATE_ID || process.env.NEXT_PUBLIC_AFFILIATE_ID || '';
-const API_KEY = process.env.SIDESHIFT_API_KEY || process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
+const AFFILIATE_ID = process.env.SIDESHIFT_AFFILIATE_ID || process.env.AFFILIATE_ID || '';
+const API_KEY = process.env.SIDESHIFT_API_KEY || process.env.SIDESHIFT_API_KEY;
 const DEFAULT_USER_IP = process.env.SIDESHIFT_CLIENT_IP;
 
 // SideShift API Configuration - use centralized config

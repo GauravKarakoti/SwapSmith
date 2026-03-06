@@ -7,25 +7,16 @@ import { analyzeCommand, generateContextualHelp } from './contextual-help';
 
 dotenv.config();
 
-// Global singleton declaration to prevent multiple instances
-declare global {
-  var _groqClient: Groq | undefined;
-}
-
 function getGroqClient(): Groq {
-  if (!global._groqClient) {
-    global._groqClient = new Groq({
-      apiKey: process.env.GROQ_API_KEY,
-    });
-  }
-  return global._groqClient;
+  return new Groq({
+    apiKey: process.env.GROQ_API_KEY,
+  });
 }
 
-const groq = getGroqClient();
 
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "swap_and_stake" | "unknown";
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "swap_and_stake" | "unknown"; // Added "swap_and_stake" intent
   
   // Single Swap Fields
   fromAsset: string | null;
@@ -111,8 +102,25 @@ MODES:
 6. "yield_migrate": Move funds between pools.
 7. "dca": Dollar Cost Averaging.
 8. "limit_order": Buy/Sell at specific price.
-
+9. "swap_and_stake": Swap assets and immediately stake them for yield.
+   Example: "Swap 100 USDC for ETH and stake it"
+   Keywords: "swap and stake", "zap", "stake immediately", "swap to stake", "stake"
+   - ACTION: Automatically map base assets to Liquid Staking Tokens (LSTs) if user says "Stake X":
+     - ETH -> stETH (Lido)
+     - SOL -> mSOL (Marinade)
+     - MATIC -> stMATIC (Lido)
+     - AVAX -> sAVAX (Benqi)
+     - BNB -> ankrBNB (Ankr)
+   - If user says "Stake ETH", "Stake SOL":
+     * Map toAsset to the corresponding LST (ETH -> "stETH", SOL -> "mSOL", etc.) and set intent to "swap_and_stake".
+     * If the user did NOT specify an amount, DO NOT guess. Leave amount unset, add a validationErrors entry explaining that amount is required, and set requiresConfirmation: true so the assistant can ask how much to stake.
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
+
+LIQUID STAKING PROVIDERS:
+- lido: stETH on Ethereum (~3-4% APR), most popular
+- rocket_pool: rETH on Ethereum (~3-4% APR), decentralized
+- stakewise: osETH on Ethereum (~3-4% APR)
+- For staking commands without specified provider, default to "lido" for ETH, or ask user to specify
 
 ADDRESS RESOLUTION:
 - Users can specify addresses as raw wallet addresses (0x...), ENS names (ending in .eth), Lens handles (ending in .lens), Unstoppable Domains (ending in .crypto, .nft, .blockchain, etc.), or nicknames from their address book.
@@ -140,7 +148,7 @@ AMBIGUITY HANDLING:
 RESPONSE FORMAT:
 {
   "success": boolean,
-  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order",
+  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "swap_and_stake",
   "fromAsset": string | null,
   "fromChain": string | null,
   "amount": number | null,
@@ -167,6 +175,7 @@ RESPONSE FORMAT:
   "conditionOperator": "gt" | "lt" | null,
   "conditionValue": number | null,
   "conditionAsset": string | null,
+  
   "confidence": number,
   "validationErrors": string[],
   "parsedMessage": "Human readable summary",
@@ -215,6 +224,18 @@ EXAMPLES:
 
 14. "DCA 200 USDC into ETH every month on the 1st"
     -> intent: "dca", fromAsset: "USDC", toAsset: "ETH", amount: 200, frequency: "monthly", dayOfMonth: "1", confidence: 95
+
+15. "Stake 2 ETH with Lido"
+    -> intent: "swap_and_stake", fromAsset: "ETH", toAsset: "stETH", amount: 2, confidence: 95
+
+16. "Stake my ETH to earn rewards" (amount missing)
+    -> intent: "swap_and_stake", fromAsset: "ETH", toAsset: "stETH", amount: null, validationErrors: ["Amount not specified"], requiresConfirmation: true, confidence: 90
+
+17. "Stake 1 ETH with Rocket Pool"
+    -> intent: "swap_and_stake", fromAsset: "ETH", toAsset: "rETH", amount: 1, confidence: 95
+
+18. "Stake 0.5 ETH"
+    -> intent: "swap_and_stake", fromAsset: "ETH", toAsset: "stETH", amount: 0.5, confidence: 90
 `;
 
 // RENAMED from parseUserCommand to parseWithLLM
@@ -240,7 +261,7 @@ export async function parseWithLLM(
         { role: "user", content: userInput }
     ];
 
-    const completion = await groq.chat.completions.create({
+    const completion = await getGroqClient().chat.completions.create({
       messages: messages,
       model: "llama-3.3-70b-versatile", 
       response_format: { type: "json_object" },
@@ -265,7 +286,7 @@ export async function parseWithLLM(
 
 export async function transcribeAudio(mp3FilePath: string): Promise<string> {
   try {
-    const transcription = await groq.audio.transcriptions.create({
+    const transcription = await getGroqClient().audio.transcriptions.create({
         file: fs.createReadStream(mp3FilePath),
         model: "whisper-large-v3",
         response_format: "json",
@@ -281,6 +302,25 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
   const errors: string[] = [];
   // ... (Keeping validation logic simple for brevity, same as before)
   if (!parsed.intent) errors.push("Could not determine intent.");
+
+  if (parsed.intent === 'portfolio' && Array.isArray(parsed.portfolio) && parsed.portfolio.length > 0) {
+    const total = parsed.portfolio.reduce((sum, item) => sum + (item?.percentage || 0), 0);
+    if (total !== 100) {
+      errors.push(`Total allocation is ${total}%, but should be 100%`);
+    }
+  }
+
+  if (parsed.intent === 'limit_order') {
+    if (parsed.targetPrice == null && parsed.conditionValue == null) {
+      errors.push('Target price not specified');
+    }
+  }
+
+  if (parsed.intent === 'dca') {
+    if (parsed.totalAmount == null) {
+      errors.push('Total investment amount not specified');
+    }
+  }
 
   const allErrors = [...(parsed.validationErrors || []), ...errors];
   const success = parsed.success !== false && allErrors.length === 0;

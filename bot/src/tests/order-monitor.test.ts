@@ -8,7 +8,10 @@ function createMockDeps(overrides?: Partial<OrderMonitorDeps>): OrderMonitorDeps
     return {
         getOrderStatus: jest.fn().mockResolvedValue({ id: 'test', status: 'pending' } as SideShiftOrderStatus),
         updateOrderStatus: jest.fn().mockResolvedValue(undefined),
+        updateWatchedOrderStatus: jest.fn().mockResolvedValue(undefined),
         getPendingOrders: jest.fn().mockResolvedValue([]),
+        getPendingWatchedOrders: jest.fn().mockResolvedValue([]),
+        addWatchedOrder: jest.fn().mockResolvedValue(undefined),
         onStatusChange: jest.fn(),
         ...overrides,
     };
@@ -268,6 +271,72 @@ describe('OrderMonitor', () => {
 
             monitor.stop();
             consoleSpy.mockRestore();
+        });
+    });
+
+    describe('reconcile', () => {
+        it('reloads pending orders and polls them in batches', async () => {
+            const pendingOrder = createMockOrder({ sideshiftOrderId: 'order-reconcile', status: 'waiting' });
+            const getOrderStatus = jest.fn().mockResolvedValue({
+                id: 'order-reconcile', status: 'waiting',
+            } as unknown as SideShiftOrderStatus);
+            const getPendingOrders = jest.fn().mockResolvedValue([pendingOrder]);
+            const deps = createMockDeps({ getPendingOrders, getOrderStatus });
+            const monitor = new OrderMonitor(deps);
+
+            await monitor.reconcile();
+
+            // Should have loaded the order from DB
+            expect(getPendingOrders).toHaveBeenCalled();
+            expect(monitor.getTrackedOrderIds()).toContain('order-reconcile');
+            // Should have polled the order
+            expect(getOrderStatus).toHaveBeenCalledWith('order-reconcile');
+        });
+
+        it('does not poll the same order twice if already tracked', async () => {
+            const getOrderStatus = jest.fn().mockResolvedValue({
+                id: 'order-dup', status: 'waiting',
+            } as unknown as SideShiftOrderStatus);
+            const deps = createMockDeps({ getOrderStatus });
+            const monitor = new OrderMonitor(deps);
+
+            // Pre-track the order
+            monitor.trackOrder('order-dup', 100);
+            expect(monitor.trackedCount).toBe(1);
+
+            await monitor.reconcile();
+
+            // Still only one entry
+            expect(monitor.trackedCount).toBe(1);
+        });
+
+        it('handles DB errors during reconciliation gracefully', async () => {
+            const getPendingOrders = jest.fn().mockRejectedValue(new Error('DB error'));
+            const deps = createMockDeps({ getPendingOrders });
+            const monitor = new OrderMonitor(deps);
+            const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+
+            await expect(monitor.reconcile()).resolves.not.toThrow();
+
+            consoleSpy.mockRestore();
+        });
+
+        it('does not fire onStatusChange when status is unchanged during reconcile', async () => {
+            const pendingOrder = createMockOrder({ sideshiftOrderId: 'order-stable', status: 'waiting' });
+            const onStatusChange = jest.fn();
+            const getOrderStatus = jest.fn().mockResolvedValue({
+                id: 'order-stable', status: 'waiting',
+            } as unknown as SideShiftOrderStatus);
+            const deps = createMockDeps({
+                getPendingOrders: jest.fn().mockResolvedValue([pendingOrder]),
+                getOrderStatus,
+                onStatusChange,
+            });
+            const monitor = new OrderMonitor(deps);
+
+            await monitor.reconcile();
+
+            expect(onStatusChange).not.toHaveBeenCalled();
         });
     });
 });
