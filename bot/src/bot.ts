@@ -12,6 +12,7 @@ import { getTopStablecoinYields, formatYieldPools } from './services/yield-clien
 import * as db from './services/database';
 import { OrderMonitor } from './services/order-monitor';
 import { parseUserCommand } from './services/parseUserCommand';
+import { reputationService } from './services/reputation-service';
 
 dotenv.config();
 
@@ -40,6 +41,17 @@ const orderMonitor = new OrderMonitor({
         `🔔 *Order Status Update*\n\nOrder \`${orderId}\` status changed to: *${newStatus.toUpperCase()}*`,
         { parse_mode: 'Markdown' }
       );
+
+      // --- AGENT REPUTATION LOGIC ---
+      // When a swap completes, record it on-chain
+      const botAddress = reputationService.getBotAddress();
+      if (botAddress) {
+        if (newStatus === 'settled') {
+          await reputationService.recordSwapOutcome(botAddress, true);
+        } else if (['expired', 'refunded', 'failed'].includes(newStatus)) {
+          await reputationService.recordSwapOutcome(botAddress, false);
+        }
+      }
     } catch (error) {
       logger.error(`[Bot] Failed to send status update to ${telegramId}:`, error);
     }
@@ -127,6 +139,26 @@ bot.command('clear', async (ctx: Context) => {
 
   await db.clearConversationState(ctx.from.id);
   await ctx.reply('🗑️ Conversation cleared');
+});
+
+bot.command('reputation', async (ctx: Context) => {
+  const botAddress = reputationService.getBotAddress();
+  if (!botAddress) {
+    return ctx.reply('⚠️ Reputation tracking is not configured for this agent.');
+  }
+
+  const reputation = await reputationService.getReputation(botAddress);
+  if (!reputation) {
+    return ctx.reply('⚠️ Could not fetch reputation stats.');
+  }
+
+  const { total, success, score } = reputation;
+  await ctx.reply(
+    `🛡️ *Agent Reputation*\n\n` +
+    `Trust Score: *${score}%*\n` +
+    `Success Rate: ${success}/${total} swaps`,
+    { parse_mode: 'Markdown' }
+  );
 });
 
 /* -------------------------------------------------------------------------- */

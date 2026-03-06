@@ -1,7 +1,7 @@
 import { Telegraf } from 'telegraf';
 import axios from 'axios';
 import { eq, and, or, isNull, lte } from 'drizzle-orm';
-import { db, limitOrders, LimitOrder, updateLimitOrderStatus, type User } from '../services/database';
+import { db, limitOrders, LimitOrder, updateLimitOrderStatus, addWatchedOrder, type User } from '../services/database';
 import { getCoins, createQuote, createOrder } from '../services/sideshift-client';
 import logger, { handleError } from '../services/logger';
 import { batchLoadUsersByTelegramIds } from '../utils/dataLoader';
@@ -257,8 +257,9 @@ export class LimitOrderWorker {
         throw new Error('Failed to create SideShift order');
       }
 
-      // 4. Update DB
+      // 4. Update DB & Watch
       await updateLimitOrderStatus(order.id, 'executed', sideshiftOrder.id);
+      await addWatchedOrder(Number(order.telegramId), sideshiftOrder.id, 'pending');
       logger.info(`✅ Order #${order.id} executed via SideShift (Order ID: ${sideshiftOrder.id})`);
 
 
