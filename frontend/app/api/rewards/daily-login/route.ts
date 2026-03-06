@@ -1,24 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { addRewardActivity, getUserByWalletOrId } from '@/lib/database';
+import { verifyAuth } from '@/lib/auth-helpers';
 
 const DAILY_LOGIN_POINTS = 10;
 const DAILY_LOGIN_TOKENS = '0.1';
 
 export async function POST(request: NextRequest) {
   try {
-    const userId = request.headers.get('x-user-id');
-    
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+    // Verify Firebase authentication token
+    const authResult = await verifyAuth(request);
+    if (!authResult.success) {
+      return authResult.error!;
     }
 
-    const userIdNum = parseInt(userId);
+    const userIdNum = authResult.userId!;
     
     // Check if user already logged in today
-    const user = await getUserByWalletOrId(userId);
+    const user = await getUserByWalletOrId(userIdNum.toString());
     if (!user) {
       return NextResponse.json(
         { error: 'User not found' },

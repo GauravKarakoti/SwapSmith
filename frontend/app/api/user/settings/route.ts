@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserSettings, createOrUpdateUserSettings } from '@/lib/database';
 import { adminAuth } from '@/lib/firebase-admin';
+import { rateLimiters } from '@/lib/rate-limiter';
+import { applyAPISecurityHeaders } from '@/lib/security-headers';
 
 // GET /api/user/settings - Get user settings
 export async function GET(request: NextRequest) {
@@ -86,10 +88,19 @@ export async function GET(request: NextRequest) {
 // POST /api/user/settings - Create or update user settings
 export async function POST(request: NextRequest) {
   try {
+    // 🔐 Rate limiting
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rateLimitResponse = rateLimiters.profile(request as any, {} as any);
+    if (!rateLimitResponse) {
+      const response = NextResponse.json({ error: 'Too many profile requests' }, { status: 429 });
+      return applyAPISecurityHeaders(response);
+    }
+
     // 🔐 Firebase authentication
     const authHeader = request.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized: No token provided' }, { status: 401 });
+      const response = NextResponse.json({ error: 'Unauthorized: No token provided' }, { status: 401 });
+      return applyAPISecurityHeaders(response);
     }
 
     const idToken = authHeader.split('Bearer ')[1];
@@ -98,7 +109,8 @@ export async function POST(request: NextRequest) {
       decodedToken = await adminAuth.verifyIdToken(idToken);
     } catch (error) {
       console.error('Error verifying Firebase token:', error);
-      return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+      const response = NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+      return applyAPISecurityHeaders(response);
     }
 
     const authenticatedUserId = decodedToken.uid;
@@ -106,10 +118,11 @@ export async function POST(request: NextRequest) {
     // Validate DATABASE_URL exists
     if (!process.env.DATABASE_URL) {
       console.error('DATABASE_URL is not configured');
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: 'Database configuration error' },
         { status: 500 }
       );
+      return applyAPISecurityHeaders(response);
     }
 
     const body = await request.json();

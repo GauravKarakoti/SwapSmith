@@ -3,11 +3,9 @@
  * Displays and compares quotes from multiple bridge protocols
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { 
-  ArrowRight, 
   Clock, 
-  Zap, 
   Shield, 
   ChevronDown, 
   CheckCircle, 
@@ -15,7 +13,8 @@ import {
   Loader2,
   Info,
   TrendingUp,
-  DollarSign
+  DollarSign,
+  Zap
 } from 'lucide-react';
 
 interface BridgeQuote {
@@ -92,7 +91,6 @@ export default function BridgeComparison({
 
   // Get best values for highlighting
   const bestOutput = Math.max(...quotes.map(q => Number(q.toAmount)));
-  const bestFee = Math.min(...quotes.map(q => Number(q.totalFee || '0')));
   const bestTime = Math.min(...quotes.map(q => q.estimatedTime?.max || 60));
   const bestReliability = Math.max(...quotes.map(q => q.confidence));
 
@@ -355,12 +353,6 @@ export default function BridgeComparison({
               <DollarSign className="w-4 h-4 text-green-600" />
               <span className="text-gray-600 dark:text-gray-400">
                 Best Output: <span className="font-medium text-gray-900 dark:text-white">{bestOutput.toFixed(6)}</span>
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 text-blue-600" />
-              <span className="text-gray-600 dark:text-gray-400">
-                Fastest: <span className="font-medium text-gray-900 dark:text-white">{bestTime}min</span>
               </span>
             </div>
             <div className="flex items-center gap-2">

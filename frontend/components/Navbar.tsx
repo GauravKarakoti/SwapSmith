@@ -4,7 +4,6 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import {
-  Zap,
   User,
   Users,
   LogOut,
@@ -28,17 +27,20 @@ import MarketSentimentWidget from "@/components/MarketSentimentWidget";
 
 const NAV_ITEMS = [
   { href: "/prices", label: "Live Prices", Icon: TrendingUp },
-  { href: "/discussions", label: "Discussions", Icon: MessageSquare },
-  { href: "/terminal", label: "Terminal", Icon: TerminalIcon },
+  { href: "/yield-scout", label: "Yield Scout", Icon: Trophy },
   { href: "/contributors", label: "Contributors", Icon: Users },
-  { href: "/watchlist", label: "Watchlist", Icon: Star },
+  { href: "/about", label: "About", Icon: Info },
 ];
 
 const PROFILE_MENU = [
   { href: "/profile", label: "Profile", Icon: User },
+  { href: "/portfolio", label: "Portfolio", Icon: Users },
   { href: "/rewards", label: "Rewards", Icon: Trophy },
   { href: "/learn", label: "Learn", Icon: BookOpen },
-  { href: "/about", label: "About", Icon: Info },
+  { href: "/terminal", label: "Terminal", Icon: TerminalIcon },
+  { href: "/watchlist", label: "Watchlist", Icon: Star },
+  { href: "/strategies", label: "Strategies", Icon: TrendingUp },
+  { href: "/discussions", label: "Discussions", Icon: MessageSquare },
 ];
 
 export default function Navbar() {
@@ -84,31 +86,31 @@ export default function Navbar() {
   return (
     <>
       <nav
-        className={`fixed top-0 left-0 right-0 z-50 h-16 sm:h-20 backdrop-blur-2xl transition-all duration-300 ${
-          scrolled ? "border-b border-zinc-200 dark:border-zinc-800 shadow-sm" : "border-b border-transparent"
-        } ${isTerminal ? "bg-white/80 dark:bg-zinc-950/80" : "bg-white/85 dark:bg-[#08080f]/85"}`}
+        className={`fixed top-0 left-0 right-0 z-50 h-16 sm:h-20 backdrop-blur-[24px] transition-all duration-300 ${
+          scrolled ? "border-b border-blue-500/10 dark:border-zinc-800 shadow-[0_4px_30px_rgba(0,0,0,0.03)] dark:shadow-sm" : "border-b border-transparent"
+        } ${isTerminal ? "bg-white/70 dark:bg-zinc-950/80" : "bg-gradient-to-r from-white/90 via-slate-50/90 to-white/90 dark:from-[#08080f]/85 dark:via-[#08080f]/85 dark:to-[#08080f]/85"}`}
       >
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 h-full grid grid-cols-[auto_1fr_auto] items-center">
 
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3 group shrink-0">
-            <div className="bg-blue-600 p-1.5 rounded-xl shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-all duration-200">
-              <Zap className="w-5 h-5 text-white" fill="white" />
+            <div className="p-0.5 rounded-xl shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-all duration-200 overflow-hidden">
+              <Image src="/swapsmithicon.png" alt="SwapSmith" width={36} height={36} className="rounded-xl" unoptimized />
             </div>
-            <span className="hidden lg:block text-lg font-black uppercase tracking-tighter text-zinc-900 dark:text-white">
+            <span className="hidden lg:block text-lg font-black uppercase tracking-tighter text-slate-900 dark:text-white">
               SwapSmith
             </span>
           </Link>
 
           {/* Center Navigation - hidden on mobile, shown on md+ */}
           <div className="hidden md:flex items-center justify-center px-4">
-            <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800/40 p-1 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+            <div className="flex items-center gap-1 bg-slate-100/80 dark:bg-zinc-800/40 p-1.5 rounded-2xl border border-white/60 dark:border-zinc-800 overflow-hidden shadow-inner backdrop-blur-sm">
               <Link
                 href="/"
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all shrink-0 ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all shrink-0 duration-300 ${
                   pathname === "/" 
-                  ? "bg-white dark:bg-zinc-800 text-blue-600 dark:text-white shadow-sm" 
-                  : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
+                  ? "bg-white dark:bg-zinc-700/50 text-blue-600 dark:text-white shadow-[0_2px_10px_rgba(0,0,0,0.06)] dark:shadow-none" 
+                  : "text-slate-600 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-white hover:bg-white/60 dark:hover:bg-zinc-800/50"
                 }`}
               >
                 <Home className="w-4 h-4" />
@@ -119,10 +121,10 @@ export default function Navbar() {
                 <Link
                   key={href}
                   href={href}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all shrink-0 ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all shrink-0 duration-300 ${
                     pathname === href
-                      ? "bg-white dark:bg-zinc-800 text-blue-600 dark:text-white shadow-sm"
-                      : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
+                      ? "bg-white dark:bg-zinc-700/50 text-blue-600 dark:text-white shadow-[0_2px_10px_rgba(0,0,0,0.06)] dark:shadow-none"
+                      : "text-slate-600 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-white hover:bg-white/60 dark:hover:bg-zinc-800/50"
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -145,21 +147,21 @@ export default function Navbar() {
             <div className="hidden md:block relative" ref={profileRef}>
               <button
                 onClick={() => setShowProfileMenu((v) => !v)}
-                className="p-1 rounded-full border-2 border-transparent hover:border-blue-500 transition-all active:scale-95"
+                className="p-1 rounded-full border-2 border-transparent hover:border-blue-500 transition-all active:scale-95 shadow-[0_4px_15px_rgba(0,0,0,0.05)] dark:shadow-none"
               >
                 {profileImageUrl ? (
                   <Image src={profileImageUrl} alt="P" width={36} height={36} className="rounded-full object-cover" unoptimized />
                 ) : (
-                  <div className="w-9 h-9 rounded-full bg-linear-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg">
                     <User className="w-4 h-4 text-white" />
                   </div>
                 )}
               </button>
 
               {showProfileMenu && (
-                <div className="absolute right-0 mt-3 w-60 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-                  <div className="px-4 py-3 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/20">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Manage Account</p>
+                <div className="absolute right-0 mt-3 w-60 rounded-2xl bg-white/90 dark:bg-zinc-900 border border-slate-200/60 dark:border-zinc-800 shadow-[0_8px_30px_rgba(0,0,0,0.08)] dark:shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150 backdrop-blur-xl">
+                  <div className="px-4 py-3 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-800/20">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-400">Manage Account</p>
                   </div>
                   <div className="p-2">
                     {PROFILE_MENU.map(({ href, label, Icon }) => (
@@ -167,17 +169,17 @@ export default function Navbar() {
                         key={href}
                         href={href}
                         onClick={() => setShowProfileMenu(false)}
-                        className="group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all"
+                        className="group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 dark:text-zinc-300 hover:bg-slate-100/80 dark:hover:bg-zinc-800 transition-all"
                       >
                         <Icon className="w-4 h-4 text-zinc-400 group-hover:text-blue-500 transition-colors" />
                         {label}
                         <ChevronRight className="w-3.5 h-3.5 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
                       </Link>
                     ))}
-                    <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2" />
+                    <div className="h-px bg-slate-200 dark:bg-zinc-800 my-2" />
                     <button
                       onClick={() => { setShowProfileMenu(false); logout(); }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-red-600 dark:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
                     >
                       <LogOut className="w-4 h-4" />
                       Logout
@@ -189,7 +191,7 @@ export default function Navbar() {
 
             <button
               onClick={() => setMobileMenuOpen(true)}
-              className="md:hidden p-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 ml-auto"
+              className="md:hidden p-2 rounded-xl bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 ml-auto border border-slate-200/50 dark:border-transparent shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-none"
             >
               <Menu className="w-6 h-6" />
             </button>
@@ -200,17 +202,17 @@ export default function Navbar() {
       {/* Mobile Menu - shown below md */}
       {mobileMenuOpen && (
         <>
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]" onClick={() => setMobileMenuOpen(false)} />
-          <div className="fixed top-0 right-0 bottom-0 w-[85%] max-w-sm bg-white dark:bg-zinc-900 shadow-2xl z-[70] animate-in slide-in-from-right duration-300">
+          <div className="fixed inset-0 bg-white/20 dark:bg-black/60 backdrop-blur-md z-[60]" onClick={() => setMobileMenuOpen(false)} />
+          <div className="fixed top-0 right-0 bottom-0 w-[85%] max-w-sm bg-white/95 dark:bg-zinc-900 shadow-[-10px_0_40px_rgba(0,0,0,0.1)] dark:shadow-2xl z-[70] animate-in slide-in-from-right duration-300 backdrop-blur-xl border-l border-slate-200/50 dark:border-none">
             <div className="p-6 flex flex-col h-full">
               <div className="flex items-center justify-between mb-6">
                 <Link href="/" className="flex items-center gap-2" onClick={() => setMobileMenuOpen(false)}>
-                  <div className="bg-blue-600 p-1.5 rounded-xl">
-                    <Zap className="w-5 h-5 text-white" fill="white" />
+                  <div className="overflow-hidden rounded-xl shadow-lg shadow-blue-500/20">
+                    <Image src="/swapsmithicon.png" alt="SwapSmith" width={36} height={36} className="rounded-xl" unoptimized />
                   </div>
-                  <span className="font-black text-lg uppercase tracking-tighter text-zinc-900 dark:text-white">SwapSmith</span>
+                  <span className="font-black text-lg uppercase tracking-tighter text-slate-900 dark:text-white">SwapSmith</span>
                 </Link>
-                <button onClick={() => setMobileMenuOpen(false)} className="p-2 rounded-full bg-zinc-100 dark:bg-zinc-800"><X /></button>
+                <button onClick={() => setMobileMenuOpen(false)} className="p-2 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-zinc-700 transition-colors"><X /></button>
               </div>
               <div className="space-y-1 flex-1 overflow-y-auto">
                 {[{ href: "/", label: "Home", Icon: Home }, ...NAV_ITEMS].map(({ href, label, Icon }) => (
@@ -218,7 +220,7 @@ export default function Navbar() {
                     key={href}
                     href={href}
                     className={`flex items-center gap-4 p-4 rounded-2xl text-base font-bold transition-all ${
-                      pathname === href ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 dark:text-zinc-300"
+                      pathname === href ? "bg-blue-600 text-white shadow-[0_4px_15px_rgba(37,99,235,0.3)]" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100/80 dark:hover:bg-zinc-800 hover:text-blue-600 dark:hover:text-zinc-300"
                     }`}
                   >
                     <Icon className="w-5 h-5" /> {label}
@@ -229,20 +231,20 @@ export default function Navbar() {
                     key={href}
                     href={href}
                     className={`flex items-center gap-4 p-4 rounded-2xl text-base font-bold transition-all ${
-                      pathname === href ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 dark:text-zinc-300"
+                      pathname === href ? "bg-blue-600 text-white shadow-[0_4px_15px_rgba(37,99,235,0.3)]" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100/80 dark:hover:bg-zinc-800 hover:text-blue-600 dark:hover:text-zinc-300"
                     }`}
                   >
                     <Icon className="w-5 h-5" /> {label}
                   </Link>
                 ))}
               </div>
-              <div className="pt-6 border-t border-zinc-100 dark:border-zinc-800 space-y-4">
+              <div className="pt-6 border-t border-slate-100 dark:border-zinc-800 space-y-4">
                 <WalletConnector />
                 <div className="flex items-center justify-between">
                   <ThemeToggle />
                   <button
                     onClick={() => { setMobileMenuOpen(false); logout(); }}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-red-600 dark:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
                   >
                     <LogOut className="w-4 h-4" /> Logout
                   </button>

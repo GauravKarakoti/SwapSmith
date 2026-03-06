@@ -11,7 +11,7 @@ import GasFeeDisplay from './GasFeeDisplay';
 import GasComparisonChart from './GasComparisonChart';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
-import { useAudioRecorder } from '@/hooks/useAudioRecorder';
+import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { useAuth } from '@/hooks/useAuth';
 
 
@@ -20,11 +20,11 @@ export interface QuoteData {
   depositAmount: string;
   depositCoin: string;
   depositNetwork: string;
+  depositAddress: string;
   rate: string;
   settleAmount: string;
   settleCoin: string;
   settleNetwork: string;
-  depositAddress?: string;
   memo?: string;
   expiry?: string;
   id?: string;
@@ -78,6 +78,7 @@ export default function ChatInterface() {
   const [isLoading, setIsLoading] = useState(false);
   const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
   const [currentConfidence, setCurrentConfidence] = useState<number | undefined>(undefined);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { address, isConnected } = useAccount();
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
@@ -85,15 +86,52 @@ export default function ChatInterface() {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasLoadedPersistenceRef = useRef(false);
   const saveSequenceRef = useRef(0);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Use cross-browser audio recorder
+  // Use unified voice input with fallback
   const {
-    isRecording,
+    isListening: isRecording,
     isSupported: isAudioSupported,
+    transcript: voiceTranscript,
+    interimTranscript,
+    inputMethod,
+    compatibility,
     startRecording,
     stopRecording,
-    error: audioError
-  } = useAudioRecorder();
+    error: audioError,
+    resetTranscript,
+    retryCount
+  } = useVoiceInput({
+    onError: (error) => {
+      addMessage({
+        role: 'assistant',
+        content: `🎤 Voice input error: ${error}. You can type your command below.`,
+        type: 'message'
+      });
+      // Auto-focus text input on voice failure
+      inputRef.current?.focus();
+    },
+    onTranscriptChange: (transcript) => {
+      // Update input with real-time transcript from Speech API
+      if (inputMethod === 'speech-api') {
+        setInput(transcript);
+      }
+    }
+  });
+
+  const prevIsRecordingRef = useRef(isRecording);
+
+  useEffect(() => {
+    // If recording just stopped and we have a transcript, send it
+    if (prevIsRecordingRef.current && !isRecording && voiceTranscript.trim()) {
+      const text = voiceTranscript.trim();
+      addMessage({ role: 'user', content: text, type: 'message' });
+      setTimeout(() => processCommand(text), 500);
+      setInput('');
+      resetTranscript(); // Clear the transcript after sending
+    }
+    prevIsRecordingRef.current = isRecording;
+  }, [isRecording, voiceTranscript, resetTranscript]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -251,10 +289,11 @@ export default function ChatInterface() {
     };
   }, [messages, isAuthenticated, isAuthLoading, user?.uid, address]);
 
-  // Show audio error if any
   useEffect(() => {
     if (audioError) {
-      addMessage({ role: 'assistant', content: audioError, type: 'message' });
+      // The error message is already being added by the `onError` callback 
+      // passed into `useVoiceInput` at the top of the file.
+      setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [audioError]);
 
@@ -293,10 +332,8 @@ export default function ChatInterface() {
     setMessages(prev => {
       const msgIndex = prev.findLastIndex(m => m.type === 'portfolio_summary');
       if (msgIndex === -1) return prev;
-
       const msg = prev[msgIndex];
       if (!msg.data?.portfolioItems) return prev;
-
       const newItems = msg.data.portfolioItems.map(item => {
         if (failedItems.some(f => f.id === item.id)) {
           return { ...item, status: 'pending' as const, error: undefined };
@@ -673,8 +710,18 @@ export default function ChatInterface() {
       setIsLoading(true);
       try {
         const audioBlob = await stopRecording();
+
+        // If we got an audio blob, it means we used MediaRecorder fallback
+        // Send to Whisper API for transcription
         if (audioBlob) {
-          const audioFile = new File([audioBlob], "voice_command.wav", { type: audioBlob.type || 'audio/wav' });
+          // Determine the file extension based on the actual recorded MIME type
+          let ext = 'wav';
+          const type = audioBlob.type.toLowerCase();
+          if (type.includes('webm')) ext = 'webm';
+          else if (type.includes('mp4')) ext = 'mp4';
+          else if (type.includes('ogg')) ext = 'ogg';
+
+          const audioFile = new File([audioBlob], `voice_command.${ext}`, { type: audioBlob.type || 'audio/wav' });
 
           const formData = new FormData();
           formData.append('file', audioFile);
@@ -692,18 +739,32 @@ export default function ChatInterface() {
             addMessage({ role: 'user', content: data.text, type: 'message' });
             processCommand(data.text);
           }
+        } else {
+          // If no blob, we used Speech API - transcript is already in the input
+          if (voiceTranscript || input) {
+            const finalText = voiceTranscript || input;
+            addMessage({ role: 'user', content: finalText, type: 'message' });
+            processCommand(finalText);
+            setInput('');
+            resetTranscript();
+          }
         }
       } catch (err) {
         console.error("Voice processing failed:", err);
         addMessage({
           role: 'assistant',
-          content: "Sorry, I couldn't process your voice command. Please try again.",
+          content: "Sorry, I couldn't process your voice command. Please type your command below.",
           type: 'message'
         });
+        // Auto-focus text input on processing failure
+        inputRef.current?.focus();
       } finally {
         setIsLoading(false);
       }
     } else {
+      // Clear input and start fresh recording
+      setInput('');
+      resetTranscript();
       await startRecording();
     }
   };
@@ -845,12 +906,14 @@ export default function ChatInterface() {
             </button>
 
             <input
+              ref={inputRef}
               type="text"
-              value={input}
+              value={isRecording && interimTranscript ? interimTranscript : input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder="Send a command (e.g., 'Swap 1 ETH to USDC')"
+              placeholder={isRecording ? "Listening..." : "Send a command (e.g., 'Swap 1 ETH to USDC')"}
               className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-white placeholder:text-gray-500 py-3"
+              readOnly={isRecording}
             />
 
             <div className="flex items-center gap-2 pr-2">
@@ -864,11 +927,21 @@ export default function ChatInterface() {
             </div>
           </div>
         </div>
-
-        {/* Voice Fallback */}
+        {/* Voice Status */}
+        {isRecording && inputMethod && (
+          <div className="text-blue-400 text-xs mt-2 px-1 text-center font-medium animate-pulse">
+            🎤 {inputMethod === 'speech-api' ? 'Listening with speech recognition...' : 'Recording audio for transcription...'}
+            {retryCount > 0 && ` (Retry ${retryCount}/3)`}
+          </div>
+        )}
         {!isAudioSupported && (
-          <div className="text-red-500 text-xs mt-2 px-1 text-center font-medium">
-            🎤 Voice input is not supported in your browser. Please use Chrome or type your command.
+          <div className="text-amber-500 text-xs mt-2 px-1 text-center font-medium">
+            🎤 Voice input is not supported in your browser. Please type your command.
+          </div>
+        )}
+        {isAudioSupported && compatibility.warnings.length > 0 && !isRecording && (
+          <div className="text-amber-400 text-xs mt-2 px-1 text-center">
+            ⚠️ {compatibility.warnings[0]}
           </div>
         )}
 
@@ -883,6 +956,6 @@ export default function ChatInterface() {
           </div>
         )}
       </div>
-    </div>
+    </div >
   );
 }

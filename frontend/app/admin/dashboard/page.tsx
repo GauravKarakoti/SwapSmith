@@ -2,14 +2,14 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 import { auth } from '@/lib/firebase'
 import { signOut } from 'firebase/auth'
 import {
   BarChart2, Users, ArrowLeftRight, TrendingUp, AlertTriangle,
-  Activity, Clock, RefreshCw, LogOut, ShieldCheck, CheckCircle2, XCircle,
-  Layers, Zap, Menu, X,
+  Activity, Clock, CheckCircle2, XCircle,
+  Layers, Zap,
 } from 'lucide-react'
+import AdminNavbar from '@/components/AdminNavbar'
 
 interface Analytics {
   totalSwaps: number
@@ -180,8 +180,6 @@ export default function AdminDashboardPage() {
     router.push('/admin/login')
   }
 
-  const [mobileNavOpen, setMobileNavOpen] = useState(false)
-
   const successRate = analytics
     ? analytics.totalSwaps > 0
       ? Math.round((analytics.successCount / analytics.totalSwaps) * 100)
@@ -223,123 +221,13 @@ export default function AdminDashboardPage() {
   return (
     <div style={{ minHeight: '100vh', background: '#070710', color: '#e4e4e7', fontFamily: 'inherit' }}>
 
-      {/* Responsive styles */}
-      <style>{`
-        .admin-nav-label { display: inline; }
-        .admin-nav-sep   { display: inline; }
-        .admin-nav-hamburger { display: none !important; }
-        @media (max-width: 768px) {
-          .admin-nav-label    { display: none !important; }
-          .admin-nav-sep      { display: none !important; }
-          .admin-nav-right    { display: none !important; }
-          .admin-nav-hamburger{ display: flex !important; }
-          .admin-nav          { padding: 10px 16px !important; }
-          .admin-content      { padding: 16px 10px !important; }
-          .admin-2col         { grid-template-columns: 1fr !important; }
-          .admin-kpi-grid     { grid-template-columns: 1fr 1fr !important; }
-        }
-        @media (max-width: 480px) {
-          .admin-kpi-grid { grid-template-columns: 1fr 1fr !important; }
-        }
-        @keyframes spin { to { transform: rotate(360deg) } }
-      `}</style>
-
-      {/* ── Navbar ── */}
-      <nav className="admin-nav" style={{ background: '#0b0b18', borderBottom: '1px solid #18182a', padding: '14px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 50 }}>
-        {/* Brand */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Image src="/swapsmithicon.png" alt="SwapSmith" width={36} height={36} style={{ borderRadius: 8 }} unoptimized />
-          <span className="admin-nav-label" style={{ fontSize: 18, fontWeight: 700 }}>SwapSmith Admin</span>
-          <span style={{ background: '#1e3a5f', color: '#93c5fd', border: '1px solid #2563eb44', borderRadius: 20, fontSize: 11, padding: '2px 10px', marginLeft: 4, fontWeight: 600 }}>
-            {adminInfo?.role?.replace('_', ' ').toUpperCase()}
-          </span>
-        </div>
-
-        {/* Desktop actions */}
-        <div className="admin-nav-right" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ color: '#52525b', fontSize: 13 }}>
-            {adminInfo?.name} · Last refresh: {lastRefresh.toLocaleTimeString()}
-          </span>
-          <button onClick={() => router.push('/admin/users')}
-            style={{ background: '#18181b', border: '1px solid #27272a', color: '#a1a1aa', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-            <Users size={14} /> Users
-          </button>
-          <button onClick={() => router.push('/admin/swaps')}
-            style={{ background: '#18181b', border: '1px solid #27272a', color: '#a1a1aa', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-            <ArrowLeftRight size={14} /> Swaps
-          </button>
-          <button onClick={fetchAnalytics}
-            style={{ background: '#18181b', border: '1px solid #27272a', color: '#a1a1aa', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-            <RefreshCw size={14} /> Refresh
-          </button>
-          <button onClick={handleLogout}
-            style={{ background: '#450a0a22', border: '1px solid #dc262644', color: '#f87171', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-            <LogOut size={14} /> Logout
-          </button>
-        </div>
-
-        {/* Mobile hamburger */}
-        <button
-          className="admin-nav-hamburger"
-          onClick={() => setMobileNavOpen(true)}
-          style={{ background: '#18181b', border: '1px solid #27272a', color: '#a1a1aa', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', alignItems: 'center', gap: 6, fontSize: 13 }}
-        >
-          <Menu size={20} />
-        </button>
-      </nav>
-
-      {/* ── Mobile drawer ── */}
-      {mobileNavOpen && (
-        <>
-          <div
-            onClick={() => setMobileNavOpen(false)}
-            style={{ position: 'fixed', inset: 0, background: '#00000070', backdropFilter: 'blur(2px)', zIndex: 200 }}
-          />
-          <div style={{
-            position: 'fixed', top: 0, right: 0, bottom: 0, width: '80%', maxWidth: 300,
-            background: '#0b0b18', borderLeft: '1px solid #1e1e2a', zIndex: 201,
-            display: 'flex', flexDirection: 'column', padding: 24, gap: 8,
-          }}>
-            {/* Drawer header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Image src="/swapsmithicon.png" alt="SwapSmith" width={32} height={32} style={{ borderRadius: 8 }} unoptimized />
-                <span style={{ fontSize: 16, fontWeight: 700 }}>SwapSmith Admin</span>
-              </div>
-              <button onClick={() => setMobileNavOpen(false)} style={{ background: '#18181b', border: '1px solid #27272a', color: '#a1a1aa', borderRadius: 8, padding: 6, cursor: 'pointer' }}>
-                <X size={18} />
-              </button>
-            </div>
-            {/* Admin info */}
-            <div style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: 10, padding: '10px 14px', marginBottom: 8 }}>
-              <p style={{ color: '#71717a', fontSize: 12, margin: 0 }}>{adminInfo?.name}</p>
-              <p style={{ color: '#52525b', fontSize: 11, margin: '2px 0 0' }}>Last refresh: {lastRefresh.toLocaleTimeString()}</p>
-            </div>
-            {/* Nav buttons */}
-            <button onClick={() => { setMobileNavOpen(false); router.push('/admin/dashboard'); }}
-              style={{ background: '#1e1e40', border: '1px solid #2563eb55', color: '#93c5fd', borderRadius: 10, padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 600 }}>
-              <BarChart2 size={16} /> Analytics
-            </button>
-            <button onClick={() => { setMobileNavOpen(false); router.push('/admin/users'); }}
-              style={{ background: '#18181b', border: '1px solid #27272a', color: '#a1a1aa', borderRadius: 10, padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}>
-              <Users size={16} /> Users
-            </button>
-            <button onClick={() => { setMobileNavOpen(false); router.push('/admin/swaps'); }}
-              style={{ background: '#18181b', border: '1px solid #27272a', color: '#a1a1aa', borderRadius: 10, padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}>
-              <ArrowLeftRight size={16} /> Swaps
-            </button>
-            <button onClick={() => { setMobileNavOpen(false); fetchAnalytics(); }}
-              style={{ background: '#18181b', border: '1px solid #27272a', color: '#a1a1aa', borderRadius: 10, padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}>
-              <RefreshCw size={16} /> Refresh
-            </button>
-            <div style={{ flex: 1 }} />
-            <button onClick={() => { setMobileNavOpen(false); handleLogout(); }}
-              style={{ background: '#450a0a22', border: '1px solid #dc262644', color: '#f87171', borderRadius: 10, padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}>
-              <LogOut size={16} /> Logout
-            </button>
-          </div>
-        </>
-      )}
+      <AdminNavbar
+        activePage="dashboard"
+        adminInfo={adminInfo}
+        onLogout={handleLogout}
+        onRefresh={fetchAnalytics}
+        lastRefresh={lastRefresh}
+      />
 
       <div className="admin-content" style={{ maxWidth: '100%', margin: '0 auto', padding: '32px 24px' }}>
 
