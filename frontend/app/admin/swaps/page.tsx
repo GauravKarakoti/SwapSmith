@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { csrfFetch } from '@/hooks/useCsrfToken'
 import { auth } from '@/lib/firebase'
 import { signOut } from 'firebase/auth'
 import {
@@ -311,7 +312,7 @@ export default function AdminSwapsPage() {
       if (typeof patch.swapExecutionEnabled === 'boolean') body.swapExecutionEnabled = patch.swapExecutionEnabled
       if (patch.sideshiftApiKey !== undefined) body.sideshiftApiKey = patch.sideshiftApiKey
 
-      const res = await fetch('/api/admin/swaps/config', {
+      const res = await csrfFetch('/api/admin/swaps/config', {
         method: 'PATCH',
         headers: authHeaders(),
         body: JSON.stringify(body),

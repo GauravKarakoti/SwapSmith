@@ -4,6 +4,9 @@ import {
   getAdminByFirebaseUid,
   getAdminUsersList,
   updateUserAdminStatus,
+  updateUserPlanAsAdmin,
+  VALID_PLANS,
+  type PlanValue,
 } from '@/lib/admin-service';
 
 // ── Auth helper ───────────────────────────────────────────────────────────
@@ -97,16 +100,39 @@ export async function PATCH(req: NextRequest) {
     if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
-    const { firebaseUid, action, reason } = body as {
+    const { firebaseUid, action, reason, plan } = body as {
       firebaseUid?: string;
       action?: string;
       reason?: string;
+      plan?: string;
     };
 
     if (!firebaseUid) {
       return NextResponse.json({ error: 'firebaseUid is required' }, { status: 400 });
     }
 
+    // ── Plan update action ───────────────────────────────────────────────
+    if (action === 'update_plan') {
+      if (!plan || !VALID_PLANS.includes(plan as PlanValue)) {
+        return NextResponse.json(
+          { error: `Invalid plan. Valid options: ${VALID_PLANS.join(', ')}` },
+          { status: 400 },
+        );
+      }
+      const { previousPlan } = await updateUserPlanAsAdmin(
+        firebaseUid,
+        plan as PlanValue,
+        admin.email,
+      );
+      return NextResponse.json({
+        success: true,
+        message: `Plan updated: ${previousPlan} → ${plan}`,
+        previousPlan,
+        newPlan: plan,
+      });
+    }
+
+    // ── Suspend / flag actions ───────────────────────────────────────────
     const validActions = ['suspend', 'unsuspend', 'flag', 'unflag'] as const;
     if (!action || !validActions.includes(action as (typeof validActions)[number])) {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

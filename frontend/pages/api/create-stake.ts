@@ -1,97 +1,166 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getTopStablecoinYields, formatYieldPools, YieldPool } from '@/utils/yield-client';
+import { withEnhancedCSRF } from '@/lib/enhanced-csrf';
+import { withRateLimit, RATE_LIMITS } from '@/lib/rate-limiter';
+import logger from '@/lib/logger';
 
-export interface StakeQuote {
+// Staking protocol configurations
+const STAKING_PROTOCOLS = {
+  ethereum: {
+    lido: {
+      name: 'Lido',
+      token: 'stETH',
+      apy: '3.2%',
+      description: 'Most popular liquid staking protocol',
+      minAmount: 0.01,
+      fee: '10%'
+    },
+    rocket_pool: {
+      name: 'Rocket Pool',
+      token: 'rETH',
+      apy: '3.1%',
+      description: 'Decentralized liquid staking',
+      minAmount: 0.01,
+      fee: '15%'
+    }
+  },
+  solana: {
+    marinade: {
+      name: 'Marinade',
+      token: 'mSOL',
+      apy: '7.2%',
+      description: 'Leading Solana liquid staking',
+      minAmount: 0.1,
+      fee: '6%'
+    }
+  }
+};
+
+interface StakeRequest {
   fromAsset: string;
+  fromChain: string;
   amount: number;
-  toAsset: string;
-  estimatedApy: number;
-  protocol: string;
-  chain: string;
-  depositAddress: string;
-  steps: { step: number; action: string; description: string; status: string }[];
+  amountType: 'exact' | 'percentage' | 'all';
+  protocol?: string;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+interface StakeQuote {
+  success: boolean;
+  fromAsset: string;
+  fromChain: string;
+  toAsset: string;
+  toChain: string;
+  amount: number;
+  amountType: string;
+  protocol: {
+    name: string;
+    apy: string;
+    fee: string;
+    description: string;
+  };
+  estimatedOutput: number;
+  fees: {
+    protocolFee: number;
+    networkFee: number;
+    total: number;
+  };
+  timeToStake: string;
+  risks: string[];
+  instructions: string[];
+}
+
+async function createStakeHandler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const { fromAsset, fromChain, amount, amountType, protocol }: StakeRequest = req.body;
+
+  if (!fromAsset || !fromChain || (!amount && amountType !== 'all')) {
+    return res.status(400).json({
+      error: 'Missing required parameters'
+    });
+  }
+
   try {
-    const { fromAsset, amount, stakeProtocol, chain } = req.body;
+    const chainProtocols =
+      STAKING_PROTOCOLS[fromChain.toLowerCase() as keyof typeof STAKING_PROTOCOLS];
 
-    // Validate required fields
-    if (!fromAsset || !amount) {
-      return res.status(400).json({ error: 'Missing required fields: fromAsset and amount' });
+    if (!chainProtocols) {
+      return res.status(400).json({
+        error: 'Unsupported chain'
+      });
     }
 
-    // Get yield pools for the asset
-    const yields = await getTopStablecoinYields();
-    
-    // Filter yields by chain if specified
-    let filteredYields = yields;
-    if (chain) {
-      filteredYields = yields.filter((p: YieldPool) => p.chain.toLowerCase() === chain.toLowerCase());
+    const selectedProtocol =
+      protocol?.toLowerCase() || Object.keys(chainProtocols)[0];
+
+    const protocolConfig =
+      chainProtocols[selectedProtocol as keyof typeof chainProtocols] as any;
+
+    if (!protocolConfig) {
+      return res.status(400).json({
+        error: 'Unsupported protocol'
+      });
     }
 
-    // If specific protocol requested, filter by that
-    if (stakeProtocol) {
-      filteredYields = filteredYields.filter((p: YieldPool) => 
-        p.project.toLowerCase() === stakeProtocol.toLowerCase()
-      );
-    }
+    const protocolFeeRate =
+      parseFloat(protocolConfig.fee.replace('%', '')) / 100;
 
-    // Get the best yield pool
-    const bestPool = filteredYields.length > 0 ? filteredYields[0] : yields[0];
+    const networkFee = 0.005;
 
-    if (!bestPool) {
-      return res.status(404).json({ error: 'No yield pool found for the specified asset' });
-    }
+    const protocolFee = amount * protocolFeeRate;
+    const totalFees = protocolFee + networkFee;
+    const estimatedOutput = amount - totalFees;
 
-    // Create stake quote
-    const stakeQuote: StakeQuote = {
-      fromAsset: fromAsset.toUpperCase(),
-      amount: parseFloat(amount),
-      toAsset: bestPool.symbol,
-      estimatedApy: bestPool.apy,
-      protocol: bestPool.project,
-      chain: bestPool.chain,
-      depositAddress: bestPool.poolId || '',
-      steps: [
-        {
-          step: 1,
-          action: 'swap',
-          description: `Swap ${amount} ${fromAsset.toUpperCase()} to ${bestPool.symbol}`,
-          status: 'pending'
-        },
-        {
-          step: 2,
-          action: 'stake',
-          description: `Deposit ${bestPool.symbol} to ${bestPool.project} for ${bestPool.apy.toFixed(2)}% APY`,
-          status: 'ready'
-        }
+    const quote: StakeQuote = {
+      success: true,
+      fromAsset,
+      fromChain,
+      toAsset: protocolConfig.token,
+      toChain: fromChain,
+      amount,
+      amountType,
+      protocol: {
+        name: protocolConfig.name,
+        apy: protocolConfig.apy,
+        fee: protocolConfig.fee,
+        description: protocolConfig.description
+      },
+      estimatedOutput,
+      fees: {
+        protocolFee,
+        networkFee,
+        total: totalFees
+      },
+      timeToStake: '~2-5 minutes',
+      risks: [
+        'Smart contract risk',
+        'Validator slashing risk',
+        'Liquidity risk'
+      ],
+      instructions: [
+        `Send ${amount} ${fromAsset} to the staking contract`,
+        `Receive ${estimatedOutput.toFixed(6)} ${protocolConfig.token}`,
+        `Earn ~${protocolConfig.apy} APY`
       ]
     };
 
-    // Return the stake quote with formatted message
-    const message = `⚡ *Stake Quote*\n\n` +
-      `*From:* ${amount} ${fromAsset.toUpperCase()}\n` +
-      `*To:* ${bestPool.symbol}\n` +
-      `*Protocol:* ${bestPool.project}\n` +
-      `*Chain:* ${bestPool.chain}\n` +
-      `*APY:* *${bestPool.apy.toFixed(2)}%*\n\n` +
-      `*Steps:*\n` +
-      `1. 🔄 Swap ${fromAsset.toUpperCase()} → ${bestPool.symbol}\n` +
-      `2. 📈 Deposit to ${bestPool.project}\n\n` +
-      `Ready to proceed?`;
+    logger.info('Staking quote generated', { ...quote });
 
-    res.status(200).json({
-      success: true,
-      data: stakeQuote,
-      message
+    return res.status(200).json(quote);
+
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Internal error';
+
+    logger.error('Staking API error', { message });
+
+    return res.status(500).json({
+      error: 'Failed to generate staking quote'
     });
-  } catch (error) {
-    console.error('Stake quote error:', error);
-    res.status(500).json({ error: 'Failed to get stake quote' });
   }
 }
+
+export default withRateLimit(
+  withEnhancedCSRF(createStakeHandler),
+  { ...RATE_LIMITS.swap }
+);

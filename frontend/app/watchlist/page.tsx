@@ -2,6 +2,7 @@
 
 import Navbar from '@/components/Navbar';
 import WatchlistContainer from '@/components/watchlist/WatchlistContainer';
+import Footer from '@/components/Footer';
 
 export default function WatchlistPage() {
   return (
@@ -13,6 +14,7 @@ export default function WatchlistPage() {
           <WatchlistContainer />
         </div>
       </main>
+      <Footer />
     </div>
   );
 }

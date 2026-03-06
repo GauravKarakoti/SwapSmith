@@ -1,7 +1,25 @@
 dist/
 build/
 node_modules/
+
+# Environment variables - NEVER commit .env files
 .env
+.env.local
+.env.*.local
+.env.*.example.local
+
+# Docker secrets - NEVER commit secret files
+secrets/
+*.secret
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Sensitive configuration files
+docker-compose.override.yml
+docker-compose.prod.yml
+
 bot\test_final_debug.txt
 bot\test_final_debug_2.txt
 bot\test_final_debug_3.txt
@@ -9,4 +27,7 @@ bot\test_debug_output_2.txt
 *.txt
 junit.xml
 coverage/
+
+
+shared/.env
 

@@ -62,7 +62,9 @@
       "**/__tests__/**/*.test.ts",
       "**/?(*.)+(spec|test).ts"
     ],
-    "verbose": true,
-    "moduleDirectories": ["node_modules", "<rootDir>/node_modules"]
+    "setupFiles": [
+      "<rootDir>/jest.setup.js"
+    ],
+    "verbose": true
   }
 }
