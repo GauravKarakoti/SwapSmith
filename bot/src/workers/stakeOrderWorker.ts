@@ -46,7 +46,7 @@ export async function checkAndProcessStakeOrders(): Promise<void> {
   } catch (error) {
     await handleError('StakeOrderCheckError', {
       error: error instanceof Error ? error.message : 'Unknown error'
-    }, null, false);
+    }, null, false, 'medium');
   }
 }
 
@@ -81,7 +81,7 @@ async function processStakeOrder(order: StakeOrder): Promise<void> {
 
   } catch (error) {
     logger.error(`[StakeWorker] Error processing stake order ${order.id}:`, error);
-    
+
     // Update order with error status
     await db.updateStakeOrderStakeStatus(
       order.sideshiftOrderId,
@@ -158,7 +158,7 @@ async function initiateStaking(order: StakeOrder, swapStatus: any): Promise<void
     }
   } catch (error) {
     logger.error(`[StakeWorker] Error in initiateStaking: ${error}`);
-    
+
     // Still notify user with instructions as fallback
     try {
       const settleAmount = swapStatus.settleAmount || order.settleAmount || '0';
@@ -180,7 +180,7 @@ async function provideManualStakingInstructions(
 
   const { formatStakingInstructions } = await import('../services/stake-client');
 
-  const instructionsMessage = formatStakingInstructions(order, settleAmount);
+  const instructionsMessage = formatStakingInstructions(order as any, settleAmount);
 
   await bot.telegram.sendMessage(
     order.telegramId,

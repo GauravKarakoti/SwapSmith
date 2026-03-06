@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserCourseProgress } from '@/lib/database';
+import { verifyAuth } from '@/lib/auth-helpers';
 
 export async function GET(request: NextRequest) {
   try {
-    const userId = request.headers.get('x-user-id');
-    
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+    // Verify Firebase authentication token
+    const authResult = await verifyAuth(request);
+    if (!authResult.success) {
+      return authResult.error!;
     }
 
-    const courses = await getUserCourseProgress(parseInt(userId));
+    const courses = await getUserCourseProgress(authResult.userId!);
 
     return NextResponse.json(courses);
   } catch (error) {

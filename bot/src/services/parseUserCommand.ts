@@ -1,5 +1,7 @@
 import { parseWithLLM, ParsedCommand } from './groq-client';
 import logger from './logger';
+import { parseDCA } from './nl-dca';
+import { detectLimitOrder } from './nl-limit-orders';
 
 export { ParsedCommand };
 
@@ -16,30 +18,109 @@ export type ParseResult =
     [key: string]: any;
   };
 
-const REGEX_TOKENS = /([A-Z]{2,10})\s+(to|into|for)\s+([A-Z]{2,10})/i;
+const REGEX_TOKENS = /([A-Z]{2,10})\s+(to|into|for|→|->)\s+([A-Z]{2,10})/i;
 const REGEX_FROM_TO = /from\s+([A-Z]{2,10})\s+to\s+([A-Z]{2,10})/i;
-const REGEX_AMOUNT_TOKEN = /\b(\d+(?:\.\d+)?)\s+([A-Z]{2,10})\b/i;
+const REGEX_AMOUNT_TOKEN = /\b(\d+(?:\.\d+)?[kmb]?)\s+([A-Z]{2,10})\b/i;
 const REGEX_MULTI_SOURCE =
-  /(?:^|\s)([A-Z]{2,10}|(?:\d+(?:\.\d+)?\s+[A-Z]{2,10}))\s+(?:and|&)\s+([A-Z]{2,10}|(?:\d+(?:\.\d+)?\s+[A-Z]{2,10}))\s+(?:to|into|for)/i;
+  /(?:^|\s)([A-Z]{2,10}|(?:\d+(?:\.\d+)?[kmb]?\s+[A-Z]{2,10}))\s+(?:and|&|\+)\s+([A-Z]{2,10}|(?:\d+(?:\.\d+)?[kmb]?\s+[A-Z]{2,10}))\s+(?:to|into|for)/i;
 
-// Use the updated Regex for Swap and Stake / Zap intents
-const REGEX_SWAP_STAKE = /(?:swap\s+and\s+stake|zap\s+(?:into|to)|stake\s+(?:my|after|then)|swap\s+(?:to|into)\s+(?:stake|yield))/i;
-const REGEX_STAKE_PROTOCOL = /(?:to\s+)?(aave|compound|yearn|lido|morpho|euler|spark)/i;
+// Enhanced patterns for better ambiguity detection
+const REGEX_AMBIGUOUS_OR = /\b(or|either|maybe)\b/i;
+const REGEX_MULTIPLE_DESTINATIONS = /(?:to|into|for)\s+([A-Z]{2,10})(?:\s+(?:or|and|\+|,)\s+([A-Z]{2,10}))+/i;
+const REGEX_CONDITIONAL = /\b(if|when|only\s+if|provided|assuming)\b/i;
+const REGEX_PRICE_CONDITION = /(?:price|value|[A-Z]{2,10})\s*(?:is|goes|hits|reaches|drops?|rises?|falls?)?\s*(above|below|over|under|>|<|>=|<=)\s*\$?(\d+(?:\.\d+)?[kmb]?)/i;
 
-// New Regex for direct Stake commands (e.g., "Stake 1 ETH with Lido" or "Stake my ETH")
-const REGEX_STAKE_COMMAND = /\b(stake)\b/i;
-const REGEX_LIQUID_STAKING_PROVIDER = /\b(lido|rocket\s*pool|rocketpool|stakewise|stake\s*wise)\b/i;
+// Enhanced abbreviation handling
+const COMMON_TYPOS = {
+  'swp': 'swap',
+  'cnvrt': 'convert',
+  'exchng': 'exchange',
+  'trd': 'trade',
+  'pls': 'please',
+  '2': 'to',
+  '4': 'for',
+  'u': 'you',
+  'ur': 'your',
+  'btc': 'BTC',
+  'eth': 'ETH',
+  'usdc': 'USDC',
+  'usdt': 'USDT',
+  'bnb': 'BNB',
+  'sol': 'SOL',
+  'ada': 'ADA',
+  'dot': 'DOT',
+  'matic': 'MATIC',
+  'avax': 'AVAX'
+};
 
+// Voice input phonetic corrections
+const PHONETIC_CORRECTIONS = {
+  'eeth': 'ETH',
+  'bit coin': 'BTC',
+  'bitcoin': 'BTC',
+  'ethereum': 'ETH',
+  'you es dee see': 'USDC',
+  'tether': 'USDT',
+  'solana': 'SOL',
+  'cardano': 'ADA',
+  'polkadot': 'DOT',
+  'polygon': 'MATIC',
+  'avalanche': 'AVAX',
+  'won': '1',
+  'too': '2',
+  'tree': '3',
+  'for': '4',
+  'fiv': '5'
+};
+
+// Enhanced number parsing with better scaling
 const parseScaledNumber = (raw: string): number => {
   const cleaned = raw.replace(/[$,\s]/g, '').toLowerCase();
-  const suffix = cleaned.slice(-1);
-  const base = parseFloat(cleaned);
+  const numPart = cleaned.replace(/[kmb]/g, '');
+  const base = parseFloat(numPart);
   
-  if (suffix === 'k') return base * 1000;
-  if (suffix === 'm') return base * 1000000;
-  if (suffix === 'b') return base * 1000000000;
+  if (isNaN(base)) return NaN;
+  
+  if (cleaned.includes('k')) return base * 1000;
+  if (cleaned.includes('m')) return base * 1000000;
+  if (cleaned.includes('b')) return base * 1000000000;
   return base;
 };
+
+// Enhanced input preprocessing
+const preprocessInput = (input: string): string => {
+  let processed = input.toLowerCase().trim();
+  
+  // Apply common typo corrections
+  Object.entries(COMMON_TYPOS).forEach(([typo, correction]) => {
+    const regex = new RegExp(`\\b${typo}\\b`, 'gi');
+    processed = processed.replace(regex, correction);
+  });
+  
+  // Apply phonetic corrections for voice input
+  Object.entries(PHONETIC_CORRECTIONS).forEach(([phonetic, correction]) => {
+    const regex = new RegExp(`\\b${phonetic}\\b`, 'gi');
+    processed = processed.replace(regex, correction);
+  });
+  
+  processed = processed.replace(/[-–—]/g, ' to ');
+  processed = processed.replace(/→|->/g, ' to ');
+  
+  return processed;
+};
+
+// Enhanced staking patterns for better natural language support
+const REGEX_SWAP_STAKE = /(?:swap\s+and\s+stake|zap\s+(?:into|to)|stake\s+(?:my|after|then)|swap\s+(?:to|into)\s+(?:stake|yield))/i;
+const REGEX_STAKE_PROTOCOL = /(?:to\s+)?(aave|compound|yearn|lido|morpho|euler|spark|rocket\s*pool|stakewise)/i;
+
+// Enhanced regex for direct stake commands with better natural language support
+const REGEX_STAKE_COMMAND = /\b(stake|staking)\b/i;
+const REGEX_LIQUID_STAKING_PROVIDER = /\b(lido|rocket\s*pool|rocketpool|stakewise|stake\s*wise|marinade|benqi|ankr)\b/i;
+
+// Enhanced patterns for amount detection in staking commands
+const REGEX_STAKE_AMOUNT = /(?:stake|staking)\s+(?:my\s+)?(?:all\s+)?(?:(\d+(?:\.\d+)?[kmb]?)\s+)?([A-Z]{2,10})/i;
+const REGEX_STAKE_ALL = /\b(?:stake|staking)\s+(?:all|everything|my\s+entire|my\s+whole)\s+([A-Z]{2,10})/i;
+const REGEX_STAKE_PERCENTAGE = /(?:stake|staking)\s+(\d+(?:\.\d+)?)%\s+(?:of\s+)?(?:my\s+)?([A-Z]{2,10})/i;
 
 const buildSwapResult = (
   userInput: string,
@@ -98,9 +179,82 @@ const buildSwapResult = (
 
 export async function parseUserCommand(
   userInput: string,
-  conversationHistory: any[] = [],
+  conversationHistory: any = [], // Replaced fallbackToLLM to fix "Cannot find name" errors
   inputType: 'text' | 'voice' = 'text'
 ): Promise<ParseResult> {
+  // Graceful handling if someone passes a boolean for legacy fallbackToLLM
+  if (typeof conversationHistory === 'boolean') {
+    conversationHistory = [];
+  }
+
+  if (!userInput?.trim()) {
+    return {
+      success: false,
+      validationErrors: ['Input cannot be empty'],
+      confidence: 0,
+      parsedMessage: 'No input provided',
+      requiresConfirmation: false,
+      originalInput: userInput
+    };
+  }
+
+  const originalInput = userInput;
+  const preprocessedInput = preprocessInput(userInput);
+  
+  // Enhanced ambiguity detection
+  const hasAmbiguousOr = REGEX_AMBIGUOUS_OR.test(preprocessedInput);
+  const hasMultipleDestinations = REGEX_MULTIPLE_DESTINATIONS.test(preprocessedInput);
+  const hasConditionals = REGEX_CONDITIONAL.test(preprocessedInput);
+  
+  if (hasAmbiguousOr || hasMultipleDestinations) {
+    const destinations = preprocessedInput.match(REGEX_MULTIPLE_DESTINATIONS);
+    return {
+      success: false, // <-- FIXED: Must be false for partial/ambiguous results
+      intent: 'swap',
+      validationErrors: destinations 
+        ? [`Multiple destination assets detected: ${destinations[1]}, ${destinations[2]}. Please specify one.`]
+        : ['Command contains ambiguous language. Please be more specific.'],
+      confidence: 20,
+      parsedMessage: 'Ambiguous command detected - clarification needed',
+      requiresConfirmation: true,
+      originalInput
+    };
+  }
+
+  // Enhanced conditional parsing
+  if (hasConditionals) {
+    const priceCondition = preprocessedInput.match(REGEX_PRICE_CONDITION);
+    if (priceCondition) {
+      const [, operator, rawValue] = priceCondition;
+      const value = parseScaledNumber(rawValue);
+      
+      if (!isNaN(value)) {
+        const conditionType = ['above', 'over', '>', '>='].includes(operator.toLowerCase()) 
+          ? 'price_above' : 'price_below';
+        
+        // Try to extract basic swap info
+        const tokenMatch = preprocessedInput.match(REGEX_TOKENS);
+        const amountMatch = preprocessedInput.match(REGEX_AMOUNT_TOKEN);
+        
+        return buildSwapResult(originalInput, {
+          intent: 'limit_order', // Changed from 'swap' to 'limit_order' for conditional orders
+          fromAsset: tokenMatch?.[1] || (amountMatch?.[2]),
+          toAsset: tokenMatch?.[3],
+          amount: amountMatch ? parseScaledNumber(amountMatch[1]) : null,
+          amountType: amountMatch ? 'exact' : null,
+          conditions: {
+            type: conditionType as "price_above" | "price_below",
+            asset: tokenMatch?.[3] || 'BTC', // Default to BTC if not specified
+            value
+            // <-- FIXED: Removed invalid 'operator' property from this object
+          },
+          confidence: 75,
+          requiresConfirmation: true
+        });
+      }
+    }
+  }
+
   let input = userInput
     .trim()
     .replace(/^(hey|hi|hello|please|kindly|can you)\s+/i, '')
@@ -157,28 +311,45 @@ export async function parseUserCommand(
      };
   }
 
-  // Check for direct Stake Intent (e.g., "Stake 1 ETH with Lido" or "Stake my ETH")
-  // Mapped to 'swap_and_stake' as per new architecture
+  // Enhanced staking command detection and parsing
   if (REGEX_STAKE_COMMAND.test(input) && !REGEX_SWAP_STAKE.test(input)) {
     const providerMatch = input.match(REGEX_LIQUID_STAKING_PROVIDER);
     const stakeProtocol = providerMatch ? providerMatch[1].toLowerCase().replace(/\s+/g, '_') : 'lido';
 
     let amount: number | null = null;
+    let amountType: 'exact' | 'percentage' | 'all' | null = null;
     let stakeAsset: string | null = null;
 
-    const amtMatch = input.match(/\b(\d+(\.\d+)?)\s*([A-Z]{2,5})?\b/i);
-    if (amtMatch) {
-      amount = parseFloat(amtMatch[1]);
-      if (amtMatch[3]) {
-        stakeAsset = amtMatch[3].toUpperCase();
-      }
+    // Check for "stake all" patterns
+    const allMatch = input.match(REGEX_STAKE_ALL);
+    if (allMatch) {
+      stakeAsset = allMatch[1].toUpperCase();
+      amountType = 'all';
     }
 
-    // Try to find asset after "stake" keyword
+    // Check for percentage patterns
+    const percentageMatch = input.match(REGEX_STAKE_PERCENTAGE);
+    if (percentageMatch && !allMatch) {
+      amount = parseFloat(percentageMatch[1]);
+      stakeAsset = percentageMatch[2].toUpperCase();
+      amountType = 'percentage';
+    }
+
+    // Check for exact amount patterns
+    const amountMatch = input.match(REGEX_STAKE_AMOUNT);
+    if (amountMatch && !allMatch && !percentageMatch) {
+      if (amountMatch[1]) {
+        amount = parseScaledNumber(amountMatch[1]);
+        amountType = 'exact';
+      }
+      stakeAsset = amountMatch[2].toUpperCase();
+    }
+
+    // Fallback: try to find asset after "stake" keyword
     if (!stakeAsset) {
-      const assetMatch = input.match(/stake\s+(?:my\s+)?(\d+(\.\d+)?\s+)?([A-Z]{2,5})/i);
-      if (assetMatch && assetMatch[3]) {
-        stakeAsset = assetMatch[3].toUpperCase();
+      const assetMatch = input.match(/stake\s+(?:my\s+)?(?:some\s+)?([A-Z]{2,10})/i);
+      if (assetMatch) {
+        stakeAsset = assetMatch[1].toUpperCase();
       }
     }
 
@@ -187,22 +358,56 @@ export async function parseUserCommand(
       stakeAsset = 'ETH';
     }
 
-    // Map base asset to LST
+    // Enhanced asset to LST mapping with more protocols
     let toAsset = 'stETH';
-    if (stakeAsset === 'SOL') toAsset = 'mSOL';
-    else if (stakeAsset === 'MATIC') toAsset = 'stMATIC';
-    else if (stakeAsset === 'AVAX') toAsset = 'sAVAX';
-    else if (stakeAsset === 'BNB') toAsset = 'ankrBNB';
+    let toChain = 'ethereum';
+    
+    if (stakeAsset === 'ETH') {
+      if (stakeProtocol === 'rocket_pool' || stakeProtocol === 'rocketpool') {
+        toAsset = 'rETH';
+      } else if (stakeProtocol === 'stakewise') {
+        toAsset = 'osETH';
+      } else {
+        toAsset = 'stETH'; // Default to Lido
+      }
+      toChain = 'ethereum';
+    } else if (stakeAsset === 'SOL') {
+      toAsset = 'mSOL';
+      toChain = 'solana';
+    } else if (stakeAsset === 'MATIC') {
+      toAsset = 'stMATIC';
+      toChain = 'polygon';
+    } else if (stakeAsset === 'AVAX') {
+      toAsset = 'sAVAX';
+      toChain = 'avalanche';
+    } else if (stakeAsset === 'BNB') {
+      toAsset = 'ankrBNB';
+      toChain = 'bsc';
+    }
+
+    // Determine confidence based on completeness
+    let confidence = 85;
+    if (!amount && amountType !== 'all') {
+      confidence = 60; // Lower confidence when amount is missing
+    }
+
+    const validationErrors: string[] = [];
+    if (!amount && amountType !== 'all') {
+      validationErrors.push('Amount not specified. How much would you like to stake?');
+    }
 
     return {
       success: true,
       intent: 'swap_and_stake',
       fromAsset: stakeAsset,
-      fromChain: 'ethereum',
+      fromChain: stakeAsset === 'SOL' ? 'solana' : 
+                 stakeAsset === 'MATIC' ? 'polygon' :
+                 stakeAsset === 'AVAX' ? 'avalanche' :
+                 stakeAsset === 'BNB' ? 'bsc' : 'ethereum',
       toAsset: toAsset,
-      toChain: 'ethereum',
+      toChain: toChain,
       amount,
-      amountType: amount ? 'exact' : null,
+      amountType,
       excludeAmount: undefined,
       excludeToken: undefined,
       quoteAmount: undefined,
@@ -224,9 +429,9 @@ export async function parseUserCommand(
       conditionAsset: undefined,
       targetPrice: undefined,
       condition: undefined,
-      confidence: 85,
-      validationErrors: [],
-      parsedMessage: `Parsed: Stake ${amount || '?'} ${stakeAsset} -> ${toAsset}`,
+      confidence,
+      validationErrors,
+      parsedMessage: `Parsed: Stake ${amount || amountType || '?'} ${stakeAsset} -> ${toAsset} via ${stakeProtocol}`,
       requiresConfirmation: true,
       originalInput: userInput
     };
@@ -497,6 +702,108 @@ export async function parseUserCommand(
       conditionAsset,
       confidence: Math.min(100, confidence)
     });
+  }
+
+  /* ───────────── LIMIT ORDER & DCA ───────────── */
+  if (isLimitOrDca) {
+    // Only treat as DCA if the input clearly indicates recurrence; otherwise,
+    // let limit-order parsing handle it later in this branch.
+    const hasDcaRecurrenceCue = /\b(every|daily|weekly|monthly|recurring|recurrence|dca)\b/i.test(
+      input
+    );
+
+    if (hasDcaRecurrenceCue) {
+      const dcaConfig = parseDCA(input);
+      if (dcaConfig && dcaConfig.amount) {
+        return {
+          success: true,
+          intent: 'dca',
+          fromAsset: 'USDC', // Default source for DCA usually
+          fromChain: null,
+          toAsset: dcaConfig.targetAsset ?? 'BTC', // Default target fallback
+          toChain: null,
+          amount: dcaConfig.amount ?? null,
+          amountType: dcaConfig.amountType ?? 'exact',
+          frequency: dcaConfig.frequency || 'daily',
+          dayOfWeek:
+            dcaConfig.dayOfWeek !== undefined
+              ? ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dcaConfig.dayOfWeek]
+              : null,
+          dayOfMonth: dcaConfig.dayOfMonth?.toString() || null,
+          excludeAmount: undefined,
+          excludeToken: undefined,
+          quoteAmount: undefined,
+          conditions: undefined,
+          portfolio: undefined,
+          settleAsset: null,
+          settleNetwork: null,
+          settleAmount: null,
+          settleAddress: null,
+          fromProject: null,
+          fromYield: null,
+          toProject: null,
+          toYield: null,
+          conditionOperator: undefined,
+          conditionValue: undefined,
+          conditionAsset: undefined,
+          targetPrice: undefined,
+          condition: undefined,
+          confidence: 90,
+          validationErrors: [],
+          parsedMessage: `Parsed: DCA $${dcaConfig.amount} into ${dcaConfig.targetAsset || 'BTC'} ${dcaConfig.frequency || 'daily'}`,
+          requiresConfirmation: true,
+          originalInput: userInput
+        };
+      }
+    }
+
+    const limitConfig = detectLimitOrder(input);
+    if (limitConfig && limitConfig.price) {
+      const tradeAsset = limitConfig.asset ?? 'ETH';
+      const quoteAsset = limitConfig.targetAsset ?? (tradeAsset === 'USDC' ? 'ETH' : 'USDC');
+      const isBuyBelow = limitConfig.condition === 'below';
+      return {
+        success: true,
+        intent: 'limit_order',
+        fromAsset: isBuyBelow ? quoteAsset : tradeAsset,
+        fromChain: null,
+        toAsset: isBuyBelow ? tradeAsset : quoteAsset,
+        toChain: null,
+        amount: limitConfig.amount ?? null,
+        amountType: limitConfig.amountType ?? null,
+        targetPrice: limitConfig.price,
+        condition: limitConfig.condition,
+        // Map to new condition format
+        conditions: {
+            type: limitConfig.condition === 'above' ? 'price_above' : 'price_below',
+            asset: limitConfig.asset ?? 'ETH',
+            value: limitConfig.price
+        },
+        excludeAmount: undefined,
+        excludeToken: undefined,
+        quoteAmount: undefined,
+        portfolio: undefined,
+        frequency: null,
+        dayOfWeek: null,
+        dayOfMonth: null,
+        settleAsset: null,
+        settleNetwork: null,
+        settleAmount: null,
+        settleAddress: null,
+        fromProject: null,
+        fromYield: null,
+        toProject: null,
+        toYield: null,
+        conditionOperator: limitConfig.condition === 'above' ? 'gt' : 'lt',
+        conditionValue: limitConfig.price,
+        conditionAsset: limitConfig.asset,
+        confidence: 90,
+        validationErrors: [],
+        parsedMessage: `Parsed: Limit Order - ${limitConfig.condition} $${limitConfig.price}`,
+        requiresConfirmation: true,
+        originalInput: userInput
+      };
+    }
   }
 
   logger.info('Fallback to LLM for:', userInput);

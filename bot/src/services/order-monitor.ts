@@ -2,7 +2,7 @@ import type { SideShiftOrderStatus } from './sideshift-client';
 import type { Order } from './database';
 import { TERMINAL_STATUSES_LIST } from '../constants';
 import logger from './logger';
-
+import { reputationService } from './reputation-service';
 
 // --- Types ---
 
@@ -258,6 +258,13 @@ export class OrderMonitor {
                 if (TERMINAL_STATUSES.has(newStatus)) {
                     this.untrackOrder(order.orderId);
                     logger.info(`[OrderMonitor] Order ${order.orderId} reached terminal state: ${newStatus}`);
+
+                    // Hook into reputation system
+                    if (newStatus === 'settled') {
+                        reputationService.recordSwapOutcome(order.telegramId.toString(), true);
+                    } else if (newStatus === 'failed' || newStatus === 'return_completed') {
+                        reputationService.recordSwapOutcome(order.telegramId.toString(), false);
+                    }
                 }
             }
         } catch (error) {
