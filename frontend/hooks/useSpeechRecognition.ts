@@ -26,21 +26,23 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
         setError("Voice input is not supported in this browser.");
       } else {
         setIsSupported(true);
-        recognitionRef.current = new SpeechRecognition();
-        recognitionRef.current.continuous = false; // We want single command
-        recognitionRef.current.interimResults = true; // Show results as they come
-        recognitionRef.current.lang = 'en-US';
+        const recognition = new SpeechRecognition();
+        recognitionRef.current = recognition;
 
-        recognitionRef.current.onstart = () => {
+        recognition.continuous = false; // We want single command
+        recognition.interimResults = true; // Show results as they come
+        recognition.lang = 'en-US';
+
+        recognition.onstart = () => {
           setIsListening(true);
           setError(null);
         };
 
-        recognitionRef.current.onend = () => {
+        recognition.onend = () => {
           setIsListening(false);
         };
 
-        recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
+        recognition.onresult = (event: SpeechRecognitionEvent) => {
           let finalTranscript = '';
           for (let i = event.resultIndex; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
@@ -54,7 +56,7 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
           setTranscript(finalTranscript);
         };
 
-        recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
+        recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
           console.error("Speech recognition error", event.error);
           if (event.error === 'no-speech') {
              setError("No speech was detected. Please try again.");

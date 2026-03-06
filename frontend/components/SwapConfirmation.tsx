@@ -14,7 +14,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi'
-import { parseEther, formatEther, isAddress, type Chain } from 'viem'
+import { parseEther, formatEther, type Chain } from 'viem'
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
 import { validateDepositAddressForNetwork } from '@/utils/addressValidation'
 
@@ -72,7 +72,7 @@ interface SafetyCheckResult {
   overallMessage: string
 }
 
-export default function SwapConfirmation({ quote, confidence, onAmountChange }: SwapConfirmationProps) {
+export default function SwapConfirmation({ quote, confidence: _confidence, onAmountChange }: SwapConfirmationProps) {
   const [copiedAddress, setCopiedAddress] = useState(false)
   const [copiedMemo, setCopiedMemo] = useState(false)
   const [isSimulating, setIsSimulating] = useState(false)

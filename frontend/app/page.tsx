@@ -1,20 +1,41 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { motion, useMotionValue, useSpring } from 'framer-motion'
 import { Zap, Mic, Shield, ArrowRight, Wallet, MessageSquare, CheckCircle, ListChecks, BarChart3, Sparkles, TrendingUp } from 'lucide-react'
 import { useEffect, useState, useRef } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-import { ReactLenis } from 'lenis/react'
-import { animate, scroll } from 'motion' 
 import Footer from '@/components/Footer'
 import Navbar from '@/components/Navbar'
 import { RandomizedTextEffect } from '@/components/RandomizedTextEffect'
 import FAQSection from '@/components/FAQSection'
+import { motion, useMotionValue, useSpring } from 'framer-motion'
+import dynamic from 'next/dynamic'
+
+// Dynamically import heavy animation libraries
+const MotionDiv = dynamic(
+  () => import('framer-motion').then(mod => ({ default: mod.motion.div })),
+  { ssr: false }
+)
+
+const MotionButton = dynamic(
+  () => import('framer-motion').then(mod => ({ default: mod.motion.button })),
+  { ssr: false }
+)
+
+const MotionA = dynamic(
+  () => import('framer-motion').then(mod => ({ default: mod.motion.a })),
+  { ssr: false }
+)
+
+const ReactLenis = dynamic(
+  () => import('lenis/react').then(mod => ({ default: mod.ReactLenis })),
+  { ssr: false }
+)
 
 // Dashboard Preview Component - Customized for SwapSmith (Crypto Theme)
-const DashboardPreview = () => (
-  <div className="absolute inset-0 pointer-events-none z-0">
+const DashboardPreview = () => {
+  return (
+    <div className="absolute inset-0 pointer-events-none z-0">
     {/* Left Card - Portfolio Analytics */}
     <motion.div 
       initial={{ opacity: 0, x: -100, rotate: -12 }}
@@ -200,26 +221,29 @@ const DashboardPreview = () => (
      </motion.div>
   </div>
 )
+}
 
 // Floating particles component
-const FloatingParticle = ({ delay, duration, x, y }: { delay: number; duration: number; x: number; y: number }) => (
-  <motion.div
-    className="absolute w-1 h-1 bg-gradient-to-r from-cyan-400 to-purple-500 rounded-full"
-    style={{ left: `${x}%`, top: `${y}%` }}
-    animate={{
-      y: [-20, 20, -20],
-      x: [-10, 10, -10],
-      opacity: [0.2, 0.8, 0.2],
-      scale: [1, 1.5, 1],
-    }}
-    transition={{
-      duration,
-      delay,
-      repeat: Infinity,
-      ease: "easeInOut",
-    }}
-  />
-)
+const FloatingParticle = ({ delay, duration, x, y }: { delay: number; duration: number; x: number; y: number }) => {
+  return (
+    <motion.div
+      className="absolute w-1 h-1 bg-gradient-to-r from-cyan-400 to-purple-500 rounded-full"
+      style={{ left: `${x}%`, top: `${y}%` }}
+      animate={{
+        y: [-20, 20, -20],
+        x: [-10, 10, -10],
+        opacity: [0.2, 0.8, 0.2],
+        scale: [1, 1.5, 1],
+      }}
+      transition={{
+        duration,
+        delay,
+        repeat: Infinity,
+        ease: "easeInOut",
+      }}
+    />
+  )
+}
 
 // Magnetic button component
 const MagneticButton = ({ children, onClick, className }: { children: React.ReactNode; onClick: () => void; className?: string }) => {
@@ -242,7 +266,7 @@ const MagneticButton = ({ children, onClick, className }: { children: React.Reac
   }
 
   return (
-    <motion.button
+    <MotionButton
       onClick={onClick}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
@@ -251,7 +275,7 @@ const MagneticButton = ({ children, onClick, className }: { children: React.Reac
       whileTap={{ scale: 0.95 }}
     >
       {children}
-    </motion.button>
+    </MotionButton>
   )
 }
 
@@ -363,29 +387,43 @@ export default function LandingPage() {
   }
 
   useEffect(() => {
-    // Add a delay to ensure DOM is fully ready
-    const timer = setTimeout(() => {
-      const items = document.querySelectorAll('.horizontal-scroll-item')
-      const section = document.querySelector('.horizontal-section')
+    // Dynamically import scroll animation utilities
+    const loadScrollAnimations = async () => {
+      try {
+        const [{ animate }, { scroll }] = await Promise.all([
+          import('framer-motion'),
+          import('framer-motion/dom')
+        ])
 
-      if (ulRef.current && items.length > 0 && section) {
-        // Animate the horizontal scroll
-        const controls = animate(
-          ulRef.current,
-          {
-            transform: ['translateX(0vw)', `translateX(-${(items.length - 1) * 100}vw)`],
-          },
-          { duration: 1 }
-        )
-        
-        scroll(controls, { 
-          target: section,
-          offset: ['start start', 'end end']
-        })
+        // Add a delay to ensure DOM is fully ready
+        const timer = setTimeout(() => {
+          const items = document.querySelectorAll('.horizontal-scroll-item')
+          const section = document.querySelector('.horizontal-section')
+
+          if (ulRef.current && items.length > 0 && section) {
+            // Animate the horizontal scroll
+            const controls = animate(
+              ulRef.current,
+              {
+                transform: ['translateX(0vw)', `translateX(-${(items.length - 1) * 100}vw)`],
+              },
+              { duration: 1 }
+            )
+            
+            scroll(controls, { 
+              target: section,
+              offset: ['start start', 'end end']
+            })
+          }
+        }, 100)
+
+        return () => clearTimeout(timer)
+      } catch (error) {
+        console.warn('Failed to load scroll animations:', error)
       }
-    }, 100)
+    }
 
-    return () => clearTimeout(timer)
+    loadScrollAnimations()
   }, [])
 
   const features = [
@@ -445,7 +483,7 @@ export default function LandingPage() {
       <div className="min-h-screen bg-slate-50 dark:bg-[#030308] text-slate-900 dark:text-white selection:bg-cyan-500/30 font-sans overflow-x-hidden transition-colors duration-300">
       {/* Animated background gradient */}
       <div className="fixed inset-0 pointer-events-none">
-        <motion.div
+        <MotionDiv
           className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-pink-500/10 rounded-full blur-[150px] mix-blend-multiply dark:mix-blend-normal opacity-50 dark:opacity-100"
           animate={{
             x: [0, 100, 0],
@@ -454,7 +492,7 @@ export default function LandingPage() {
           }}
           transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
         />
-        <motion.div
+        <MotionDiv
           className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-cyan-500/10 rounded-full blur-[150px] mix-blend-multiply dark:mix-blend-normal opacity-50 dark:opacity-100"
           animate={{
             x: [0, -80, 0],
@@ -484,24 +522,24 @@ export default function LandingPage() {
       {/* 2. Hero Section */}
       <section className="relative pt-24 sm:pt-32 lg:pt-40 pb-16 sm:pb-24 px-4 sm:px-6 overflow-hidden">
         <DashboardPreview />
-        <motion.div
+        <MotionDiv
           className="max-w-5xl mx-auto text-center space-y-10 relative z-10"
           variants={containerVariants}
           initial="hidden"
           animate="visible"
         >
-          <motion.div variants={itemVariants} className="flex justify-center">
-            <motion.div
+          <MotionDiv variants={itemVariants} className="flex justify-center">
+            <MotionDiv
               className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500/10 to-purple-500/10 border border-cyan-500/20 rounded-full"
               animate={{ boxShadow: ["0 0 20px rgba(34,211,238,0.1)", "0 0 40px rgba(34,211,238,0.2)", "0 0 20px rgba(34,211,238,0.1)"] }}
               transition={{ duration: 2, repeat: Infinity }}
             >
               <Sparkles className="w-4 h-4 text-cyan-500 dark:text-cyan-400" />
               <span className="text-xs font-semibold text-cyan-600 dark:text-cyan-300 tracking-wider uppercase">AI-Powered Trading</span>
-            </motion.div>
-          </motion.div>
+            </MotionDiv>
+          </MotionDiv>
 
-          <motion.h1
+          <MotionDiv
             variants={itemVariants}
             className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter leading-[0.9]"
           >
@@ -509,7 +547,7 @@ export default function LandingPage() {
               YOUR VOICE-ACTIVATED
             </span>
             <br />
-            <motion.span
+            <MotionDiv
               className="bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 dark:from-cyan-400 dark:via-purple-400 dark:to-pink-400 bg-clip-text text-transparent"
               animate={{
                 backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
@@ -518,27 +556,27 @@ export default function LandingPage() {
               style={{ backgroundSize: "200% 200%" }}
             >
               TRADING ASSISTANT.
-            </motion.span>
-          </motion.h1>
+            </MotionDiv>
+          </MotionDiv>
 
-          <motion.p
+          <MotionDiv
             variants={itemVariants}
             className="text-base sm:text-lg md:text-xl lg:text-2xl text-slate-500 dark:text-zinc-400 max-w-2xl mx-auto font-medium"
           >
             Execute complex, cross-chain cryptocurrency swaps using{" "}
             <span className="text-cyan-600 dark:text-cyan-400">simple natural language</span>.
-          </motion.p>
+          </MotionDiv>
 
-          <motion.div
+          <MotionDiv
             variants={itemVariants}
             className="relative group max-w-lg mx-auto"
           >
-            <motion.div
+            <MotionDiv
               className="absolute -inset-1 bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-pink-500/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
             />
             <div className="relative bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 p-5 rounded-2xl backdrop-blur-sm shadow-xl dark:shadow-none">
               <div className="flex items-center gap-2 mb-2">
-                <motion.div
+                <MotionDiv
                   className="w-2 h-2 rounded-full bg-cyan-500 dark:bg-cyan-400"
                   animate={{ scale: [1, 1.3, 1] }}
                   transition={{ duration: 1.5, repeat: Infinity }}
@@ -549,14 +587,14 @@ export default function LandingPage() {
                 &ldquo;Swap half of my MATIC on Polygon for 50 USDC on Arbitrum.&rdquo;
               </p>
             </div>
-          </motion.div>
+          </MotionDiv>
 
-          <motion.div variants={itemVariants} className="pt-4">
+          <MotionDiv variants={itemVariants} className="pt-4">
             <MagneticButton
               onClick={handleAccess}
               className="group relative px-8 sm:px-12 py-4 sm:py-5 bg-gradient-to-r from-cyan-500 via-purple-600 to-pink-600 rounded-2xl font-black text-lg sm:text-xl overflow-hidden"
             >
-              <motion.div
+              <MotionDiv
                 className="absolute inset-0 bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500"
                 animate={{
                   x: ["-100%", "100%"],
@@ -566,18 +604,18 @@ export default function LandingPage() {
               />
               <span className="relative flex items-center gap-2">
                 Start Trading Now
-                <motion.span
+                <MotionDiv
                   animate={{ x: [0, 5, 0] }}
                   transition={{ duration: 1.5, repeat: Infinity }}
                 >
                   <ArrowRight className="w-5 h-5" />
-                </motion.span>
+                </MotionDiv>
               </span>
             </MagneticButton>
-          </motion.div>
+          </MotionDiv>
 
           {/* Floating stats */}
-          <motion.div
+          <MotionDiv
             variants={itemVariants}
             className="flex flex-wrap justify-center gap-8 pt-8"
           >
@@ -586,7 +624,7 @@ export default function LandingPage() {
               { value: "40+", label: "Chains" },
               { value: "0%", label: "Platform Fees" },
             ].map((stat, i) => (
-              <motion.div
+              <MotionDiv
                 key={i}
                 className="text-center"
                 whileHover={{ y: -5 }}
@@ -595,15 +633,15 @@ export default function LandingPage() {
                   {stat.value}
                 </div>
                 <div className="text-xs text-slate-500 dark:text-zinc-500 uppercase tracking-wider">{stat.label}</div>
-              </motion.div>
+              </MotionDiv>
             ))}
-          </motion.div>
-        </motion.div>
+          </MotionDiv>
+        </MotionDiv>
       </section>
 
       {/* 3. Features Grid */}
       <section className="relative max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
-        <motion.div
+        <MotionDiv
           className="text-center mb-16"
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -614,9 +652,9 @@ export default function LandingPage() {
             <span className="bg-gradient-to-r from-cyan-600 to-purple-600 dark:from-cyan-400 dark:to-purple-400 bg-clip-text text-transparent">POWERFUL</span> FEATURES
           </h2>
           <p className="text-slate-600 dark:text-zinc-500 max-w-md mx-auto">Everything you need for seamless cross-chain trading</p>
-        </motion.div>
+        </MotionDiv>
 
-        <motion.div
+        <MotionDiv
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
           variants={containerVariants}
           initial="hidden"
@@ -624,31 +662,31 @@ export default function LandingPage() {
           viewport={{ once: true }}
         >
           {features.map((feature, idx) => (
-            <motion.div key={idx} variants={itemVariants}>
+            <MotionDiv key={idx} variants={itemVariants}>
               <GlowCard
                 className="h-full p-8 bg-white dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 rounded-3xl backdrop-blur-sm shadow-xl dark:shadow-none"
                 glowColor={feature.color}
               >
                 <div className="relative z-10 space-y-4">
-                  <motion.div
+                  <MotionDiv
                     className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.bgClass} flex items-center justify-center`}
                     whileHover={{ rotate: [0, -10, 10, 0] }}
                     transition={{ duration: 0.5 }}
                   >
                     <feature.icon className={`w-7 h-7 ${feature.textClass}`} />
-                  </motion.div>
+                  </MotionDiv>
                   <h3 className="text-xl font-bold text-slate-900 dark:text-white">{feature.title}</h3>
                   <p className="text-slate-600 dark:text-zinc-500 text-sm leading-relaxed">{feature.desc}</p>
                 </div>
               </GlowCard>
-            </motion.div>
+            </MotionDiv>
           ))}
-        </motion.div>
+        </MotionDiv>
       </section>
 
       {/* 4. How it Works */}
       <section className="relative max-w-4xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
-        <motion.div
+        <MotionDiv
           className="text-center mb-16"
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -658,9 +696,9 @@ export default function LandingPage() {
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tighter text-slate-900 dark:text-white">
             HOW IT <span className="bg-gradient-to-r from-purple-600 to-pink-600 dark:from-purple-400 dark:to-pink-400 bg-clip-text text-transparent">WORKS</span>
           </h2>
-        </motion.div>
+        </MotionDiv>
 
-        <motion.div
+        <MotionDiv
           className="space-y-4"
           variants={containerVariants}
           initial="hidden"
@@ -668,48 +706,48 @@ export default function LandingPage() {
           viewport={{ once: true }}
         >
           {steps.map((item, idx) => (
-            <motion.div
+            <MotionDiv
               key={idx}
               variants={slideInLeft}
               custom={idx}
               className="group relative"
             >
-              <motion.div
+              <MotionDiv
                 className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500/0 via-purple-500/0 to-pink-500/0 rounded-2xl opacity-0 group-hover:opacity-100 group-hover:from-cyan-500/20 group-hover:via-purple-500/20 group-hover:to-pink-500/20 transition-all duration-500 blur-sm"
               />
               <div className="relative flex items-center gap-3 sm:gap-6 p-4 sm:p-6 bg-white dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 rounded-2xl group-hover:border-cyan-500/30 group-hover:bg-slate-50 dark:group-hover:bg-white/[0.04] transition-all duration-300 shadow-sm dark:shadow-none">
-                <motion.div
+                <MotionDiv
                   className="text-3xl font-black text-transparent bg-gradient-to-b from-slate-200 to-slate-300 dark:from-white/10 dark:to-white/5 bg-clip-text group-hover:from-cyan-600 group-hover:to-purple-600 dark:group-hover:from-cyan-400 dark:group-hover:to-purple-400 transition-all duration-300"
                   whileHover={{ scale: 1.1 }}
                 >
                   0{item.step}
-                </motion.div>
-                <motion.div
+                </MotionDiv>
+                <MotionDiv
                   className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/10 to-purple-500/10 flex items-center justify-center flex-shrink-0 group-hover:from-cyan-500/20 group-hover:to-purple-500/20 transition-colors"
                   whileHover={{ rotate: 360 }}
                   transition={{ duration: 0.5 }}
                 >
                   <item.icon className="w-6 h-6 text-cyan-600 dark:text-cyan-400" />
-                </motion.div>
+                </MotionDiv>
                 <p className="text-sm sm:text-base md:text-lg font-medium text-slate-600 dark:text-zinc-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{item.text}</p>
-                <motion.div
+                <MotionDiv
                   className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity"
                   animate={{ x: [0, 5, 0] }}
                   transition={{ duration: 1, repeat: Infinity }}
                 >
                   <ArrowRight className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
-                </motion.div>
+                </MotionDiv>
               </div>
-            </motion.div>
+            </MotionDiv>
           ))}
-        </motion.div>
+        </MotionDiv>
       </section>
 
       {/* Mobile Mockup Section (AutoML Style) */}
       <section className="relative py-16 sm:py-24 lg:py-32 px-4 sm:px-6 overflow-hidden max-w-7xl mx-auto">
         <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
           {/* Left Side - Text Content */}
-          <motion.div
+          <MotionDiv
             initial={{ opacity: 0, x: -50 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
@@ -745,10 +783,10 @@ export default function LandingPage() {
                 </button>
               </div>
             </div>
-          </motion.div>
+          </MotionDiv>
 
           {/* Right Side - Phone Mockup */}
-          <motion.div
+          <MotionDiv
             initial={{ opacity: 0, x: 50 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
@@ -756,17 +794,17 @@ export default function LandingPage() {
             className="relative"
           >
             {/* Background decorative circles */}
-            <motion.div 
+            <MotionDiv 
                animate={{ y: [-20, 20, -20] }} 
                transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
                className="absolute -top-10 -left-10 w-24 h-24 rounded-full border border-white/10 z-0 bg-transparent" 
             />
-            <motion.div 
+            <MotionDiv 
                animate={{ scale: [1, 1.2, 1] }} 
                transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
                className="absolute top-1/2 -right-12 w-16 h-16 rounded-full border border-cyan-500/20 z-0 bg-cyan-500/5 backdrop-blur-sm" 
             />
-             <motion.div 
+             <MotionDiv 
                animate={{ y: [20, -20, 20] }} 
                transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
                className="absolute -bottom-8 left-1/4 w-20 h-20 rounded-full border border-purple-500/20 z-0 bg-purple-500/5" 
@@ -869,48 +907,48 @@ export default function LandingPage() {
             
             {/* Background Glow */}
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[600px] bg-cyan-500/20 blur-[100px] pointer-events-none -z-10" />
-          </motion.div>
+          </MotionDiv>
         </div>
       </section>
 
       {/* 5. Footer */}
       <footer className="relative py-16 border-t border-slate-200 dark:border-white/5">
-        <motion.div
+        <MotionDiv
           className="max-w-7xl mx-auto px-6 flex flex-col items-center gap-6"
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
         >
-          <motion.div
+          <MotionDiv
             className="flex items-center gap-2 cursor-pointer"
             whileHover={{ scale: 1.05 }}
           >
-            <motion.div
+            <MotionDiv
               animate={{ rotate: [0, 360] }}
               transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
             >
               <Zap className="w-5 h-5 text-cyan-500 dark:text-cyan-400" />
-            </motion.div>
+            </MotionDiv>
             <span className="text-sm font-bold tracking-widest uppercase bg-gradient-to-r from-cyan-600 to-purple-600 dark:from-cyan-400 dark:to-purple-400 bg-clip-text text-transparent">
               SwapSmith Terminal
             </span>
-          </motion.div>
+          </MotionDiv>
           <div className="flex gap-6 text-xs text-slate-500 dark:text-zinc-600">
             {["Privacy", "Terms", "Docs"].map((item) => (
-              <motion.a
+              <MotionA
                 key={item}
                 href="#"
                 className="hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors cursor-pointer"
                 whileHover={{ y: -2 }}
               >
                 {item}
-              </motion.a>
+              </MotionA>
             ))}
           </div>
           <p className="text-xs text-slate-400 dark:text-zinc-700">
             © 2026 SwapSmith. Built with AI.
           </p>
-        </motion.div>
+        </MotionDiv>
       </footer>
       </div>
 

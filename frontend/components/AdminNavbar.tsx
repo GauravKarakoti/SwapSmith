@@ -3,9 +3,9 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { BarChart2, Users, ArrowLeftRight, Coins, RefreshCw, LogOut, Menu, X } from 'lucide-react'
+import { BarChart2, Users, ArrowLeftRight, Coins, Database, RefreshCw, LogOut, Menu, X, LineChart } from 'lucide-react'
 
-export type AdminPage = 'dashboard' | 'users' | 'swaps' | 'coins'
+export type AdminPage = 'dashboard' | 'users' | 'swaps' | 'coins' | 'stats' | 'database'
 
 export interface AdminNavbarProps {
   activePage: AdminPage
@@ -22,6 +22,8 @@ const NAV_ITEMS = [
   { label: 'Users',      icon: Users,           path: '/admin/users',     key: 'users'     },
   { label: 'Swaps',      icon: ArrowLeftRight,  path: '/admin/swaps',     key: 'swaps'     },
   { label: 'Test Coins', icon: Coins,           path: '/admin/coins',     key: 'coins'     },
+  { label: 'Stats',      icon: LineChart,       path: '/admin/stats',     key: 'stats'     },
+  { label: 'Database',   icon: Database,        path: '/admin/database',  key: 'database'  },
 ] as const
 
 export default function AdminNavbar({ activePage, adminInfo, onLogout, onRefresh, lastRefresh }: AdminNavbarProps) {

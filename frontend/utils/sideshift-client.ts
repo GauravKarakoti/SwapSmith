@@ -2,8 +2,8 @@ import axios from 'axios';
 import { z } from 'zod';
 import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift';
 import { validateDepositAddressForNetwork } from './addressValidation';
-const AFFILIATE_ID = process.env.NEXT_PUBLIC_AFFILIATE_ID;
-const API_KEY = process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
+
+// API key is now server-side only - client calls backend API routes
 
 // ============================================
 // Type Definitions
@@ -148,27 +148,17 @@ export async function createQuote(
   toAsset: string,
   toNetwork: string,
   amount: number,
-  userIP: string
+  _userIP: string
 ): Promise<SideShiftQuote> {
   try {
-    const response = await axios.post(
-      `${SIDESHIFT_CONFIG.BASE_URL}/quotes`,
-      {
-        depositCoin: fromAsset,
-        depositNetwork: fromNetwork,
-        settleCoin: toAsset,
-        settleNetwork: toNetwork,
-        depositAmount: amount.toString(),
-        affiliateId: AFFILIATE_ID,
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'x-sideshift-secret': API_KEY,
-          'x-user-ip': userIP
-        }
-      }
-    );
+    // Call backend API route instead of SideShift directly
+    const response = await axios.post('/api/sideshift/quote', {
+      depositCoin: fromAsset,
+      depositNetwork: fromNetwork,
+      settleCoin: toAsset,
+      settleNetwork: toNetwork,
+      depositAmount: amount,
+    });
 
     const quote = { ...response.data, id: response.data.id };
 
@@ -199,7 +189,7 @@ export async function createCheckout(
   settleNetwork: string,
   settleAmount: number,
   settleAddress: string,
-  userIP: string
+  _userIP: string
 ): Promise<SideShiftCheckoutResponse> {
   try {
     const response = await axios.post(

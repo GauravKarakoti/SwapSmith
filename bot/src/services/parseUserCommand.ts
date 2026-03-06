@@ -22,20 +22,22 @@ const REGEX_AMOUNT_TOKEN = /\b(\d+(?:\.\d+)?)\s+([A-Z]{2,10})\b/i;
 const REGEX_MULTI_SOURCE =
   /(?:^|\s)([A-Z]{2,10}|(?:\d+(?:\.\d+)?\s+[A-Z]{2,10}))\s+(?:and|&)\s+([A-Z]{2,10}|(?:\d+(?:\.\d+)?\s+[A-Z]{2,10}))\s+(?:to|into|for)/i;
 
-const REGEX_SWAP_STAKE =
-  /(?:swap\s+and\s+stake|\bzap\b|stake\s+(?:my|after|then)|and\s+stake|stake\s+in)/i;
+// Use the updated Regex for Swap and Stake / Zap intents
+const REGEX_SWAP_STAKE = /(?:swap\s+and\s+stake|zap\s+(?:into|to)|stake\s+(?:my|after|then)|swap\s+(?:to|into)\s+(?:stake|yield))/i;
+const REGEX_STAKE_PROTOCOL = /(?:to\s+)?(aave|compound|yearn|lido|morpho|euler|spark)/i;
 
-const REGEX_STAKE_PROTOCOL =
-  /(?:to|on|in|into|using)\s+(aave|compound|yearn|lido|morpho|euler|spark|uniswap|curve|convex)/i;
+// New Regex for direct Stake commands (e.g., "Stake 1 ETH with Lido" or "Stake my ETH")
+const REGEX_STAKE_COMMAND = /\b(stake)\b/i;
+const REGEX_LIQUID_STAKING_PROVIDER = /\b(lido|rocket\s*pool|rocketpool|stakewise|stake\s*wise)\b/i;
 
 const parseScaledNumber = (raw: string): number => {
   const cleaned = raw.replace(/[$,\s]/g, '').toLowerCase();
   const suffix = cleaned.slice(-1);
   const base = parseFloat(cleaned);
-
-  if (Number.isNaN(base)) return NaN;
-  if (suffix === 'k') return base * 1_000;
-  if (suffix === 'm') return base * 1_000_000;
+  
+  if (suffix === 'k') return base * 1000;
+  if (suffix === 'm') return base * 1000000;
+  if (suffix === 'b') return base * 1000000000;
   return base;
 };
 
@@ -141,7 +143,92 @@ export async function parseUserCommand(
       }),
       fromProject: stakeProtocol,
       toProject: stakeProtocol,
-      parsedMessage: `Parsed: Swap ${amount ?? '?'} ${fromAsset ?? '?'} → ${toAsset ?? 'USDC'} and stake`
+      toYield: null,
+      conditionOperator: undefined,
+      conditionValue: undefined,
+      conditionAsset: undefined,
+      targetPrice: undefined,
+      condition: undefined,
+      confidence: 80,
+      validationErrors: [],
+      parsedMessage: `Parsed: Swap ${amount || '?'} ${fromAsset || '?'} to ${toAsset} and stake`,
+      requiresConfirmation: true,
+      originalInput: userInput
+     };
+  }
+
+  // Check for direct Stake Intent (e.g., "Stake 1 ETH with Lido" or "Stake my ETH")
+  // Mapped to 'swap_and_stake' as per new architecture
+  if (REGEX_STAKE_COMMAND.test(input) && !REGEX_SWAP_STAKE.test(input)) {
+    const providerMatch = input.match(REGEX_LIQUID_STAKING_PROVIDER);
+    const stakeProtocol = providerMatch ? providerMatch[1].toLowerCase().replace(/\s+/g, '_') : 'lido';
+
+    let amount: number | null = null;
+    let stakeAsset: string | null = null;
+
+    const amtMatch = input.match(/\b(\d+(\.\d+)?)\s*([A-Z]{2,5})?\b/i);
+    if (amtMatch) {
+      amount = parseFloat(amtMatch[1]);
+      if (amtMatch[3]) {
+        stakeAsset = amtMatch[3].toUpperCase();
+      }
+    }
+
+    // Try to find asset after "stake" keyword
+    if (!stakeAsset) {
+      const assetMatch = input.match(/stake\s+(?:my\s+)?(\d+(\.\d+)?\s+)?([A-Z]{2,5})/i);
+      if (assetMatch && assetMatch[3]) {
+        stakeAsset = assetMatch[3].toUpperCase();
+      }
+    }
+
+    // Default to ETH if no asset specified
+    if (!stakeAsset) {
+      stakeAsset = 'ETH';
+    }
+
+    // Map base asset to LST
+    let toAsset = 'stETH';
+    if (stakeAsset === 'SOL') toAsset = 'mSOL';
+    else if (stakeAsset === 'MATIC') toAsset = 'stMATIC';
+    else if (stakeAsset === 'AVAX') toAsset = 'sAVAX';
+    else if (stakeAsset === 'BNB') toAsset = 'ankrBNB';
+
+    return {
+      success: true,
+      intent: 'swap_and_stake',
+      fromAsset: stakeAsset,
+      fromChain: 'ethereum',
+      toAsset: toAsset,
+      toChain: 'ethereum',
+      amount,
+      amountType: amount ? 'exact' : null,
+      excludeAmount: undefined,
+      excludeToken: undefined,
+      quoteAmount: undefined,
+      conditions: undefined,
+      portfolio: undefined,
+      frequency: null,
+      dayOfWeek: null,
+      dayOfMonth: null,
+      settleAsset: null,
+      settleNetwork: null,
+      settleAmount: null,
+      settleAddress: null,
+      fromProject: stakeProtocol,
+      fromYield: null,
+      toProject: null,
+      toYield: null,
+      conditionOperator: undefined,
+      conditionValue: undefined,
+      conditionAsset: undefined,
+      targetPrice: undefined,
+      condition: undefined,
+      confidence: 85,
+      validationErrors: [],
+      parsedMessage: `Parsed: Stake ${amount || '?'} ${stakeAsset} -> ${toAsset}`,
+      requiresConfirmation: true,
+      originalInput: userInput
     };
   }
 
