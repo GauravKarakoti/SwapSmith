@@ -66,6 +66,11 @@ export interface ParsedCommand {
   toProject: string | null;
   toYield: number | null;
 
+  // Stake Fields
+  estimatedApy?: number | null;
+  stakeProtocol?: string | null;
+  stakePool?: string | null;
+
   // Limit Order Fields (Legacy - kept for compatibility, prefer 'conditions')
   conditionOperator?: 'gt' | 'lt';
   conditionValue?: number;
@@ -208,17 +213,20 @@ RESPONSE FORMAT (Enhanced):
   // DCA fields
   "frequency": "daily" | "weekly" | "monthly" | null,
   "dayOfWeek": "monday" | "tuesday" | ... | null,
-  "dayOfMonth": 1-31 | null,
+  "dayOfMonth": "1" to "31" | null,
+  "settleAsset": null,
+  "settleNetwork": null,
+  "settleAmount": null,
+  "settleAddress": null,
   "totalAmount": number | null,
   "numPurchases": number | null,
   
-  // Settlement fields
-  "settleAsset": string | null,
-  "settleNetwork": string | null,
-  "settleAmount": number | null,
-  "settleAddress": string | null,
+  // Staking Fields (for stake and swap_and_stake intents)
+  "estimatedApy": number | null,
+  "stakeProtocol": "aave" | "compound" | "lido" | "yearn" | "morpho" | "spark" | "euler" | null,
+  "stakePool": string | null,
+  "toProject": string | null,
   
-  // Legacy condition fields (for backward compatibility)
   "conditionOperator": "gt" | "lt" | null,
   "conditionValue": number | null,
   "conditionAsset": string | null,
@@ -536,6 +544,11 @@ function validateParsedCommand(parsed: Partial<ParsedCommand>, userInput: string
     fromYield: parsed.fromYield || null,
     toProject: parsed.toProject || null,
     toYield: parsed.toYield || null,
+    
+    // Stake fields
+    estimatedApy: parsed.estimatedApy || null,
+    stakeProtocol: parsed.stakeProtocol || null,
+    stakePool: parsed.stakePool || null,
     
     // New fields
     targetPrice: parsed.targetPrice,
