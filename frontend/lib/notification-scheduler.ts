@@ -1,5 +1,7 @@
 import cron from 'node-cron';
 import { sendPriceAlertEmail, sendWalletReminderEmail } from '@/lib/email';
+import { getActivePriceAlerts, getCachedPrice } from '@/lib/database';
+import logger from '@/lib/logger';
 
 // Store active cron jobs
 const scheduledJobs: Map<string, ReturnType<typeof cron.schedule>> = new Map();
@@ -39,7 +41,7 @@ export function scheduleNotification(schedule: NotificationSchedule) {
   const cronExpression = getCronExpression(schedule.frequency, schedule.cronExpression);
   
   const job = cron.schedule(cronExpression, async () => {
-    console.log(`Running scheduled notification for ${schedule.userEmail}`);
+    logger.info('Running scheduled notification', { userEmail: schedule.userEmail });
     
     try {
       switch (schedule.type) {
@@ -48,26 +50,72 @@ export function scheduleNotification(schedule: NotificationSchedule) {
           break;
         
         case 'price':
-          // Fetch latest crypto prices and send alert
-          // This would integrate with your price API
-          const mockPrice = '45,231.50';
-          const mockChange = '+2.34';
-          await sendPriceAlertEmail(
-            schedule.userEmail,
-            schedule.userName,
-            'Bitcoin',
-            mockPrice,
-            mockChange
-          );
+          // Fetch user's active price alerts
+          const alerts = await getActivePriceAlerts(schedule.userId);
+          
+          if (alerts.length === 0) {
+            logger.info('No active price alerts for user', { userId: schedule.userId });
+            break;
+          }
+          
+          // Check each alert and send notification if triggered
+          for (const alert of alerts) {
+            try {
+              const priceData = await getCachedPrice(alert.coin, alert.network);
+              
+              if (!priceData || !priceData.usdPrice) {
+                logger.warn('No price data available for alert', {
+                  coin: alert.coin,
+                  network: alert.network
+                });
+                continue;
+              }
+              
+              const currentPrice = parseFloat(priceData.usdPrice);
+              const targetPrice = parseFloat(alert.targetPrice as string);
+              
+              // Calculate price change
+              const priceChange = ((currentPrice - targetPrice) / targetPrice * 100).toFixed(2);
+              const priceChangeStr = priceChange.startsWith('-') ? priceChange : `+${priceChange}`;
+              
+              // Send email with real price data
+              await sendPriceAlertEmail(
+                schedule.userEmail,
+                schedule.userName,
+                alert.name,
+                currentPrice.toFixed(2),
+                `${priceChangeStr}%`
+              );
+              
+              logger.info('Sent price alert email', {
+                userId: schedule.userId,
+                coin: alert.name,
+                currentPrice,
+                targetPrice
+              });
+              
+            } catch (error) {
+              logger.error('Error processing price alert', {
+                alertId: alert.id,
+                error: error instanceof Error ? error.message : String(error)
+              });
+            }
+          }
           break;
       }
     } catch (error) {
-      console.error('Error sending scheduled notification:', error);
+      logger.error('Error sending scheduled notification', { 
+        error: error instanceof Error ? error.message : String(error) 
+      });
     }
   });
 
   scheduledJobs.set(jobKey, job);
-  console.log(`Scheduled ${schedule.type} notification for ${schedule.userEmail} with cron: ${cronExpression}`);
+  logger.info('Scheduled notification', { 
+    type: schedule.type, 
+    userEmail: schedule.userEmail, 
+    cronExpression 
+  });
   
   return { success: true, jobKey, cronExpression };
 }
@@ -79,7 +127,7 @@ export function stopScheduledNotification(userId: string, type: string) {
   if (scheduledJobs.has(jobKey)) {
     scheduledJobs.get(jobKey)?.stop();
     scheduledJobs.delete(jobKey);
-    console.log(`Stopped notification: ${jobKey}`);
+    logger.info('Stopped notification', { jobKey });
     return { success: true };
   }
   
@@ -95,5 +143,5 @@ export function getActiveJobs() {
 export function stopAllJobs() {
   scheduledJobs.forEach((job) => job.stop());
   scheduledJobs.clear();
-  console.log('Stopped all scheduled notifications');
+  logger.info('Stopped all scheduled notifications');
 }
