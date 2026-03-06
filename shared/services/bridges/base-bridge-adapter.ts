@@ -178,7 +178,7 @@ export function createBaseQuote(
 ): BridgeQuote {
   const fromAmount = BigInt(request.amount);
   const toAmountBigInt = BigInt(toAmount);
-  const rate = fromAmount > 0n 
+  const rate = fromAmount > BigInt(0) 
     ? (Number(toAmount) / Number(request.amount)).toFixed(8)
     : '0';
 

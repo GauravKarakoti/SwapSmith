@@ -13,6 +13,7 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
+    "baseUrl": ".",
     "plugins": [
       {
         "name": "next"
@@ -20,6 +21,7 @@
     ],
     "paths": {
       "@/*": ["./*"],
+      "shared/*": ["../shared/*"],
       "dotenv": ["./node_modules/dotenv"],
       "drizzle-kit": ["./node_modules/drizzle-kit"],
       "drizzle-orm": ["./node_modules/drizzle-orm"],

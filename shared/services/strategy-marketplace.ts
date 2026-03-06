@@ -1,4 +1,5 @@
-import { eq, desc, and, gte, lte, sql, like, or } from 'drizzle-orm'; import { 
+import { eq, desc, and, gte, lte, sql, like, or } from 'drizzle-orm';
+import { 
   tradingStrategies, 
   strategySubscriptions, 
   strategyPerformance,
@@ -91,12 +92,13 @@ export async function getStrategies(options: StrategyFilterOptions = {}): Promis
   }
 
   if (search) {
-    conditions.push(
-      or(
-        like(tradingStrategies.name, `%${search}%`),
-        like(tradingStrategies.description, `%${search}%`)
-      )
+    const searchConditions = or(
+      like(tradingStrategies.name, `%${search}%`),
+      like(tradingStrategies.description, `%${search}%`)
     );
+    if (searchConditions) {
+      conditions.push(searchConditions);
+    }
   }
 
   const orderColumn = sortBy === 'createdAt' 

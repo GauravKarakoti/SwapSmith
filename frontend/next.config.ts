@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   
   // Enable compilation for the shared folder
-  transpilePackages: ['@swapsmith/shared'],
+  transpilePackages: ['shared'],
   
   // Correctly trace files from the monorepo root (one level up)
   // This works dynamically for both Local (Windows/Mac) and Docker

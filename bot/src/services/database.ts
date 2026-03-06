@@ -472,15 +472,15 @@ export async function updateOrderStatus(sideshiftOrderId: string, newStatus: str
 }
 
 export async function createCheckoutEntry(telegramId: number, checkout: SideShiftCheckoutResponse) {
-  // Fix: Convert number to float if needed or ensure parsing is safe
-  const amount = typeof checkout.settleAmount === 'string' ? parseFloat(checkout.settleAmount) : checkout.settleAmount;
+  // Fix: Convert number to string for numeric field (Drizzle numeric type requires string)
+  const amount = typeof checkout.settleAmount === 'string' ? checkout.settleAmount : String(checkout.settleAmount);
   
   await db.insert(checkouts).values({
     telegramId,
     checkoutId: checkout.id,
     settleAsset: checkout.settleCoin,
     settleNetwork: checkout.settleNetwork,
-    settleAmount: amount,
+    settleAmount: amount, // Pass as string for numeric field
     settleAddress: checkout.settleAddress,
     status: 'pending'
   });
