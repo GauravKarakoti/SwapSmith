@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
 import { useAccount } from "wagmi";
 import {
   MessageCircle,
@@ -15,10 +13,11 @@ import {
   Activity,
   Trash2,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 
 import Navbar from "@/components/Navbar";
 import ClaudeChatInput from "@/components/ClaudeChatInput";
-import SwapConfirmation from "@/components/SwapConfirmation";
+import SwapConfirmation, { QuoteData } from "@/components/SwapConfirmation";
 import IntentConfirmation from "@/components/IntentConfirmation";
 import FullPageAd from "@/components/FullPageAd";
 import PlanLimitBanner from "@/components/PlanLimitBanner";
@@ -27,27 +26,20 @@ import { useTerminalFullPageAd } from "@/hooks/useAds";
 import { useChatHistory, useChatSessions } from "@/hooks/useCachedData";
 import { useErrorHandler, ErrorType } from "@/hooks/useErrorHandler";
 import { useAudioRecorder } from "@/hooks/useAudioRecorder";
-// ...existing code...
 import { usePlan } from "@/hooks/usePlan";
 
+// Dynamically import Framer Motion components
+const MotionDiv = dynamic(
+  () => import('framer-motion').then(mod => ({ default: mod.motion.div })),
+  { ssr: false }
+)
+
+const AnimatePresence = dynamic(
+  () => import('framer-motion').then(mod => ({ default: mod.AnimatePresence })),
+  { ssr: false }
+)
+
 import { ParsedCommand } from "@/utils/groq-client";
-
-/* -------------------------------------------------------------------------- */
-/* Types                                    */
-/* -------------------------------------------------------------------------- */
-
-interface QuoteData {
-  depositAmount: string;
-  depositCoin: string;
-  depositNetwork: string;
-  rate: string;
-  settleAmount: string;
-  settleCoin: string;
-  settleNetwork: string;
-  memo?: string;
-  expiry?: string;
-  id?: string;
-}
 
 interface Message {
   role: "user" | "assistant";
@@ -134,7 +126,6 @@ const LiveStatsCard = () => {
 /* -------------------------------------------------------------------------- */
 
 export default function TerminalPage() {
-  const router = useRouter();
   const { address, isConnected } = useAccount();
   const { handleError } = useErrorHandler();
 
@@ -482,7 +473,7 @@ export default function TerminalPage() {
         {/* Sidebar */}
         <AnimatePresence>
           {isSidebarOpen && (
-            <motion.aside
+            <MotionDiv
               initial={{ width: 0 }}
               animate={{ width: 320 }}
               exit={{ width: 0 }}
@@ -580,7 +571,7 @@ export default function TerminalPage() {
                   <Settings className="w-4 h-4" /> Settings
                 </Link>
               </div>
-            </motion.aside>
+            </MotionDiv>
           )}
         </AnimatePresence>
 
@@ -629,8 +620,8 @@ export default function TerminalPage() {
                   <div className="max-w-[80%]">
                     <div
                       className={`px-4 py-3 rounded-2xl text-sm ${msg.role === "user"
-                          ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg"
-                          : "panel"
+                        ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg"
+                        : "panel"
                         }`}
                     >
                       {msg.type === "swap_confirmation" &&
@@ -640,15 +631,26 @@ export default function TerminalPage() {
                           quote={(msg.data as { quoteData: QuoteData }).quoteData}
                           confidence={(msg.data as { confidence: number }).confidence}
                           onAmountChange={(newAmount) => {
-                            // Update the quote with the new amount
                             const quoteData = (msg.data as { quoteData?: QuoteData })?.quoteData;
                             if (quoteData) {
-                              const updatedQuote = { ...quoteData, depositAmount: newAmount };
-                              addMessage({
-                                role: 'assistant',
-                                content: `Amount updated to ${newAmount} ${quoteData.depositCoin}. Please review the new swap details.`,
-                                type: 'message'
-                              });
+                              const command: ParsedCommand = {
+                                success: true,
+                                intent: 'swap',
+                                fromAsset: quoteData.depositCoin,
+                                toAsset: quoteData.settleCoin,
+                                amount: parseFloat(newAmount),
+                                fromChain: quoteData.depositNetwork,
+                                toChain: quoteData.settleNetwork,
+                                confidence: 100,
+                                requiresConfirmation: false,
+                                settleAsset: quoteData.settleCoin,
+                                settleNetwork: quoteData.settleNetwork,
+                                settleAmount: parseFloat(quoteData.settleAmount),
+                                settleAddress: '',
+                                validationErrors: [],
+                                parsedMessage: `Updating swap amount to ${newAmount}`
+                              };
+                              executeSwap(command);
                             }
                           }}
                         />

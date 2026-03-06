@@ -13,6 +13,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "db:push": "drizzle-kit push",
+    "test:smoke": "ts-node scripts/smoke-test.ts",
     "smoke": "node smoke-test.js"
   },
   "keywords": [],
@@ -22,8 +23,9 @@
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
     "@sentry/node": "^10.39.0",
-    "axios": "^1.12.2",
+    "axios": "^1.13.5",
     "better-sqlite3": "^12.4.1",
+    "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "drizzle-orm": "^0.45.1",
     "ethers": "^6.13.1",
@@ -37,12 +39,14 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jest": "^29.5.14",
     "@types/node": "^24.10.11",
     "@types/node-cron": "^3.0.11",
     "drizzle-kit": "^0.31.9",
     "jest": "^29.7.0",
+    "jest-junit": "^16.0.0",
     "ts-jest": "^29.1.4",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3"
@@ -50,12 +54,17 @@
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "node",
+    "cache": false,
     "roots": [
       "<rootDir>/src"
     ],
     "testMatch": [
       "**/__tests__/**/*.test.ts",
       "**/?(*.)+(spec|test).ts"
-    ]
+    ],
+    "setupFiles": [
+      "<rootDir>/jest.setup.js"
+    ],
+    "verbose": true
   }
 }

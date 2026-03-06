@@ -94,6 +94,46 @@ export function generateContextualHelp(
     );
   }
 
+  // Handle ambiguous commands with specific suggestions
+  if (originalInput.toLowerCase().includes(' or ') || originalInput.toLowerCase().includes('either')) {
+    const assets = originalInput.match(/([A-Z]{2,10})/gi) || [];
+    if (assets.length >= 2) {
+      return formatMessage(
+        `I see multiple options: ${assets.join(', ')}. Which one would you prefer?`,
+        `swap 1 ETH to ${assets[0]}`,
+        inputType
+      );
+    }
+  }
+
+  // Handle voice input errors with phonetic suggestions
+  if (inputType === 'voice' && analysis.missingFields.length > 0) {
+    return formatMessage(
+      "I might have misheard you. Could you try speaking more clearly or typing instead?",
+      "Try saying 'swap one ETH to bitcoin' slowly",
+      inputType
+    );
+  }
+
+  // Handle invalid fields with specific corrections
+  if (analysis.invalidFields.length > 0) {
+    const invalidField = analysis.invalidFields[0];
+    if (invalidField.field === 'amount') {
+      return formatMessage(
+        "The amount needs to be greater than zero.",
+        "Try 'swap 1 ETH to BTC' or 'swap 50% of my ETH'",
+        inputType
+      );
+    }
+    if (invalidField.field === 'portfolio') {
+      return formatMessage(
+        "I need to know how to split your assets.",
+        "Try 'split 1 ETH into 50% BTC and 50% USDC'",
+        inputType
+      );
+    }
+  }
+
   // If no missing fields, provide generic guidance
   if (analysis.missingFields.length === 0 && analysis.invalidFields.length === 0) {
     return formatMessage(
@@ -112,35 +152,35 @@ export function generateContextualHelp(
   const presentAmount = analysis.presentFields.find(f => f.field === 'amount' || f.field === 'settleAmount')?.value;
   const presentToAsset = analysis.presentFields.find(f => f.field === 'toAsset')?.value;
 
-  // Generate intent-specific messages
+  // Generate intent-specific messages with enhanced context
   let question: string;
   let example: string;
 
   if (criticalMissing === 'amount' || criticalMissing === 'settleAmount') {
     const asset = presentAsset || presentToAsset || 'ETH';
     const action = getActionForIntent(analysis.intent);
-    question = `How much ${asset} would you like to ${action}?`;
+    question = `How much ${asset} would you like to ${action}? You can specify an exact amount, percentage, or 'all'.`;
     example = presentToAsset 
       ? `${analysis.intent} 1 ${asset} to ${presentToAsset}`
-      : `${analysis.intent} 1 ${asset} to BTC`;
+      : `${analysis.intent} 50% of my ${asset} to BTC`;
   } else if (criticalMissing === 'fromAsset' || criticalMissing === 'settleAsset') {
     const action = getActionForIntent(analysis.intent);
-    question = `Which asset would you like to ${action}?`;
+    question = `Which asset would you like to ${action}? Common options include ETH, BTC, USDC, SOL.`;
     example = presentAmount 
       ? `${analysis.intent} ${presentAmount} ETH to BTC`
       : `${analysis.intent} 1 ETH to BTC`;
   } else if (criticalMissing === 'toAsset') {
-    question = `Which asset would you like to receive?`;
+    question = `Which asset would you like to receive? Popular choices are BTC, ETH, USDC, SOL.`;
     const amountPart = presentAmount ? `${presentAmount}` : '1';
     const assetPart = presentAsset || 'ETH';
     example = `swap ${amountPart} ${assetPart} to BTC`;
   } else if (criticalMissing === 'portfolio') {
-    question = `How would you like to split your ${presentAsset || 'assets'}?`;
+    question = `How would you like to split your ${presentAsset || 'assets'}? Specify percentages for each asset.`;
     example = `split ${presentAmount || '1'} ${presentAsset || 'ETH'} into 50% BTC and 50% USDC`;
   } else {
     // Multiple missing fields or unknown scenario
     const intentName = getIntentDisplayName(analysis.intent);
-    question = `I need more information to complete your ${intentName}.`;
+    question = `I need more information to complete your ${intentName}. Please provide the missing details.`;
     example = getDefaultExampleForIntent(analysis.intent);
   }
 

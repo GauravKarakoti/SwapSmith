@@ -248,6 +248,16 @@ export default function RegisterPage() {
             Already have an account? Sign in 
           </Link>
 
+          {/* Admin Portal */}
+          <Link
+            href="/admin/login"
+            className="animate-element animate-delay-900 block w-full text-center rounded-2xl py-3 text-xs font-medium transition-all duration-200"
+            style={{ border: '1px solid rgba(124,58,237,0.2)', color: '#6b7280' }}
+          >
+            <ShieldCheck className="w-3 h-3 inline mr-1.5" style={{ color: '#a78bfa' }} />
+            Admin Portal
+          </Link>
+
           {/* Footer note */}
           <p className="animate-element animate-delay-900 flex items-center justify-center gap-1.5 text-center text-xs" style={{ color: '#374151' }}>
             <ShieldCheck className="w-3 h-3" />

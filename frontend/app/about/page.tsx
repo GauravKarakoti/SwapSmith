@@ -11,11 +11,9 @@ import {
   Star,
   GitFork,
   AlertCircle,
-  ArrowRight,
   Github,
   Code2,
   Users,
-  Terminal,
 } from 'lucide-react';
 
 /* ================================================================ */
@@ -41,7 +39,7 @@ function GlassCard({
 }: {
   children: React.ReactNode;
   title?: string;
-  icon?: any;
+  icon?: React.ElementType;
   className?: string;
 }) {
   return (

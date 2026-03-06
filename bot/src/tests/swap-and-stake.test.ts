@@ -2,6 +2,32 @@ import { parseUserCommand } from '../services/parseUserCommand';
 import { getZapQuote, formatZapQuote } from '../services/stake-client';
 import { getDepositAddress, getProtocolInfo, enrichPoolWithDepositAddress, YIELD_PROTOCOLS } from '../services/yield-client';
 
+// Mock the Groq client to avoid API key requirement
+jest.mock('../services/groq-client', () => ({
+  parseWithLLM: jest.fn(),
+  transcribeAudio: jest.fn(),
+}));
+
+// Mock SideShift client
+jest.mock('../services/sideshift-client', () => ({
+  createQuote: jest.fn().mockResolvedValue({
+    id: 'mock-quote-id',
+    depositCoin: 'ETH',
+    depositNetwork: 'ethereum',
+    settleCoin: 'USDC',
+    settleNetwork: 'ethereum',
+    depositAmount: '1',
+    settleAmount: '3000',
+    rate: '3000',
+    affiliateId: '',
+  }),
+  createOrder: jest.fn().mockResolvedValue({
+    id: 'mock-order-id',
+    depositAddress: '0x1234567890123456789012345678901234567890',
+  }),
+  getOrderStatus: jest.fn(),
+}));
+
 describe('Swap and Stake Enhancement', () => {
   
   describe('parseUserCommand - swap_and_stake intent detection', () => {

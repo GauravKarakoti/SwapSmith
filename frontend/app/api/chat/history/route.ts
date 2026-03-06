@@ -1,9 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getChatHistory, addChatMessage, clearChatHistory } from '@/lib/database';
+import { adminAuth } from '@/lib/firebase-admin';
 
 // GET /api/chat/history - Get chat history for user
 export async function GET(request: NextRequest) {
   try {
+    // 🔐 Firebase authentication
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized: No token provided' }, { status: 401 });
+    }
+
+    const idToken = authHeader.split('Bearer ')[1];
+    let decodedToken;
+    try {
+      decodedToken = await adminAuth.verifyIdToken(idToken);
+    } catch (error) {
+      console.error('Error verifying Firebase token:', error);
+      return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+    }
+
+    const authenticatedUserId = decodedToken.uid;
+
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
     const sessionId = searchParams.get('sessionId');
@@ -14,6 +32,11 @@ export async function GET(request: NextRequest) {
         { error: 'userId is required' },
         { status: 400 }
       );
+    }
+
+    // 🔐 IDOR protection: Ensure user can only access their own data
+    if (userId !== authenticatedUserId) {
+      return NextResponse.json({ error: 'Forbidden: User ID mismatch' }, { status: 403 });
     }
 
     const history = await getChatHistory(userId, sessionId || undefined, limit);
@@ -46,6 +69,23 @@ export async function GET(request: NextRequest) {
 // POST /api/chat/history - Add chat message
 export async function POST(request: NextRequest) {
   try {
+    // 🔐 Firebase authentication
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized: No token provided' }, { status: 401 });
+    }
+
+    const idToken = authHeader.split('Bearer ')[1];
+    let decodedToken;
+    try {
+      decodedToken = await adminAuth.verifyIdToken(idToken);
+    } catch (error) {
+      console.error('Error verifying Firebase token:', error);
+      return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+    }
+
+    const authenticatedUserId = decodedToken.uid;
+
     const body = await request.json();
     const {
       userId,
@@ -61,6 +101,11 @@ export async function POST(request: NextRequest) {
         { error: 'userId, role, and content are required' },
         { status: 400 }
       );
+    }
+
+    // 🔐 IDOR protection: Ensure user can only add messages for themselves
+    if (userId !== authenticatedUserId) {
+      return NextResponse.json({ error: 'Forbidden: User ID mismatch' }, { status: 403 });
     }
 
     if (!['user', 'assistant'].includes(role)) {
@@ -98,6 +143,23 @@ export async function POST(request: NextRequest) {
 // DELETE /api/chat/history - Clear chat history
 export async function DELETE(request: NextRequest) {
   try {
+    // 🔐 Firebase authentication
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized: No token provided' }, { status: 401 });
+    }
+
+    const idToken = authHeader.split('Bearer ')[1];
+    let decodedToken;
+    try {
+      decodedToken = await adminAuth.verifyIdToken(idToken);
+    } catch (error) {
+      console.error('Error verifying Firebase token:', error);
+      return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+    }
+
+    const authenticatedUserId = decodedToken.uid;
+
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
     const sessionId = searchParams.get('sessionId');
@@ -107,6 +169,11 @@ export async function DELETE(request: NextRequest) {
         { error: 'userId is required' },
         { status: 400 }
       );
+    }
+
+    // 🔐 IDOR protection: Ensure user can only delete their own data
+    if (userId !== authenticatedUserId) {
+      return NextResponse.json({ error: 'Forbidden: User ID mismatch' }, { status: 403 });
     }
 
     await clearChatHistory(userId, sessionId || undefined);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDiscussions, createDiscussion, deleteDiscussion, likeDiscussion } from '@/lib/database';
+import { adminAuth } from '@/lib/firebase-admin';
 
 // GET /api/discussions - Get all discussions or filtered by category
 export async function GET(request: NextRequest) {
@@ -88,6 +89,23 @@ export async function POST(request: NextRequest) {
 // DELETE /api/discussions - Delete a discussion
 export async function DELETE(request: NextRequest) {
   try {
+    // 🔐 Firebase authentication
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized: No token provided' }, { status: 401 });
+    }
+
+    const idToken = authHeader.split('Bearer ')[1];
+    let decodedToken;
+    try {
+      decodedToken = await adminAuth.verifyIdToken(idToken);
+    } catch (error) {
+      console.error('Error verifying Firebase token:', error);
+      return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+    }
+
+    const authenticatedUserId = decodedToken.uid;
+
     if (!process.env.DATABASE_URL) {
       console.error('DATABASE_URL is not configured');
       return NextResponse.json(
@@ -105,6 +123,11 @@ export async function DELETE(request: NextRequest) {
         { error: 'id and userId are required' },
         { status: 400 }
       );
+    }
+
+    // 🔐 IDOR protection: Ensure user can only delete their own discussions
+    if (userId !== authenticatedUserId) {
+      return NextResponse.json({ error: 'Forbidden: User ID mismatch' }, { status: 403 });
     }
 
     await deleteDiscussion(parseInt(id), userId);

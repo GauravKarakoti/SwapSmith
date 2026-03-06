@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   frontend:
     build:
@@ -6,11 +8,27 @@ services:
     container_name: swapsmith-frontend
     ports:
       - "3002:3000"
+    environment:
+      # Non-sensitive environment variables
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+      - NEXT_PUBLIC_APP_URL=http://localhost:3002
+      # Database connection
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/swapsmith
+    secrets:
+      - groq_api_key
+      - firebase_service_account_key
+      - brevo_api_key
+      - reward_token_private_key
     env_file:
-      - ./frontend/.env
+      # Only for non-sensitive public variables
+      - ./frontend/.env.public
     restart: unless-stopped
     networks:
       - swapsmith-net
+    depends_on:
+      db:
+        condition: service_healthy
   
   bot:
     build:
@@ -18,11 +36,21 @@ services:
       dockerfile: bot/Dockerfile
     container_name: swapsmith-bot
     restart: unless-stopped
-    env_file:
-      - ./bot/.env
     environment:
+      # Non-sensitive environment variables
+      - NODE_ENV=production
+      - PORT=3000
       - DATABASE_URL=postgres://postgres:postgres@db:5432/swapsmith
-    command: sh -c "npm run db:migrate && npm run start"
+      - SIDESHIFT_CLIENT_IP=127.0.0.1
+    secrets:
+      - bot_token
+      - groq_api_key
+      - sideshift_api_key
+      - walletconnect_project_id
+    env_file:
+      # Only for non-sensitive public variables
+      - ./bot/.env.public
+    command: sh -c "chmod +x ./scripts/wait-for-db-and-migrate.sh && ./scripts/wait-for-db-and-migrate.sh"
     depends_on:
       db:
         condition: service_healthy
@@ -48,6 +76,21 @@ services:
     networks:
       - swapsmith-net
 
+secrets:
+  groq_api_key:
+    file: ./secrets/groq_api_key.txt
+  bot_token:
+    file: ./secrets/bot_token.txt
+  sideshift_api_key:
+    file: ./secrets/sideshift_api_key.txt
+  firebase_service_account_key:
+    file: ./secrets/firebase_service_account_key.json
+  brevo_api_key:
+    file: ./secrets/brevo_api_key.txt
+  reward_token_private_key:
+    file: ./secrets/reward_token_private_key.txt
+  walletconnect_project_id:
+    file: ./secrets/walletconnect_project_id.txt
 
 volumes:
   postgres_data:
