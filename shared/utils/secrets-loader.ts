@@ -154,7 +154,7 @@ export function initializeSecrets(): {
   botToken?: string;
   walletConnectProjectId?: string;
   rewardTokenPrivateKey?: string;
-  firebaseServiceAccount?: any;
+  firebaseServiceAccount?: Record<string, unknown>;
 } {
   logger.info('Initializing application secrets');
   

@@ -1,14 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-// Extend Window interface for Web Speech API
-declare global {
-  interface Window {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    SpeechRecognition: any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    webkitSpeechRecognition: any;
-  }
-}
+// Extend Window interface for Web Speech API handled by @types/dom-speech-recognition or similar if needed,
+// but checking support dynamically is better. For now we use standard types if available.
+
 
 export type VoiceInputMethod = 'speech-api' | 'media-recorder' | null;
 

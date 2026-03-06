@@ -86,7 +86,7 @@ export class TrailingStopWorker {
       }
 
       const triggerPrice =
-        peakPrice * (1 - parseFloat(order.trailingPercentage) / 100); // Convert string to number
+        peakPrice * (1 - order.trailingPercentage / 100);
 
       await db
         .update(trailingStopOrders)
