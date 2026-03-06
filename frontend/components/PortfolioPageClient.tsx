@@ -60,22 +60,10 @@ export default function PortfolioPageClient() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5, delay: 0.2 }}
             className="bg-white/80 dark:bg-[#0a0a0a]/80 backdrop-blur-xl border border-slate-200 dark:border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl shadow-blue-900/5 ring-1 ring-slate-900/5"
-        >
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-6 border-b border-slate-100 dark:border-white/5">
-                <div className="flex items-center gap-4">
-                    <div className="p-3.5 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg shadow-blue-500/20 text-white">
-                        <PieChart className="w-6 h-6" />
-                    </div>
-                    <div>
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Active Strategies</h2>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage your portfolio targets and automated rules</p>
-                    </div>
-                </div>
-            </div>
-            
-            <div className="mt-6">
-                <PortfolioRebalance />
-            </div>
+        >   
+          <div className="mt-6">
+              <PortfolioRebalance />
+          </div>
         </motion.div>
 
       </main>

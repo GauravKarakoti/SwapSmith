@@ -1,6 +1,5 @@
 import '@testing-library/jest-dom/vitest';
 import { beforeAll, afterAll, vi, afterEach } from 'vitest';
-import * as React from 'react';
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
@@ -56,7 +55,7 @@ global.IntersectionObserver = class IntersectionObserver {
     return [];
   }
   unobserve() {}
-} as any;
+} as unknown as typeof IntersectionObserver;
 
 // Mock ResizeObserver
 global.ResizeObserver = class ResizeObserver {
@@ -64,7 +63,7 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
   observe() {}
   unobserve() {}
-} as any;
+} as unknown as typeof ResizeObserver;
 
 // Suppress specific console errors in tests
 const originalError = console.error;

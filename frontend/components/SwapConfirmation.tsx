@@ -14,9 +14,10 @@ import {
   Wallet,
 } from 'lucide-react'
 import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi'
-import { parseEther, formatEther, isAddress, type Chain } from 'viem'
+import { parseEther, formatEther, type Chain, erc20Abi, formatUnits, parseUnits, encodeFunctionData } from 'viem'
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
 import { validateDepositAddressForNetwork } from '@/utils/addressValidation'
+import { getCoins, type Coin, type CoinNetwork } from '@/utils/sideshift-client'
 
 export interface QuoteData {
   depositAmount: string
@@ -72,7 +73,7 @@ interface SafetyCheckResult {
   overallMessage: string
 }
 
-export default function SwapConfirmation({ quote, confidence, onAmountChange }: SwapConfirmationProps) {
+export default function SwapConfirmation({ quote, confidence: _confidence, onAmountChange }: SwapConfirmationProps) {
   const [copiedAddress, setCopiedAddress] = useState(false)
   const [copiedMemo, setCopiedMemo] = useState(false)
   const [isSimulating, setIsSimulating] = useState(false)
@@ -96,17 +97,60 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
 
     setIsLoadingBalance(true)
     try {
-      const balance = await publicClient.getBalance({ address })
-      const formatted = formatEther(balance)
+      let isNativeValue = true
+      let tokenAddress: string | undefined
+      let decimals = 18
+
+      try {
+        const coins = await getCoins()
+        const coinInfo = coins.find((c: Coin) => c.coin.toLowerCase() === quote.depositCoin.toLowerCase())
+        const networkInfo = coinInfo?.networks.find((n: CoinNetwork) => n.network.toLowerCase() === quote.depositNetwork.toLowerCase())
+
+        if (networkInfo?.tokenContract) {
+          isNativeValue = false
+          tokenAddress = networkInfo.tokenContract
+        }
+      } catch (err) {
+        console.error('Failed to fetch coin info from SideShift; aborting max balance calculation', err)
+        throw err
+      }
+
+      let balanceRaw: bigint = BigInt(0)
+
+      if (isNativeValue) {
+        balanceRaw = await publicClient.getBalance({ address })
+        decimals = 18
+      } else if (tokenAddress) {
+        const [bal, dec] = await Promise.all([
+          publicClient.readContract({
+            address: tokenAddress as `0x${string}`,
+            abi: erc20Abi,
+            functionName: 'balanceOf',
+            args: [address],
+          }) as Promise<bigint>,
+          publicClient.readContract({
+            address: tokenAddress as `0x${string}`,
+            abi: erc20Abi,
+            functionName: 'decimals',
+          }) as Promise<number>,
+        ])
+        balanceRaw = bal
+        decimals = Number(dec)
+      }
+
+      const formatted = formatUnits(balanceRaw, decimals)
       setWalletBalance(formatted)
 
-      // Calculate final amount with gas buffer for native tokens
-      const balanceNum = parseFloat(formatted)
-      const gasBuffer = 0.001 // 0.001 in native currency
-      const finalAmount = Math.max(0, balanceNum - gasBuffer)
+      let finalAmountFormatted = formatted
+
+      if (isNativeValue) {
+        const gasBuffer = parseUnits('0.005', decimals) // 0.005 buffer for gas
+        const maxBalance = balanceRaw > gasBuffer ? balanceRaw - gasBuffer : BigInt(0)
+        finalAmountFormatted = formatUnits(maxBalance, decimals)
+      }
 
       if (onAmountChange) {
-        onAmountChange(finalAmount.toString())
+        onAmountChange(finalAmountFormatted)
       }
     } catch (err) {
       console.error('Failed to fetch balance:', err)
@@ -144,27 +188,86 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
       }
 
       // Check 3: Balance check
-      const balance = await publicClient.getBalance({ address })
-      const requiredAmount = parseEther(quote.depositAmount)
+      let isNative = true
+      let tokenAddress: string | undefined
+      let decimals = 18
+
+      try {
+        const coins = await getCoins()
+        const coinInfo = coins.find((c: Coin) => c.coin.toLowerCase() === quote.depositCoin.toLowerCase())
+        const networkInfo = coinInfo?.networks.find((n: CoinNetwork) => n.network.toLowerCase() === quote.depositNetwork.toLowerCase())
+
+        if (networkInfo?.tokenContract) {
+          isNative = false
+          tokenAddress = networkInfo.tokenContract
+        }
+      } catch (err) {
+        console.warn('Failed to fetch coin info, default to native', err)
+      }
+
+      let balance = BigInt(0)
+      let nativeBalance = BigInt(0)
+
+      if (!isNative && tokenAddress) {
+        const [bal, dec, natBal] = await Promise.all([
+          publicClient.readContract({
+            address: tokenAddress as `0x${string}`,
+            abi: erc20Abi,
+            functionName: 'balanceOf',
+            args: [address],
+          }) as Promise<bigint>,
+          publicClient.readContract({
+            address: tokenAddress as `0x${string}`,
+            abi: erc20Abi,
+            functionName: 'decimals',
+          }) as Promise<number>,
+          publicClient.getBalance({ address }),
+        ])
+        balance = bal
+        decimals = dec
+        nativeBalance = natBal
+      } else {
+        balance = await publicClient.getBalance({ address })
+        nativeBalance = balance
+      }
+
+      const requiredAmount = parseUnits(quote.depositAmount, decimals)
+
       if (balance >= requiredAmount) {
         checks.balance.passed = true
-        checks.balance.message = `Sufficient balance: ${formatEther(balance)} available`
+        checks.balance.message = `Sufficient balance: ${formatUnits(balance, decimals)} available`
       } else {
         checks.balance.passed = false
-        checks.balance.message = `Insufficient balance: need ${quote.depositAmount}, have ${formatEther(balance)}`
+        checks.balance.message = `Insufficient balance: need ${quote.depositAmount}, have ${formatUnits(balance, decimals)}`
       }
 
       // Check 4: Gas estimation
       try {
-        const gasEstimate = await publicClient.estimateGas({
-          to: quote.depositAddress as `0x${string}`,
-          value: requiredAmount,
-          account: address,
-        })
-        const gasCost = gasEstimate * BigInt(30000000000) // 30 gwei
-        if (balance > requiredAmount + gasCost) {
+        let gasEstimate = BigInt(0)
+        if (!isNative && tokenAddress) {
+          gasEstimate = await publicClient.estimateGas({
+            to: tokenAddress as `0x${string}`,
+            data: encodeFunctionData({
+              abi: erc20Abi,
+              functionName: 'transfer',
+              args: [quote.depositAddress as `0x${string}`, requiredAmount],
+            }),
+            account: address,
+          })
+        } else {
+          gasEstimate = await publicClient.estimateGas({
+            to: quote.depositAddress as `0x${string}`,
+            value: requiredAmount,
+            account: address,
+          })
+        }
+
+        const gasCost = gasEstimate * BigInt(30000000000) // 30 gwei buffer (conservative)
+        const hasGas = isNative ? balance >= requiredAmount + gasCost : nativeBalance >= gasCost
+
+        if (hasGas) {
           checks.gas.passed = true
-          checks.gas.message = `Gas fees: ~${formatEther(gasCost)} available`
+          checks.gas.message = `Gas fees: ~${formatEther(gasCost)} estimated`
         } else {
           checks.gas.passed = false
           checks.gas.message = `Insufficient gas buffer`
@@ -239,13 +342,46 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
       return
     }
 
-    const transactionDetails = {
-      to: quote.depositAddress as `0x${string}`,
-      value: parseEther(quote.depositAmount),
-      chainId: depositChainId,
-    }
-
+    let transactionDetails: any
     try {
+      const coins = await getCoins()
+      const coinInfo = coins.find((c: Coin) => c.coin.toLowerCase() === quote.depositCoin.toLowerCase())
+      const networkInfo = coinInfo?.networks.find((n: CoinNetwork) => n.network.toLowerCase() === quote.depositNetwork.toLowerCase())
+      const isNative = !networkInfo?.tokenContract
+
+      if (!isNative && networkInfo?.tokenContract) {
+        let decimals = 18
+        if (publicClient) {
+          try {
+            decimals = (await publicClient.readContract({
+              address: networkInfo.tokenContract as `0x${string}`,
+              abi: erc20Abi,
+              functionName: 'decimals',
+            })) as number
+          } catch {
+            console.warn('Could not fetch token decimals, defaulting to 18')
+          }
+        }
+        const amount = parseUnits(quote.depositAmount, decimals)
+
+        transactionDetails = {
+          to: networkInfo.tokenContract as `0x${string}`,
+          value: BigInt(0),
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: 'transfer',
+            args: [quote.depositAddress as `0x${string}`, amount],
+          }),
+          chainId: depositChainId,
+        }
+      } else {
+        transactionDetails = {
+          to: quote.depositAddress as `0x${string}`,
+          value: parseUnits(quote.depositAmount, 18),
+          chainId: depositChainId,
+        }
+      }
+
       if (connectedChain?.id !== depositChainId) {
         if (!switchChainAsync) {
           alert('Could not switch network. Please do it manually in your wallet.')
