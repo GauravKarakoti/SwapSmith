@@ -115,7 +115,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
       }
 
       let balanceRaw: bigint = 0n
-
+BigInt(0)
       if (isNativeValue) {
         balanceRaw = await publicClient.getBalance({ address })
         decimals = 18
@@ -146,7 +146,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
 
       if (isNativeValue) {
         const gasBuffer = parseUnits('0.005', decimals) // 0.005 buffer for gas
-        const maxBalance = balanceRaw > gasBuffer ? balanceRaw - gasBuffer : 0n
+        const maxBalance = balanceRaw > gasBuffer ? balanceRaw - gasBuffer : BigInt(0)
         finalAmountFormatted = formatUnits(maxBalance, decimals)
       }
 
@@ -206,8 +206,8 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
         console.warn('Failed to fetch coin info, default to native', err)
       }
 
-      let balance = 0n
-      let nativeBalance = 0n
+      let balance = BigInt(0)
+      let nativeBalance = BigInt(0)
 
       if (!isNative && tokenAddress) {
         const [bal, dec, natBal] = await Promise.all([
@@ -244,7 +244,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
 
       // Check 4: Gas estimation
       try {
-        let gasEstimate = 0n
+        let gasEstimate = BigInt(0)
         if (!isNative && tokenAddress) {
           gasEstimate = await publicClient.estimateGas({
             to: tokenAddress as `0x${string}`,
@@ -367,7 +367,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
 
         transactionDetails = {
           to: networkInfo.tokenContract as `0x${string}`,
-          value: 0n,
+          value: BigInt(0),
           data: encodeFunctionData({
             abi: erc20Abi,
             functionName: 'transfer',
