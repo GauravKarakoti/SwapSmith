@@ -50,14 +50,18 @@ export default async function handler(
         watchlist.map(async (item) => {
           const priceData = await getCachedPrice(
             item.coin,
-            item.network
+            item.network,
+            true
           );
+
+          const isStale = priceData ? new Date(priceData.expiresAt) < new Date() : false;
 
           return {
             ...item,
             usdPrice: priceData?.usdPrice ?? null,
             btcPrice: priceData?.btcPrice ?? null,
             lastUpdated: priceData?.updatedAt ?? null,
+            isStale,
           };
         })
       );

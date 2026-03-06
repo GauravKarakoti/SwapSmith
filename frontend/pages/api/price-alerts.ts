@@ -57,7 +57,8 @@ export default async function handler(
         alerts.map(async (alert) => {
           const priceData = await getCachedPrice(
             alert.coin,
-            alert.network
+            alert.network,
+            true
           );
 
           return {
