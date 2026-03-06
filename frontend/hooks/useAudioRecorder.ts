@@ -89,7 +89,7 @@ class WebAudioRecorder {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     this.context = new AudioContextClass({ sampleRate: this.sampleRate });
     this.input = this.context.createMediaStreamSource(this.stream);
-    
+
     // bufferSize 4096 is a good balance between latency and performance
     this.processor = this.context.createScriptProcessor(4096, 1, 1);
 
@@ -101,21 +101,26 @@ class WebAudioRecorder {
 
     this.input.connect(this.processor);
     this.processor.connect(this.context.destination);
+
+    // Safari iOS fix: AudioContext might start in a suspended state
+    if (this.context.state === 'suspended') {
+      this.context.resume().catch(err => console.error("Failed to resume AudioContext", err));
+    }
   }
 
   async stop(): Promise<Blob> {
     if (this.processor && this.input && this.context) {
-       this.input.disconnect();
-       this.processor.disconnect();
-       if (this.context.state !== 'closed') {
-         await this.context.close();
-       }
+      this.input.disconnect();
+      this.processor.disconnect();
+      if (this.context.state !== 'closed') {
+        await this.context.close();
+      }
     }
 
     // Determine total length
     const totalLength = this.chunks.reduce((acc, chunk) => acc + chunk.length, 0);
     const result = new Float32Array(totalLength);
-    
+
     // Flatten chunks
     let offset = 0;
     for (const chunk of this.chunks) {
@@ -156,7 +161,7 @@ class AudioRecorderPolyfill {
   private detectBrowser(): void {
     if (typeof navigator === 'undefined') return;
     const userAgent = navigator.userAgent;
-    
+
     if (userAgent.includes('Chrome') && !userAgent.includes('Edg')) {
       this.browser = 'chrome';
     } else if (userAgent.includes('Firefox')) {
@@ -328,6 +333,15 @@ class AudioRecorderPolyfill {
   }
 
   isSupported(): boolean {
+<<<<<<< HEAD
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+      return false;
+    }
+    // Supported if MediaRecorder exists OR AudioContext exists
+    return !!(
+      (typeof window !== 'undefined' && window.MediaRecorder) ||
+      (typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext))
+=======
     if (typeof navigator === 'undefined') return false;
 
     const hasGetUserMedia =
@@ -348,6 +362,7 @@ class AudioRecorderPolyfill {
     return (
       hasGetUserMedia &&
       (hasMediaRecorder || hasAudioContext || hasSpeechRecognition)
+>>>>>>> origin/main
     );
   }
 
@@ -419,7 +434,7 @@ export const useAudioRecorder = (config: AudioRecorderConfig = {}): UseAudioReco
       setBrowserInfo(polyfillRef.current.getBrowserInfo());
     } catch (err: unknown) {
       console.error('Failed to start recording:', err);
-      
+
       const error = err as Error;
       if (error.name === 'NotAllowedError') {
         setError('Microphone access denied. Please enable microphone permissions and try again.');
