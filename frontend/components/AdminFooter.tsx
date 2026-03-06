@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { Shield, Database, BarChart2, Users, ArrowLeftRight, Coins, LineChart } from 'lucide-react'
+import { Shield, Database, BarChart2, Users, ArrowLeftRight, Coins, LineChart, Terminal } from 'lucide-react'
 
 const YEAR = new Date().getFullYear()
 
@@ -13,6 +13,7 @@ const QUICK_LINKS = [
   { label: 'Test Coins',   href: '/admin/coins',     icon: Coins          },
   { label: 'Stats',        href: '/admin/stats',     icon: LineChart      },
   { label: 'Database',     href: '/admin/database',  icon: Database       },
+  { label: 'SQL Terminal', href: '/admin/sql',       icon: Terminal       },
 ]
 
 export default function AdminFooter() {
