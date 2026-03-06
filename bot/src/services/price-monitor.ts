@@ -139,7 +139,7 @@ export async function getCurrentPrice(asset: string): Promise<number | null> {
       error: error instanceof Error ? error.message : 'Unknown error',
       asset,
       coinId 
-    }, null, false);
+    }, null, false, 'low');
     return null;
   }
 }
@@ -196,7 +196,7 @@ export async function getMultiplePrices(assets: string[]): Promise<Record<string
     await handleError('PriceFetchError', { 
       error: error instanceof Error ? error.message : 'Unknown error',
       assets: uniqueAssets 
-    }, null, false);
+    }, null, false, 'low');
     return {};
   }
 }
@@ -289,7 +289,7 @@ export async function getPriceChange(asset: string, days: number = 1): Promise<n
       error: error instanceof Error ? error.message : 'Unknown error',
       asset,
       days 
-    }, null, false);
+    }, null, false, 'low');
     return null;
   }
 }

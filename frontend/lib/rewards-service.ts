@@ -1,4 +1,5 @@
 import { authenticatedFetch } from './api-client';
+import logger from './logger';
 
 /**
  * Rewards Service - Centralized service for tracking user rewards
@@ -27,7 +28,9 @@ export async function trackDailyLogin(): Promise<RewardResult> {
     
     return await response.json();
   } catch (error) {
-    console.error('Error tracking daily login:', error);
+    logger.error('Error tracking daily login', { 
+      error: error instanceof Error ? error.message : String(error) 
+    });
     return { success: false, message: 'Error tracking daily login' };
   }
 }
@@ -51,7 +54,9 @@ export async function trackWalletConnection(walletAddress: string): Promise<Rewa
     
     return await response.json();
   } catch (error) {
-    console.error('Error tracking wallet connection:', error);
+    logger.error('Error tracking wallet connection', { 
+      error: error instanceof Error ? error.message : String(error) 
+    });
     return { success: false, message: 'Error tracking wallet connection' };
   }
 }
@@ -71,7 +76,9 @@ export async function trackTerminalUsage(): Promise<RewardResult> {
     
     return await response.json();
   } catch (error) {
-    console.error('Error tracking terminal usage:', error);
+    logger.error('Error tracking terminal usage', { 
+      error: error instanceof Error ? error.message : String(error) 
+    });
     return { success: false, message: 'Error tracking terminal usage' };
   }
 }
@@ -91,7 +98,9 @@ export async function trackNotificationEnabled(): Promise<RewardResult> {
     
     return await response.json();
   } catch (error) {
-    console.error('Error tracking notification enable:', error);
+    logger.error('Error tracking notification enable', { 
+      error: error instanceof Error ? error.message : String(error) 
+    });
     return { success: false, message: 'Error tracking notification enable' };
   }
 }
@@ -102,7 +111,10 @@ export async function trackNotificationEnabled(): Promise<RewardResult> {
 export function showRewardNotification(result: RewardResult) {
   if (result.success && result.pointsEarned) {
     // You can integrate with a toast library here
-    console.log(`🎉 ${result.message} You earned ${result.pointsEarned} points!`);
+    logger.info('Reward earned', { 
+      message: result.message, 
+      points: result.pointsEarned 
+    });
     
     // Dispatch custom event for UI to listen
     window.dispatchEvent(new CustomEvent('rewardEarned', { 

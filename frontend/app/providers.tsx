@@ -11,7 +11,7 @@ import { usePageTracking } from '@/hooks/usePageTracking'
 // Dynamically import heavy Web3 libraries
 const Web3Provider = dynamic(
   () => import('./Web3Provider'),
-  {
+  { 
     ssr: false,
     loading: () => <div className="min-h-screen bg-gray-900" />
   }

@@ -369,7 +369,7 @@ bot.action('confirm_swap_and_stake', async (ctx) => {
       { parse_mode: 'Markdown' }
     );
   } catch (error) {
-    handleError('SwapAndStakeError', error);
+    handleError('SwapAndStakeError', error, null, true, 'high');
     await ctx.editMessageText(
       '❌ Failed to create swap & stake order. Please try again later.'
     );
@@ -424,7 +424,7 @@ async function start() {
     process.once('SIGINT', () => shutdown('SIGINT'));
     process.once('SIGTERM', () => shutdown('SIGTERM'));
   } catch (e) {
-    handleError('StartupFailed', e);
+    handleError('StartupFailed', e, null, true, 'critical');
     process.exit(1);
   }
 }

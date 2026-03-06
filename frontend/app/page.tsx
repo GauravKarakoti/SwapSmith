@@ -8,7 +8,7 @@ import Footer from '@/components/Footer'
 import Navbar from '@/components/Navbar'
 import { RandomizedTextEffect } from '@/components/RandomizedTextEffect'
 import FAQSection from '@/components/FAQSection'
-import { motion } from 'framer-motion'
+import { motion, useMotionValue, useSpring } from 'framer-motion'
 import dynamic from 'next/dynamic'
 
 // Dynamically import heavy animation libraries
@@ -27,67 +27,17 @@ const MotionA = dynamic(
   { ssr: false }
 )
 
-// Dynamically import heavy libraries
 const ReactLenis = dynamic(
   () => import('lenis/react').then(mod => ({ default: mod.ReactLenis })),
   { ssr: false }
 )
 
-// Dynamically import scroll and animate utilities
-const useScrollAnimations = () => {
-  const [scrollUtils, setScrollUtils] = useState<any>(null)
-  
-  useEffect(() => {
-    Promise.all([
-      import('framer-motion'),
-      import('framer-motion/dom')
-    ]).then(([framerMotion, framerMotionDom]) => {
-      setScrollUtils({
-        motion: framerMotion.motion,
-        animate: framerMotionDom.animate,
-        scroll: framerMotionDom.scroll,
-        useMotionValue: framerMotion.useMotionValue,
-        useSpring: framerMotion.useSpring
-      })
-    })
-  }, [])
-  
-  return scrollUtils
-}
-
 // Dashboard Preview Component - Customized for SwapSmith (Crypto Theme)
 const DashboardPreview = () => {
-  const [MotionComponent, setMotionComponent] = useState<any>(null)
-
-  useEffect(() => {
-    import('framer-motion').then(mod => {
-      setMotionComponent(mod.motion)
-    })
-  }, [])
-
-  if (!MotionComponent) {
-    return (
-      <div className="absolute inset-0 pointer-events-none z-0">
-        {/* Static fallback content */}
-        <div className="absolute left-[5%] top-[20%] hidden xl:block p-6 bg-white/90 dark:bg-[#0a0a12]/90 backdrop-blur-md rounded-3xl shadow-2xl w-[320px] text-slate-800 dark:text-white border border-slate-200/50 dark:border-white/10">
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-cyan-100 dark:bg-cyan-900/30 flex items-center justify-center border border-cyan-500/30">
-                <BarChart3 className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
-              </div>
-              <span className="font-bold text-sm text-slate-600 dark:text-zinc-200">Portfolio Value</span>
-            </div>
-          </div>
-          <div className="text-4xl font-black mb-1 text-slate-900 dark:text-white tracking-tight">$42,853.21</div>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="absolute inset-0 pointer-events-none z-0">
     {/* Left Card - Portfolio Analytics */}
-    <MotionComponent.div 
+    <motion.div 
       initial={{ opacity: 0, x: -100, rotate: -12 }}
       animate={{ 
         opacity: 1, 
@@ -157,10 +107,10 @@ const DashboardPreview = () => {
           <span>Route: Best</span>
         </div>
       </div>
-    </MotionComponent.div>
+    </motion.div>
 
     {/* Right Card - Active Swaps / Operations */}
-    <MotionComponent.div 
+    <motion.div 
       initial={{ opacity: 0, x: 100, rotate: 12 }}
       animate={{ 
         opacity: 1, 
@@ -222,10 +172,10 @@ const DashboardPreview = () => {
             </div>
         ))}
       </div>
-    </MotionComponent.div>
+    </motion.div>
 
     {/* Bottom Left Card - 'Expert Level' / AI Status */}
-    <MotionComponent.div
+    <motion.div
         initial={{ opacity: 0, scale: 0.8, rotate: -5 }}
         animate={{ 
             opacity: 1, 
@@ -251,49 +201,32 @@ const DashboardPreview = () => {
         <h4 className="font-black text-lg text-slate-900 dark:text-white mb-1">SwapSmith Pro</h4>
         <p className="text-[10px] text-slate-500 dark:text-zinc-400 mb-3">Auto-routing optimization enabled</p>
         <div className="w-full h-1 bg-slate-200 dark:bg-zinc-800 rounded-full overflow-hidden">
-            <MotionComponent.div 
+            <motion.div 
                 className="h-full bg-gradient-to-r from-pink-500 to-rose-500"
                 animate={{ width: ["0%", "100%"] }}
                 transition={{ duration: 2, repeat: Infinity }}
             />
         </div>
-    </MotionComponent.div>
+    </motion.div>
     
     {/* Floating Background Words - Crypto Themed */}
-     <MotionComponent.div animate={{ rotate: 360 }} transition={{ duration: 150, repeat: Infinity, ease: 'linear' }} className="absolute left-[10%] top-[15%] text-slate-900/[0.03] dark:text-white/[0.03] font-black text-7xl select-none -z-10 blur-[2px] pointer-events-none tracking-tighter">
+     <motion.div animate={{ rotate: 360 }} transition={{ duration: 150, repeat: Infinity, ease: 'linear' }} className="absolute left-[10%] top-[15%] text-slate-900/[0.03] dark:text-white/[0.03] font-black text-7xl select-none -z-10 blur-[2px] pointer-events-none tracking-tighter">
         LIQUIDITY
-     </MotionComponent.div>
-     <MotionComponent.div animate={{ rotate: -360 }} transition={{ duration: 180, repeat: Infinity, ease: 'linear' }} className="absolute right-[8%] bottom-[25%] text-slate-900/[0.03] dark:text-white/[0.03] font-black text-7xl select-none -z-10 blur-[2px] pointer-events-none tracking-tighter">
+     </motion.div>
+     <motion.div animate={{ rotate: -360 }} transition={{ duration: 180, repeat: Infinity, ease: 'linear' }} className="absolute right-[8%] bottom-[25%] text-slate-900/[0.03] dark:text-white/[0.03] font-black text-7xl select-none -z-10 blur-[2px] pointer-events-none tracking-tighter">
         PROTOCOL
-     </MotionComponent.div>
-     <MotionComponent.div animate={{ y: [-20, 20, -20] }} transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }} className="absolute left-[20%] bottom-[30%] text-cyan-600/5 dark:text-cyan-500/5 font-black text-5xl select-none -z-10 transform -rotate-12 pointer-events-none">
+     </motion.div>
+     <motion.div animate={{ y: [-20, 20, -20] }} transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }} className="absolute left-[20%] bottom-[30%] text-cyan-600/5 dark:text-cyan-500/5 font-black text-5xl select-none -z-10 transform -rotate-12 pointer-events-none">
         GAS
-     </MotionComponent.div>
+     </motion.div>
   </div>
 )
 }
 
 // Floating particles component
 const FloatingParticle = ({ delay, duration, x, y }: { delay: number; duration: number; x: number; y: number }) => {
-  const [MotionComponent, setMotionComponent] = useState<any>(null)
-
-  useEffect(() => {
-    import('framer-motion').then(mod => {
-      setMotionComponent(mod.motion)
-    })
-  }, [])
-
-  if (!MotionComponent) {
-    return (
-      <div
-        className="absolute w-1 h-1 bg-gradient-to-r from-cyan-400 to-purple-500 rounded-full opacity-20"
-        style={{ left: `${x}%`, top: `${y}%` }}
-      />
-    )
-  }
-
   return (
-    <MotionComponent.div
+    <motion.div
       className="absolute w-1 h-1 bg-gradient-to-r from-cyan-400 to-purple-500 rounded-full"
       style={{ left: `${x}%`, top: `${y}%` }}
       animate={{
@@ -314,42 +247,22 @@ const FloatingParticle = ({ delay, duration, x, y }: { delay: number; duration: 
 
 // Magnetic button component
 const MagneticButton = ({ children, onClick, className }: { children: React.ReactNode; onClick: () => void; className?: string }) => {
-  const [motionValues, setMotionValues] = useState<any>(null)
-
-  useEffect(() => {
-    import('framer-motion').then(mod => {
-      const x = mod.useMotionValue(0)
-      const y = mod.useMotionValue(0)
-      const springX = mod.useSpring(x, { stiffness: 300, damping: 20 })
-      const springY = mod.useSpring(y, { stiffness: 300, damping: 20 })
-
-      setMotionValues({ x, y, springX, springY })
-    })
-  }, [])
+  const x = useMotionValue(0)
+  const y = useMotionValue(0)
+  const springX = useSpring(x, { stiffness: 300, damping: 20 })
+  const springY = useSpring(y, { stiffness: 300, damping: 20 })
 
   const handleMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (!motionValues) return
-
     const rect = e.currentTarget.getBoundingClientRect()
     const centerX = rect.left + rect.width / 2
     const centerY = rect.top + rect.height / 2
-    motionValues.x.set((e.clientX - centerX) * 0.15)
-    motionValues.y.set((e.clientY - centerY) * 0.15)
+    x.set((e.clientX - centerX) * 0.15)
+    y.set((e.clientY - centerY) * 0.15)
   }
 
   const handleMouseLeave = () => {
-    if (!motionValues) return
-
-    motionValues.x.set(0)
-    motionValues.y.set(0)
-  }
-
-  if (!motionValues) {
-    return (
-      <button onClick={onClick} className={className}>
-        {children}
-      </button>
-    )
+    x.set(0)
+    y.set(0)
   }
 
   return (
@@ -357,7 +270,7 @@ const MagneticButton = ({ children, onClick, className }: { children: React.Reac
       onClick={onClick}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      style={{ x: motionValues.springX, y: motionValues.springY }}
+      style={{ x: springX, y: springY }}
       className={className}
       whileTap={{ scale: 0.95 }}
     >
@@ -370,13 +283,6 @@ const MagneticButton = ({ children, onClick, className }: { children: React.Reac
 const GlowCard = ({ children, className, glowColor = "cyan" }: { children: React.ReactNode; className?: string; glowColor?: string }) => {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
   const [isHovered, setIsHovered] = useState(false)
-  const [MotionComponent, setMotionComponent] = useState<any>(null)
-
-  useEffect(() => {
-    import('framer-motion').then(mod => {
-      setMotionComponent(mod.motion)
-    })
-  }, [])
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -395,31 +301,8 @@ const GlowCard = ({ children, className, glowColor = "cyan" }: { children: React
     blue: "rgba(59, 130, 246, 0.15)",
   }
 
-  if (!MotionComponent) {
-    return (
-      <div
-        className={`relative overflow-hidden ${className}`}
-        onMouseMove={handleMouseMove}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
-        {isHovered && (
-          <div
-            className="absolute pointer-events-none w-[300px] h-[300px] rounded-full blur-[80px]"
-            style={{
-              background: glowColors[glowColor] || glowColors.cyan,
-              left: mousePosition.x - 150,
-              top: mousePosition.y - 150,
-            }}
-          />
-        )}
-        {children}
-      </div>
-    )
-  }
-
   return (
-    <MotionComponent.div
+    <motion.div
       className={`relative overflow-hidden ${className}`}
       onMouseMove={handleMouseMove}
       onMouseEnter={() => setIsHovered(true)}
@@ -428,7 +311,7 @@ const GlowCard = ({ children, className, glowColor = "cyan" }: { children: React
       transition={{ duration: 0.3, ease: "easeOut" }}
     >
       {isHovered && (
-        <MotionComponent.div
+        <motion.div
           className="absolute pointer-events-none w-[300px] h-[300px] rounded-full blur-[80px]"
           style={{
             background: glowColors[glowColor] || glowColors.cyan,
@@ -441,7 +324,7 @@ const GlowCard = ({ children, className, glowColor = "cyan" }: { children: React
         />
       )}
       {children}
-    </MotionComponent.div>
+    </motion.div>
   )
 }
 
@@ -600,7 +483,7 @@ export default function LandingPage() {
       <div className="min-h-screen bg-slate-50 dark:bg-[#030308] text-slate-900 dark:text-white selection:bg-cyan-500/30 font-sans overflow-x-hidden transition-colors duration-300">
       {/* Animated background gradient */}
       <div className="fixed inset-0 pointer-events-none">
-        <motion.div
+        <MotionDiv
           className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-pink-500/10 rounded-full blur-[150px] mix-blend-multiply dark:mix-blend-normal opacity-50 dark:opacity-100"
           animate={{
             x: [0, 100, 0],
@@ -609,7 +492,7 @@ export default function LandingPage() {
           }}
           transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
         />
-        <motion.div
+        <MotionDiv
           className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-cyan-500/10 rounded-full blur-[150px] mix-blend-multiply dark:mix-blend-normal opacity-50 dark:opacity-100"
           animate={{
             x: [0, -80, 0],
@@ -639,24 +522,24 @@ export default function LandingPage() {
       {/* 2. Hero Section */}
       <section className="relative pt-24 sm:pt-32 lg:pt-40 pb-16 sm:pb-24 px-4 sm:px-6 overflow-hidden">
         <DashboardPreview />
-        <motion.div
+        <MotionDiv
           className="max-w-5xl mx-auto text-center space-y-10 relative z-10"
           variants={containerVariants}
           initial="hidden"
           animate="visible"
         >
-          <motion.div variants={itemVariants} className="flex justify-center">
-            <motion.div
+          <MotionDiv variants={itemVariants} className="flex justify-center">
+            <MotionDiv
               className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500/10 to-purple-500/10 border border-cyan-500/20 rounded-full"
               animate={{ boxShadow: ["0 0 20px rgba(34,211,238,0.1)", "0 0 40px rgba(34,211,238,0.2)", "0 0 20px rgba(34,211,238,0.1)"] }}
               transition={{ duration: 2, repeat: Infinity }}
             >
               <Sparkles className="w-4 h-4 text-cyan-500 dark:text-cyan-400" />
               <span className="text-xs font-semibold text-cyan-600 dark:text-cyan-300 tracking-wider uppercase">AI-Powered Trading</span>
-            </motion.div>
-          </motion.div>
+            </MotionDiv>
+          </MotionDiv>
 
-          <motion.div
+          <MotionDiv
             variants={itemVariants}
             className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter leading-[0.9]"
           >
@@ -664,7 +547,7 @@ export default function LandingPage() {
               YOUR VOICE-ACTIVATED
             </span>
             <br />
-            <motion.div
+            <MotionDiv
               className="bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 dark:from-cyan-400 dark:via-purple-400 dark:to-pink-400 bg-clip-text text-transparent"
               animate={{
                 backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
@@ -673,27 +556,27 @@ export default function LandingPage() {
               style={{ backgroundSize: "200% 200%" }}
             >
               TRADING ASSISTANT.
-            </motion.div>
-          </motion.div>
+            </MotionDiv>
+          </MotionDiv>
 
-          <motion.div
+          <MotionDiv
             variants={itemVariants}
             className="text-base sm:text-lg md:text-xl lg:text-2xl text-slate-500 dark:text-zinc-400 max-w-2xl mx-auto font-medium"
           >
             Execute complex, cross-chain cryptocurrency swaps using{" "}
             <span className="text-cyan-600 dark:text-cyan-400">simple natural language</span>.
-          </motion.div>
+          </MotionDiv>
 
-          <motion.div
+          <MotionDiv
             variants={itemVariants}
             className="relative group max-w-lg mx-auto"
           >
-            <motion.div
+            <MotionDiv
               className="absolute -inset-1 bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-pink-500/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
             />
             <div className="relative bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 p-5 rounded-2xl backdrop-blur-sm shadow-xl dark:shadow-none">
               <div className="flex items-center gap-2 mb-2">
-                <motion.div
+                <MotionDiv
                   className="w-2 h-2 rounded-full bg-cyan-500 dark:bg-cyan-400"
                   animate={{ scale: [1, 1.3, 1] }}
                   transition={{ duration: 1.5, repeat: Infinity }}
@@ -704,14 +587,14 @@ export default function LandingPage() {
                 &ldquo;Swap half of my MATIC on Polygon for 50 USDC on Arbitrum.&rdquo;
               </p>
             </div>
-          </motion.div>
+          </MotionDiv>
 
-          <motion.div variants={itemVariants} className="pt-4">
+          <MotionDiv variants={itemVariants} className="pt-4">
             <MagneticButton
               onClick={handleAccess}
               className="group relative px-8 sm:px-12 py-4 sm:py-5 bg-gradient-to-r from-cyan-500 via-purple-600 to-pink-600 rounded-2xl font-black text-lg sm:text-xl overflow-hidden"
             >
-              <motion.div
+              <MotionDiv
                 className="absolute inset-0 bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500"
                 animate={{
                   x: ["-100%", "100%"],
@@ -721,18 +604,18 @@ export default function LandingPage() {
               />
               <span className="relative flex items-center gap-2">
                 Start Trading Now
-                <motion.div
+                <MotionDiv
                   animate={{ x: [0, 5, 0] }}
                   transition={{ duration: 1.5, repeat: Infinity }}
                 >
                   <ArrowRight className="w-5 h-5" />
-                </motion.div>
+                </MotionDiv>
               </span>
             </MagneticButton>
-          </motion.div>
+          </MotionDiv>
 
           {/* Floating stats */}
-          <motion.div
+          <MotionDiv
             variants={itemVariants}
             className="flex flex-wrap justify-center gap-8 pt-8"
           >
@@ -741,7 +624,7 @@ export default function LandingPage() {
               { value: "40+", label: "Chains" },
               { value: "0%", label: "Platform Fees" },
             ].map((stat, i) => (
-              <motion.div
+              <MotionDiv
                 key={i}
                 className="text-center"
                 whileHover={{ y: -5 }}
@@ -750,15 +633,15 @@ export default function LandingPage() {
                   {stat.value}
                 </div>
                 <div className="text-xs text-slate-500 dark:text-zinc-500 uppercase tracking-wider">{stat.label}</div>
-              </motion.div>
+              </MotionDiv>
             ))}
-          </motion.div>
-        </motion.div>
+          </MotionDiv>
+        </MotionDiv>
       </section>
 
       {/* 3. Features Grid */}
       <section className="relative max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
-        <motion.div
+        <MotionDiv
           className="text-center mb-16"
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -769,9 +652,9 @@ export default function LandingPage() {
             <span className="bg-gradient-to-r from-cyan-600 to-purple-600 dark:from-cyan-400 dark:to-purple-400 bg-clip-text text-transparent">POWERFUL</span> FEATURES
           </h2>
           <p className="text-slate-600 dark:text-zinc-500 max-w-md mx-auto">Everything you need for seamless cross-chain trading</p>
-        </motion.div>
+        </MotionDiv>
 
-        <motion.div
+        <MotionDiv
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
           variants={containerVariants}
           initial="hidden"
@@ -779,26 +662,26 @@ export default function LandingPage() {
           viewport={{ once: true }}
         >
           {features.map((feature, idx) => (
-            <motion.div key={idx} variants={itemVariants}>
+            <MotionDiv key={idx} variants={itemVariants}>
               <GlowCard
                 className="h-full p-8 bg-white dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 rounded-3xl backdrop-blur-sm shadow-xl dark:shadow-none"
                 glowColor={feature.color}
               >
                 <div className="relative z-10 space-y-4">
-                  <motion.div
+                  <MotionDiv
                     className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.bgClass} flex items-center justify-center`}
                     whileHover={{ rotate: [0, -10, 10, 0] }}
                     transition={{ duration: 0.5 }}
                   >
                     <feature.icon className={`w-7 h-7 ${feature.textClass}`} />
-                  </motion.div>
+                  </MotionDiv>
                   <h3 className="text-xl font-bold text-slate-900 dark:text-white">{feature.title}</h3>
                   <p className="text-slate-600 dark:text-zinc-500 text-sm leading-relaxed">{feature.desc}</p>
                 </div>
               </GlowCard>
-            </motion.div>
+            </MotionDiv>
           ))}
-        </motion.div>
+        </MotionDiv>
       </section>
 
       {/* 4. How it Works */}

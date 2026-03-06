@@ -1,6 +1,5 @@
 import '@testing-library/jest-dom/vitest';
 import { beforeAll, afterAll, vi, afterEach } from 'vitest';
-import * as React from 'react';
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {

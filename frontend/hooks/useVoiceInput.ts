@@ -12,16 +12,26 @@ declare global {
 
 export type VoiceInputMethod = 'speech-api' | 'media-recorder' | null;
 
+export interface BrowserCompatibility {
+  hasSpeechAPI: boolean;
+  hasMediaRecorder: boolean;
+  hasGetUserMedia: boolean;
+  recommendedMethod: VoiceInputMethod;
+  warnings: string[];
+}
+
 export interface UseVoiceInputReturn {
   isListening: boolean;
   transcript: string;
   interimTranscript: string;
   isSupported: boolean;
   inputMethod: VoiceInputMethod;
+  compatibility: BrowserCompatibility;
   startRecording: () => Promise<void>;
   stopRecording: () => Promise<Blob | null>;
   error: string | null;
   resetTranscript: () => void;
+  retryCount: number;
 }
 
 interface VoiceInputConfig {
@@ -36,8 +46,17 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
   const [isSupported, setIsSupported] = useState(true);
   const [inputMethod, setInputMethod] = useState<VoiceInputMethod>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const [compatibility, setCompatibility] = useState<BrowserCompatibility>({
+    hasSpeechAPI: false,
+    hasMediaRecorder: false,
+    hasGetUserMedia: false,
+    recommendedMethod: null,
+    warnings: [],
+  });
 
   // Refs for Speech Recognition
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
   const hasSpeechApi = useRef(false);
 
@@ -46,18 +65,57 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Check support on mount
+  // Retry configuration
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 1000; // 1 second
+
+  // Check support on mount and detect browser compatibility
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    hasSpeechApi.current = !!SpeechRecognition;
+    const hasSpeech = !!SpeechRecognition;
+    hasSpeechApi.current = hasSpeech;
 
-    // We support voice input if either Speech API or MediaRecorder is available
-    const hasMediaRecorder = typeof MediaRecorder !== 'undefined';
-    const hasGetUserMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    const hasMediaRec = typeof MediaRecorder !== 'undefined';
+    const hasGetMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 
-    setIsSupported(hasSpeechApi.current || (hasMediaRecorder && hasGetUserMedia));
+    const warnings: string[] = [];
+    let recommendedMethod: VoiceInputMethod = null;
+
+    // Determine best method and warnings
+    if (hasSpeech) {
+      recommendedMethod = 'speech-api';
+      // Check for webkit prefix (Safari/older Chrome)
+      if (!window.SpeechRecognition && window.webkitSpeechRecognition) {
+        warnings.push('Using webkit speech recognition (limited browser support)');
+      }
+    } else if (hasMediaRec && hasGetMedia) {
+      recommendedMethod = 'media-recorder';
+      warnings.push('Real-time transcription unavailable. Using audio recording fallback.');
+    } else {
+      warnings.push('Voice input not supported in this browser. Please use Chrome, Edge, or Safari.');
+    }
+
+    // Browser-specific warnings
+    const userAgent = navigator.userAgent.toLowerCase();
+    if (userAgent.includes('firefox')) {
+      warnings.push('Firefox has limited voice support. Chrome or Edge recommended.');
+    }
+    if (userAgent.includes('mobile') || userAgent.includes('android') || userAgent.includes('iphone')) {
+      warnings.push('Mobile voice input may require additional permissions.');
+    }
+
+    const compat: BrowserCompatibility = {
+      hasSpeechAPI: hasSpeech,
+      hasMediaRecorder: hasMediaRec,
+      hasGetUserMedia: hasGetMedia,
+      recommendedMethod,
+      warnings,
+    };
+
+    setCompatibility(compat);
+    setIsSupported(hasSpeech || (hasMediaRec && hasGetMedia));
   }, []);
 
   // Initialize Speech Recognition
@@ -80,7 +138,7 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
       setIsListening(false);
     };
 
-    recognitionRef.current.onresult = (event: any) => {
+    recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
       let finalText = '';
       let interimText = '';
 
@@ -105,7 +163,7 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
       }
     };
 
-    recognitionRef.current.onerror = (event: any) => {
+    recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error('Speech recognition error:', event.error);
 
       // Don't treat 'no-speech' as a hard error, just stop listening
@@ -115,6 +173,8 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
       }
 
       let errorMessage = 'Voice input error';
+      let shouldFallback = false;
+
       switch (event.error) {
         case 'audio-capture':
           errorMessage = 'No microphone found. Please check your microphone connection.';
@@ -123,7 +183,12 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
           errorMessage = 'Microphone permission denied. Please allow microphone access.';
           break;
         case 'network':
-          errorMessage = 'Network error. Falling back to alternative method...';
+          errorMessage = 'Network error. Trying alternative method...';
+          shouldFallback = true;
+          break;
+        case 'service-not-allowed':
+          errorMessage = 'Speech service unavailable. Switching to audio recording...';
+          shouldFallback = true;
           break;
         case 'aborted':
           // User aborted, no need for error message
@@ -131,11 +196,23 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
           return;
         default:
           errorMessage = `Voice input error: ${event.error}`;
+          shouldFallback = true;
       }
 
       setError(errorMessage);
       config.onError?.(errorMessage);
       setIsListening(false);
+
+      // Automatic fallback to MediaRecorder if available
+      if (shouldFallback && compatibility.hasMediaRecorder && compatibility.hasGetUserMedia) {
+        console.log('Attempting automatic fallback to MediaRecorder...');
+        setTimeout(async () => {
+          const success = await startMediaRecorder();
+          if (success) {
+            setError('Switched to audio recording mode');
+          }
+        }, 500);
+      }
     };
 
     return true;
@@ -161,7 +238,7 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
     return '';
   }, []);
 
-  // Start MediaRecorder fallback
+  // Start MediaRecorder fallback with audio quality validation
   const startMediaRecorder = useCallback(async (): Promise<boolean> => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -170,14 +247,34 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
           channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true,
+          autoGainControl: true, // Added for better audio quality
         }
       });
 
       streamRef.current = stream;
       audioChunksRef.current = [];
 
+      // Validate audio stream
+      const audioTracks = stream.getAudioTracks();
+      if (audioTracks.length === 0) {
+        throw new Error('No audio tracks available');
+      }
+
+      const audioTrack = audioTracks[0];
+      const settings = audioTrack.getSettings();
+      console.log('Audio track settings:', settings);
+
+      // Warn if audio quality is poor
+      if (settings.sampleRate && settings.sampleRate < 8000) {
+        console.warn('Low sample rate detected:', settings.sampleRate);
+      }
+
       const mimeType = getBestMimeType();
-      const options: MediaRecorderOptions = mimeType ? { mimeType } : {};
+      if (!mimeType) {
+        throw new Error('No supported audio format found');
+      }
+
+      const options: MediaRecorderOptions = { mimeType };
 
       mediaRecorderRef.current = new MediaRecorder(stream, options);
 
@@ -192,6 +289,7 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
         setError(null);
         setInputMethod('media-recorder');
         setTranscript(''); // Reset transcript for media recorder mode
+        setRetryCount(0); // Reset retry count on successful start
       };
 
       mediaRecorderRef.current.onstop = () => {
@@ -206,6 +304,15 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
         setError(errorMessage);
         config.onError?.(errorMessage);
         setIsListening(false);
+
+        // Retry logic
+        if (retryCount < MAX_RETRIES) {
+          console.log(`Retrying MediaRecorder (attempt ${retryCount + 1}/${MAX_RETRIES})...`);
+          setRetryCount(prev => prev + 1);
+          setTimeout(() => {
+            startMediaRecorder();
+          }, RETRY_DELAY * (retryCount + 1)); // Exponential backoff
+        }
       };
 
       // Start recording
@@ -214,12 +321,25 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
       return true;
     } catch (err) {
       console.error('Failed to start MediaRecorder:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Could not access microphone';
+      let errorMessage = 'Could not access microphone';
+
+      if (err instanceof Error) {
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          errorMessage = 'Microphone permission denied. Please allow access in your browser settings.';
+        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+          errorMessage = 'No microphone found. Please connect a microphone and try again.';
+        } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+          errorMessage = 'Microphone is already in use by another application.';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+
       setError(errorMessage);
       config.onError?.(errorMessage);
       return false;
     }
-  }, [config, getBestMimeType]);
+  }, [config, getBestMimeType, retryCount]);
 
   // Start recording - tries Speech API first, falls back to MediaRecorder
   const startRecording = useCallback(async () => {
@@ -321,10 +441,12 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
     interimTranscript,
     isSupported,
     inputMethod,
+    compatibility,
     startRecording,
     stopRecording,
     error,
-    resetTranscript
+    resetTranscript,
+    retryCount
   };
 };
 
