@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { TrendingUp, Search, Filter, ArrowUpRight, Shield, Zap, ChevronDown } from 'lucide-react';
-import Link from 'next/link';
+import { TrendingUp, Search, ArrowUpRight, Shield, Zap } from 'lucide-react';
+import Navbar from '@/components/Navbar';
+import Footer from '@/components/Footer';
 
 interface YieldPool {
   chain: string;
@@ -69,176 +70,172 @@ export default function YieldScoutPage() {
     .sort((a, b) => sortBy === 'apy' ? b.apy - a.apy : b.tvlUsd - a.tvlUsd);
 
   const getRiskLevel = (apy: number): { level: string; color: string } => {
-    if (apy < 5) return { level: 'Low', color: 'text-green-400' };
-    if (apy < 15) return { level: 'Medium', color: 'text-yellow-400' };
-    return { level: 'High', color: 'text-red-400' };
+    if (apy < 5) return { level: 'Low', color: 'text-green-600 dark:text-green-400' };
+    if (apy < 15) return { level: 'Medium', color: 'text-yellow-600 dark:text-yellow-400' };
+    return { level: 'High', color: 'text-red-600 dark:text-red-400' };
   };
 
   return (
-    <main className="min-h-screen bg-[#050505] text-white">
-      {/* Header */}
-      <div className="border-b border-white/10 bg-zinc-900/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-blue-400" />
+    <>
+      <Navbar />
+      <main className="min-h-screen bg-white dark:bg-[#050505] text-slate-900 dark:text-white pt-20">
+        {/* Hero Section */}
+        <div className="border-b border-slate-200 dark:border-white/10 bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-zinc-900/50 dark:via-[#050505] dark:to-zinc-900/50">
+          <div className="max-w-7xl mx-auto px-6 py-12">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-14 h-14 bg-blue-500/10 dark:bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center justify-center">
+                <TrendingUp className="w-7 h-7 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <h1 className="text-xl font-bold">Yield Scout</h1>
-                <p className="text-xs text-zinc-400">Discover the best DeFi yields</p>
+                <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Yield Scout</h1>
+                <p className="text-sm text-slate-600 dark:text-zinc-400">Discover the best DeFi yields across multiple chains</p>
               </div>
             </div>
-            <Link
-              href="/"
-              className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm transition-colors"
-            >
-              ← Back
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="bg-zinc-900/50 border border-white/10 rounded-xl p-6">
-            <div className="flex items-center gap-3 mb-2">
-              <Zap className="w-5 h-5 text-blue-400" />
-              <span className="text-sm text-zinc-400">Total Pools</span>
-            </div>
-            <p className="text-3xl font-bold">{pools.length}</p>
-          </div>
-          <div className="bg-zinc-900/50 border border-white/10 rounded-xl p-6">
-            <div className="flex items-center gap-3 mb-2">
-              <TrendingUp className="w-5 h-5 text-green-400" />
-              <span className="text-sm text-zinc-400">Avg APY</span>
-            </div>
-            <p className="text-3xl font-bold">
-              {pools.length > 0 ? (pools.reduce((sum, p) => sum + p.apy, 0) / pools.length).toFixed(2) : '0'}%
-            </p>
-          </div>
-          <div className="bg-zinc-900/50 border border-white/10 rounded-xl p-6">
-            <div className="flex items-center gap-3 mb-2">
-              <Shield className="w-5 h-5 text-purple-400" />
-              <span className="text-sm text-zinc-400">Total TVL</span>
-            </div>
-            <p className="text-3xl font-bold">
-              ${pools.length > 0 ? (pools.reduce((sum, p) => sum + p.tvlUsd, 0) / 1000000).toFixed(1) : '0'}M
-            </p>
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="bg-zinc-900/50 border border-white/10 rounded-xl p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-              <input
-                type="text"
-                placeholder="Search protocols..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-zinc-800 border border-white/10 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-              />
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          {/* Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div className="bg-white dark:bg-zinc-900/50 border border-slate-200 dark:border-white/10 rounded-xl p-6 shadow-sm dark:shadow-none">
+              <div className="flex items-center gap-3 mb-2">
+                <Zap className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                <span className="text-sm text-slate-600 dark:text-zinc-400">Total Pools</span>
+              </div>
+              <p className="text-3xl font-bold text-slate-900 dark:text-white">{pools.length}</p>
             </div>
-
-            {/* Chain Filter */}
-            <select
-              value={selectedChain}
-              onChange={(e) => setSelectedChain(e.target.value)}
-              className="px-4 py-2 bg-zinc-800 border border-white/10 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-            >
-              {chains.map(chain => (
-                <option key={chain} value={chain}>{chain === 'all' ? 'All Chains' : chain}</option>
-              ))}
-            </select>
-
-            {/* Asset Filter */}
-            <select
-              value={selectedAsset}
-              onChange={(e) => setSelectedAsset(e.target.value)}
-              className="px-4 py-2 bg-zinc-800 border border-white/10 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-            >
-              {assets.map(asset => (
-                <option key={asset} value={asset}>{asset === 'all' ? 'All Assets' : asset}</option>
-              ))}
-            </select>
-
-            {/* Sort */}
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as 'apy' | 'tvl')}
-              className="px-4 py-2 bg-zinc-800 border border-white/10 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-            >
-              <option value="apy">Sort by APY</option>
-              <option value="tvl">Sort by TVL</option>
-            </select>
+            <div className="bg-white dark:bg-zinc-900/50 border border-slate-200 dark:border-white/10 rounded-xl p-6 shadow-sm dark:shadow-none">
+              <div className="flex items-center gap-3 mb-2">
+                <TrendingUp className="w-5 h-5 text-green-600 dark:text-green-400" />
+                <span className="text-sm text-slate-600 dark:text-zinc-400">Avg APY</span>
+              </div>
+              <p className="text-3xl font-bold text-slate-900 dark:text-white">
+                {pools.length > 0 ? (pools.reduce((sum, p) => sum + p.apy, 0) / pools.length).toFixed(2) : '0'}%
+              </p>
+            </div>
+            <div className="bg-white dark:bg-zinc-900/50 border border-slate-200 dark:border-white/10 rounded-xl p-6 shadow-sm dark:shadow-none">
+              <div className="flex items-center gap-3 mb-2">
+                <Shield className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                <span className="text-sm text-slate-600 dark:text-zinc-400">Total TVL</span>
+              </div>
+              <p className="text-3xl font-bold text-slate-900 dark:text-white">
+                ${pools.length > 0 ? (pools.reduce((sum, p) => sum + p.tvlUsd, 0) / 1000000).toFixed(1) : '0'}M
+              </p>
+            </div>
           </div>
-        </div>
 
-        {/* Pools List */}
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          {/* Filters */}
+          <div className="bg-white dark:bg-zinc-900/50 border border-slate-200 dark:border-white/10 rounded-xl p-6 mb-6 shadow-sm dark:shadow-none">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-zinc-400" />
+                <input
+                  type="text"
+                  placeholder="Search protocols..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              {/* Chain Filter */}
+              <select
+                value={selectedChain}
+                onChange={(e) => setSelectedChain(e.target.value)}
+                className="px-4 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+              >
+                {chains.map(chain => (
+                  <option key={chain} value={chain}>{chain === 'all' ? 'All Chains' : chain}</option>
+                ))}
+              </select>
+
+              {/* Asset Filter */}
+              <select
+                value={selectedAsset}
+                onChange={(e) => setSelectedAsset(e.target.value)}
+                className="px-4 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+              >
+                {assets.map(asset => (
+                  <option key={asset} value={asset}>{asset === 'all' ? 'All Assets' : asset}</option>
+                ))}
+              </select>
+
+              {/* Sort */}
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as 'apy' | 'tvl')}
+                className="px-4 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+              >
+                <option value="apy">Sort by APY</option>
+                <option value="tvl">Sort by TVL</option>
+              </select>
+            </div>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {filteredPools.map((pool, index) => {
-              const risk = getRiskLevel(pool.apy);
-              return (
-                <div
-                  key={pool.poolId || index}
-                  className="bg-zinc-900/50 border border-white/10 rounded-xl p-6 hover:border-blue-500/50 transition-all group"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center text-white font-bold">
-                        {pool.symbol.slice(0, 2)}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-bold text-lg">{pool.project}</h3>
-                          <span className="px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded text-xs text-blue-400">
-                            {pool.chain}
-                          </span>
+
+          {/* Pools List */}
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredPools.map((pool, index) => {
+                const risk = getRiskLevel(pool.apy);
+                return (
+                  <div
+                    key={pool.poolId || index}
+                    className="bg-white dark:bg-zinc-900/50 border border-slate-200 dark:border-white/10 rounded-xl p-6 hover:border-blue-500/50 hover:shadow-lg dark:hover:shadow-none transition-all group shadow-sm dark:shadow-none"
+                  >
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                      <div className="flex items-center gap-4 flex-1 min-w-[200px]">
+                        <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center text-white font-bold shrink-0">
+                          {pool.symbol.slice(0, 2)}
                         </div>
-                        <p className="text-sm text-zinc-400">{pool.symbol} Pool</p>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <h3 className="font-bold text-lg text-slate-900 dark:text-white">{pool.project}</h3>
+                            <span className="px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded text-xs text-blue-600 dark:text-blue-400">
+                              {pool.chain}
+                            </span>
+                          </div>
+                          <p className="text-sm text-slate-600 dark:text-zinc-400">{pool.symbol} Pool</p>
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="flex items-center gap-8">
-                      <div className="text-right">
-                        <p className="text-sm text-zinc-400 mb-1">APY</p>
-                        <p className="text-2xl font-bold text-green-400">{pool.apy.toFixed(2)}%</p>
+                      <div className="flex items-center gap-8 flex-wrap">
+                        <div className="text-right">
+                          <p className="text-sm text-slate-600 dark:text-zinc-400 mb-1">APY</p>
+                          <p className="text-2xl font-bold text-green-600 dark:text-green-400">{pool.apy.toFixed(2)}%</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-slate-600 dark:text-zinc-400 mb-1">TVL</p>
+                          <p className="text-lg font-semibold text-slate-900 dark:text-white">${(pool.tvlUsd / 1000000).toFixed(2)}M</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-slate-600 dark:text-zinc-400 mb-1">Risk</p>
+                          <p className={`text-sm font-semibold ${risk.color}`}>{risk.level}</p>
+                        </div>
+                        <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-lg text-sm font-semibold text-white transition-colors flex items-center gap-2 group-hover:scale-105">
+                          Deposit
+                          <ArrowUpRight className="w-4 h-4" />
+                        </button>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm text-zinc-400 mb-1">TVL</p>
-                        <p className="text-lg font-semibold">${(pool.tvlUsd / 1000000).toFixed(2)}M</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm text-zinc-400 mb-1">Risk</p>
-                        <p className={`text-sm font-semibold ${risk.color}`}>{risk.level}</p>
-                      </div>
-                      <button className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 group-hover:scale-105">
-                        Deposit
-                        <ArrowUpRight className="w-4 h-4" />
-                      </button>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
 
-            {filteredPools.length === 0 && (
-              <div className="text-center py-20">
-                <p className="text-zinc-400">No pools found matching your filters</p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </main>
+              {filteredPools.length === 0 && (
+                <div className="text-center py-20">
+                  <p className="text-slate-600 dark:text-zinc-400">No pools found matching your filters</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </main>
+      <Footer />
+    </>
   );
 }
