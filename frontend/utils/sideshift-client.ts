@@ -126,7 +126,7 @@ export async function createCheckout(
  */
 export async function getCoins(): Promise<Coin[]> {
   try {
-    const response = await axios.get(`${SIDESHIFT_CONFIG.BASE_URL}/coins`);
+    const response = await axios.get('/api/sideshift/coins');
     return response.data;
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: { message?: string } } } };
