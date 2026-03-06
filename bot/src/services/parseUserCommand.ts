@@ -26,7 +26,7 @@ const REGEX_MULTI_SOURCE =
 const REGEX_AMBIGUOUS_OR = /\b(or|either|maybe)\b/i;
 const REGEX_MULTIPLE_DESTINATIONS = /(?:to|into|for)\s+([A-Z]{2,10})(?:\s+(?:or|and|\+|,)\s+([A-Z]{2,10}))+/i;
 const REGEX_CONDITIONAL = /\b(if|when|only\s+if|provided|assuming)\b/i;
-const REGEX_PRICE_CONDITION = /(?:price|value)\s*(?:is|goes|hits|reaches)?\s*(above|below|over|under|>|<|>=|<=)\s*\$?(\d+(?:\.\d+)?[kmb]?)/i;
+const REGEX_PRICE_CONDITION = /(?:price|value|[A-Z]{2,10})\s*(?:is|goes|hits|reaches|drops?|rises?|falls?)?\s*(above|below|over|under|>|<|>=|<=)\s*\$?(\d+(?:\.\d+)?[kmb]?)/i;
 
 // Enhanced abbreviation handling
 const COMMON_TYPOS = {
@@ -230,7 +230,7 @@ export async function parseUserCommand(
         const amountMatch = preprocessedInput.match(REGEX_AMOUNT_TOKEN);
         
         return buildSwapResult(originalInput, {
-          intent: 'swap',
+          intent: 'limit_order', // Changed from 'swap' to 'limit_order' for conditional orders
           fromAsset: tokenMatch?.[1] || (amountMatch?.[2]),
           toAsset: tokenMatch?.[3],
           amount: amountMatch ? parseScaledNumber(amountMatch[1]) : null,
