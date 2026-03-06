@@ -12,6 +12,7 @@ import {
   X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { authenticatedFetch } from '@/lib/api-client';
 
 interface PortfolioAsset {
   coin: string;
@@ -60,10 +61,11 @@ export default function PortfolioRebalance() {
   const fetchPortfolios = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/portfolio-targets');
+      const response = await authenticatedFetch('/api/portfolio-targets');
       if (!response.ok) throw new Error('Failed to fetch portfolios');
       const data = await response.json();
       setPortfolios(data);
+
       setError(null);
     } catch (err) {
       setError('Failed to load portfolios');
@@ -81,11 +83,12 @@ export default function PortfolioRebalance() {
   ) => {
     try {
       setSubmitting(true);
-      const response = await fetch('/api/portfolio-targets', {
+      const response = await authenticatedFetch('/api/portfolio-targets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, assets, driftThreshold, autoRebalance }),
       });
+
 
       if (!response.ok) {
         const data = await response.json();
@@ -104,11 +107,12 @@ export default function PortfolioRebalance() {
 
   const deletePortfolio = async (id: number) => {
     try {
-      const response = await fetch('/api/portfolio-targets', {
+      const response = await authenticatedFetch('/api/portfolio-targets', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
       });
+
 
       if (!response.ok) throw new Error('Failed to delete portfolio');
 
@@ -121,7 +125,7 @@ export default function PortfolioRebalance() {
 
   const togglePortfolio = async (id: number, isActive: boolean) => {
     try {
-      const response = await fetch('/api/portfolio-targets', {
+      const response = await authenticatedFetch('/api/portfolio-targets', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, isActive }),
@@ -139,7 +143,7 @@ export default function PortfolioRebalance() {
 
   const fetchHistory = async (portfolioId: number) => {
     try {
-      const response = await fetch(`/api/portfolio-targets?id=${portfolioId}`);
+      const response = await authenticatedFetch(`/api/portfolio-targets?id=${portfolioId}&history=true`);
       if (!response.ok) throw new Error('Failed to fetch history');
       const data = await response.json();
       setHistory(data.history || []);
