@@ -715,11 +715,7 @@ export default function AdminTableList() {
       {/* ── Top header ── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ background: '#1e3a5f', borderRadius: 8, padding: 8 }}>
-            <Database size={18} style={{ color: '#93c5fd' }} />
-          </div>
           <div>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#e4e4e7', margin: 0 }}>Neon Postgres Tables</h2>
             <p style={{ fontSize: 12, color: '#52525b', margin: 0 }}>
               {lastRefresh ? `Last updated ${lastRefresh.toLocaleTimeString()}` : 'Loading...'}
             </p>
