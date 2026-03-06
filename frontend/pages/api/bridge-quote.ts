@@ -4,11 +4,11 @@
  */
 
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getAggregatedQuotes, getSingleBridgeQuote, getSupportedBridgeList } from '../../shared/services/bridge-aggregator';
-import { optimizeRoutes, compareRoutes } from '../../shared/services/route-optimizer';
-import { DEFAULT_BRIDGE_PREFERENCES, BridgePreferences } from '../../shared/config/bridge-config';
-import { csrfGuard } from '@/lib/csrf';
-import logger from '@/lib/logger';
+import { getAggregatedQuotes, getSingleBridgeQuote, getSupportedBridgeList } from '../../../shared/services/bridge-aggregator';
+import { optimizeRoutes, compareRoutes } from '../../../shared/services/route-optimizer';
+import { DEFAULT_BRIDGE_PREFERENCES, BridgePreferences } from '../../../shared/config/bridge-config';
+import { csrfGuard } from '../../lib/csrf';
+import logger from '../../lib/logger';
 
 export interface BridgeQuoteRequest {
   fromChain: string;

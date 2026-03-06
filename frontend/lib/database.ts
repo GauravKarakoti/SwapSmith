@@ -33,6 +33,8 @@ export {
   rewardsLog,
   watchlist,
   priceAlerts,
+  portfolioTargets,
+  rebalanceHistory,
 };
 
 export type User = typeof users.$inferSelect;

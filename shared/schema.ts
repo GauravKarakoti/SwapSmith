@@ -660,3 +660,99 @@ export type StrategyPerformance = typeof strategyPerformance.$inferSelect;
 export type NewStrategyPerformance = typeof strategyPerformance.$inferInsert;
 export type StrategyTrade = typeof strategyTrades.$inferSelect;
 export type NewStrategyTrade = typeof strategyTrades.$inferInsert;
+
+// --- PORTFOLIO TARGET SCHEMAS ---
+
+export const portfolioTargets = pgTable('portfolio_targets', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  telegramId: bigint('telegram_id', { mode: 'number' }),
+  name: text('name').notNull(),
+  assets: jsonb('assets').notNull().default([]), // Array of {symbol, targetPercent, network}
+  driftThreshold: real('drift_threshold').notNull().default(5.0),
+  autoRebalance: boolean('auto_rebalance').notNull().default(false),
+  isActive: boolean('is_active').notNull().default(true),
+  lastRebalancedAt: timestamp('last_rebalanced_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => [
+  index("idx_portfolio_targets_user_id").on(table.userId),
+]);
+
+export const rebalanceHistory = pgTable('rebalance_history', {
+  id: serial('id').primaryKey(),
+  portfolioTargetId: integer('portfolio_target_id').notNull().references(() => portfolioTargets.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull(),
+  telegramId: bigint('telegram_id', { mode: 'number' }),
+  rebalanceType: text('rebalance_type'), // 'manual', 'auto', 'threshold'
+  triggerType: text('trigger_type'), // 'manual', 'auto', 'threshold'
+  previousAssets: jsonb('previous_assets'),
+  newAssets: jsonb('new_assets'),
+  swaps: jsonb('swaps').notNull().default([]), // Array of swap details
+  swapsExecuted: jsonb('swaps_executed').notNull().default([]), // Array of executed swaps
+  totalValue: text('total_value'),
+  totalPortfolioValue: text('total_portfolio_value'),
+  gasFee: text('gas_fee'),
+  totalFees: text('total_fees'),
+  status: text('status').notNull().default('pending'), // 'pending', 'completed', 'failed'
+  errorMessage: text('error_message'),
+  startedAt: timestamp('started_at'),
+  completedAt: timestamp('completed_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => [
+  index("idx_rebalance_history_portfolio_target_id").on(table.portfolioTargetId),
+  index("idx_rebalance_history_user_id").on(table.userId),
+]);
+
+// --- PORTFOLIO RELATIONS ---
+
+export const portfolioTargetsRelations = relations(portfolioTargets, ({many}) => ({
+  rebalanceHistory: many(rebalanceHistory),
+}));
+
+export const rebalanceHistoryRelations = relations(rebalanceHistory, ({one}) => ({
+  portfolioTarget: one(portfolioTargets, {
+    fields: [rebalanceHistory.portfolioTargetId],
+    references: [portfolioTargets.id],
+  }),
+}));
+
+// --- PORTFOLIO TYPES ---
+
+export type PortfolioTarget = typeof portfolioTargets.$inferSelect;
+export type NewPortfolioTarget = typeof portfolioTargets.$inferInsert;
+export type RebalanceHistory = typeof rebalanceHistory.$inferSelect;
+export type NewRebalanceHistory = typeof rebalanceHistory.$inferInsert;
+
+// --- TRAILING STOP ORDERS SCHEMA ---
+
+export const trailingStopOrders = pgTable('trailing_stop_orders', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  telegramId: bigint('telegram_id', { mode: 'number' }),
+  fromAsset: text('from_asset').notNull(),
+  fromNetwork: text('from_network'),
+  fromAmount: text('from_amount').notNull(),
+  toAsset: text('to_asset').notNull(),
+  toNetwork: text('to_network'),
+  trailingPercentage: real('trailing_percentage').notNull(),
+  peakPrice: text('peak_price'),
+  currentPrice: text('current_price'),
+  triggerPrice: text('trigger_price'),
+  settleAddress: text('settle_address'),
+  sideshiftOrderId: text('sideshift_order_id'),
+  isActive: boolean('is_active').notNull().default(true),
+  status: text('status').notNull().default('pending'), // 'pending', 'triggered', 'completed', 'failed'
+  error: text('error'),
+  lastCheckedAt: timestamp('last_checked_at'),
+  triggeredAt: timestamp('triggered_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => [
+  index("idx_trailing_stop_orders_user_id").on(table.userId),
+  index("idx_trailing_stop_orders_telegram_id").on(table.telegramId),
+  index("idx_trailing_stop_orders_is_active").on(table.isActive),
+  index("idx_trailing_stop_orders_status").on(table.status),
+]);
+
+export type TrailingStopOrder = typeof trailingStopOrders.$inferSelect;
+export type NewTrailingStopOrder = typeof trailingStopOrders.$inferInsert;

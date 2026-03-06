@@ -65,8 +65,8 @@ export class StargateAdapter extends BaseBridgeAdapter {
           `${this.config.apiBaseUrl}/quote`,
           {
             params: {
-              srcChainId,
-              dstChainId,
+              srcChainId: fromChainId,
+              dstChainId: toChainId,
               srcTokenAddress: request.fromToken,
               dstTokenAddress: request.toToken,
               amount: request.amount,

@@ -91,12 +91,13 @@ export async function getStrategies(options: StrategyFilterOptions = {}): Promis
   }
 
   if (search) {
-    conditions.push(
-      or(
-        like(tradingStrategies.name, `%${search}%`),
-        like(tradingStrategies.description, `%${search}%`)
-      )
+    const searchCondition = or(
+      like(tradingStrategies.name, `%${search}%`),
+      like(tradingStrategies.description, `%${search}%`)
     );
+    if (searchCondition) {
+      conditions.push(searchCondition);
+    }
   }
 
   const orderColumn = sortBy === 'createdAt' 
