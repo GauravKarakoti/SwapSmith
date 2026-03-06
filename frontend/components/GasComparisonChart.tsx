@@ -43,6 +43,7 @@ export default function GasComparisonChart({
 
   useEffect(() => {
     fetchComparison();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fromChain, toChain]);
 
   const fetchComparison = async () => {

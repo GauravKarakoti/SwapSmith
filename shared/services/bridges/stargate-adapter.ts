@@ -38,12 +38,6 @@ interface StargateQuoteResponse {
   toTokenAddress: string;
 }
 
-interface StargateOrderResponse {
-  txHash: string;
-  status: 'pending' | 'success' | 'failed';
-  message: string;
-}
-
 export class StargateAdapter extends BaseBridgeAdapter {
   private apiKey: string;
 

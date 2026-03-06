@@ -11,11 +11,9 @@ import {
   Star,
   GitFork,
   AlertCircle,
-  ArrowRight,
   Github,
   Code2,
   Users,
-  Terminal,
 } from 'lucide-react';
 
 /* ================================================================ */
