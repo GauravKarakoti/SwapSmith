@@ -182,7 +182,7 @@ export const trailingStopOrders = pgTable('trailing_stop_orders', {
   index("idx_trailing_stop_orders_is_active").on(table.isActive),
 ]);
 
-// --- SHARED SCHEMAS (used by both bot and frontend) ---
+// --- SHARED SCHEMAS (used by both bot and frontend) --- (Financial precision updated)
 
 export const coinPriceCache = pgTable('coin_price_cache', {
   id: serial('id').primaryKey(),
