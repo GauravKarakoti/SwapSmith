@@ -24,7 +24,7 @@ export default function AdminDatabasePage() {
     token.current = t
     const cached = sessionStorage.getItem('admin-info')
     if (cached) {
-      try { setAdminInfo(JSON.parse(cached)) } catch { /* ignore malformed cache */ }
+      try { setAdminInfo(JSON.parse(cached)) } catch (error) { console.error('Error parsing cached admin info:', error) }
     }
     setAuthChecked(true)
   }, [router])

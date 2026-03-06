@@ -154,7 +154,8 @@ export default function AdminDashboardPage() {
       } else {
         setError(data.error ?? 'Failed to load analytics.')
       }
-    } catch {
+    } catch (error) {
+      console.error('Error fetching analytics data:', error)
       setError('Network error. Please refresh.')
     } finally {
       setLoading(false)
@@ -164,7 +165,7 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     // Load cached admin info immediately
     const cached = sessionStorage.getItem('admin-info')
-    if (cached) { try { setAdminInfo(JSON.parse(cached)) } catch {} }
+    if (cached) { try { setAdminInfo(JSON.parse(cached)) } catch (error) { console.error('Error parsing cached admin info:', error) } }
     fetchAnalytics()
     // Auto-refresh every 60 s
     const t = setInterval(fetchAnalytics, 60_000)
