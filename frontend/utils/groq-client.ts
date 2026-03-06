@@ -300,7 +300,7 @@ export async function parseUserCommand(
       throw new Error("No response content from Groq");
     }
 
-    const parsed = safeParseJSON(content) as any;
+    const parsed = safeParseJSON(content) as Record<string, unknown>;
     if (!parsed) {
       throw new Error("Invalid JSON response from Groq");
     }
