@@ -136,7 +136,7 @@ export async function getUserPortfolioHoldings(
       if (!holdings[fromKey]) {
         holdings[fromKey] = { amount: 0, network: swap.fromNetwork };
       }
-      holdings[fromKey].amount += parseFloat(swap.fromAmount); // Convert string to number
+      holdings[fromKey].amount += parseFloat(swap.fromAmount.toString()); // Convert numeric to number
 
       // Subtract from holdings (to asset) - assuming they sold
       const toKey = `${swap.toAsset}-${swap.toNetwork}`;
@@ -226,7 +226,7 @@ export async function analyzePortfolioDrift(
 
       const currentPercentage = currentAsset?.percentage || 0;
       const drift = currentPercentage - targetAsset.targetPercentage;
-      const needsRebalance = Math.abs(drift) >= parseFloat(driftThreshold); // Convert string to number
+      const needsRebalance = Math.abs(drift) >= parseFloat(driftThreshold.toString()); // Convert numeric to number
 
       let suggestedAction: 'buy' | 'sell' | 'hold' = 'hold';
       let amountToTrade = 0;
@@ -263,8 +263,8 @@ export async function analyzePortfolioDrift(
           targetPercentage: 0,
           currentPercentage: currentAsset.percentage,
           drift: currentAsset.percentage,
-          needsRebalance: currentAsset.percentage >= parseFloat(driftThreshold), // Convert string to number
-          suggestedAction: currentAsset.percentage >= parseFloat(driftThreshold) ? 'sell' : 'hold', // Convert string to number
+          needsRebalance: currentAsset.percentage >= parseFloat(driftThreshold.toString()), // Convert numeric to number
+          suggestedAction: currentAsset.percentage >= parseFloat(driftThreshold.toString()) ? 'sell' : 'hold', // Convert numeric to number
           amountToTrade: currentAsset.value
         });
       }
