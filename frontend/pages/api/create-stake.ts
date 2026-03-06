@@ -145,7 +145,7 @@ async function createStakeHandler(req: NextApiRequest, res: NextApiResponse) {
       ]
     };
 
-    logger.info('Staking quote generated', quote);
+    logger.info('Staking quote generated', { ...quote });
 
     return res.status(200).json(quote);
 

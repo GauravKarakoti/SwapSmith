@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { sendPriceAlertEmail, sendWalletReminderEmail } from '@/lib/email';
+import { getActivePriceAlerts, getCachedPrice } from '@/lib/database';
 import logger from '@/lib/logger';
 
 // Store active cron jobs
@@ -49,21 +50,63 @@ export function scheduleNotification(schedule: NotificationSchedule) {
           break;
         
         case 'price':
-          // Fetch latest crypto prices and send alert
-          // This would integrate with your price API
-          const mockPrice = '45,231.50';
-          const mockChange = '+2.34';
-          await sendPriceAlertEmail(
-            schedule.userEmail,
-            schedule.userName,
-            'Bitcoin',
-            mockPrice,
-            mockChange
-          );
+          // Fetch user's active price alerts
+          const alerts = await getActivePriceAlerts(schedule.userId);
+          
+          if (alerts.length === 0) {
+            logger.info('No active price alerts for user', { userId: schedule.userId });
+            break;
+          }
+          
+          // Check each alert and send notification if triggered
+          for (const alert of alerts) {
+            try {
+              const priceData = await getCachedPrice(alert.coin, alert.network);
+              
+              if (!priceData || !priceData.usdPrice) {
+                logger.warn('No price data available for alert', {
+                  coin: alert.coin,
+                  network: alert.network
+                });
+                continue;
+              }
+              
+              const currentPrice = parseFloat(priceData.usdPrice);
+              const targetPrice = parseFloat(alert.targetPrice as string);
+              
+              // Calculate price change
+              const priceChange = ((currentPrice - targetPrice) / targetPrice * 100).toFixed(2);
+              const priceChangeStr = priceChange.startsWith('-') ? priceChange : `+${priceChange}`;
+              
+              // Send email with real price data
+              await sendPriceAlertEmail(
+                schedule.userEmail,
+                schedule.userName,
+                alert.name,
+                currentPrice.toFixed(2),
+                `${priceChangeStr}%`
+              );
+              
+              logger.info('Sent price alert email', {
+                userId: schedule.userId,
+                coin: alert.name,
+                currentPrice,
+                targetPrice
+              });
+              
+            } catch (error) {
+              logger.error('Error processing price alert', {
+                alertId: alert.id,
+                error: error instanceof Error ? error.message : String(error)
+              });
+            }
+          }
           break;
       }
     } catch (error) {
-      logger.error('Error sending scheduled notification', { error: error instanceof Error ? error.message : String(error) });
+      logger.error('Error sending scheduled notification', { 
+        error: error instanceof Error ? error.message : String(error) 
+      });
     }
   });
 
