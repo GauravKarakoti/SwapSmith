@@ -107,13 +107,18 @@ const preprocessInput = (input: string): string => {
   return processed;
 };
 
-// Use the updated Regex for Swap and Stake / Zap intents
+// Enhanced staking patterns for better natural language support
 const REGEX_SWAP_STAKE = /(?:swap\s+and\s+stake|zap\s+(?:into|to)|stake\s+(?:my|after|then)|swap\s+(?:to|into)\s+(?:stake|yield))/i;
-const REGEX_STAKE_PROTOCOL = /(?:to\s+)?(aave|compound|yearn|lido|morpho|euler|spark)/i;
+const REGEX_STAKE_PROTOCOL = /(?:to\s+)?(aave|compound|yearn|lido|morpho|euler|spark|rocket\s*pool|stakewise)/i;
 
-// New Regex for direct Stake commands (e.g., "Stake 1 ETH with Lido" or "Stake my ETH")
-const REGEX_STAKE_COMMAND = /\b(stake)\b/i;
-const REGEX_LIQUID_STAKING_PROVIDER = /\b(lido|rocket\s*pool|rocketpool|stakewise|stake\s*wise)\b/i;
+// Enhanced regex for direct stake commands with better natural language support
+const REGEX_STAKE_COMMAND = /\b(stake|staking)\b/i;
+const REGEX_LIQUID_STAKING_PROVIDER = /\b(lido|rocket\s*pool|rocketpool|stakewise|stake\s*wise|marinade|benqi|ankr)\b/i;
+
+// Enhanced patterns for amount detection in staking commands
+const REGEX_STAKE_AMOUNT = /(?:stake|staking)\s+(?:my\s+)?(?:all\s+)?(?:(\d+(?:\.\d+)?[kmb]?)\s+)?([A-Z]{2,10})/i;
+const REGEX_STAKE_ALL = /\b(?:stake|staking)\s+(?:all|everything|my\s+entire|my\s+whole)\s+([A-Z]{2,10})/i;
+const REGEX_STAKE_PERCENTAGE = /(?:stake|staking)\s+(\d+(?:\.\d+)?)%\s+(?:of\s+)?(?:my\s+)?([A-Z]{2,10})/i;
 
 const buildSwapResult = (
   userInput: string,
@@ -304,28 +309,45 @@ export async function parseUserCommand(
      };
   }
 
-  // Check for direct Stake Intent (e.g., "Stake 1 ETH with Lido" or "Stake my ETH")
-  // Mapped to 'swap_and_stake' as per new architecture
+  // Enhanced staking command detection and parsing
   if (REGEX_STAKE_COMMAND.test(input) && !REGEX_SWAP_STAKE.test(input)) {
     const providerMatch = input.match(REGEX_LIQUID_STAKING_PROVIDER);
     const stakeProtocol = providerMatch ? providerMatch[1].toLowerCase().replace(/\s+/g, '_') : 'lido';
 
     let amount: number | null = null;
+    let amountType: 'exact' | 'percentage' | 'all' | null = null;
     let stakeAsset: string | null = null;
 
-    const amtMatch = input.match(/\b(\d+(\.\d+)?)\s*([A-Z]{2,5})?\b/i);
-    if (amtMatch) {
-      amount = parseFloat(amtMatch[1]);
-      if (amtMatch[3]) {
-        stakeAsset = amtMatch[3].toUpperCase();
-      }
+    // Check for "stake all" patterns
+    const allMatch = input.match(REGEX_STAKE_ALL);
+    if (allMatch) {
+      stakeAsset = allMatch[1].toUpperCase();
+      amountType = 'all';
     }
 
-    // Try to find asset after "stake" keyword
+    // Check for percentage patterns
+    const percentageMatch = input.match(REGEX_STAKE_PERCENTAGE);
+    if (percentageMatch && !allMatch) {
+      amount = parseFloat(percentageMatch[1]);
+      stakeAsset = percentageMatch[2].toUpperCase();
+      amountType = 'percentage';
+    }
+
+    // Check for exact amount patterns
+    const amountMatch = input.match(REGEX_STAKE_AMOUNT);
+    if (amountMatch && !allMatch && !percentageMatch) {
+      if (amountMatch[1]) {
+        amount = parseScaledNumber(amountMatch[1]);
+        amountType = 'exact';
+      }
+      stakeAsset = amountMatch[2].toUpperCase();
+    }
+
+    // Fallback: try to find asset after "stake" keyword
     if (!stakeAsset) {
-      const assetMatch = input.match(/stake\s+(?:my\s+)?(\d+(\.\d+)?\s+)?([A-Z]{2,5})/i);
-      if (assetMatch && assetMatch[3]) {
-        stakeAsset = assetMatch[3].toUpperCase();
+      const assetMatch = input.match(/stake\s+(?:my\s+)?(?:some\s+)?([A-Z]{2,10})/i);
+      if (assetMatch) {
+        stakeAsset = assetMatch[1].toUpperCase();
       }
     }
 
@@ -334,22 +356,56 @@ export async function parseUserCommand(
       stakeAsset = 'ETH';
     }
 
-    // Map base asset to LST
+    // Enhanced asset to LST mapping with more protocols
     let toAsset = 'stETH';
-    if (stakeAsset === 'SOL') toAsset = 'mSOL';
-    else if (stakeAsset === 'MATIC') toAsset = 'stMATIC';
-    else if (stakeAsset === 'AVAX') toAsset = 'sAVAX';
-    else if (stakeAsset === 'BNB') toAsset = 'ankrBNB';
+    let toChain = 'ethereum';
+    
+    if (stakeAsset === 'ETH') {
+      if (stakeProtocol === 'rocket_pool' || stakeProtocol === 'rocketpool') {
+        toAsset = 'rETH';
+      } else if (stakeProtocol === 'stakewise') {
+        toAsset = 'osETH';
+      } else {
+        toAsset = 'stETH'; // Default to Lido
+      }
+      toChain = 'ethereum';
+    } else if (stakeAsset === 'SOL') {
+      toAsset = 'mSOL';
+      toChain = 'solana';
+    } else if (stakeAsset === 'MATIC') {
+      toAsset = 'stMATIC';
+      toChain = 'polygon';
+    } else if (stakeAsset === 'AVAX') {
+      toAsset = 'sAVAX';
+      toChain = 'avalanche';
+    } else if (stakeAsset === 'BNB') {
+      toAsset = 'ankrBNB';
+      toChain = 'bsc';
+    }
+
+    // Determine confidence based on completeness
+    let confidence = 85;
+    if (!amount && amountType !== 'all') {
+      confidence = 60; // Lower confidence when amount is missing
+    }
+
+    const validationErrors: string[] = [];
+    if (!amount && amountType !== 'all') {
+      validationErrors.push('Amount not specified. How much would you like to stake?');
+    }
 
     return {
       success: true,
       intent: 'swap_and_stake',
       fromAsset: stakeAsset,
-      fromChain: 'ethereum',
+      fromChain: stakeAsset === 'SOL' ? 'solana' : 
+                 stakeAsset === 'MATIC' ? 'polygon' :
+                 stakeAsset === 'AVAX' ? 'avalanche' :
+                 stakeAsset === 'BNB' ? 'bsc' : 'ethereum',
       toAsset: toAsset,
-      toChain: 'ethereum',
+      toChain: toChain,
       amount,
-      amountType: amount ? 'exact' : null,
+      amountType,
       excludeAmount: undefined,
       excludeToken: undefined,
       quoteAmount: undefined,
@@ -371,9 +427,9 @@ export async function parseUserCommand(
       conditionAsset: undefined,
       targetPrice: undefined,
       condition: undefined,
-      confidence: 85,
-      validationErrors: [],
-      parsedMessage: `Parsed: Stake ${amount || '?'} ${stakeAsset} -> ${toAsset}`,
+      confidence,
+      validationErrors,
+      parsedMessage: `Parsed: Stake ${amount || amountType || '?'} ${stakeAsset} -> ${toAsset} via ${stakeProtocol}`,
       requiresConfirmation: true,
       originalInput: userInput
     };
