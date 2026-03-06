@@ -32,6 +32,7 @@ const NAV_ITEMS = [
   { href: "/contributors", label: "Contributors", Icon: Users },
   { href: "/watchlist", label: "Watchlist", Icon: Star },
   { href: "/strategies", label: "Strategies", Icon: BookOpen },
+  { href: "/yield-scout", label: "Yield Scout", Icon: Trophy },
 ];
 
 const PROFILE_MENU = [
