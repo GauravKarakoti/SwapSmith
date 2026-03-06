@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { sendPriceAlertEmail, sendWalletReminderEmail } from '@/lib/email';
+import logger from '@/lib/logger';
 
 // Store active cron jobs
 const scheduledJobs: Map<string, ReturnType<typeof cron.schedule>> = new Map();
@@ -39,7 +40,7 @@ export function scheduleNotification(schedule: NotificationSchedule) {
   const cronExpression = getCronExpression(schedule.frequency, schedule.cronExpression);
   
   const job = cron.schedule(cronExpression, async () => {
-    console.log(`Running scheduled notification for ${schedule.userEmail}`);
+    logger.info('Running scheduled notification', { userEmail: schedule.userEmail });
     
     try {
       switch (schedule.type) {
@@ -62,12 +63,16 @@ export function scheduleNotification(schedule: NotificationSchedule) {
           break;
       }
     } catch (error) {
-      console.error('Error sending scheduled notification:', error);
+      logger.error('Error sending scheduled notification', { error: error instanceof Error ? error.message : String(error) });
     }
   });
 
   scheduledJobs.set(jobKey, job);
-  console.log(`Scheduled ${schedule.type} notification for ${schedule.userEmail} with cron: ${cronExpression}`);
+  logger.info('Scheduled notification', { 
+    type: schedule.type, 
+    userEmail: schedule.userEmail, 
+    cronExpression 
+  });
   
   return { success: true, jobKey, cronExpression };
 }
@@ -79,7 +84,7 @@ export function stopScheduledNotification(userId: string, type: string) {
   if (scheduledJobs.has(jobKey)) {
     scheduledJobs.get(jobKey)?.stop();
     scheduledJobs.delete(jobKey);
-    console.log(`Stopped notification: ${jobKey}`);
+    logger.info('Stopped notification', { jobKey });
     return { success: true };
   }
   
@@ -95,5 +100,5 @@ export function getActiveJobs() {
 export function stopAllJobs() {
   scheduledJobs.forEach((job) => job.stop());
   scheduledJobs.clear();
-  console.log('Stopped all scheduled notifications');
+  logger.info('Stopped all scheduled notifications');
 }

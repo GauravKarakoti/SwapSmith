@@ -10,6 +10,22 @@ import { join } from 'path';
 
 const DOCKER_SECRETS_PATH = '/run/secrets';
 
+// Simple logger for shared utilities (no Winston dependency)
+const logger = {
+  info: (message: string, meta?: Record<string, unknown>) => {
+    const metaStr = meta ? ` ${JSON.stringify(meta)}` : '';
+    console.log(`[Secrets Loader] ${message}${metaStr}`);
+  },
+  warn: (message: string, meta?: Record<string, unknown>) => {
+    const metaStr = meta ? ` ${JSON.stringify(meta)}` : '';
+    console.warn(`[Secrets Loader] ${message}${metaStr}`);
+  },
+  error: (message: string, meta?: Record<string, unknown>) => {
+    const metaStr = meta ? ` ${JSON.stringify(meta)}` : '';
+    console.error(`[Secrets Loader] ${message}${metaStr}`);
+  },
+};
+
 /**
  * Load a secret from Docker secrets or environment variable
  * 
@@ -29,30 +45,30 @@ export function loadSecret(
     const secretValue = readFileSync(secretPath, 'utf8').trim();
     
     if (secretValue) {
-      console.log(`✅ Loaded secret '${secretName}' from Docker secrets`);
+      logger.info('Loaded secret from Docker secrets', { secretName });
       return secretValue;
     }
   } catch (error) {
     // Docker secret not found, try environment variable
-    console.log(`ℹ️  Docker secret '${secretName}' not found, trying environment variable`);
+    logger.info('Docker secret not found, trying environment variable', { secretName });
   }
   
   // Fallback to environment variable
   const envValue = process.env[envVarName];
   
   if (envValue) {
-    console.log(`✅ Loaded secret '${envVarName}' from environment variable`);
+    logger.info('Loaded secret from environment variable', { envVarName });
     return envValue;
   }
   
   // Handle missing required secrets
   if (required) {
     throw new Error(
-      `❌ Required secret '${secretName}' not found in Docker secrets or environment variable '${envVarName}'`
+      `Required secret '${secretName}' not found in Docker secrets or environment variable '${envVarName}'`
     );
   }
   
-  console.warn(`⚠️  Optional secret '${secretName}' not found`);
+  logger.warn('Optional secret not found', { secretName });
   return undefined;
 }
 
@@ -79,9 +95,9 @@ export function loadJSONSecret<T = any>(
     return JSON.parse(secretValue) as T;
   } catch (error) {
     if (required) {
-      throw new Error(`❌ Failed to parse JSON secret '${secretName}': ${error}`);
+      throw new Error(`Failed to parse JSON secret '${secretName}': ${error}`);
     }
-    console.warn(`⚠️  Failed to parse optional JSON secret '${secretName}'`);
+    logger.warn('Failed to parse optional JSON secret', { secretName });
     return undefined;
   }
 }
@@ -99,12 +115,12 @@ export function validateSecrets(secrets: Record<string, string | undefined>): vo
   
   if (missingSecrets.length > 0) {
     throw new Error(
-      `❌ Missing required secrets: ${missingSecrets.join(', ')}\n` +
+      `Missing required secrets: ${missingSecrets.join(', ')}\n` +
       'Please ensure all secrets are properly configured in Docker secrets or environment variables.'
     );
   }
   
-  console.log('✅ All required secrets loaded successfully');
+  logger.info('All required secrets loaded successfully');
 }
 
 /**
@@ -140,7 +156,7 @@ export function initializeSecrets(): {
   rewardTokenPrivateKey?: string;
   firebaseServiceAccount?: any;
 } {
-  console.log('🔐 Initializing application secrets...');
+  logger.info('Initializing application secrets');
   
   const secrets = {
     groqApiKey: AppSecrets.GROQ_API_KEY()!,
@@ -158,7 +174,7 @@ export function initializeSecrets(): {
     sideshiftApiKey: secrets.sideshiftApiKey,
   });
   
-  console.log('🎉 Secrets initialization complete');
+  logger.info('Secrets initialization complete');
   return secrets;
 }
 
