@@ -40,6 +40,29 @@ export interface ParsedCommand {
   amount: number | null;
   amountType?: "exact" | "percentage" | "all" | null;
 
+  // Enhanced Conditional Fields
+  conditions?: {
+    type: "price_above" | "price_below" | "balance_threshold" | "time_based" | "market_condition";
+    asset: string;
+    value: number;
+    operator?: "gt" | "lt" | "gte" | "lte" | "eq";
+    secondary_conditions?: Array<{
+      type: string;
+      asset: string;
+      value: number;
+      operator: string;
+      logic: "AND" | "OR";
+    }>;
+    fallback_action?: {
+      intent: string;
+      fromAsset: string;
+      toAsset: string;
+      amount: number;
+      rawText?: string;
+      needsParsing?: boolean;
+    };
+  };
+
   // Portfolio Fields
   portfolio?: {
     toAsset: string;
@@ -66,6 +89,26 @@ export interface ParsedCommand {
   // Staking Fields
   fromProject?: string | null;
   toProject?: string | null;
+
+  // Enhanced Multi-Step and Ambiguity Handling
+  nextActions?: Array<{
+    rawText: string;
+    needsParsing: boolean;
+    intent?: string;
+    fromAsset?: string;
+    toAsset?: string;
+    amount?: number;
+  }>;
+  fallbackAction?: {
+    rawText: string;
+    needsParsing: boolean;
+    intent?: string;
+    fromAsset?: string;
+    toAsset?: string;
+    amount?: number;
+  };
+  alternativeInterpretations?: string[];
+  suggestedClarifications?: string[];
 
   confidence: number;
   validationErrors: string[];
