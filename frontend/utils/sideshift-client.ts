@@ -121,12 +121,23 @@ export async function createCheckout(
   }
 }
 
+let coinsCache: Coin[] | null = null;
+let coinsCacheTimestamp = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Fetches all available coins from SideShift API
+ * Results are cached for 5 minutes
  */
 export async function getCoins(): Promise<Coin[]> {
+  if (coinsCache && Date.now() - coinsCacheTimestamp < CACHE_TTL) {
+    return coinsCache;
+  }
+
   try {
     const response = await axios.get(`${SIDESHIFT_CONFIG.BASE_URL}/coins`);
+    coinsCache = response.data;
+    coinsCacheTimestamp = Date.now();
     return response.data;
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: { message?: string } } } };

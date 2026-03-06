@@ -46,7 +46,7 @@ export async function checkAndProcessStakeOrders(): Promise<void> {
   } catch (error) {
     await handleError('StakeOrderCheckError', {
       error: error instanceof Error ? error.message : 'Unknown error'
-    }, null, false);
+    }, null, false, 'medium');
   }
 }
 

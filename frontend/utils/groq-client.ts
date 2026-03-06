@@ -26,7 +26,7 @@ function getGroqClient(): Groq {
 // Type definition for the parsed command object
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "dca" | "unknown";
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "dca" | "swap_and_stake" | "unknown";
 
   // Single Swap Fields
   fromAsset: string | null;
@@ -58,6 +58,10 @@ export interface ParsedCommand {
   settleNetwork: string | null;
   settleAmount: number | null;
   settleAddress: string | null;
+
+  // Staking Fields
+  fromProject?: string | null;
+  toProject?: string | null;
 
   confidence: number;
   validationErrors: string[];
@@ -92,7 +96,24 @@ SUPPORTED INTENTS:
 5. "dca": Dollar Cost Averaging
    Examples: "Buy $100 of BTC daily", "DCA into ETH weekly", "Invest $50 in SOL every month"
 
-6. "unknown": Commands that don't fit other categories
+6. "swap_and_stake": Natural language staking commands
+   Examples: "Stake my ETH", "Stake 10 ETH with Lido", "Stake all my SOL", "Stake 50% of my MATIC"
+   
+   STAKING LOGIC:
+   - Use "swap_and_stake" as the intent (not "stake")
+   - Auto-map base assets to Liquid Staking Tokens (LSTs):
+     * ETH -> stETH (Lido), rETH (Rocket Pool), osETH (StakeWise)
+     * SOL -> mSOL (Marinade)
+     * MATIC -> stMATIC (Lido)
+     * AVAX -> sAVAX (Benqi)
+     * BNB -> ankrBNB (Ankr)
+   - Default to Lido for ETH if no provider specified
+   - Support amount types: exact numbers, percentages, "all"
+   - Set fromAsset to the base asset (ETH, SOL, etc.)
+   - Set toAsset to the corresponding LST (stETH, mSOL, etc.)
+   - Set appropriate chains for each asset
+
+7. "unknown": Commands that don't fit other categories
    Examples: General questions, help requests, unclear instructions
 
 STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana
@@ -128,7 +149,7 @@ ADVANCED AMBIGUITY HANDLING:
 RESPONSE FORMAT:
 {
   "success": boolean,
-  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "dca" | "unknown",
+  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "dca" | "swap_and_stake" | "unknown",
   "fromAsset": string | null,
   "fromChain": string | null,
   "toAsset": string | null,
@@ -247,6 +268,55 @@ ENHANCED EXAMPLES WITH EDGE CASES:
      "requiresConfirmation": false
    }
 
+6. STAKING COMMANDS:
+   Input: "Stake my ETH"
+   Output: {
+     "success": true,
+     "intent": "swap_and_stake",
+     "fromAsset": "ETH",
+     "fromChain": "ethereum",
+     "toAsset": "stETH",
+     "toChain": "ethereum",
+     "amount": null,
+     "amountType": null,
+     "confidence": 60,
+     "validationErrors": ["Amount not specified. How much ETH would you like to stake?"],
+     "parsedMessage": "Stake [amount needed] ETH -> stETH via Lido",
+     "requiresConfirmation": true
+   }
+
+   Input: "Stake 10 ETH with Rocket Pool"
+   Output: {
+     "success": true,
+     "intent": "swap_and_stake",
+     "fromAsset": "ETH",
+     "fromChain": "ethereum",
+     "toAsset": "rETH",
+     "toChain": "ethereum",
+     "amount": 10,
+     "amountType": "exact",
+     "confidence": 95,
+     "validationErrors": [],
+     "parsedMessage": "Stake 10 ETH -> rETH via Rocket Pool",
+     "requiresConfirmation": false
+   }
+
+   Input: "Stake all my SOL"
+   Output: {
+     "success": true,
+     "intent": "swap_and_stake",
+     "fromAsset": "SOL",
+     "fromChain": "solana",
+     "toAsset": "mSOL",
+     "toChain": "solana",
+     "amount": 100,
+     "amountType": "percentage",
+     "confidence": 90,
+     "validationErrors": [],
+     "parsedMessage": "Stake all SOL -> mSOL via Marinade",
+     "requiresConfirmation": false
+   }
+
 CRITICAL PARSING RULES:
 1. Always set confidence based on clarity and completeness
 2. Use validationErrors for specific issues, not generic messages
@@ -300,7 +370,7 @@ export async function parseUserCommand(
       throw new Error("No response content from Groq");
     }
 
-    const parsed = safeParseJSON(content) as any;
+    const parsed = safeParseJSON(content) as Partial<ParsedCommand>;
     if (!parsed) {
       throw new Error("Invalid JSON response from Groq");
     }
@@ -326,6 +396,8 @@ export async function parseUserCommand(
       settleNetwork: parsed.settleNetwork ?? null,
       settleAmount: parsed.settleAmount ?? null,
       settleAddress: parsed.settleAddress ?? null,
+      fromProject: parsed.fromProject ?? null,
+      toProject: parsed.toProject ?? null,
       confidence: parsed.confidence ?? 50,
       validationErrors: parsed.validationErrors ?? [],
       parsedMessage: parsed.parsedMessage ?? "Command parsed",
@@ -357,6 +429,8 @@ export async function parseUserCommand(
       settleNetwork: null,
       settleAmount: null,
       settleAddress: null,
+      fromProject: null,
+      toProject: null,
       confidence: 0,
       validationErrors: ["Failed to parse command. Please try rephrasing."],
       parsedMessage: "Error occurred during parsing",
