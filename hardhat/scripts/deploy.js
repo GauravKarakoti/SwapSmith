@@ -31,6 +31,9 @@ async function main() {
     );
   }
 
+  const network = await ethers.provider.getNetwork();
+  const chainId = network.chainId;
+
   // -------------------------------------------------------------------------
   // 2. Deploy RewardToken
   // -------------------------------------------------------------------------
@@ -38,36 +41,57 @@ async function main() {
 
   const RewardToken = await ethers.getContractFactory("RewardToken");
   // Pass the deployer address as initialOwner (required by OZ Ownable v5)
-  const token = await RewardToken.deploy(deployer.address);
-  await token.waitForDeployment();
+  const rewardtoken = await RewardToken.deploy(deployer.address);
+  await rewardtoken.waitForDeployment();
 
-  const contractAddress = await token.getAddress();
+  const rewardtokencontractAddress = await rewardtoken.getAddress();
 
   // -------------------------------------------------------------------------
   // 3. Print results
   // -------------------------------------------------------------------------
   console.log("─".repeat(60));
   console.log(`✅  RewardToken deployed!`);
-  console.log(`    Contract address : ${contractAddress}`);
-console.log(`    Token name       : ${await token.name()} (SMTH)`);
-  console.log(`    Token symbol     : ${await token.symbol()}`);
+  console.log(`    Contract address : ${rewardtokencontractAddress}`);
+  console.log(`    Token name       : ${await rewardtoken.name()} (SMTH)`);
+  console.log(`    Token symbol     : ${await rewardtoken.symbol()}`);
 
-  const totalSupply = await token.totalSupply();
+  const totalSupply = await rewardtoken.totalSupply();
   console.log(`    Total supply     : ${ethers.formatEther(totalSupply)} SMTH`);
-
-  const network = await ethers.provider.getNetwork();
-  const chainId = network.chainId;
 
   if (chainId === 11155111n) {
     console.log(
       `\n🔍  View on Etherscan:\n` +
-      `    https://sepolia.etherscan.io/address/${contractAddress}`
+      `    https://sepolia.etherscan.io/address/${rewardtokencontractAddress}`
     );
     console.log(
       `\n📋  Add to frontend/.env:\n` +
-      `    NEXT_PUBLIC_REWARD_TOKEN_ADDRESS=${contractAddress}`
+      `    NEXT_PUBLIC_REWARD_TOKEN_ADDRESS=${rewardtokencontractAddress}`
     );
   }
+
+  console.log("\n📄  Deploying AgentReputation...");
+
+  const AgentReputation = await ethers.getContractFactory("AgentReputation");
+  const agentreputationtoken = await AgentReputation.deploy(deployer.address);
+  await agentreputationtoken.waitForDeployment();
+
+  const agentreputationcontractAddress = await agentreputationtoken.getAddress();
+
+  console.log("─".repeat(60));
+  console.log(`✅  AgentReputation deployed!`);
+  console.log(`    Contract address : ${agentreputationcontractAddress}`);
+
+  if (chainId === 11155111n) {
+      console.log(
+          `\n🔍  View on Etherscan:\n` +
+          `    https://sepolia.etherscan.io/address/${agentreputationcontractAddress}`
+      );
+      console.log(
+          `\n📋  Add to bot/.env:\n` +
+          `    REPUTATION_CONTRACT_ADDRESS=${agentreputationcontractAddress}`
+      );
+  }
+
   console.log("─".repeat(60));
 }
 

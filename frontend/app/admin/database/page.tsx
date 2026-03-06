@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Database } from 'lucide-react'
+import { Database, Terminal } from 'lucide-react'
 import AdminNavbar from '@/components/AdminNavbar'
 import AdminTableList from '@/components/AdminTableList'
 
@@ -77,6 +77,17 @@ export default function AdminDatabasePage() {
             </p>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={() => router.push('/admin/sql')}
+              style={{
+                background: '#1a1a2e', border: '1px solid #7c3aed55',
+                color: '#c4b5fd', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                padding: '6px 14px', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              <Terminal size={13} /> SQL Terminal
+            </button>
             <span style={{
               background: '#14532d22', border: '1px solid #16a34a44',
               color: '#4ade80', borderRadius: 20, fontSize: 11,
