@@ -1,6 +1,7 @@
 import Groq from "groq-sdk";
 import { safeParseJSON } from "@/lib/safeParse";
 import { logGroqUsage } from "@/lib/stats-service";
+import { loadSecret } from "../../shared/utils/secrets-loader";
 
 // Global singleton declaration to prevent multiple instances during hot reload
 declare global {
@@ -16,8 +17,11 @@ declare global {
  */
 function getGroqClient(): Groq {
   if (!global._groqClient) {
+    // Use secure secrets loader instead of direct environment variable access
+    const apiKey = loadSecret('groq_api_key', 'GROQ_API_KEY');
+    
     global._groqClient = new Groq({
-      apiKey: process.env.GROQ_API_KEY,
+      apiKey,
     });
   }
   return global._groqClient;

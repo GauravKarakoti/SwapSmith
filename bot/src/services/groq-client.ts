@@ -2,14 +2,18 @@ import Groq from "groq-sdk";
 import dotenv from 'dotenv';
 import fs from 'fs';
 import logger, { handleError } from './logger';
+import { loadSecret } from '../../../shared/utils/secrets-loader';
 
 import { analyzeCommand, generateContextualHelp } from './contextual-help';
 
 dotenv.config();
 
 function getGroqClient(): Groq {
+  // Use secure secrets loader instead of direct environment variable access
+  const apiKey = loadSecret('groq_api_key', 'GROQ_API_KEY');
+  
   return new Groq({
-    apiKey: process.env.GROQ_API_KEY,
+    apiKey,
   });
 }
 
