@@ -2,7 +2,56 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { createCheckout } from '@/utils/sideshift-client';
 import { csrfGuard } from '@/lib/csrf';
 
-const SIDESHIFT_CLIENT_IP = process.env.SIDESHIFT_CLIENT_IP || "127.0.0.1";
+/**
+ * Extract real user IP from request headers
+ * Handles various proxy configurations (Vercel, Cloudflare, etc.)
+ */
+function extractUserIP(req: NextApiRequest): string | undefined {
+  // Try various headers in order of preference
+  const headers = [
+    'x-real-ip',           // Nginx proxy
+    'x-forwarded-for',     // Standard proxy header
+    'cf-connecting-ip',    // Cloudflare
+    'x-vercel-forwarded-for', // Vercel
+  ];
+
+  for (const header of headers) {
+    const value = req.headers[header];
+    if (value) {
+      // x-forwarded-for can be a comma-separated list, take the first one
+      const ip = typeof value === 'string' ? value.split(',')[0].trim() : value[0];
+      
+      // Validate it's not a local/private IP
+      if (ip && !isLocalIP(ip)) {
+        return ip;
+      }
+    }
+  }
+
+  // Fallback to socket remote address
+  const socketIP = req.socket.remoteAddress;
+  if (socketIP && !isLocalIP(socketIP)) {
+    return socketIP;
+  }
+
+  // If all else fails, use environment variable or undefined
+  return process.env.SIDESHIFT_CLIENT_IP || undefined;
+}
+
+/**
+ * Check if IP is local/private
+ */
+function isLocalIP(ip: string): boolean {
+  return (
+    ip === '::1' ||
+    ip === '127.0.0.1' ||
+    ip.startsWith('192.168.') ||
+    ip.startsWith('10.') ||
+    ip.startsWith('172.16.') ||
+    ip.startsWith('::ffff:127.') ||
+    ip === 'localhost'
+  );
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -12,7 +61,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return;
   }
   
-  // ✅ Added settleAddress to destructuring
   const { settleAsset, settleNetwork, settleAmount, settleAddress } = req.body;
   
   if (!settleAddress) {
@@ -20,11 +68,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const forwarded = req.headers['x-forwarded-for'];
-    let userIP = (typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : undefined) || req.socket.remoteAddress ||undefined;
-    if (!userIP || userIP === '::1' || userIP === '127.0.0.1') { userIP = SIDESHIFT_CLIENT_IP;}
+    // Extract real user IP for geo-compliance checks
+    const userIP = extractUserIP(req);
 
-    // ✅ Pass settleAddress to the function
+    // Pass settleAddress and real user IP to the function
     const result = await createCheckout(settleAsset, settleNetwork, settleAmount, settleAddress, userIP);
     res.status(200).json(result);
   } catch (error: unknown) {
