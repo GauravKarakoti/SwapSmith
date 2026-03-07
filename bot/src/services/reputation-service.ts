@@ -96,15 +96,24 @@ class ReputationService {
         try {
             // contract.getReputation returns [totalSwaps, successSwaps] as BigInts
             const result = await this.contract.getReputation(agent);
-            const total = Number(result[0]);
-            const success = Number(result[1]);
+            
+            // Result is usually an array/object with BigInt properties
+            const total = BigInt(result[0]); // Ensure BigInt
+            const success = BigInt(result[1]); // Ensure BigInt
 
             let score = "0.0";
-            if (total > 0) {
-                score = ((success / total) * 100).toFixed(1);
+            if (total > 0n) {
+                // Calculation: (success * 1000n) / total (yields e.g. 985 for 98.5%)
+                const basisPoints = (success * 1000n) / total;
+                const numericScore = Number(basisPoints) / 10;
+                score = numericScore.toFixed(1);
             }
 
-            return { total, success, score };
+            return { 
+                total: Number(total), 
+                success: Number(success), 
+                score 
+            };
         } catch (error) {
             logger.error(`[ReputationService] Failed to fetch reputation for ${agent}:`, error instanceof Error ? error : new Error(String(error)));
             return null;

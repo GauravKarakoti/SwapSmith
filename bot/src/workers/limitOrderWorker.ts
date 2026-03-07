@@ -267,7 +267,7 @@ export class LimitOrderWorker {
         logger.error('Failed to update DB & watch order; attempting to revert limit order status', err);
         try {
           // Revert to a safe, pre-executed status so the order can be retried/handled
-          await updateLimitOrderStatus(order.id, 'pending', null as any);
+          await updateLimitOrderStatus(order.id, 'pending', undefined);
         } catch (revertErr) {
           logger.error('Failed to revert limit order status after watch-order failure', revertErr);
         }

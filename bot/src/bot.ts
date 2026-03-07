@@ -13,6 +13,7 @@ import * as db from './services/database';
 import { OrderMonitor } from './services/order-monitor';
 import { parseUserCommand } from './services/parseUserCommand';
 import { reputationService } from './services/reputation-service';
+import { TERMINAL_STATUSES_LIST } from './constants';
 import { limitOrderWorker } from './workers/limitOrderWorker';
 import { DCAScheduler } from './services/dca-scheduler';
 
@@ -46,8 +47,12 @@ const orderMonitor = new OrderMonitor({
 
       // --- AGENT REPUTATION LOGIC ---
       // When a swap completes, record it on-chain
+      // Ensure we only record once by checking if the previous status was not already terminal
+      const wasTerminal = TERMINAL_STATUSES_LIST.includes(oldStatus);
+      const isTerminal = TERMINAL_STATUSES_LIST.includes(newStatus);
       const botAddress = reputationService.getBotAddress();
-      if (botAddress) {
+
+      if (botAddress && isTerminal && !wasTerminal) {
         if (newStatus === 'settled') {
           await reputationService.recordSwapOutcome(botAddress, true);
         } else if (['expired', 'refunded', 'failed'].includes(newStatus)) {
