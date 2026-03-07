@@ -404,7 +404,7 @@ async function start() {
 
     await orderMonitor.loadPendingOrders();
     orderMonitor.start();
-    limitOrderWorker.start(bot);
+    await limitOrderWorker.start(bot);
     dcaScheduler.start();
 
     await bot.telegram.deleteWebhook({ drop_pending_updates: true });
