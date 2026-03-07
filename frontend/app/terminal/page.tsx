@@ -465,7 +465,7 @@ export default function TerminalPage() {
             toAsset: item.toAsset,
             toChain: item.toChain,
             portfolio: undefined,
-            confidence: 100,
+            confidence: command.confidence,
           };
           await executeSwap(subCommand);
         }
@@ -695,7 +695,7 @@ export default function TerminalPage() {
                                 amount: parseFloat(newAmount),
                                 fromChain: quoteData.depositNetwork,
                                 toChain: quoteData.settleNetwork,
-                                confidence: 100,
+                                confidence: (msg.data as { confidence: number }).confidence || 100,
                                 requiresConfirmation: false,
                                 settleAsset: quoteData.settleCoin,
                                 settleNetwork: quoteData.settleNetwork,
