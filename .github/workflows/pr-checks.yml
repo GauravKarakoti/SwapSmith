@@ -1,0 +1,160 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  shared:
+    name: Shared Library (Lint, Build)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: shared/package-lock.json
+
+      - name: Install Shared Dependencies
+        working-directory: ./shared
+        run: npm ci
+
+      - name: Build Shared
+        working-directory: ./shared
+        run: npm run build
+
+  frontend:
+    name: Frontend (Lint, Test, Build)
+    runs-on: ubuntu-latest
+    
+    env:
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            shared/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install Shared Dependencies
+        working-directory: ./shared
+        run: npm ci
+
+      - name: Install Frontend Dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Lint Frontend
+        working-directory: ./frontend
+        run: npm run lint
+
+      - name: Test Frontend
+        working-directory: ./frontend
+        run: npm run test
+
+      - name: Test Frontend Coverage
+        working-directory: ./frontend
+        run: npm run test:coverage
+
+      - name: Build Frontend
+        working-directory: ./frontend
+        run: npm run build
+
+  bot:
+    name: Bot (Test, Build)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            shared/package-lock.json
+            bot/package-lock.json
+
+      - name: Install Shared Dependencies
+        working-directory: ./shared
+        run: npm ci
+
+      - name: Install Bot Dependencies
+        working-directory: ./bot
+        run: npm ci
+
+      - name: Test Bot
+        working-directory: ./bot
+        run: npm test
+
+      - name: Build Bot
+        working-directory: ./bot
+        run: npm run build
+
+  code-quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for large files
+        run: |
+          # Warn about files larger than 10MB
+          find . -type f -size +10M -not -path "./.git/*" -not -path "./node_modules/*" -not -path "./.next/*" | while read file; do
+            echo "⚠️  Warning: Large file detected: $file ($(du -h "$file" | cut -f1))"
+          done
+
+      - name: Check for secrets (git-secrets style)
+        run: |
+          if grep -r "private_key\|password\|api_key\|secret" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" . 2>/dev/null | grep -v node_modules | grep -v ".git" | grep -v "process.env" | grep -v "secrets\." | grep -v "// " | grep -v "API_KEY\|SIDESHIFT_API"; then
+            echo "⚠️  Warning: Potential hardcoded secrets detected"
+          fi
+
+      - name: Check for console.log in production code
+        run: |
+          if grep -r "console\.log" --include="*.ts" --include="*.tsx" frontend/app frontend/components --exclude-dir=tests 2>/dev/null | grep -v "// console" | grep -v "\/\/" | head -5; then
+            echo "⚠️  Warning: console.log statements found in frontend code"
+          fi
+
+  dependency-check:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run npm audit for shared
+        working-directory: ./shared
+        run: npm audit --audit-level=moderate || true
+
+      - name: Run npm audit for frontend
+        working-directory: ./frontend
+        run: npm audit --audit-level=moderate || true
+
+      - name: Run npm audit for bot
+        working-directory: ./bot
+        run: npm audit --audit-level=moderate || true

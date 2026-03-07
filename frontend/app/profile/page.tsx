@@ -217,7 +217,9 @@ export default function ProfilePage() {
           currency: 'USD'
         }, ...JSON.parse(saved) }
       }
-    } catch {}
+    } catch (error) {
+      console.error('Error parsing user preferences from localStorage:', error)
+    }
     return {
       soundEnabled: true,
       autoConfirmSwaps: false,
@@ -252,7 +254,9 @@ export default function ProfilePage() {
       if (saved) {
         return JSON.parse(saved)
       }
-    } catch {}
+    } catch (error) {
+      console.error('Error parsing email notification preferences from localStorage:', error)
+    }
     return {
       enabled: false,
       walletReminders: true,

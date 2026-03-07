@@ -82,6 +82,50 @@ class ReputationService {
             logger.error(`[ReputationService] Error interacting with smart contract:`, error instanceof Error ? error : new Error(String(error)));
         }
     }
+
+    /**
+     * Retrieves the reputation stats for a given agent address.
+     * @param agent Address of the bot/agent to look up
+     * @returns Object containing total swaps, successful swaps, and a trust score (percentage)
+     */
+    public async getReputation(agent: string): Promise<{ total: number; success: number; score: string } | null> {
+        if (!this.isConfigured || !this.contract) {
+            return null;
+        }
+
+        try {
+            // contract.getReputation returns [totalSwaps, successSwaps] as BigInts
+            const result = await this.contract.getReputation(agent);
+            
+            // Result is usually an array/object with BigInt properties
+            const total = BigInt(result[0]); // Ensure BigInt
+            const success = BigInt(result[1]); // Ensure BigInt
+
+            let score = "0.0";
+            if (total > 0n) {
+                // Calculation: (success * 1000n) / total (yields e.g. 985 for 98.5%)
+                const basisPoints = (success * 1000n) / total;
+                const numericScore = Number(basisPoints) / 10;
+                score = numericScore.toFixed(1);
+            }
+
+            return { 
+                total: Number(total), 
+                success: Number(success), 
+                score 
+            };
+        } catch (error) {
+            logger.error(`[ReputationService] Failed to fetch reputation for ${agent}:`, error instanceof Error ? error : new Error(String(error)));
+            return null;
+        }
+    }
+
+    /**
+     * Helper to get the bot's own wallet address if configured.
+     */
+    public getBotAddress(): string | null {
+        return this.wallet ? this.wallet.address : null;
+    }
 }
 
 export const reputationService = new ReputationService();

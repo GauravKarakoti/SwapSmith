@@ -77,7 +77,7 @@ export class TrailingStopWorker {
   ) {
     try {
       let peakPrice = order.peakPrice
-        ? parseFloat(order.peakPrice)
+        ? parseFloat(order.peakPrice.toString())
         : currentPrice;
 
       if (currentPrice > peakPrice) {
@@ -86,7 +86,7 @@ export class TrailingStopWorker {
       }
 
       const triggerPrice =
-        peakPrice * (1 - parseFloat(order.trailingPercentage) / 100); // Convert string to number
+        peakPrice * (1 - parseFloat(order.trailingPercentage.toString()) / 100); // Convert numeric to number
 
       await db
         .update(trailingStopOrders)
@@ -131,10 +131,10 @@ export class TrailingStopWorker {
         await this.bot.telegram.sendMessage(
           Number(order.telegramId),
           `🚨 *Trailing Stop Triggered!*\n\n` +
-            `*${order.fromAsset} → ${order.toAsset}*\n` +
-            `Amount: ${order.fromAmount}\n` +
-            `Peak: $${peakPrice.toLocaleString()}\n` +
-            `Trigger: $${triggerPrice.toLocaleString()}`,
+          `*${order.fromAsset} → ${order.toAsset}*\n` +
+          `Amount: ${order.fromAmount}\n` +
+          `Peak: $${peakPrice.toLocaleString()}\n` +
+          `Trigger: $${triggerPrice.toLocaleString()}`,
           { parse_mode: 'Markdown' }
         );
       }
@@ -163,7 +163,7 @@ export class TrailingStopWorker {
         order.fromNetwork || 'ethereum',
         order.toAsset,
         order.toNetwork || 'ethereum',
-        parseFloat(order.fromAmount),
+        parseFloat(order.fromAmount.toString()),
         process.env.SIDESHIFT_CLIENT_IP || '127.0.0.1'
       );
 
@@ -189,8 +189,8 @@ export class TrailingStopWorker {
         await this.bot.telegram.sendMessage(
           Number(order.telegramId),
           `✅ *Trailing Stop Executed!*\n\n` +
-            `Deposit: ${quote.depositAmount} ${quote.depositCoin}\n` +
-            `To: \`${sideshiftOrder.depositAddress}\``,
+          `Deposit: ${quote.depositAmount} ${quote.depositCoin}\n` +
+          `To: \`${sideshiftOrder.depositAddress}\``,
           { parse_mode: 'Markdown' }
         );
       }

@@ -504,7 +504,9 @@ export default function AdminCoinsPage() {
       })
       const data = await res.json()
       if (data.success) setStats(data.stats)
-    } catch { /* ignore stats fetch errors */ }
+    } catch (error) {
+      console.error('Error fetching coins stats:', error)
+    }
     finally { setStatsLoading(false) }
   }, [])
 
@@ -515,7 +517,7 @@ export default function AdminCoinsPage() {
     if (!tok) { router.push('/admin/login'); return }
     setToken(tok)
     const cached = sessionStorage.getItem('admin-info')
-    if (cached) { try { setAdminInfo(JSON.parse(cached)) } catch {} }
+    if (cached) { try { setAdminInfo(JSON.parse(cached)) } catch (error) { console.error('Error parsing cached admin info:', error) } }
     fetchUsers(1, '', tok, false)
     fetchStats(tok)
     // eslint-disable-next-line react-hooks/exhaustive-deps
