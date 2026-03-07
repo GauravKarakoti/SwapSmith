@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-// Extend Window interface for Web Speech API handled by @types/dom-speech-recognition or similar if needed,
-// but checking support dynamically is better. For now we use standard types if available.
+// Web Speech API globals (e.g. SpeechRecognition) are declared in frontend/types/speech-recognition.d.ts;
+// this hook still checks support dynamically and uses those globals only when available.
 
 
 export type VoiceInputMethod = 'speech-api' | 'media-recorder' | null;
