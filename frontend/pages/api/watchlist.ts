@@ -4,6 +4,7 @@ import {
   getWatchlist,
   addToWatchlist,
   removeFromWatchlist,
+  getCachedPrice,
   getCachedPricesBatch,
 } from '@/lib/database';
 import logger from '@/lib/logger';
