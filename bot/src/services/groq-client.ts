@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import logger, { handleError } from './logger';
 import { loadSecret } from '../../../shared/utils/secrets-loader';
+import { sanitizeLLMPrompt, validateAndSanitizeLLMInput } from '../../../shared/utils/validation';
 
 import { analyzeCommand, generateContextualHelp } from './contextual-help';
 
@@ -655,6 +656,32 @@ export async function parseWithLLM(
   conversationHistory: any[] = [],
   inputType: 'text' | 'voice' = 'text'
 ): Promise<ParsedCommand> {
+  // ============================================
+  // INPUT VALIDATION & SANITIZATION
+  // ============================================
+  
+  // Validate and sanitize user input to prevent prompt injection
+  const { valid, sanitized, errors } = validateAndSanitizeLLMInput(userInput);
+  
+  if (!valid) {
+    return {
+      success: false,
+      intent: 'unknown',
+      confidence: 0,
+      validationErrors: errors,
+      parsedMessage: 'Invalid input',
+      fromAsset: null,
+      fromChain: null,
+      toAsset: null,
+      toChain: null,
+      amount: null,
+      settleAsset: null,
+      settleNetwork: null,
+      settleAmount: null,
+      settleAddress: null,
+    };
+  }
+
   let currentSystemPrompt = systemPrompt;
 
   if (inputType === 'voice') {
@@ -666,10 +693,13 @@ export async function parseWithLLM(
   }
 
   try {
+    // Use sanitized and delimited input to prevent prompt injection
+    const sanitizedUserInput = sanitizeLLMPrompt(sanitized);
+    
     const messages: any[] = [
         { role: "system", content: currentSystemPrompt },
         ...conversationHistory,
-        { role: "user", content: userInput }
+        { role: "user", content: sanitizedUserInput }
     ];
 
     const completion = await getGroqClient().chat.completions.create({

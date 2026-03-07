@@ -2,6 +2,13 @@ import { parseWithLLM, ParsedCommand } from './groq-client';
 import logger from './logger';
 import { parseDCA } from './nl-dca';
 import { detectLimitOrder } from './nl-limit-orders';
+import { 
+  sanitizeInput, 
+  validateAndSanitizeLLMInput,
+  VALIDATION_LIMITS,
+  ConversationHistorySchema,
+  safeParse
+} from '../../../shared/utils/validation';
 
 export { ParsedCommand };
 
@@ -323,12 +330,38 @@ export async function parseUserCommand(
   conversationHistory: any = [], // Replaced fallbackToLLM to fix "Cannot find name" errors
   inputType: 'text' | 'voice' = 'text'
 ): Promise<ParseResult> {
+  // ============================================
+  // INPUT VALIDATION & SANITIZATION
+  // ============================================
+  
+  // Validate user input with LLM sanitization
+  const { valid, sanitized, errors } = validateAndSanitizeLLMInput(userInput);
+  
+  if (!valid) {
+    return {
+      success: false,
+      validationErrors: errors,
+      confidence: 0,
+      parsedMessage: 'Invalid input format',
+      requiresConfirmation: false,
+      originalInput: userInput
+    };
+  }
+
+  // Validate conversation history
+  const historyValidation = safeParse(ConversationHistorySchema, conversationHistory);
+  if (!historyValidation.success) {
+    conversationHistory = []; // Reset to empty if invalid
+    logger.warn('Invalid conversation history format, resetting', { errors: historyValidation.errors });
+  }
+
   // Graceful handling if someone passes a boolean for legacy fallbackToLLM
   if (typeof conversationHistory === 'boolean') {
     conversationHistory = [];
   }
 
-  if (!userInput?.trim()) {
+  const userInputLength = sanitized.length;
+  if (userInputLength === 0) {
     return {
       success: false,
       validationErrors: ['Input cannot be empty'],
@@ -339,8 +372,20 @@ export async function parseUserCommand(
     };
   }
 
+  // Enforce input length limits to prevent ReDoS
+  if (userInputLength > VALIDATION_LIMITS.COMMAND_MAX) {
+    return {
+      success: false,
+      validationErrors: [`Input exceeds maximum length of ${VALIDATION_LIMITS.COMMAND_MAX} characters`],
+      confidence: 0,
+      parsedMessage: 'Input too long',
+      requiresConfirmation: false,
+      originalInput: userInput
+    };
+  }
+
   const originalInput = userInput;
-  const preprocessedInput = preprocessInput(userInput);
+  const preprocessedInput = preprocessInput(sanitized);
   
   // Enhanced ambiguity detection with better error handling
   const hasAmbiguousOr = REGEX_AMBIGUOUS_OR.test(preprocessedInput);
