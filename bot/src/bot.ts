@@ -13,6 +13,8 @@ import * as db from './services/database';
 import { OrderMonitor } from './services/order-monitor';
 import { parseUserCommand } from './services/parseUserCommand';
 import { reputationService } from './services/reputation-service';
+import { limitOrderWorker } from './workers/limitOrderWorker';
+import { DCAScheduler } from './services/dca-scheduler';
 
 dotenv.config();
 
@@ -57,6 +59,8 @@ const orderMonitor = new OrderMonitor({
     }
   }
 });
+
+const dcaScheduler = new DCAScheduler();
 
 /* ---------------- Rate Limit ---------------- */
 
@@ -432,6 +436,8 @@ async function start() {
 
     await orderMonitor.loadPendingOrders();
     orderMonitor.start();
+    await limitOrderWorker.start(bot);
+    dcaScheduler.start();
 
     await bot.telegram.deleteWebhook({ drop_pending_updates: true });
 
@@ -446,6 +452,8 @@ async function start() {
       logger.info(`🛑 Shutdown (${signal})`);
 
       orderMonitor.stop();
+      limitOrderWorker.stop();
+      dcaScheduler.stop();
       bot.stop(signal);
 
       await new Promise<void>((resolve) => server.close(() => resolve()));
