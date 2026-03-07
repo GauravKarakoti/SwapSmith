@@ -13,8 +13,11 @@ export function useCsrfToken() {
     const csrfCookie = cookies.find(c => c.trim().startsWith('csrf-token='));
     
     if (csrfCookie) {
-      const tokenValue = csrfCookie.split('=')[1];
-      setToken(tokenValue);
+      const tokenParts = csrfCookie.split('=');
+      const tokenValue = tokenParts[1];
+      if (tokenValue && tokenValue.trim().length > 0) {
+        setToken(tokenValue.trim());
+      }
     }
   }, []);
 
@@ -45,7 +48,11 @@ export async function csrfFetch(
   const cookies = document.cookie.split(';');
   const csrfCookie = cookies.find(c => c.trim().startsWith('csrf-token='));
   
-  const token = csrfCookie?.split('=')[1];
+  let token: string | undefined;
+  if (csrfCookie) {
+    const tokenParts = csrfCookie.split('=');
+    token = tokenParts[1]?.trim();
+  }
 
   const headers = new Headers(options.headers || {});
 
@@ -87,8 +94,11 @@ export function setupCsrfInterceptor(axiosInstance: AxiosLikeInstance) {
     const csrfCookie = cookies.find(c => c.trim().startsWith('csrf-token='));
     
     if (csrfCookie) {
-      const token = csrfCookie.split('=')[1];
-      config.headers['x-csrf-token'] = token;
+      const tokenParts = csrfCookie.split('=');
+      const token = tokenParts[1]?.trim();
+      if (token && token.length > 0) {
+        config.headers['x-csrf-token'] = token;
+      }
     }
 
     return config;
