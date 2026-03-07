@@ -110,14 +110,34 @@ function SwapHistoryModal({
   const [error, setError]     = useState('')
 
   useEffect(() => {
-    if (!user.firebaseUid) { setLoading(false); setError('No firebaseUid for this user.'); return }
-    fetch(`/api/admin/users/${encodeURIComponent(user.firebaseUid)}/swaps?limit=100`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.json())
-      .then(d => { if (d.success) setSwaps(d.swaps); else setError(d.error ?? 'Failed'); })
-      .catch(() => setError('Network error'))
-      .finally(() => setLoading(false))
+    const fetchUserSwaps = async () => {
+      if (!user.firebaseUid) {
+        setLoading(false);
+        setError('No firebaseUid for this user.');
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `/api/admin/users/${encodeURIComponent(user.firebaseUid)}/swaps?limit=100`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const data = await response.json();
+        
+        if (data.success) {
+          setSwaps(data.swaps);
+        } else {
+          setError(data.error ?? 'Failed to load swaps');
+        }
+      } catch (err) {
+        console.error('Failed to fetch user swaps:', err);
+        setError('Network error');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserSwaps();
   }, [user.firebaseUid, token])
 
   return (
