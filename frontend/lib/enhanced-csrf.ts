@@ -43,7 +43,9 @@ export const ENHANCED_CSRF_CONFIG = {
 
 // Allowed origins for CSRF validation
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS 
-  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  ? process.env.ALLOWED_ORIGINS.split(',')
+      .map(o => o.trim())
+      .filter(o => o.length > 0)
   : [
       'http://localhost:3000',
       'http://localhost:3001',

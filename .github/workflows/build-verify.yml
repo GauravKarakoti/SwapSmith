@@ -1,0 +1,71 @@
+name: Build Verification
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  build-matrix:
+    name: Build Check - ${{ matrix.workspace }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ['20', '22']
+        workspace: ['shared', 'frontend', 'bot']
+      fail-fast: false
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: |
+            shared/package-lock.json
+            frontend/package-lock.json
+            bot/package-lock.json
+
+      - name: Install dependencies - Shared
+        working-directory: ./shared
+        run: npm ci
+
+      - name: Build Shared
+        working-directory: ./shared
+        run: npm run build
+
+      - name: Install dependencies - ${{ matrix.workspace }}
+        working-directory: ./${{ matrix.workspace }}
+        run: npm ci
+        if: matrix.workspace != 'shared'
+
+      - name: Build ${{ matrix.workspace }}
+        working-directory: ./${{ matrix.workspace }}
+        run: npm run build
+        if: matrix.workspace != 'shared'
+
+  docker-build-check:
+    name: Docker Build Check - ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: ['bot', 'frontend']
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image - ${{ matrix.service }}
+        uses: docker/build-push-action@v5
+        with:
+          context: ./${{ matrix.service }}
+          file: ./${{ matrix.service }}/Dockerfile
+          push: false
+          tags: ${{ matrix.service }}:test

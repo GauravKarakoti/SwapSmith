@@ -12,7 +12,10 @@ import { getTopStablecoinYields, formatYieldPools } from './services/yield-clien
 import * as db from './services/database';
 import { OrderMonitor } from './services/order-monitor';
 import { parseUserCommand } from './services/parseUserCommand';
-import { shutdownManager, registerProcessHandlers } from './services/shutdown-manager';
+import { reputationService } from './services/reputation-service';
+import { TERMINAL_STATUSES_LIST } from './constants';
+import { limitOrderWorker } from './workers/limitOrderWorker';
+import { DCAScheduler } from './services/dca-scheduler';
 
 dotenv.config();
 
@@ -41,11 +44,28 @@ const orderMonitor = new OrderMonitor({
         `🔔 *Order Status Update*\n\nOrder \`${orderId}\` status changed to: *${newStatus.toUpperCase()}*`,
         { parse_mode: 'Markdown' }
       );
+
+      // --- AGENT REPUTATION LOGIC ---
+      // When a swap completes, record it on-chain
+      // Ensure we only record once by checking if the previous status was not already terminal
+      const wasTerminal = TERMINAL_STATUSES_LIST.includes(oldStatus);
+      const isTerminal = TERMINAL_STATUSES_LIST.includes(newStatus);
+      const botAddress = reputationService.getBotAddress();
+
+      if (botAddress && isTerminal && !wasTerminal) {
+        if (newStatus === 'settled') {
+          await reputationService.recordSwapOutcome(botAddress, true);
+        } else if (['expired', 'refunded', 'failed'].includes(newStatus)) {
+          await reputationService.recordSwapOutcome(botAddress, false);
+        }
+      }
     } catch (error) {
       logger.error(`[Bot] Failed to send status update to ${telegramId}:`, error);
     }
   }
 });
+
+const dcaScheduler = new DCAScheduler();
 
 /* ---------------- Rate Limit ---------------- */
 
@@ -128,6 +148,26 @@ bot.command('clear', async (ctx: Context) => {
 
   await db.clearConversationState(ctx.from.id);
   await ctx.reply('🗑️ Conversation cleared');
+});
+
+bot.command('reputation', async (ctx: Context) => {
+  const botAddress = reputationService.getBotAddress();
+  if (!botAddress) {
+    return ctx.reply('⚠️ Reputation tracking is not configured for this agent.');
+  }
+
+  const reputation = await reputationService.getReputation(botAddress);
+  if (!reputation) {
+    return ctx.reply('⚠️ Could not fetch reputation stats.');
+  }
+
+  const { total, success, score } = reputation;
+  await ctx.reply(
+    `🛡️ *Agent Reputation*\n\n` +
+    `Trust Score: *${score}%*\n` +
+    `Success Rate: ${success}/${total} swaps`,
+    { parse_mode: 'Markdown' }
+  );
 });
 
 /* -------------------------------------------------------------------------- */
@@ -401,6 +441,8 @@ async function start() {
 
     await orderMonitor.loadPendingOrders();
     orderMonitor.start();
+    await limitOrderWorker.start(bot);
+    dcaScheduler.start();
 
     // Register OrderMonitor for graceful shutdown
     shutdownManager.register({
@@ -418,17 +460,13 @@ async function start() {
       logger.info(`🌍 Server running on port ${PORT}`)
     );
 
-    // Register HTTP server for graceful shutdown
-    shutdownManager.register({
-      name: 'HTTP Server',
-      stop: () => new Promise<void>((resolve) => {
-        server.close(() => {
-          logger.info('✅ HTTP server closed');
-          resolve();
-        });
-      }),
-      timeout: 5000
-    });
+    const shutdown = async (signal: string) => {
+      logger.info(`🛑 Shutdown (${signal})`);
+
+      orderMonitor.stop();
+      limitOrderWorker.stop();
+      dcaScheduler.stop();
+      bot.stop(signal);
 
     // Register Telegraf bot for graceful shutdown
     shutdownManager.register({

@@ -23,7 +23,7 @@ jobs:
     
     env:
       NEXT_PUBLIC_APP_URL: http://localhost:3000
-      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }} # Optional if needed for build
+      # Note: GROQ_API_KEY should only be used at runtime, not during build
       
     steps:
       - name: Checkout repository

@@ -18,6 +18,7 @@ import { parseEther, formatEther, type Chain, erc20Abi, formatUnits, parseUnits,
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
 import { validateDepositAddressForNetwork } from '@/utils/addressValidation'
 import { getCoins, type Coin, type CoinNetwork } from '@/utils/sideshift-client'
+import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift'
 
 export interface QuoteData {
   depositAmount: string
@@ -311,7 +312,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
   }
 
   const handleConfirm = async () => {
-    if (!quote) {
+    if (!quote || !quote.depositAddress) {
       alert('Error: Deposit address is missing. Cannot proceed.')
       return
     }
@@ -327,22 +328,50 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
       return
     }
 
-    console.log('Processing swap to SideShift address:', quote.depositAddress)
+    // CRITICAL: Validate deposit address before proceeding
+    const depositAddress = quote.depositAddress.trim()
+    
+    if (!depositAddress || depositAddress.length === 0) {
+      console.error('SECURITY: Empty deposit address detected')
+      alert('ERROR: Invalid deposit address. Cannot proceed.')
+      return
+    }
 
-    const addressCheck = validateDepositAddressForNetwork(quote.depositNetwork, quote.depositAddress)
+    console.log('Processing swap to SideShift address:', depositAddress)
+
+    const addressCheck = validateDepositAddressForNetwork(quote.depositNetwork, depositAddress)
     if (!addressCheck.passed) {
-      console.error('SECURITY: Rejected invalid deposit address from quote:', { quoteId: quote.id, depositNetwork: quote.depositNetwork, depositAddress: quote.depositAddress })
+      console.error('SECURITY: Rejected invalid deposit address from quote:', { 
+        quoteId: quote.id, 
+        depositNetwork: quote.depositNetwork, 
+        depositAddress: depositAddress 
+      })
       alert(`Error: ${addressCheck.message}. Cannot proceed with swap.`)
       return
     }
 
-    if (quote.depositAddress.toLowerCase() === address?.toLowerCase()) {
-      console.error('SECURITY: Attempted to send funds to user\'s own address instead of SideShift!')
+    // CRITICAL: Prevent sending to user's own wallet
+    if (depositAddress.toLowerCase() === address?.toLowerCase()) {
+      console.error('SECURITY: Attempted to send funds to user\'s own address instead of SideShift!', {
+        userAddress: address,
+        depositAddress: depositAddress
+      })
       alert('ERROR: Cannot send funds to your own wallet. Must send to SideShift deposit address.')
       return
     }
 
-    let transactionDetails: any
+    // CRITICAL: Verify deposit address is different from connected wallet
+    if (!address) {
+      alert('ERROR: Wallet not connected.')
+      return
+    }
+
+    let transactionDetails: {
+      to: `0x${string}`
+      value?: bigint
+      data?: `0x${string}`
+      chainId?: number
+    }
     try {
       const coins = await getCoins()
       const coinInfo = coins.find((c: Coin) => c.coin.toLowerCase() === quote.depositCoin.toLowerCase())
@@ -364,23 +393,51 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
         }
         const amount = parseUnits(quote.depositAmount, decimals)
 
+        // CRITICAL: ERC20 transfer - ensure we're sending to SideShift deposit address
+        console.log('Preparing ERC20 transfer:', {
+          token: networkInfo.tokenContract,
+          to: depositAddress,
+          amount: quote.depositAmount,
+          userWallet: address
+        })
+
         transactionDetails = {
           to: networkInfo.tokenContract as `0x${string}`,
           value: BigInt(0),
           data: encodeFunctionData({
             abi: erc20Abi,
             functionName: 'transfer',
-            args: [quote.depositAddress as `0x${string}`, amount],
+            args: [depositAddress as `0x${string}`, amount],
           }),
           chainId: depositChainId,
         }
       } else {
+        // CRITICAL: Native token transfer - ensure we're sending to SideShift deposit address
+        console.log('Preparing native token transfer:', {
+          to: depositAddress,
+          value: quote.depositAmount,
+          userWallet: address
+        })
+
         transactionDetails = {
-          to: quote.depositAddress as `0x${string}`,
+          to: depositAddress as `0x${string}`,
           value: parseUnits(quote.depositAmount, 18),
           chainId: depositChainId,
         }
       }
+
+      // Final validation before sending
+      if (transactionDetails.to.toLowerCase() === address.toLowerCase()) {
+        console.error('CRITICAL: Transaction target is user wallet, aborting!', transactionDetails)
+        alert('CRITICAL ERROR: Transaction would send to your own wallet. Aborting for safety.')
+        return
+      }
+
+      console.log('Final transaction details:', {
+        ...transactionDetails,
+        depositAddress: depositAddress,
+        userAddress: address
+      })
 
       if (connectedChain?.id !== depositChainId) {
         if (!switchChainAsync) {
@@ -456,7 +513,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
           <Zap className="w-4 h-4 text-yellow-500 shrink-0" /> Confirm Swap
         </h4>
         <div className="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">
-          SideShift.ai API
+          {SIDESHIFT_CONFIG.DISPLAY_NAME} API
         </div>
       </div>
 
