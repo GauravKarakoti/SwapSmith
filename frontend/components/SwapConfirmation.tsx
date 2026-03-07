@@ -366,7 +366,12 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
       return
     }
 
-    let transactionDetails: any
+    let transactionDetails: {
+      to: `0x${string}`
+      value?: bigint
+      data?: `0x${string}`
+      chainId?: number
+    }
     try {
       const coins = await getCoins()
       const coinInfo = coins.find((c: Coin) => c.coin.toLowerCase() === quote.depositCoin.toLowerCase())
