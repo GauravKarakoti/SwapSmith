@@ -67,8 +67,8 @@ export const orders = pgTable('orders', {
   tx_hash: text('tx_hash'),
   createdAt: timestamp('created_at').defaultNow(),
 }, (table) => [
+  index('orders_status_idx').on(table.status),
   index("idx_orders_telegram_id").on(table.telegramId),
-  index("idx_orders_status").on(table.status),
 ]);
 
 export const checkouts = pgTable('checkouts', {
@@ -97,7 +97,9 @@ export const watchedOrders = pgTable('watched_orders', {
   sideshiftOrderId: text('sideshift_order_id').notNull().unique(),
   lastStatus: text('last_status').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => [
+  index("idx_watched_orders_telegram_id").on(table.telegramId),
+]);
 
 export const dcaSchedules = pgTable('dca_schedules', {
   id: serial('id').primaryKey(),
@@ -145,7 +147,11 @@ export const limitOrders = pgTable('limit_orders', {
   lastCheckedAt: timestamp('last_checked_at'),
   retryCount: integer('retry_count').notNull().default(0),
   retryAfter: timestamp('retry_after'),
-});
+}, (table) => [
+  index("idx_limit_orders_telegram_id").on(table.telegramId),
+  index("idx_limit_orders_status").on(table.status),
+  index("idx_limit_orders_is_active").on(table.isActive),
+]);
 
 // --- SHARED SCHEMAS (used by both bot and frontend) ---
 

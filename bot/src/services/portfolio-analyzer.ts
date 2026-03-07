@@ -148,7 +148,7 @@ export async function getUserPortfolioHoldings(
 
     // Get unique coins
     const uniqueCoins = [...new Set(Object.keys(holdings).map(k => k.split('-')[0]))];
-    
+
     // Fetch prices
     const prices = await fetchPrices(uniqueCoins);
 
@@ -160,7 +160,7 @@ export async function getUserPortfolioHoldings(
       const [coin, network] = key.split('-');
       const price = prices.get(coin) || 0;
       const value = data.amount * price;
-      
+
       if (value > 0) {
         assets.push({
           coin,
