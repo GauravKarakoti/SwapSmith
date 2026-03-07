@@ -13,7 +13,6 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov', 'text-summary', 'json-summary'],
       reportOnFailure: true,
-      all: true,
       lines: 70,
       functions: 70,
       branches: 70,
