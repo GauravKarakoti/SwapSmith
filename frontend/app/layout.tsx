@@ -1,12 +1,21 @@
-'use client'
-
 import './globals.css'
 import { Inter } from 'next/font/google'
 import { Providers } from './providers'
-import { Toaster } from 'react-hot-toast'
-import RewardToast from '@/components/RewardToast'
+import type { Metadata, Viewport } from 'next'
 
 const inter = Inter({ subsets: ['latin'] })
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+}
+
+export const metadata: Metadata = {
+  title: 'SwapSmith',
+  description: 'Voice-Activated Crypto Trading Assistant',
+}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -37,32 +46,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-purple-600/10 blur-[120px]" />
         </div>
         <Providers>{children}</Providers>
-        <RewardToast />
-        <Toaster
-          position="top-center"
-          toastOptions={{
-            duration: 4000,
-            style: {
-              background: '#18181b',
-              color: '#fff',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '12px',
-              padding: '16px',
-            },
-            success: {
-              iconTheme: {
-                primary: '#10b981',
-                secondary: '#18181b',
-              },
-            },
-            error: {
-              iconTheme: {
-                primary: '#ef4444',
-                secondary: '#18181b',
-              },
-            },
-          }}
-        />
       </body>
     </html>
   )
