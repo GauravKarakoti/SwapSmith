@@ -402,6 +402,7 @@ export async function getConversationState(telegramId: number) {
     }
     return state;
   } catch (err) {
+    logger.error('Error retrieving conversation state:', err);
     return memoryState.get(telegramId) || null;
   }
 }
@@ -415,6 +416,7 @@ export async function setConversationState(telegramId: number, state: any) {
         set: { state: JSON.stringify(state), lastUpdated: new Date() }
       });
   } catch (err) {
+    logger.error('Error saving conversation state:', err);
     memoryState.set(telegramId, state);
   }
 }
@@ -423,6 +425,7 @@ export async function clearConversationState(telegramId: number) {
   try {
     await db.delete(conversations).where(eq(conversations.telegramId, telegramId));
   } catch (err) {
+    logger.error('Error clearing conversation state:', err);
     memoryState.delete(telegramId);
   }
 }
