@@ -16,7 +16,8 @@
     },
     "android": {
       "favicon": "./assets/icon.png",
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.swapsmith"
     },
     "web": {
       "favicon": "./assets/icon.png"
@@ -24,6 +25,11 @@
     "plugins": [
       "expo-font",
       "expo-asset"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "919c70a9-9497-4764-aba9-f142e0941134"
+      }
+    }
   }
 }
