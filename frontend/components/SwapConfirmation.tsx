@@ -18,6 +18,7 @@ import { parseEther, formatEther, type Chain, erc20Abi, formatUnits, parseUnits,
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
 import { validateDepositAddressForNetwork } from '@/utils/addressValidation'
 import { getCoins, type Coin, type CoinNetwork } from '@/utils/sideshift-client'
+import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift'
 
 export interface QuoteData {
   depositAmount: string
@@ -512,7 +513,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
           <Zap className="w-4 h-4 text-yellow-500 shrink-0" /> Confirm Swap
         </h4>
         <div className="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">
-          SideShift.ai API
+          {SIDESHIFT_CONFIG.DISPLAY_NAME} API
         </div>
       </div>
 
