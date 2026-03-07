@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift';
+import { SIDESHIFT_CONFIG, getApiUrl } from '../../shared/config/sideshift';
 import { validateDepositAddressForNetwork } from './addressValidation';
 
 // API key is now server-side only - client calls backend API routes
@@ -135,7 +135,7 @@ export async function getCoins(): Promise<Coin[]> {
   }
 
   try {
-    const response = await axios.get(`${SIDESHIFT_CONFIG.BASE_URL}/coins`);
+    const response = await axios.get(getApiUrl('coins'));
     coinsCache = response.data;
     coinsCacheTimestamp = Date.now();
     return response.data;
@@ -240,7 +240,7 @@ export async function getCoinPrices(): Promise<CoinPrice[]> {
           }
 
           const quoteResponse = await axios.post(
-            `${SIDESHIFT_CONFIG.BASE_URL}/quotes`,
+            getApiUrl('quotes'),
             {
               depositCoin: coin.coin,
               depositNetwork: network.network,
@@ -286,7 +286,7 @@ export async function getCoinPrices(): Promise<CoinPrice[]> {
 export async function getCoinPrice(coin: string, network: string): Promise<string | null> {
   try {
     const quoteResponse = await axios.post(
-      `${SIDESHIFT_CONFIG.BASE_URL}/quotes`,
+      getApiUrl('quotes'),
       {
         depositCoin: coin,
         depositNetwork: network,
