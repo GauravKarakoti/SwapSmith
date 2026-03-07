@@ -258,9 +258,21 @@ export class LimitOrderWorker {
       }
 
       // 4. Update DB & Watch
-      await updateLimitOrderStatus(order.id, 'executed', sideshiftOrder.id);
-      await addWatchedOrder(Number(order.telegramId), sideshiftOrder.id, 'pending');
-      logger.info(`✅ Order #${order.id} executed via SideShift (Order ID: ${sideshiftOrder.id})`);
+      try {
+        await updateLimitOrderStatus(order.id, 'executed', sideshiftOrder.id);
+        await addWatchedOrder(Number(order.telegramId), sideshiftOrder.id, 'pending');
+        logger.info(`✅ Order #${order.id} executed via SideShift (Order ID: ${sideshiftOrder.id})`);
+      } catch (err) {
+        // If adding the watched order fails after marking as executed, attempt to revert
+        logger.error('Failed to update DB & watch order; attempting to revert limit order status', err);
+        try {
+          // Revert to a safe, pre-executed status so the order can be retried/handled
+          await updateLimitOrderStatus(order.id, 'pending', null as any);
+        } catch (revertErr) {
+          logger.error('Failed to revert limit order status after watch-order failure', revertErr);
+        }
+        throw err;
+      }
 
 
       // 5. Notify User
