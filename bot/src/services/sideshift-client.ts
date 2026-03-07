@@ -6,6 +6,7 @@ dotenv.config();
 const AFFILIATE_ID = process.env.SIDESHIFT_AFFILIATE_ID || process.env.AFFILIATE_ID || '';
 const API_KEY = process.env.SIDESHIFT_API_KEY || '';
 const DEFAULT_USER_IP = process.env.SIDESHIFT_CLIENT_IP;
+const API_TIMEOUT = parseInt(process.env.SIDESHIFT_API_TIMEOUT_MS ?? '15000', 10);
 
 export interface SideShiftPair {
   depositCoin: string;
@@ -245,10 +246,42 @@ const SideShiftCheckoutResponseSchema = z.object({
 // ============================================
 
 /**
- * Validates API response data against a Zod schema
+ * Safely extracts error message from SideShift API error response
+ */
+function extractErrorMessage(error: any, fallback: string): string {
+  try {
+    // Try nested error structure: error.response.data.error.message
+    if (error?.response?.data?.error?.message && typeof error.response.data.error.message === 'string') {
+      return error.response.data.error.message;
+    }
+    // Try direct error message
+    if (error?.response?.data?.message && typeof error.response.data.message === 'string') {
+      return error.response.data.message;
+    }
+    // Try flat error structure: error.response.data.error
+    if (error?.response?.data?.error && typeof error.response.data.error === 'string') {
+      return error.response.data.error;
+    }
+    // Try message property
+    if (error?.message && typeof error.message === 'string') {
+      return error.message;
+    }
+  } catch (e) {
+    // Silently fall through to fallback
+  }
+  return fallback;
+}
+
+/**
+ * Validates API response data against a Zod schema with safe null checks
  * @throws Error with detailed validation issues if validation fails
  */
 function validateResponse<T>(schema: z.ZodSchema<T>, data: unknown, context: string): T {
+  // Ensure data exists and is an object
+  if (data === null || data === undefined) {
+    throw new Error(`SideShift API response validation failed for ${context}: received null or undefined response`);
+  }
+  
   const result = schema.safeParse(data);
   
   if (!result.success) {
@@ -271,14 +304,12 @@ export async function getCoins(userIP?: string): Promise<SideShiftCoin[]> {
 
     const response = await axios.get(
       `${SIDESHIFT_CONFIG.BASE_URL}/coins`,
-      { headers }
+      { headers, timeout: API_TIMEOUT }
     );
-    return validateResponse(SideShiftCoinSchema.array(), response.data, 'getCoins');
+    return validateResponse(SideShiftCoinSchema.array(), response?.data, 'getCoins');
   } catch (error) {
-    if (axios.isAxiosError(error)) {
-      throw new Error(error.response?.data?.error?.message || 'Failed to fetch coins');
-    }
-    throw new Error("Failed to fetch coins");
+    const message = extractErrorMessage(error, 'Failed to fetch coins');
+    throw new Error(message);
   }
 }
 
@@ -292,14 +323,12 @@ export async function getPairs(userIP?: string): Promise<SideShiftPair[]> {
 
     const response = await axios.get(
       `${SIDESHIFT_CONFIG.BASE_URL}/pairs`,
-      { headers }
+      { headers, timeout: API_TIMEOUT }
     );
-    return validateResponse(SideShiftPairSchema.array(), response.data, 'getPairs');
+    return validateResponse(SideShiftPairSchema.array(), response?.data, 'getPairs');
   } catch (error) {
-    if (axios.isAxiosError(error)) {
-      throw new Error(error.response?.data?.error?.message || 'Failed to fetch trading pairs');
-    }
-    throw new Error("Failed to fetch trading pairs");
+    const message = extractErrorMessage(error, 'Failed to fetch trading pairs');
+    throw new Error(message);
   }
 }
 
@@ -329,24 +358,19 @@ export async function createQuote(
         depositAmount: amount.toString(),
         affiliateId: AFFILIATE_ID,
       },
-      { headers }
+      { headers, timeout: API_TIMEOUT }
     );
 
-    const validated = validateResponse(SideShiftQuoteSchema, response.data, 'createQuote');
+    const validated = validateResponse(SideShiftQuoteSchema, response?.data, 'createQuote');
 
     if (validated.error) {
-      throw new Error(validated.error.message);
+      throw new Error(`SideShift quote error: ${validated.error.message}`);
     }
 
-    return {
-      ...validated,
-      id: validated.id || ''
-    };
+    return validated;
   } catch (error) {
-    if (axios.isAxiosError(error)) {
-      throw new Error(error.response?.data?.error?.message || `Failed to create quote for ${fromAsset} to ${toAsset}`);
-    }
-    throw new Error(`Failed to create quote for ${fromAsset} to ${toAsset}`);
+    const message = extractErrorMessage(error, `Failed to create quote for ${fromAsset} to ${toAsset}`);
+    throw new Error(message);
   }
 }
 
@@ -372,14 +396,12 @@ export async function createOrder(quoteId: string, settleAddress: string, refund
     const response = await axios.post(
       `${SIDESHIFT_CONFIG.BASE_URL}/shifts/fixed`,
       payload,
-      { headers }
+      { headers, timeout: API_TIMEOUT }
     );
-    return validateResponse(SideShiftOrderSchema, response.data, 'createOrder');
+    return validateResponse(SideShiftOrderSchema, response?.data, 'createOrder');
   } catch (error) {
-    if (axios.isAxiosError(error)) {
-      throw new Error(error.response?.data?.error?.message || 'Failed to create order');
-    }
-    throw new Error('Failed to create order');
+    const message = extractErrorMessage(error, 'Failed to create order');
+    throw new Error(message);
   }
 }
 
@@ -394,14 +416,12 @@ export async function getOrderStatus(orderId: string, userIP?: string): Promise<
 
     const response = await axios.get(
       `${SIDESHIFT_CONFIG.BASE_URL}/shifts/${orderId}`,
-      { headers }
+      { headers, timeout: API_TIMEOUT }
     );
-    return validateResponse(SideShiftOrderStatusSchema, response.data, 'getOrderStatus');
+    return validateResponse(SideShiftOrderStatusSchema, response?.data, 'getOrderStatus');
   } catch (error) {
-    if (axios.isAxiosError(error)) {
-      throw new Error(error.response?.data?.error?.message || 'Failed to get order status');
-    }
-    throw new Error('Failed to get order status');
+    const message = extractErrorMessage(error, `Failed to get order status for ${orderId}`);
+    throw new Error(message);
   }
 }
 
@@ -434,23 +454,18 @@ export async function createCheckout(
     const response = await axios.post(
       `${SIDESHIFT_CONFIG.BASE_URL}/checkout`,
       payload,
-      { headers }
+      { headers, timeout: API_TIMEOUT }
     );
 
-    const validated = validateResponse(SideShiftCheckoutResponseSchema, response.data, 'createCheckout');
+    const validated = validateResponse(SideShiftCheckoutResponseSchema, response?.data, 'createCheckout');
 
     if (validated.error) {
-      throw new Error(validated.error.message);
+      throw new Error(`SideShift checkout error: ${validated.error.message}`);
     }
 
-    return {
-      ...validated,
-      url: validated.url || `${SIDESHIFT_CONFIG.CHECKOUT_URL}/${validated.id}`
-    };
+    return validated;
   } catch (error) {
-    if (axios.isAxiosError(error)) {
-      throw new Error(error.response?.data?.error?.message || 'Failed to create checkout');
-    }
-    throw new Error('Failed to create checkout');
+    const message = extractErrorMessage(error, 'Failed to create checkout');
+    throw new Error(message);
   }
 }
