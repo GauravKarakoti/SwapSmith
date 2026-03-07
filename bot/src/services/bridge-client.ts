@@ -8,7 +8,7 @@
 
 import axios from 'axios';
 import dotenv from 'dotenv';
-import { SIDESHIFT_CONFIG } from '../../../shared/config/sideshift';
+import { SIDESHIFT_CONFIG, getApiUrl } from '../../../shared/config/sideshift';
 
 dotenv.config();
 
@@ -42,7 +42,7 @@ interface BridgeConfig {
 const BRIDGE_CONFIGS: Record<string, BridgeConfig> = {
   sideshift: {
     name: 'sideshift',
-    displayName: 'SideShift.ai',
+    displayName: SIDESHIFT_CONFIG.DISPLAY_NAME,
     supportedChains: ['ethereum', 'polygon', 'arbitrum', 'optimism', 'avalanche', 'bsc', 'base', 'solana'],
     features: { instantExecution: false },
     reliability: { score: 85 },
@@ -195,7 +195,7 @@ async function getSideShiftQuotes(request: BridgeQuoteRequest): Promise<Aggregat
     }
 
     const response = await axios.post(
-      `${SIDESHIFT_BASE_URL}/quotes`,
+      getApiUrl('quotes'),
       {
         depositCoin: request.fromToken,
         depositNetwork: request.fromChain,
@@ -210,7 +210,7 @@ async function getSideShiftQuotes(request: BridgeQuoteRequest): Promise<Aggregat
     const data = response.data;
     const quote: BridgeQuote = {
       bridge: 'sideshift',
-      displayName: 'SideShift.ai',
+      displayName: SIDESHIFT_CONFIG.DISPLAY_NAME,
       fromChain: request.fromChain,
       toChain: request.toChain,
       fromToken: request.fromToken,

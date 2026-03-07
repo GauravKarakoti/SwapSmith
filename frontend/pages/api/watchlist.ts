@@ -21,7 +21,14 @@ export default async function handler(
       .json({ error: 'Unauthorized: No token provided' });
   }
 
-  const idToken = authHeader.split('Bearer ')[1];
+  const tokenParts = authHeader.split('Bearer ');
+  const idToken = tokenParts[1];
+  
+  if (!idToken || idToken.trim().length === 0) {
+    return res
+      .status(401)
+      .json({ error: 'Unauthorized: Invalid token format' });
+  }
 
   let decodedToken;
   try {

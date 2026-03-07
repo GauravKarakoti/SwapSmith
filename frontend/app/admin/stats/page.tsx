@@ -176,7 +176,8 @@ export default function AdminStatsPage() {
       } else {
         setError(data.error ?? 'Failed to load stats.')
       }
-    } catch {
+    } catch (error) {
+      console.error('Error fetching stats:', error)
       setError('Network error. Please refresh.')
     } finally {
       setLoading(false)
@@ -185,7 +186,7 @@ export default function AdminStatsPage() {
 
   useEffect(() => {
     const cached = sessionStorage.getItem('admin-info')
-    if (cached) { try { setAdminInfo(JSON.parse(cached)) } catch {} }
+    if (cached) { try { setAdminInfo(JSON.parse(cached)) } catch (error) { console.error('Error parsing cached admin info:', error) } }
     fetchStats(range)
     const t = setInterval(() => fetchStats(range), 60_000)
     return () => clearInterval(t)
