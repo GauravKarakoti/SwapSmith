@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { z } from 'zod';
 import dotenv from 'dotenv';
-import { SIDESHIFT_CONFIG } from '../../../shared/config/sideshift';
+import { SIDESHIFT_CONFIG, getApiEndpoint } from '../../../shared/config/sideshift';
 dotenv.config();
 const AFFILIATE_ID = process.env.SIDESHIFT_AFFILIATE_ID || process.env.AFFILIATE_ID || '';
 const API_KEY = process.env.SIDESHIFT_API_KEY || '';
@@ -303,7 +303,7 @@ export async function getCoins(userIP?: string): Promise<SideShiftCoin[]> {
     if (ip) headers['x-user-ip'] = ip;
 
     const response = await axios.get(
-      `${SIDESHIFT_CONFIG.BASE_URL}/coins`,
+      getApiEndpoint('COINS'),
       { headers, timeout: API_TIMEOUT }
     );
     return validateResponse(SideShiftCoinSchema.array(), response?.data, 'getCoins');
@@ -322,7 +322,7 @@ export async function getPairs(userIP?: string): Promise<SideShiftPair[]> {
     if (ip) headers['x-user-ip'] = ip;
 
     const response = await axios.get(
-      `${SIDESHIFT_CONFIG.BASE_URL}/pairs`,
+      getApiEndpoint('PAIRS'),
       { headers, timeout: API_TIMEOUT }
     );
     return validateResponse(SideShiftPairSchema.array(), response?.data, 'getPairs');
@@ -349,7 +349,7 @@ export async function createQuote(
     if (ip) headers['x-user-ip'] = ip;
 
     const response = await axios.post(
-      `${SIDESHIFT_CONFIG.BASE_URL}/quotes`,
+      getApiEndpoint('QUOTES'),
       {
         depositCoin: fromAsset,
         depositNetwork: fromNetwork,
@@ -394,7 +394,7 @@ export async function createOrder(quoteId: string, settleAddress: string, refund
     if (ip) headers['x-user-ip'] = ip;
 
     const response = await axios.post(
-      `${SIDESHIFT_CONFIG.BASE_URL}/shifts/fixed`,
+      getApiEndpoint('ORDERS'),
       payload,
       { headers, timeout: API_TIMEOUT }
     );
@@ -415,7 +415,7 @@ export async function getOrderStatus(orderId: string, userIP?: string): Promise<
     if (ip) headers['x-user-ip'] = ip;
 
     const response = await axios.get(
-      `${SIDESHIFT_CONFIG.BASE_URL}/shifts/${orderId}`,
+      `${SIDESHIFT_CONFIG.BASE_URL}/${SIDESHIFT_CONFIG.ENDPOINTS.SHIFTS}/${orderId}`,
       { headers, timeout: API_TIMEOUT }
     );
     return validateResponse(SideShiftOrderStatusSchema, response?.data, 'getOrderStatus');
@@ -452,7 +452,7 @@ export async function createCheckout(
     if (ip) headers['x-user-ip'] = ip;
 
     const response = await axios.post(
-      `${SIDESHIFT_CONFIG.BASE_URL}/checkout`,
+      getApiEndpoint('CHECKOUT'),
       payload,
       { headers, timeout: API_TIMEOUT }
     );
