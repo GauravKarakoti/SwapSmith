@@ -22,7 +22,16 @@ const currentLevel = process.env.NEXT_PUBLIC_LOG_LEVEL
  */
 function formatMessage(level: string, message: string, metadata?: object): string {
   const timestamp = new Date().toISOString();
-  const metadataStr = metadata ? ` ${JSON.stringify(metadata)}` : '';
+  
+  let metadataStr = '';
+  if (metadata) {
+    try {
+      metadataStr = ` ${JSON.stringify(metadata, (_, v) => typeof v === 'bigint' ? v.toString() : v)}`;
+    } catch {
+      metadataStr = ' [Metadata serialization failed]';
+    }
+  }
+
   return `${timestamp} [${level.toUpperCase()}]: ${message}${metadataStr}`;
 }
 
