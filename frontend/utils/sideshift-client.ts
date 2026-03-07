@@ -171,7 +171,6 @@ export async function createQuote(
     }
 
     return quote;
->>>>>>> 0e4cef795c15b946e650c2cf9da1821b3a59b31a
   } catch (error: unknown) {
     if (axios.isAxiosError(error)) {
       const err = error as { response?: { data?: { error?: { message?: string } } } };

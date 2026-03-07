@@ -13,8 +13,7 @@ import {
   ChevronUp,
   Lock,
   Unlock,
-  Flame,
-  Warning
+  Flame
 } from 'lucide-react';
 import { performSecurityScan, getRiskLevelLabel, getRiskScoreColor, type SecurityCheckResult } from '@/utils/security-scanner';
 
@@ -249,7 +248,7 @@ export default function TransactionSecurityScanner({
                 <ul className="space-y-1">
                   {scanResult.checks.tokenSecurity.details.riskFactors.map((factor, i) => (
                     <li key={i} className="flex items-center gap-2 text-yellow-700">
-                      <Warning className="w-3 h-3" />
+                      <AlertTriangle className="w-3 h-3" />
                       {factor}
                     </li>
                   ))}

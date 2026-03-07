@@ -14,10 +14,12 @@ import {
   Wallet,
 } from 'lucide-react'
 import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi'
-import { parseEther, formatEther, type Chain, erc20Abi, formatUnits, parseUnits, encodeFunctionData } from 'viem'
+import { formatEther, type Chain, erc20Abi, formatUnits, parseUnits, encodeFunctionData } from 'viem'
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
 import { validateDepositAddressForNetwork } from '@/utils/addressValidation'
 import { getCoins, type Coin, type CoinNetwork } from '@/utils/sideshift-client'
+import type { SecurityCheckResult as ScannerSecurityCheckResult } from '@/utils/security-scanner'
+import TransactionSecurityScanner from './TransactionSecurityScanner'
 
 export interface QuoteData {
   depositAmount: string
@@ -80,12 +82,16 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
   const [safetyCheck, setSafetyCheck] = useState<SafetyCheckResult | null>(null)
   const [walletBalance, setWalletBalance] = useState<string | null>(null)
   const [isLoadingBalance, setIsLoadingBalance] = useState(false)
+  const [securityScanResult, setSecurityScanResult] = useState<ScannerSecurityCheckResult | null>(null)
 
   const { address, isConnected, chain: connectedChain } = useAccount()
-=======
+  const { switchChainAsync } = useSwitchChain()
+  const { data: hash, isPending, isSuccess, error, sendTransaction } = useSendTransaction()
+
   const depositChainId = CHAIN_MAP[quote.depositNetwork.toLowerCase()]?.id
   const publicClient = usePublicClient({ chainId: depositChainId })
 
+  const getNetworkName = (network: string) => {
     return CHAIN_MAP[network.toLowerCase()]?.name || network
   }
 
@@ -141,7 +147,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
       let finalAmountFormatted = formatted
 
       if (isNativeValue) {
-        const gasBuffer = parseUnits('0.005', decimals) // 0.005 buffer for gas
+        const gasBuffer = parseUnits('0.005', decimals)
         const maxBalance = balanceRaw > gasBuffer ? balanceRaw - gasBuffer : BigInt(0)
         finalAmountFormatted = formatUnits(maxBalance, decimals)
       }
@@ -168,14 +174,12 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
         gas: { passed: true, message: '' },
       }
 
-      // Check 1: Address validation
       {
         const addressCheck = validateDepositAddressForNetwork(quote.depositNetwork, quote.depositAddress)
         checks.address.passed = addressCheck.passed
         checks.address.message = addressCheck.message
       }
 
-      // Check 2: Network compatibility
       if (depositChainId) {
         checks.network.passed = true
         checks.network.message = `Compatible with ${getNetworkName(quote.depositNetwork)}`
@@ -184,7 +188,6 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
         checks.network.message = `Network ${quote.depositNetwork} not supported`
       }
 
-      // Check 3: Balance check
       let isNative = true
       let tokenAddress: string | undefined
       let decimals = 18
@@ -238,7 +241,6 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
         checks.balance.message = `Insufficient balance: need ${quote.depositAmount}, have ${formatUnits(balance, decimals)}`
       }
 
-      // Check 4: Gas estimation
       try {
         let gasEstimate = BigInt(0)
         if (!isNative && tokenAddress) {
@@ -259,7 +261,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
           })
         }
 
-        const gasCost = gasEstimate * BigInt(30000000000) // 30 gwei buffer (conservative)
+        const gasCost = gasEstimate * BigInt(30000000000)
         const hasGas = isNative ? balance >= requiredAmount + gasCost : nativeBalance >= gasCost
 
         if (hasGas) {
@@ -267,7 +269,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
           checks.gas.message = `Gas fees: ~${formatEther(gasCost)} estimated`
         } else {
           checks.gas.passed = false
-          checks.gas.message = `Insufficient gas buffer`
+          checks.gas.message = 'Insufficient gas buffer'
         }
       } catch {
         checks.gas.passed = true
@@ -293,7 +295,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
       console.error('Safety check failed:', err)
       setSafetyCheck({
         passed: false,
-        riskLevel: 'warning' as const,
+        riskLevel: 'warning',
         overallMessage: 'Could not complete all safety checks',
         checks: {
           address: { passed: true, message: 'Address format valid' },
@@ -306,11 +308,10 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
       setIsSimulating(false)
     }
   }
->>>>>>> 0e4cef795c15b946e650c2cf9da1821b3a59b31a
 
-  const handleSecurityScanComplete = (result: SecurityCheckResult) => {
-    setSecurityScanResult(result);
-  };
+  const handleSecurityScanComplete = (result: ScannerSecurityCheckResult) => {
+    setSecurityScanResult(result)
+  }
 
   const handleConfirm = async () => {
     if (!quote) {
@@ -324,27 +325,29 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
     }
 
     if (!sendTransaction) {
-      console.error('Transaction function not available.', error)
+      console.error('Transaction function not available.')
       alert('Could not prepare transaction. Make sure your wallet is connected.')
       return
     }
 
-    console.log('Processing swap to SideShift address:', quote.depositAddress)
-
     const addressCheck = validateDepositAddressForNetwork(quote.depositNetwork, quote.depositAddress)
     if (!addressCheck.passed) {
-      console.error('SECURITY: Rejected invalid deposit address from quote:', { quoteId: quote.id, depositNetwork: quote.depositNetwork, depositAddress: quote.depositAddress })
+      console.error('SECURITY: Rejected invalid deposit address from quote:', {
+        quoteId: quote.id,
+        depositNetwork: quote.depositNetwork,
+        depositAddress: quote.depositAddress,
+      })
       alert(`Error: ${addressCheck.message}. Cannot proceed with swap.`)
       return
     }
 
     if (quote.depositAddress.toLowerCase() === address?.toLowerCase()) {
-      console.error('SECURITY: Attempted to send funds to user\'s own address instead of SideShift!')
+      console.error('SECURITY: Attempted to send funds to user own address instead of SideShift!')
       alert('ERROR: Cannot send funds to your own wallet. Must send to SideShift deposit address.')
       return
     }
 
-    let transactionDetails: any
+    let transactionDetails: { to: `0x${string}`; value: bigint; data?: `0x${string}`; chainId: number }
     try {
       const coins = await getCoins()
       const coinInfo = coins.find((c: Coin) => c.coin.toLowerCase() === quote.depositCoin.toLowerCase())
@@ -364,8 +367,8 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
             console.warn('Could not fetch token decimals, defaulting to 18')
           }
         }
-        const amount = parseUnits(quote.depositAmount, decimals)
 
+        const amount = parseUnits(quote.depositAmount, decimals)
         transactionDetails = {
           to: networkInfo.tokenContract as `0x${string}`,
           value: BigInt(0),
@@ -391,6 +394,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
         }
         await switchChainAsync({ chainId: depositChainId })
       }
+
       sendTransaction(transactionDetails)
     } catch (e) {
       const switchError = e as Error
@@ -425,18 +429,23 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
     if (hash && baseUrl) {
       return `${baseUrl}/tx/${hash}`
     }
-    if (baseUrl) {
-      if (networkKey === 'bitcoin') {
-        return `${baseUrl}/addresses/${address}`
-      }
-      return `${baseUrl}/address/${address}`
+
+    if (!baseUrl || !address) {
+      return null
     }
-    return null
+
+    if (networkKey === 'bitcoin') {
+      return `${baseUrl}/addresses/${address}`
+    }
+
+    return `${baseUrl}/address/${address}`
   }
 
   const explorerUrl = getExplorerUrl()
-
-  const isTransactionBlocked = safetyCheck?.riskLevel === 'unsafe' || securityScanResult?.riskLevel === 'critical' || securityScanResult?.riskLevel === 'high';
+  const isTransactionBlocked =
+    safetyCheck?.riskLevel === 'unsafe' ||
+    securityScanResult?.riskLevel === 'critical' ||
+    securityScanResult?.riskLevel === 'high'
 
   if (isSuccess) {
     return (
@@ -446,7 +455,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
         <p className="text-sm text-gray-600">Track your transaction on the explorer.</p>
         {explorerUrl && (
           <a href={explorerUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline mt-2 block">
-            View on Explorer →
+            View on Explorer {'>'}
           </a>
         )}
       </div>
@@ -459,13 +468,10 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
         <h4 className="font-bold text-gray-800 flex items-center gap-2">
           <Zap className="w-4 h-4 text-yellow-500 shrink-0" /> Confirm Swap
         </h4>
-        <div className="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">
-          SideShift.ai API
-        </div>
+        <div className="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">SideShift.ai API</div>
       </div>
 
       <div className="space-y-4 text-sm">
-        {/* You Send Section */}
         <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
           <div className="flex justify-between items-start mb-2">
             <div>
@@ -493,7 +499,6 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
           )}
         </div>
 
-        {/* You Receive */}
         <div className="bg-green-50 border border-green-100 rounded-lg p-3">
           <span className="text-xs font-semibold text-green-600 uppercase">You Receive Approx.</span>
           <div className="flex justify-between items-end mt-1">
@@ -502,7 +507,6 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
           </div>
         </div>
 
-        {/* Deposit Address Info */}
         <div className="pt-2">
           <div className="flex justify-between text-[11px] text-gray-500 mb-1 px-1">
             <span>Deposit Address</span>
@@ -518,14 +522,15 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
         <div className="mt-6 flex flex-col gap-2 w-full">
           <button
             onClick={handleConfirm}
-            disabled={!isConnected || isPending}
+            disabled={!isConnected || isPending || isTransactionBlocked}
             className="w-full py-3 bg-gray-900 text-white rounded-lg font-bold hover:bg-black transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
           >
             {isPending ? 'Confirming...' : 'Confirm and Send'}
           </button>
-          <p className="text-[10px] text-center text-gray-400">
-            By confirming, you agree to SideShift&apos;s terms and gas fees.
-          </p>
+          <p className="text-[10px] text-center text-gray-400">By confirming, you agree to SideShift&apos;s terms and gas fees.</p>
+          {isTransactionBlocked && (
+            <p className="text-[11px] text-center text-red-600">Transaction blocked by security checks.</p>
+          )}
         </div>
 
         {quote.memo && (
@@ -541,7 +546,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
               </button>
             </div>
             <div className="bg-yellow-50 p-2 rounded text-xs font-mono break-all border border-yellow-200">
-              ⚠️ Important: Include this memo
+              Important: Include this memo
               <div className="mt-1 font-semibold">{quote.memo}</div>
             </div>
           </div>
@@ -559,7 +564,6 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
         )}
       </div>
 
-      {/* Advanced Security Scanner */}
       <div className="mt-4">
         <TransactionSecurityScanner
           fromToken={quote.depositCoin}
@@ -595,7 +599,6 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
           </button>
         ) : (
           <div className="space-y-3">
-            {/* Overall Status Banner */}
             <div
               className={`flex items-center gap-2 p-3 rounded-lg border ${
                 safetyCheck.riskLevel === 'safe'
@@ -610,9 +613,9 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
               {safetyCheck.riskLevel === 'unsafe' && <AlertCircle className="w-5 h-5" />}
               <div className="flex-1">
                 <div className="font-semibold text-sm">
-                  {safetyCheck.riskLevel === 'safe' && '✅ Safe to Proceed'}
-                  {safetyCheck.riskLevel === 'warning' && '⚠️ Proceed with Caution'}
-                  {safetyCheck.riskLevel === 'unsafe' && '❌ Unsafe Transaction'}
+                  {safetyCheck.riskLevel === 'safe' && 'Safe to Proceed'}
+                  {safetyCheck.riskLevel === 'warning' && 'Proceed with Caution'}
+                  {safetyCheck.riskLevel === 'unsafe' && 'Unsafe Transaction'}
                 </div>
                 <div className="text-xs mt-0.5">{safetyCheck.overallMessage}</div>
               </div>
@@ -686,7 +689,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
       )}
 
       <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
-        💡 Always verify the deposit address and memo (if required) before sending funds.
+        Always verify the deposit address and memo (if required) before sending funds.
       </div>
     </div>
   )
