@@ -903,7 +903,7 @@ export default function ChatInterface() {
           }`}>
             <button
               onClick={handleVoiceRecording}
-              disabled={!isAudioSupported || audioError}
+              disabled={!isAudioSupported || !!audioError}
               title={audioError ? `Voice input failed: ${audioError}` : 'Click to start voice recording'}
               className={`p-3 rounded-xl transition-all ${!isAudioSupported ? 'bg-white/5 text-gray-600 cursor-not-allowed' :
                 audioError ? 'bg-red-500/30 text-red-400 cursor-not-allowed' :
