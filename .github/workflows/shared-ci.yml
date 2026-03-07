@@ -1,0 +1,37 @@
+name: Shared Library CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "shared/**"
+  pull_request:
+    paths:
+      - "shared/**"
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: shared/package-lock.json
+
+      - name: Install dependencies
+        working-directory: shared
+        run: npm ci
+
+      - name: Build shared library
+        working-directory: shared
+        run: npm run build
+
+      - name: Type check shared library
+        working-directory: shared
+        run: npx tsc --noEmit

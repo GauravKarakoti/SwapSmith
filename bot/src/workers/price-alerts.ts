@@ -6,7 +6,7 @@ import { priceAlerts } from '../../../shared/schema';
 import logger from '../services/logger';
 import { batchLoadUsersByIds } from '../utils/dataLoader';
 
-const CHECK_INTERVAL_MS = 60 * 1000; // 60 seconds
+const CHECK_INTERVAL_MS = parseInt(process.env.PRICE_ALERT_CHECK_INTERVAL_MS ?? '60000', 10);
 
 // Asset ID mapping for CoinGecko
 const ASSET_ID_MAP: Record<string, string> = {

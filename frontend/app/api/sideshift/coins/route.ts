@@ -13,8 +13,9 @@ export async function GET() {
   try {
     const response = await axios.get(`${SIDESHIFT_CONFIG.BASE_URL}/coins`);
     return NextResponse.json(response.data);
-  } catch (error: any) {
-    console.error('SideShift Coins API Error:', error.message);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('SideShift Coins API Error:', errorMessage);
     return NextResponse.json(
       { error: 'Failed to fetch coins from SideShift' },
       { status: 500 }

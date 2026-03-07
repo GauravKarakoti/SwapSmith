@@ -5,6 +5,7 @@
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
+    "noImplicitAny": true,
     "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",
@@ -30,7 +31,7 @@
       "axios": ["./node_modules/axios"],
       "@neondatabase/serverless": ["./node_modules/@neondatabase/serverless"],
     },
-    "types": ["vitest"]
+    "types": ["vitest", "vitest/globals"]
   },
   "include": [
     "next-env.d.ts",
@@ -41,5 +42,8 @@
     "**/*.mts",
     "../shared/**/*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "**/__tests__/**/*"
+  ]
 }
