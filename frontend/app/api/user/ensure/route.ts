@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureUserExists } from '@/lib/user-service';
+import { userEnsureBodySchema, validateInput } from '@/lib/api-validation';
 
 /**
  * POST /api/user/ensure
@@ -7,15 +8,17 @@ import { ensureUserExists } from '@/lib/user-service';
  */
 export async function POST(request: NextRequest) {
   try {
-    const { firebaseUid, walletAddress } = await request.json();
+    const body = await request.json();
+    const validation = validateInput(userEnsureBodySchema, body);
 
-    if (!firebaseUid) {
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'firebaseUid is required' },
+        { error: validation.error },
         { status: 400 }
       );
     }
 
+    const { firebaseUid, walletAddress } = validation.data;
     const userId = await ensureUserExists(firebaseUid, walletAddress);
 
     return NextResponse.json({ 

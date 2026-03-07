@@ -1,23 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStrategies, createStrategy } from '../../../../shared/services/strategy-marketplace';
+import { strategyQuerySchema, strategyCreateBodySchema, validateInput } from '@/lib/api-validation';
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
+    const queryParams = Object.fromEntries(searchParams.entries());
     
-    const options = {
-      riskLevel: searchParams.get('riskLevel') || undefined,
-      status: searchParams.get('status') || 'active',
-      minReturn: searchParams.get('minReturn') ? Number(searchParams.get('minReturn')) : undefined,
-      maxDrawdown: searchParams.get('maxDrawdown') ? Number(searchParams.get('maxDrawdown')) : undefined,
-      search: searchParams.get('search') || undefined,
-      sortBy: (searchParams.get('sortBy') as 'totalReturn' | 'subscriberCount' | 'monthlyReturn' | 'createdAt') || 'totalReturn',
-      sortOrder: (searchParams.get('sortOrder') as 'asc' | 'desc') || 'desc',
-      limit: searchParams.get('limit') ? Number(searchParams.get('limit')) : 20,
-      offset: searchParams.get('offset') ? Number(searchParams.get('offset')) : 0,
-    };
+    const validation = validateInput(strategyQuerySchema, queryParams);
+    
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: validation.error },
+        { status: 400 }
+      );
+    }
 
-    const strategies = await getStrategies(options);
+    const strategies = await getStrategies(validation.data);
     return NextResponse.json(strategies);
   } catch (error) {
     console.error('Error fetching strategies:', error);
@@ -31,40 +30,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { 
-      creatorId, 
-      creatorTelegramId, 
-      name, 
-      description, 
-      parameters, 
-      riskLevel, 
-      subscriptionFee, 
-      performanceFee,
-      minInvestment,
-      isPublic,
-      tags 
-    } = body;
+    const validation = validateInput(strategyCreateBodySchema, body);
 
-    if (!creatorId || !name || !description || !riskLevel) {
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: validation.error },
         { status: 400 }
       );
     }
 
-    const strategy = await createStrategy({
-      creatorId,
-      creatorTelegramId,
-      name,
-      description,
-      parameters: parameters || {},
-      riskLevel,
-      subscriptionFee: subscriptionFee || '0',
-      performanceFee: performanceFee || 0,
-      minInvestment: minInvestment || '100',
-      isPublic: isPublic ?? true,
-      tags,
-    });
+    const strategy = await createStrategy(validation.data);
 
     return NextResponse.json(strategy, { status: 201 });
   } catch (error) {
