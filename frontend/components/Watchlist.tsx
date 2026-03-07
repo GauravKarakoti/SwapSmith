@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Star, Trash2, RefreshCw, ArrowRightLeft, Plus, Search, X, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '@/hooks/useAuth';
 
 interface WatchlistItem {
   id: number;
@@ -21,6 +22,7 @@ interface WatchlistProps {
 }
 
 export default function Watchlist({ onSwap }: WatchlistProps) {
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,34 +31,53 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
   const [availableCoins, setAvailableCoins] = useState<{ coin: string; network: string; name: string }[]>([]);
   const [addingToken, setAddingToken] = useState(false);
 
-  // Fetch watchlist on mount
-  useEffect(() => {
-    fetchWatchlist();
-  }, []);
-
-  const fetchWatchlist = async () => {
+  const fetchWatchlist = useCallback(async () => {
+    if (!user) return;
+    
     try {
       setLoading(true);
-      const response = await fetch('/api/watchlist');
-      if (!response.ok) throw new Error('Failed to fetch watchlist');
+      const token = await user.getIdToken();
+      const response = await fetch('/api/watchlist', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to fetch watchlist');
+      }
+      
       const data = await response.json();
       setWatchlist(data);
       setError(null);
     } catch (err) {
-      setError('Failed to load watchlist');
+      setError(err instanceof Error ? err.message : 'Failed to load watchlist');
       console.error(err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  // Fetch watchlist on mount or when user changes
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      fetchWatchlist();
+    } else if (!authLoading) {
+      setLoading(false);
+    }
+  }, [isAuthenticated, user, authLoading, fetchWatchlist]);
 
   const fetchAvailableCoins = async () => {
     try {
       const response = await fetch('/api/prices');
       if (!response.ok) throw new Error('Failed to fetch prices');
       const data = await response.json();
-      // Transform to watchlist format
-      const coins = data.map((item: { coin: string; network: string; name: string }) => ({
+      
+      // Transform from { prices: [...] } to watchlist format
+      const priceList = Array.isArray(data) ? data : (data.prices || []);
+      
+      const coins = priceList.map((item: { coin: string; network: string; name: string }) => ({
         coin: item.coin,
         network: item.network,
         name: item.name,
@@ -73,11 +94,20 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
   };
 
   const addToWatchlist = async (coin: string, network: string, name: string) => {
+    if (!user) {
+      setError('You must be logged in to add tokens to your watchlist');
+      return;
+    }
+
     try {
       setAddingToken(true);
+      const token = await user.getIdToken();
       const response = await fetch('/api/watchlist', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ coin, network, name }),
       });
       
@@ -97,18 +127,27 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
   };
 
   const removeFromWatchlist = async (coin: string, network: string) => {
+    if (!user) return;
+
     try {
+      const token = await user.getIdToken();
       const response = await fetch('/api/watchlist', {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ coin, network }),
       });
       
-      if (!response.ok) throw new Error('Failed to remove from watchlist');
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to remove from watchlist');
+      }
       
       setWatchlist((prev) => prev.filter((item) => !(item.coin === coin && item.network === network)));
     } catch (err) {
-      setError('Failed to remove token');
+      setError(err instanceof Error ? err.message : 'Failed to remove token');
       console.error(err);
     }
   };
@@ -185,8 +224,31 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
         </div>
       )}
 
-      {/* Empty State */}
-      {!loading && watchlist.length === 0 && (
+      {/* Empty State / Not Logged In */}
+      {!loading && !isAuthenticated && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-center py-12 bg-gray-50 dark:bg-gray-800/50 rounded-xl"
+        >
+          <Star className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+            Watchlist
+          </h3>
+          <p className="text-gray-500 dark:text-gray-400 mb-4">
+            Login to track your favorite tokens and monitor prices in real-time
+          </p>
+          <button
+            onClick={() => window.location.href = '/login'}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+          >
+            Login to Get Started
+          </button>
+        </motion.div>
+      )}
+
+      {/* Empty State (Logged In) */}
+      {!loading && isAuthenticated && watchlist.length === 0 && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

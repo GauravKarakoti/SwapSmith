@@ -488,7 +488,7 @@ export default function AdminUsersPage() {
     setToken(tok)
 
     const cached = sessionStorage.getItem('admin-info')
-    if (cached) { try { setAdminInfo(JSON.parse(cached)) } catch {} }
+    if (cached) { try { setAdminInfo(JSON.parse(cached)) } catch (error) { console.error('Error parsing cached admin info:', error) } }
 
     fetchUsers(1, '', tok)
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -2,14 +2,18 @@ import Groq from "groq-sdk";
 import dotenv from 'dotenv';
 import fs from 'fs';
 import logger, { handleError } from './logger';
+import { loadSecret } from '../../../shared/utils/secrets-loader';
 
 import { analyzeCommand, generateContextualHelp } from './contextual-help';
 
 dotenv.config();
 
 function getGroqClient(): Groq {
+  // Use secure secrets loader instead of direct environment variable access
+  const apiKey = loadSecret('groq_api_key', 'GROQ_API_KEY');
+  
   return new Groq({
-    apiKey: process.env.GROQ_API_KEY,
+    apiKey,
   });
 }
 
@@ -30,11 +34,29 @@ export interface ParsedCommand {
   excludeToken?: string;
   quoteAmount?: number;
 
-  // Conditional Fields
+  // Enhanced Conditional Fields
   conditions?: {
-    type: "price_above" | "price_below";
+    type: "price_above" | "price_below" | "balance_threshold" | "time_based" | "market_condition";
     asset: string;
     value: number;
+    operator?: "gt" | "lt" | "gte" | "lte" | "eq";
+    timeframe?: "1m" | "5m" | "1h" | "1d";
+    secondary_conditions?: Array<{
+      type: string;
+      asset: string;
+      value: number;
+      operator: string;
+      logic: "AND" | "OR";
+    }>;
+    fallback_action?: {
+      intent: string;
+      fromAsset: string;
+      toAsset: string;
+      amount: number;
+      conditions?: object;
+      rawText?: string;
+      needsParsing?: boolean;
+    };
   };
   
   // Portfolio Fields
@@ -77,6 +99,26 @@ export interface ParsedCommand {
   conditionAsset?: string;
   targetPrice?: number;
   condition?: 'above' | 'below';
+
+  // Enhanced Multi-Step and Ambiguity Handling
+  nextActions?: Array<{
+    rawText: string;
+    needsParsing: boolean;
+    intent?: string;
+    fromAsset?: string;
+    toAsset?: string;
+    amount?: number;
+  }>;
+  fallbackAction?: {
+    rawText: string;
+    needsParsing: boolean;
+    intent?: string;
+    fromAsset?: string;
+    toAsset?: string;
+    amount?: number;
+  };
+  alternativeInterpretations?: string[];
+  suggestedClarifications?: string[];
 
   confidence: number;
   validationErrors: string[];
@@ -240,7 +282,183 @@ RESPONSE FORMAT (Enhanced):
   "suggestedClarifications"?: string[] // Questions to ask user
 }
 
-ENHANCED EXAMPLES WITH EDGE CASES:
+ENHANCED CONDITIONAL COMMAND PARSING:
+
+MULTI-STEP COMMANDS: Commands with multiple actions or conditions
+Examples: 
+- "Swap X if Y, then stake it"
+- "Buy ETH when price drops below $2000, but only if I have enough USDC"
+- "Swap 50% ETH to BTC if BTC > $60k, otherwise keep as ETH"
+
+CONDITIONAL OPERATORS SUPPORTED:
+- Price conditions: "if/when [asset] [above/below/hits] [price]"
+- Balance conditions: "if I have enough", "only if balance > X"
+- Time conditions: "after [date/time]", "during market hours"
+- Market conditions: "if volume > X", "when volatility is low"
+
+COMPLEX CONDITION PARSING:
+1. PRIMARY CONDITIONS: Main trigger for the action
+   - Extract into "conditions" object with type, asset, value, operator
+   - Support multiple condition types: price_above, price_below, balance_threshold, time_based
+
+2. SECONDARY CONDITIONS: Additional constraints or fallbacks
+   - Store in "conditions.secondary_conditions" array
+   - Each secondary condition has same structure as primary
+
+3. MULTI-STEP LOGIC: Commands with sequential actions
+   - Parse primary action first
+   - Store subsequent actions in "nextActions" array
+   - Each action has full command structure
+
+4. FALLBACK ACTIONS: Alternative actions if conditions not met
+   - Store in "fallbackAction" object
+   - Same structure as primary action
+
+ENHANCED CONDITION STRUCTURE:
+"conditions": {
+  "type": "price_above" | "price_below" | "balance_threshold" | "time_based" | "market_condition",
+  "asset": string,
+  "value": number,
+  "operator": "gt" | "lt" | "gte" | "lte" | "eq",
+  "timeframe"?: "1m" | "5m" | "1h" | "1d",
+  "secondary_conditions"?: [{
+    "type": string,
+    "asset": string,
+    "value": number,
+    "operator": string,
+    "logic": "AND" | "OR"
+  }],
+  "fallback_action"?: {
+    "intent": string,
+    "fromAsset": string,
+    "toAsset": string,
+    "amount": number,
+    "conditions": object
+  }
+}
+
+COMPLEX CONDITIONAL EXAMPLES:
+
+9. MULTI-CONDITION SWAP:
+   Input: "Swap 50% ETH to BTC if BTC > $60k AND I have more than 2 ETH"
+   Output: {
+     "success": true,
+     "intent": "limit_order",
+     "fromAsset": "ETH",
+     "amount": 50,
+     "amountType": "percentage",
+     "toAsset": "BTC",
+     "conditions": {
+       "type": "price_above",
+       "asset": "BTC",
+       "value": 60000,
+       "operator": "gt",
+       "secondary_conditions": [{
+         "type": "balance_threshold",
+         "asset": "ETH",
+         "value": 2,
+         "operator": "gt",
+         "logic": "AND"
+       }]
+     },
+     "confidence": 85,
+     "validationErrors": [],
+     "parsedMessage": "Conditional swap: 50% ETH → BTC if BTC > $60,000 AND ETH balance > 2",
+     "requiresConfirmation": true
+   }
+
+10. CONDITIONAL WITH FALLBACK:
+    Input: "Swap ETH to BTC if BTC drops below $50k, otherwise swap to USDC"
+    Output: {
+      "success": true,
+      "intent": "limit_order",
+      "fromAsset": "ETH",
+      "toAsset": "BTC",
+      "conditions": {
+        "type": "price_below",
+        "asset": "BTC",
+        "value": 50000,
+        "operator": "lt",
+        "fallback_action": {
+          "intent": "swap",
+          "fromAsset": "ETH",
+          "toAsset": "USDC",
+          "amount": null,
+          "amountType": "all"
+        }
+      },
+      "confidence": 80,
+      "validationErrors": ["Amount not specified for primary action"],
+      "parsedMessage": "Conditional: ETH → BTC if BTC < $50,000, else ETH → USDC",
+      "requiresConfirmation": true,
+      "alternativeInterpretations": ["Set up two separate limit orders", "Wait for user to specify amounts"]
+    }
+
+11. MULTI-STEP COMMAND:
+    Input: "Swap 1 ETH to USDC if ETH hits $4000, then stake the USDC"
+    Output: {
+      "success": true,
+      "intent": "limit_order",
+      "fromAsset": "ETH",
+      "amount": 1,
+      "amountType": "exact",
+      "toAsset": "USDC",
+      "conditions": {
+        "type": "price_above",
+        "asset": "ETH",
+        "value": 4000,
+        "operator": "gte"
+      },
+      "nextActions": [{
+        "intent": "yield_deposit",
+        "fromAsset": "USDC",
+        "amount": null,
+        "amountType": "all",
+        "toProject": "aave"
+      }],
+      "confidence": 75,
+      "validationErrors": ["Multi-step execution requires manual confirmation for second action"],
+      "parsedMessage": "Step 1: ETH → USDC if ETH ≥ $4,000, Step 2: Stake resulting USDC",
+      "requiresConfirmation": true,
+      "suggestedClarifications": ["Should I automatically execute the staking after the swap?"]
+    }
+
+12. COMPLEX AMBIGUOUS COMMAND:
+    Input: "Swap some ETH to BTC or USDC when the market looks good"
+    Output: {
+      "success": false,
+      "intent": "swap",
+      "fromAsset": "ETH",
+      "toAsset": null,
+      "amount": null,
+      "confidence": 15,
+      "validationErrors": [
+        "Amount not specified ('some' is too vague)",
+        "Multiple destination assets: BTC, USDC",
+        "Condition 'market looks good' cannot be automatically evaluated"
+      ],
+      "parsedMessage": "Ambiguous command: [amount?] ETH → [BTC or USDC?] when [market condition unclear]",
+      "requiresConfirmation": true,
+      "alternativeInterpretations": [
+        "Swap 50% ETH to BTC when BTC price increases",
+        "Swap 50% ETH to USDC when market volatility is high",
+        "Set up multiple conditional orders"
+      ],
+      "suggestedClarifications": [
+        "How much ETH would you like to swap?",
+        "Which asset would you prefer: BTC or USDC?",
+        "What specific market condition should trigger this swap?"
+      ]
+    }
+
+PARSING PRIORITY FOR CONDITIONALS:
+1. Extract all conditional keywords: if, when, only if, provided, assuming, unless
+2. Identify condition types: price, balance, time, market
+3. Parse condition values and operators
+4. Look for secondary conditions with AND/OR logic
+5. Check for fallback actions: otherwise, else, or
+6. Identify multi-step sequences: then, after, next
+7. Validate condition feasibility and set confidence accordingly
 
 1. CLEAR COMMAND:
    Input: "Swap 100 ETH for BTC"
