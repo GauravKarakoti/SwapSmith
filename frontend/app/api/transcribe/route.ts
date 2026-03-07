@@ -2,10 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
 import { getRateLimitStatus } from '@/lib/rate-limiter';
 import { applyAPISecurityHeaders } from '@/lib/security-headers';
+import { loadSecret } from '../../../../shared/utils/secrets-loader';
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
+// Initialize Groq client with secure secrets loader
+function getGroqClient(): Groq {
+  const apiKey = loadSecret('groq_api_key', 'GROQ_API_KEY');
+  return new Groq({
+    apiKey,
+  });
+}
 
 async function transcribeHandler(request: NextRequest) {
   try {
@@ -46,6 +51,7 @@ async function transcribeHandler(request: NextRequest) {
     const file = new File([audioBlob], audioFile.name, { type: audioFile.type });
 
     // Transcribe with Groq Whisper
+    const groq = getGroqClient();
     const transcription = await groq.audio.transcriptions.create({
       file: file,
       model: 'whisper-large-v3',

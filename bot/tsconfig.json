@@ -5,6 +5,7 @@
     "moduleResolution": "node",
     "outDir": "./dist",
     "strict": true,
+    "noImplicitAny": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "downlevelIteration": true,

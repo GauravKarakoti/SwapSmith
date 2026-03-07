@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
-import { SIDESHIFT_CONFIG } from '../../../../../shared/config/sideshift';
+import { SIDESHIFT_CONFIG, getApiUrl } from '../../../../../shared/config/sideshift';
 
 const API_KEY = process.env.SIDESHIFT_API_KEY; // Server-side only, no NEXT_PUBLIC_
 const AFFILIATE_ID = process.env.AFFILIATE_ID;
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
 
     // Make request to SideShift API with server-side API key
     const response = await axios.post(
-      `${SIDESHIFT_CONFIG.BASE_URL}/quotes`,
+      getApiUrl('quotes'),
       {
         depositCoin,
         depositNetwork,
