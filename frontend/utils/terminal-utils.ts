@@ -4,6 +4,7 @@
  */
 
 import { ParsedCommand } from '@/utils/groq-client';
+import apiClient from '@/lib/axios-client';
 
 export interface Message {
   role: 'user' | 'assistant';
@@ -29,19 +30,15 @@ export interface Message {
  * @returns Promise<Response> from the API
  */
 export async function executeSwapCommand(command: ParsedCommand) {
-  const response = await fetch('/api/create-swap', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  const response = await apiClient.post('/api/create-swap', {
       fromAsset: command.fromAsset,
       toAsset: command.toAsset,
       amount: command.amount,
       fromChain: command.fromChain,
       toChain: command.toChain,
-    }),
   });
 
-  const quote = await response.json();
+  const quote = response.data;
   if (quote.error) throw new Error(quote.error);
   return quote;
 }
@@ -51,8 +48,8 @@ export async function executeSwapCommand(command: ParsedCommand) {
  * @returns Promise with yield data
  */
 export async function executeYieldScoutCommand() {
-  const response = await fetch('/api/yields');
-  return await response.json();
+  const response = await apiClient.get('/api/yields');
+  return response.data;
 }
 
 /**
@@ -73,18 +70,14 @@ export async function executeCheckoutCommand(
     );
   }
 
-  const response = await fetch('/api/create-checkout', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      settleAsset: command.settleAsset,
-      settleNetwork: command.settleNetwork,
-      settleAmount: command.settleAmount,
-      settleAddress: finalAddress,
-    }),
+  const response = await apiClient.post('/api/create-checkout', {
+    settleAsset: command.settleAsset,
+    settleNetwork: command.settleNetwork,
+    settleAmount: command.settleAmount,
+    settleAddress: finalAddress,
   });
 
-  const checkoutData = await response.json();
+  const checkoutData = response.data;
   if (checkoutData.error) throw new Error(checkoutData.error);
   return checkoutData;
 }
@@ -95,13 +88,8 @@ export async function executeCheckoutCommand(
  * @returns Promise<ParsedCommand>
  */
 export async function parseUserCommand(text: string): Promise<ParsedCommand> {
-  const response = await fetch('/api/parse-command', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: text }),
-  });
-
-  return await response.json();
+  const response = await apiClient.post('/api/parse-command', { message: text });
+  return response.data;
 }
 
 /**
