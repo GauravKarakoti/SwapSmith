@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { detectBrowser, checkVoiceCapabilities, getVoiceErrorMessage } from '@/utils/browser-detection';
 
 export interface UseSpeechRecognitionReturn {
   isListening: boolean;
@@ -85,70 +86,90 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
   const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    
-    const browser = detectBrowser();
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    
-    // Check if SpeechRecognition is available
-    if (!SpeechRecognition) {
-      // Check if MediaRecorder is available as fallback
-      const hasMediaRecorder = typeof MediaRecorder !== 'undefined';
-      const hasGetUserMedia = typeof (navigator.mediaDevices?.getUserMedia) === 'function';
-      
-      if (hasMediaRecorder && hasGetUserMedia) {
+    if (typeof window !== 'undefined') {
+      const browserInfo = detectBrowser();
+      const capabilities = checkVoiceCapabilities();
+
+      // Firefox doesn't support Speech Recognition API well
+      if (browserInfo.isFirefox) {
+        setIsSupported(false);
+        setError("Firefox: Voice input requires audio recording mode. Please use the advanced voice input feature.");
+        return;
+      }
+
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+      if (!SpeechRecognition || !capabilities.hasSpeechRecognition) {
+        setIsSupported(false);
+        setError(capabilities.userMessage || "Voice input is not supported in this browser.");
+      } else {
         setIsSupported(true);
-        const recognition = new SpeechRecognition();
-        recognitionRef.current = recognition;
+        
+        try {
+          const recognition = new SpeechRecognition();
+          recognitionRef.current = recognition;
 
-        recognition.continuous = false; // We want single command
-        recognition.interimResults = true; // Show results as they come
-        recognition.lang = 'en-US';
+          recognition.continuous = false; // We want single command
+          recognition.interimResults = true; // Show results as they come
+          recognition.lang = 'en-US';
+          recognition.maxAlternatives = 1;
 
-        recognition.onstart = () => {
-          setIsListening(true);
-          setError(null);
-        };
+          recognition.onstart = () => {
+            setIsListening(true);
+            setError(null);
+          };
 
-        recognition.onend = () => {
-          setIsListening(false);
-        };
+          recognition.onend = () => {
+            setIsListening(false);
+          };
 
-        recognition.onresult = (event: SpeechRecognitionEvent) => {
-          let finalTranscript = '';
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-              finalTranscript += event.results[i][0].transcript;
-            } else {
-              // Handle interim results if needed, but for now we focus on final
-              // You might want to update a live preview here
-              finalTranscript += event.results[i][0].transcript;
+          recognition.onresult = (event: SpeechRecognitionEvent) => {
+            let finalTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+              if (event.results[i].isFinal) {
+                finalTranscript += event.results[i][0].transcript;
+              } else {
+                // Handle interim results if needed, but for now we focus on final
+                // You might want to update a live preview here
+                finalTranscript += event.results[i][0].transcript;
+              }
             }
-          }
-          setTranscript(finalTranscript);
-        };
+            setTranscript(finalTranscript);
+          };
 
-        recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-          console.error("Speech recognition error", event.error);
-          if (event.error === 'no-speech') {
-             setError("No speech was detected. Please try again.");
-          } else if (event.error === 'audio-capture') {
-             setError("No microphone was found. Ensure that a microphone is installed.");
-          } else if (event.error === 'not-allowed') {
-             setError("Microphone permission denied.");
-          } else {
-             setError(`Speech recognition error: ${event.error}`);
-          }
-          setIsListening(false);
-        };
+          recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+            console.error("Speech recognition error", event.error);
+            
+            // Don't treat 'no-speech' as a hard error
+            if (event.error === 'no-speech') {
+              setError("No speech was detected. Please try again.");
+              setIsListening(false);
+              return;
+            }
+
+            // Use enhanced error messaging
+            const errorMessage = getVoiceErrorMessage(event.error, browserInfo);
+            setError(errorMessage);
+            setIsListening(false);
+          };
+        } catch (initError) {
+          console.error('Failed to initialize Speech Recognition:', initError);
+          setIsSupported(false);
+          setError(`${browserInfo.name}: Speech recognition initialization failed. Please try refreshing the page.`);
+        }
       }
       setIsListening(false);
     };
 
     return () => {
       if (recognitionRef.current) {
-        recognitionRef.current.abort();
+          try {
+            recognitionRef.current.abort();
+          } catch (e) {
+            // Ignore cleanup errors
+          }
       }
+
       // Cleanup MediaRecorder if exists
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
@@ -157,19 +178,19 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
   }, []);
 
   const startRecording = useCallback(() => {
-    if (!isSupported) {
-      setError('Voice input is not supported in this browser.');
-      return;
+    const browserInfo = detectBrowser();
+    
+    if (!isSupported || !recognitionRef.current) {
+        const errorMessage = browserInfo.isFirefox 
+          ? "Firefox: Please use the advanced voice input feature for audio recording."
+          : "Voice input is not supported in this browser.";
+        setError(errorMessage);
+        return;
     }
     
-    setTranscript('');
-    setError(null);
-    
-    if (isFallbackMode) {
-      // Use MediaRecorder fallback
-      startMediaRecorder();
-    } else if (recognitionRef.current) {
-      try {
+    try {
+        setTranscript('');
+        setError(null);
         recognitionRef.current.start();
       } catch (err) {
         console.warn('Speech recognition already started or failed to start', err);

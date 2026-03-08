@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { detectBrowser, checkVoiceCapabilities, getVoiceErrorMessage } from '@/utils/browser-detection';
 
 // Web Speech API globals (e.g. SpeechRecognition) are declared in frontend/types/speech-recognition.d.ts;
 // this hook still checks support dynamically and uses those globals only when available.
@@ -68,64 +69,56 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
   const MAX_RETRIES = 3;
   const RETRY_DELAY = 1000; // 1 second
 
-  // Check support on mount and detect browser compatibility
+  // Check support on mount using enhanced browser detection
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const hasSpeech = !!SpeechRecognition;
-    hasSpeechApi.current = hasSpeech;
-
-    const hasMediaRec = typeof MediaRecorder !== 'undefined';
-    const hasGetMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
-
-    const warnings: string[] = [];
-    let recommendedMethod: VoiceInputMethod = null;
-
-    // Determine best method and warnings
-    if (hasSpeech) {
-      recommendedMethod = 'speech-api';
-      // Check for webkit prefix (Safari/older Chrome)
-      if (!window.SpeechRecognition && window.webkitSpeechRecognition) {
-        warnings.push('Using webkit speech recognition (limited browser support)');
-      }
-    } else if (hasMediaRec && hasGetMedia) {
-      recommendedMethod = 'media-recorder';
-      warnings.push('Real-time transcription unavailable. Using audio recording fallback.');
-    } else {
-      warnings.push('Voice input not supported in this browser. Please use Chrome, Edge, or Safari.');
-    }
-
-    // Browser-specific warnings
-    const userAgent = navigator.userAgent.toLowerCase();
-    if (userAgent.includes('firefox')) {
-      warnings.push('Firefox has limited voice support. Chrome or Edge recommended.');
-    }
-    if (userAgent.includes('mobile') || userAgent.includes('android') || userAgent.includes('iphone')) {
-      warnings.push('Mobile voice input may require additional permissions.');
-    }
+    const browserInfo = detectBrowser();
+    const capabilities = checkVoiceCapabilities();
+    
+    hasSpeechApi.current = capabilities.hasSpeechRecognition;
 
     const compat: BrowserCompatibility = {
-      hasSpeechAPI: hasSpeech,
-      hasMediaRecorder: hasMediaRec,
-      hasGetUserMedia: hasGetMedia,
-      recommendedMethod,
-      warnings,
+      hasSpeechAPI: capabilities.hasSpeechRecognition,
+      hasMediaRecorder: capabilities.hasMediaRecorder,
+      hasGetUserMedia: capabilities.hasGetUserMedia,
+      recommendedMethod: capabilities.recommendedMethod,
+      warnings: [capabilities.userMessage],
     };
 
     setCompatibility(compat);
-    setIsSupported(hasSpeech || (hasMediaRec && hasGetMedia));
+    setIsSupported(capabilities.supportLevel !== 'none');
+    
+    // Log browser info for debugging
+    console.log('Browser detected:', browserInfo.name, browserInfo.version);
+    console.log('Voice capabilities:', capabilities);
   }, []);
 
   // Initialize Speech Recognition
   const initSpeechRecognition = useCallback(() => {
     if (!hasSpeechApi.current) return false;
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognitionRef.current = new SpeechRecognition();
-    recognitionRef.current.continuous = true;
-    recognitionRef.current.interimResults = true;
-    recognitionRef.current.lang = 'en-US';
+    try {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) return false;
+
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.lang = 'en-US';
+      
+      // Enhanced configuration for better compatibility
+      recognitionRef.current.maxAlternatives = 1;
+      
+      // Set timeout to prevent hanging
+      if ('grammars' in recognitionRef.current) {
+        // Only set if supported (not in all browsers)
+        try {
+          recognitionRef.current.grammars = new (window as any).SpeechGrammarList();
+        } catch (e) {
+          // Ignore grammar errors - not critical
+        }
+      }
 
     recognitionRef.current.onstart = () => {
       setIsListening(true);
@@ -171,50 +164,40 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
         return;
       }
 
-      let errorMessage = 'Voice input error';
-      let shouldFallback = false;
+      // Use enhanced error messaging
+      const browserInfo = detectBrowser();
+      const errorMessage = getVoiceErrorMessage(event.error, browserInfo);
+      
+      // Determine if we should fallback to MediaRecorder
+      const shouldFallback = [
+        'network',
+        'service-not-allowed', 
+        'bad-grammar',
+        'language-not-supported'
+      ].includes(event.error) || event.error.includes('service');
 
-      switch (event.error) {
-        case 'audio-capture':
-          errorMessage = 'No microphone found. Please check your microphone connection.';
-          break;
-        case 'not-allowed':
-          errorMessage = 'Microphone permission denied. Please allow microphone access.';
-          break;
-        case 'network':
-          errorMessage = 'Network error. Trying alternative method...';
-          shouldFallback = true;
-          break;
-        case 'service-not-allowed':
-          errorMessage = 'Speech service unavailable. Switching to audio recording...';
-          shouldFallback = true;
-          break;
-        case 'aborted':
-          // User aborted, no need for error message
-          setIsListening(false);
-          return;
-        default:
-          errorMessage = `Voice input error: ${event.error}`;
-          shouldFallback = true;
+      // User aborted - no error needed
+      if (event.error === 'aborted') {
+        setIsListening(false);
+        return;
       }
 
       setError(errorMessage);
       config.onError?.(errorMessage);
       setIsListening(false);
 
-      // Automatic fallback to MediaRecorder if available
+      // Enhanced automatic fallback to MediaRecorder if available
       if (shouldFallback && compatibility.hasMediaRecorder && compatibility.hasGetUserMedia) {
         console.log('Attempting automatic fallback to MediaRecorder...');
-        
-        // Clear any existing fallback timeout
-        if (fallbackTimeoutRef.current) {
-          clearTimeout(fallbackTimeoutRef.current);
-        }
-        
-        fallbackTimeoutRef.current = setTimeout(async () => {
-          const success = await startMediaRecorder();
-          if (success) {
-            setError('Switched to audio recording mode');
+        setTimeout(async () => {
+          try {
+            const success = await startMediaRecorder();
+            if (success) {
+              setError('Switched to audio recording mode - speak and click stop when finished');
+            }
+          } catch (fallbackError) {
+            console.error('Fallback to MediaRecorder failed:', fallbackError);
+            setError('Voice input unavailable. Please type your message instead.');
           }
           fallbackTimeoutRef.current = null;
         }, 500);
@@ -222,39 +205,74 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
     };
 
     return true;
+    } catch (initError) {
+      console.error('Failed to initialize Speech Recognition:', initError);
+      return false;
+    }
   }, [config]);
 
-  // Get best MIME type for MediaRecorder
+  // Get best MIME type for MediaRecorder with Firefox optimization
   const getBestMimeType = useCallback((): string => {
-    const mimeTypes = [
-      'audio/webm;codecs=opus',
-      'audio/webm',
-      'audio/ogg;codecs=opus',
-      'audio/ogg',
-      'audio/mp4',
-      'audio/wav'
-    ];
+    const browserInfo = detectBrowser();
+    
+    let mimeTypes: string[];
+    
+    if (browserInfo.isFirefox) {
+      // Firefox prefers OGG formats
+      mimeTypes = [
+        'audio/ogg;codecs=opus',
+        'audio/ogg',
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/wav'
+      ];
+    } else {
+      // Chrome/Edge/Safari prefer WebM
+      mimeTypes = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/ogg',
+        'audio/mp4',
+        'audio/wav'
+      ];
+    }
 
     for (const mimeType of mimeTypes) {
-      if (MediaRecorder.isTypeSupported(mimeType)) {
+      if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(mimeType)) {
+        console.log(`Selected MIME type: ${mimeType} for ${browserInfo.name}`);
         return mimeType;
       }
     }
 
+    console.warn(`No supported MIME type found for ${browserInfo.name}, using default`);
     return '';
   }, []);
 
-  // Start MediaRecorder fallback with audio quality validation
+  // Start MediaRecorder fallback with enhanced Firefox support
   const startMediaRecorder = useCallback(async (): Promise<boolean> => {
     try {
+      // Enhanced audio constraints with Firefox compatibility
+      const browserInfo = detectBrowser();
+      
+      const audioConstraints: MediaTrackConstraints = {
+        sampleRate: browserInfo.isFirefox ? { ideal: 48000, min: 16000 } : 16000,
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      };
+
+      // Firefox-specific optimizations
+      if (browserInfo.isFirefox) {
+        // Firefox handles these constraints better
+        // Note: latency is not a standard MediaTrackConstraints property
+        // Using advanced constraints for Firefox optimization
+        (audioConstraints as any).latency = { ideal: 0.01 };
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          sampleRate: 16000,
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true, // Added for better audio quality
-        }
+        audio: audioConstraints
       });
 
       streamRef.current = stream;
@@ -268,21 +286,45 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
 
       const audioTrack = audioTracks[0];
       const settings = audioTrack.getSettings();
-      console.log('Audio track settings:', settings);
+      console.log(`Audio track settings for ${browserInfo.name}:`, settings);
 
-      // Warn if audio quality is poor
+      // Enhanced audio quality validation
       if (settings.sampleRate && settings.sampleRate < 8000) {
         console.warn('Low sample rate detected:', settings.sampleRate);
       }
 
-      const mimeType = getBestMimeType();
-      if (!mimeType) {
-        throw new Error('No supported audio format found');
+      // Check if track is actually active
+      if (audioTrack.readyState !== 'live') {
+        throw new Error('Audio track is not active');
       }
 
-      const options: MediaRecorderOptions = { mimeType };
+      const mimeType = getBestMimeType();
+      if (!mimeType) {
+        console.warn(`No supported MIME type found for ${browserInfo.name}, using browser default`);
+      }
 
-      mediaRecorderRef.current = new MediaRecorder(stream, options);
+      // Enhanced MediaRecorder options with Firefox compatibility
+      const options: MediaRecorderOptions = {};
+      if (mimeType) {
+        options.mimeType = mimeType;
+      }
+      
+      // Browser-specific optimizations
+      if (browserInfo.isFirefox && mimeType.includes('ogg')) {
+        // Firefox OGG optimization
+        options.audioBitsPerSecond = 128000;
+      } else if (mimeType.includes('webm')) {
+        // WebM optimization for Chrome/Edge
+        options.audioBitsPerSecond = 128000;
+      }
+
+      try {
+        mediaRecorderRef.current = new MediaRecorder(stream, options);
+      } catch (optionsError) {
+        console.warn(`MediaRecorder options not supported in ${browserInfo.name}, using defaults:`, optionsError);
+        // Fallback to basic MediaRecorder without options
+        mediaRecorderRef.current = new MediaRecorder(stream);
+      }
 
       mediaRecorderRef.current.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -334,17 +376,29 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
       return true;
     } catch (err) {
       console.error('Failed to start MediaRecorder:', err);
+      
+      // Use enhanced error messaging
+      const browserInfo = detectBrowser();
       let errorMessage = 'Could not access microphone';
 
       if (err instanceof Error) {
-        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-          errorMessage = 'Microphone permission denied. Please allow access in your browser settings.';
-        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-          errorMessage = 'No microphone found. Please connect a microphone and try again.';
-        } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-          errorMessage = 'Microphone is already in use by another application.';
-        } else {
-          errorMessage = err.message;
+        errorMessage = getVoiceErrorMessage(err.name.toLowerCase().replace('error', ''), browserInfo);
+        
+        // Fallback to generic message if no specific mapping
+        if (errorMessage.includes('Voice input error:')) {
+          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            errorMessage = browserInfo.isFirefox 
+              ? 'Firefox: Microphone permission denied. Please allow access in browser settings and refresh the page.'
+              : 'Microphone permission denied. Please allow access in your browser settings.';
+          } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+            errorMessage = 'No microphone found. Please connect a microphone and try again.';
+          } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+            errorMessage = 'Microphone is already in use by another application.';
+          } else {
+            errorMessage = browserInfo.isFirefox 
+              ? `Firefox: ${err.message}. Voice recording may not be fully supported.`
+              : err.message;
+          }
         }
       }
 
@@ -354,14 +408,30 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
     }
   }, [config, getBestMimeType, retryCount]);
 
-  // Start recording - tries Speech API first, falls back to MediaRecorder
+  // Start recording - enhanced Firefox handling
   const startRecording = useCallback(async () => {
     setError(null); // Clear any previous errors
     setRetryCount(0); // Reset retry count on new attempt
     setTranscript(''); // Reset transcript for fresh recording
     setInterimTranscript(''); // Reset interim transcript
 
-    // Try Web Speech API first (for real-time transcription)
+    // Use browser detection utility
+    const browserInfo = detectBrowser();
+
+    // Firefox: Skip Speech API and go directly to MediaRecorder
+    if (browserInfo.isFirefox) {
+      console.log('Firefox detected: Using MediaRecorder directly');
+      const success = await startMediaRecorder();
+      if (!success) {
+        const errorMessage = 'Firefox: Voice input is not available. Please type your message instead.';
+        setError(errorMessage);
+        setIsSupported(false);
+        config.onError?.(errorMessage);
+      }
+      return;
+    }
+
+    // Other browsers: Try Web Speech API first, then fallback to MediaRecorder
     if (hasSpeechApi.current && initSpeechRecognition()) {
       try {
         recognitionRef.current.start();
@@ -372,10 +442,10 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
       }
     }
 
-    // Fallback to MediaRecorder + Whisper API
+    // Fallback to MediaRecorder + server transcription
     const success = await startMediaRecorder();
     if (!success) {
-      const errorMessage = 'Voice input is not supported in this browser.';
+      const errorMessage = 'Voice input is not supported in this browser. Please type your message instead.';
       setError(errorMessage);
       setIsSupported(false);
       config.onError?.(errorMessage);
