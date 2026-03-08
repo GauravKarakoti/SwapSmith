@@ -8,6 +8,7 @@ import {
   VALID_PLANS,
   type PlanValue,
 } from '@/lib/admin-service';
+import { logAdminAction, AUDIT_ACTIONS, getIpAddress, getUserAgent } from '../../../../shared/lib/audit-logger';
 
 // ── Auth helper ───────────────────────────────────────────────────────────
 
@@ -144,6 +145,28 @@ export async function PATCH(req: NextRequest) {
       admin.email,
       reason,
     );
+
+    // Log the action
+    const actionToAudit: Record<string, string> = {
+      suspend: AUDIT_ACTIONS.SUSPEND_USER,
+      unsuspend: AUDIT_ACTIONS.UNSUSPEND_USER,
+      flag: AUDIT_ACTIONS.FLAG_USER,
+      unflag: AUDIT_ACTIONS.UNFLAG_USER,
+    };
+
+    await logAdminAction({
+      adminId: admin.firebaseUid,
+      adminEmail: admin.email,
+      action: actionToAudit[action] || action,
+      targetResource: 'user',
+      targetId: firebaseUid,
+      metadata: {
+        action,
+        reason: reason || null,
+      },
+      ipAddress: getIpAddress(req.headers),
+      userAgent: getUserAgent(req.headers),
+    });
 
     const actionLabels: Record<string, string> = {
       suspend:   'User suspended',

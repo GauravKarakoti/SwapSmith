@@ -759,6 +759,33 @@ export const coinGiftLogs = pgTable('coin_gift_logs', {
   index("idx_trading_strategies_total_return").on(table.totalReturn),
 ]);
 
+export const coinGiftLogsRelations = relations(coinGiftLogs, ({ one }) => ({
+  user: one(users, { fields: [coinGiftLogs.targetUserId], references: [users.id] }),
+}));
+
+export type CoinGiftLog = typeof coinGiftLogs.$inferSelect;
+
+// --- ADMIN AUDIT LOG ---
+
+export const adminAuditLog = pgTable('admin_audit_log', {
+  id: serial('id').primaryKey(),
+  adminId: text('admin_id').notNull(),          // admin firebaseUid
+  adminEmail: text('admin_email').notNull(),
+  action: text('action').notNull(),              // e.g., 'approve_admin_request', 'suspend_user', 'update_config'
+  targetResource: text('target_resource'),       // e.g., 'user', 'admin_request', 'swap', 'config'
+  targetId: text('target_id'),                   // ID of the affected resource
+  metadata: jsonb('metadata'),                   // JSONB field for action-specific context
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => [
+  index('idx_admin_audit_log_admin').on(table.adminId),
+  index('idx_admin_audit_log_action').on(table.action),
+  index('idx_admin_audit_log_created_at').on(table.createdAt),
+  index('idx_admin_audit_log_target').on(table.targetResource, table.targetId),
+]);
+
+export type AdminAuditLog = typeof adminAuditLog.$inferSelect;
 export const strategySubscriptions = pgTable('strategy_subscriptions', {
   id: serial('id').primaryKey(),
   strategyId: integer('strategy_id').notNull().references(() => tradingStrategies.id, { onDelete: 'cascade' }),
