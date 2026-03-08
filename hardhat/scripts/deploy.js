@@ -49,11 +49,14 @@ async function main() {
   console.log("─".repeat(60));
   console.log(`✅  RewardToken deployed!`);
   console.log(`    Contract address : ${contractAddress}`);
-console.log(`    Token name       : ${await token.name()} (SMTH)`);
+  console.log(`    Token name       : ${await token.name()}`);
   console.log(`    Token symbol     : ${await token.symbol()}`);
 
   const totalSupply = await token.totalSupply();
   console.log(`    Total supply     : ${ethers.formatEther(totalSupply)} SMTH`);
+  
+  const mintingCap = await token.mintingCap();
+  console.log(`    Minting cap      : ${ethers.formatEther(mintingCap)} SMTH`);
 
   const network = await ethers.provider.getNetwork();
   const chainId = network.chainId;
