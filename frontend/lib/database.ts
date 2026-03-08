@@ -50,7 +50,7 @@ export type PriceAlert = typeof priceAlerts.$inferSelect;
 
 // --- COIN PRICE CACHE FUNCTIONS ---
 
-export async function getCachedPrice(coin: string, network: string): Promise<CoinPriceCache | undefined> {
+export async function getCachedPrice(coin: string, network: string, includeExpired: boolean = true): Promise<CoinPriceCache | undefined> {
   if (!db) {
     console.warn('Database not configured');
     return undefined;
@@ -67,7 +67,7 @@ export async function getCachedPrice(coin: string, network: string): Promise<Coi
   if (!cached) return undefined;
   
   // Check if cache is still valid
-  if (new Date(cached.expiresAt) < new Date()) {
+  if (!includeExpired && new Date(cached.expiresAt) < new Date()) {
     return undefined; // Expired
   }
   
@@ -123,7 +123,7 @@ export async function setCachedPrice(
   usdPrice: string | undefined,
   btcPrice: string | undefined,
   available: boolean,
-  ttlMinutes: number = 5
+  ttlMinutes: number = 360 // Default to 6 hours
 ) {
   if (!db) {
     console.warn('Database not configured');
