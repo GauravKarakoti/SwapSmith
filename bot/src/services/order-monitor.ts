@@ -1,4 +1,4 @@
-import type { SideShiftOrderStatus } from './sideshift-client';
+import type { SideShiftOrderStatus, RateLimitError } from './sideshift-client';
 import type { Order } from './database';
 import { TERMINAL_STATUSES_LIST } from '../constants';
 import logger from './logger';
@@ -79,6 +79,7 @@ export class OrderMonitor {
     private tickTimer: ReturnType<typeof setInterval> | null = null;
     private activePollCount = 0;
     private deps: OrderMonitorDeps;
+    private rateLimitCooldownUntil: number | null = null; // timestamp when cooldown ends
 
     constructor(deps: OrderMonitorDeps) {
         this.deps = deps;
@@ -204,8 +205,32 @@ export class OrderMonitor {
 
     // --- Internal ---
 
+    /**
+     * Checks if the monitor is currently in rate-limit cooldown.
+     * @returns true if cooldown is active, false otherwise
+     */
+    private isRateLimited(): boolean {
+        if (this.rateLimitCooldownUntil === null) return false;
+        const now = Date.now();
+        if (now >= this.rateLimitCooldownUntil) {
+            // Cooldown expired
+            this.rateLimitCooldownUntil = null;
+            logger.info('[OrderMonitor] Rate-limit cooldown expired. Resuming polling.');
+            return false;
+        }
+        return true;
+    }
+
     /** Single tick: evaluate which orders need polling and poll them. */
     private async tick(): Promise<void> {
+        // Skip polling if rate-limited
+        if (this.isRateLimited()) {
+            const remainingMs = this.rateLimitCooldownUntil! - Date.now();
+            const remainingSec = Math.ceil(remainingMs / 1000);
+            logger.debug(`[OrderMonitor] Skipping tick — rate-limited for ${remainingSec} more seconds.`);
+            return;
+        }
+
         const now = Date.now();
         const toPoll: TrackedOrder[] = [];
 
@@ -261,9 +286,20 @@ export class OrderMonitor {
                 }
             }
         } catch (error) {
-            logger.error(`[OrderMonitor] Error polling order ${order.orderId}:`, error);
-
-            // Don't remove — will retry on next tick
+            // Handle rate-limit errors specially
+            if (error && typeof error === 'object' && 'name' in error && error.name === 'RateLimitError') {
+                const rateLimitError = error as { retryAfter: number; message: string };
+                const cooldownMs = rateLimitError.retryAfter * 1000;
+                this.rateLimitCooldownUntil = Date.now() + cooldownMs;
+                logger.warn(
+                    `[OrderMonitor] ⚠️  SideShift API rate limit exceeded (HTTP 429). ` +
+                    `Pausing all polling for ${rateLimitError.retryAfter} seconds.`
+                );
+                // Don't remove order — will retry after cooldown
+            } else {
+                logger.error(`[OrderMonitor] Error polling order ${order.orderId}:`, error);
+                // Don't remove — will retry on next tick
+            }
         } finally {
             this.activePollCount--;
         }
