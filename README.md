@@ -12,6 +12,7 @@ SwapSmith allows you to execute complex, cross-chain cryptocurrency swaps using 
 - **Cross-Chain Magic:** Seamlessly swap between 200+ assets across 40+ chains.
 - **Voice Input:** (Experimental) Use your microphone to command the agent.
 - **Secure:** Your keys stay yours. Transactions are only executed after your explicit confirmation.
+- **Security Scanner:** Analyze tokens for potential honeypots and risks before swapping.
 - **Real-Time Quotes:** Always get the best available rate via SideShift.
 
 ## 🛠️ How It Works

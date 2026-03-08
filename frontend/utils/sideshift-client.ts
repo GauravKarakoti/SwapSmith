@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { SIDESHIFT_CONFIG, getApiUrl } from '../../shared/config/sideshift';
+import { SIDESHIFT_CONFIG, getApiUrl, getApiEndpoint } from '../../shared/config/sideshift';
 import { validateDepositAddressForNetwork } from './addressValidation';
 
 const apiClient = axios.create({

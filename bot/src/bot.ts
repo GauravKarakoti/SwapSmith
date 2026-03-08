@@ -444,6 +444,13 @@ async function start() {
     await limitOrderWorker.start(bot);
     dcaScheduler.start();
 
+    // Register OrderMonitor for graceful shutdown
+    shutdownManager.register({
+      name: 'OrderMonitor',
+      stop: () => orderMonitor.gracefulStop(10000),
+      timeout: 15000
+    });
+
     await bot.telegram.deleteWebhook({ drop_pending_updates: true });
 
     await bot.launch();
@@ -461,13 +468,22 @@ async function start() {
       dcaScheduler.stop();
       bot.stop(signal);
 
-      await new Promise<void>((resolve) => server.close(() => resolve()));
+    // Register Telegraf bot for graceful shutdown
+    shutdownManager.register({
+      name: 'Telegraf Bot',
+      stop: () => {
+        bot.stop('SHUTDOWN');
+      },
+      timeout: 5000
+    });
 
-      process.exit(0);
-    };
+    // Register process signal handlers
+    registerProcessHandlers(async (signal: string) => {
+      logger.info(`🛑 Shutdown initiated (${signal})`);
+      await shutdownManager.shutdown(signal);
+    });
 
-    process.once('SIGINT', () => shutdown('SIGINT'));
-    process.once('SIGTERM', () => shutdown('SIGTERM'));
+    logger.info('✅ All services started and shutdown handlers registered');
   } catch (e) {
     handleError('StartupFailed', e, null, true, 'critical');
     process.exit(1);

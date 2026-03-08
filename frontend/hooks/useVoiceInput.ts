@@ -25,6 +25,7 @@ export interface UseVoiceInputReturn {
   stopRecording: () => Promise<Blob | null>;
   error: string | null;
   resetTranscript: () => void;
+  clearError: () => void;
   retryCount: number;
 }
 
@@ -337,7 +338,10 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
 
   // Start recording - tries Speech API first, falls back to MediaRecorder
   const startRecording = useCallback(async () => {
-    setError(null);
+    setError(null); // Clear any previous errors
+    setRetryCount(0); // Reset retry count on new attempt
+    setTranscript(''); // Reset transcript for fresh recording
+    setInterimTranscript(''); // Reset interim transcript
 
     // Try Web Speech API first (for real-time transcription)
     if (hasSpeechApi.current && initSpeechRecognition()) {
@@ -408,6 +412,11 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
     setInterimTranscript('');
   }, []);
 
+  // Clear error state (useful for UI to explicitly dismiss errors)
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -440,6 +449,7 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
     stopRecording,
     error,
     resetTranscript,
+    clearError,
     retryCount
   };
 };
