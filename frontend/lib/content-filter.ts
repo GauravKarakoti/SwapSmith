@@ -63,8 +63,27 @@ export function extractUrls(content: string): string[] {
  * Check if a URL contains a suspicious or phishing domain
  */
 export function isPhishingUrl(url: string): boolean {
-  const lowerUrl = url.toLowerCase();
-  return PHISHING_DOMAINS.some(domain => lowerUrl.includes(domain));
+  let hostname: string;
+
+  try {
+    const parsed = new URL(url);
+    hostname = parsed.hostname.toLowerCase();
+  } catch {
+    // If the URL cannot be parsed, treat it as non-phishing
+    return false;
+  }
+
+  return PHISHING_DOMAINS.some(domain => {
+    const lowerDomain = domain.toLowerCase();
+
+    // TLD-only entries (e.g., ".tk", ".ga"): check that the hostname ends with the TLD
+    if (lowerDomain.startsWith('.')) {
+      return hostname.endsWith(lowerDomain);
+    }
+
+    // Full domains (e.g., "bit.ly"): match exact hostname or any subdomain
+    return hostname === lowerDomain || hostname.endsWith(`.${lowerDomain}`);
+  });
 }
 
 /**
