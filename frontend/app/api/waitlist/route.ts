@@ -1,34 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Waitlist from '@/models/Waitlist';
+import { waitlistBodySchema, validateInput } from '@/lib/api-validation';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email } = body;
+    const validation = validateInput(waitlistBodySchema, body);
 
-    // Validate email
-    if (!email) {
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'Email is required' },
+        { error: validation.error },
         { status: 400 }
       );
     }
 
-    // Basic email validation
-    const emailRegex = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/;
-    if (!emailRegex.test(email)) {
-      return NextResponse.json(
-        { error: 'Please enter a valid email address' },
-        { status: 400 }
-      );
-    }
+    const { email } = validation.data;
+    const normalizedEmail = email.toLowerCase().trim();
 
     // Connect to database
     await connectDB();
 
     // Check if email already exists
-    const existingEmail = await Waitlist.findOne({ email: email.toLowerCase().trim() });
+    const existingEmail = await Waitlist.findOne({ email: normalizedEmail });
 
     if (existingEmail) {
       return NextResponse.json(
@@ -39,7 +33,7 @@ export async function POST(request: NextRequest) {
 
     // Create new waitlist entry
     const newEntry = await Waitlist.create({
-      email: email.toLowerCase().trim(),
+      email: normalizedEmail,
     });
 
     return NextResponse.json(

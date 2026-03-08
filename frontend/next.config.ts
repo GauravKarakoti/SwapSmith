@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
   output: isVercel ? undefined : "standalone",
   
   // Enable compilation for the shared folder
-  transpilePackages: ['@swapsmith/shared'],
+  transpilePackages: ['shared'],
   
   // Only set custom tracing root when NOT on Vercel
   ...(isVercel ? {} : { outputFileTracingRoot: path.join(process.cwd(), '../') }),

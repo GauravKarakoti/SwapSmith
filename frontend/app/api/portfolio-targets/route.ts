@@ -8,33 +8,11 @@ import {
   deletePortfolioTarget,
   getRebalanceHistory 
 } from '@/lib/database';
-
-type AssetInput = { symbol?: unknown; allocation?: unknown; [key: string]: unknown };
-
-function validateAssets(assets: AssetInput[]): { valid: boolean; error?: string } {
-  if (!Array.isArray(assets) || assets.length === 0) {
-    return { valid: false, error: 'Assets must be a non-empty array' };
-  }
-
-  let totalAllocation = 0;
-  for (const asset of assets) {
-    if (!asset.symbol || typeof asset.symbol !== 'string') {
-      return { valid: false, error: 'Each asset must have a valid symbol' };
-    }
-    // Handle allocation as number (0-100)
-    if (typeof asset.allocation !== 'number' || asset.allocation < 0) {
-      return { valid: false, error: 'Each asset must have a valid non-negative allocation' };
-    }
-    totalAllocation += asset.allocation;
-  }
-
-  // Allow small floating point error
-  if (Math.abs(totalAllocation - 100) > 0.5) {
-     return { valid: false, error: 'Total allocation must be approximately 100%' };
-  }
-
-  return { valid: true };
-}
+import { 
+  portfolioTargetsQuerySchema, 
+  portfolioTargetBodySchema,
+  validateInput 
+} from '@/lib/api-validation';
 
 export async function GET(request: NextRequest) {
   try {
@@ -48,32 +26,35 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-    const history = searchParams.get('history');
+    const queryParams = {
+      id: searchParams.get('id'),
+      history: searchParams.get('history')
+    };
+
+    const validation = validateInput(portfolioTargetsQuerySchema, queryParams);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: validation.error },
+        { status: 400 }
+      );
+    }
+
+    const { id, history } = validation.data;
 
     if (id) {
-      const portfolioId = parseInt(id);
-
-      if (!Number.isFinite(portfolioId)) {
-        return NextResponse.json(
-          { error: 'Invalid portfolio ID' },
-          { status: 400 }
-        );
-      }
-      
-      if (history === 'true') {
-        const portfolio = await getPortfolioTargetById(portfolioId, userId.toString());
+      if (history) {
+        const portfolio = await getPortfolioTargetById(id, userId.toString());
         if (!portfolio) {
           return NextResponse.json(
             { error: 'Portfolio not found' },
             { status: 404 }
           );
         }
-        const historyData = await getRebalanceHistory(portfolioId);
+        const historyData = await getRebalanceHistory(id);
         return NextResponse.json({ history: historyData });
       }
       
-      const portfolio = await getPortfolioTargetById(portfolioId, userId.toString());
+      const portfolio = await getPortfolioTargetById(id, userId.toString());
       if (!portfolio) {
         return NextResponse.json(
           { error: 'Portfolio not found' },
@@ -108,22 +89,16 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, assets, driftThreshold, autoRebalance } = body;
-
-    if (!name || !assets || !Array.isArray(assets)) {
-      return NextResponse.json(
-        { error: 'Invalid input: name and assets array are required' },
-        { status: 400 }
-      );
-    }
-
-    const validation = validateAssets(assets);
-    if (!validation.valid) {
+    const validation = validateInput(portfolioTargetBodySchema, body);
+    
+    if (!validation.success) {
       return NextResponse.json(
         { error: validation.error },
         { status: 400 }
       );
     }
+
+    const { name, assets, driftThreshold, autoRebalance } = validation.data;
 
     const newPortfolio = await createPortfolioTarget(
       userId.toString(),
@@ -162,28 +137,22 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, ...updates } = body;
-    const portfolioId = Number(id);
-
-    if (!Number.isFinite(portfolioId)) {
+    const validation = validateInput(
+      portfolioTargetBodySchema.extend({ id: portfolioTargetsQuerySchema.shape.id }), 
+      body
+    );
+    
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'Invalid portfolio ID' },
+        { error: validation.error },
         { status: 400 }
       );
     }
 
-    if (updates.assets) {
-      const v = validateAssets(updates.assets as AssetInput[]);
-      if (!v.valid) {
-        return NextResponse.json(
-          { error: v.error },
-          { status: 400 }
-        );
-      }
-    }
+    const { id, ...updates } = validation.data;
 
     const updatedPortfolio = await updatePortfolioTarget(
-      portfolioId,
+      id!,
       userId.toString(),
       updates
     );
@@ -217,16 +186,21 @@ export async function DELETE(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id } = body;
-
-    if (!id) {
+    const validation = validateInput(
+      portfolioTargetsQuerySchema.pick({ id: true }), 
+      body
+    );
+    
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'Missing required field: id' },
+        { error: validation.error },
         { status: 400 }
       );
     }
 
-    const success = await deletePortfolioTarget(id, userId.toString());
+    const { id } = validation.data;
+
+    const success = await deletePortfolioTarget(id!, userId.toString());
 
     if (!success) {
       return NextResponse.json(

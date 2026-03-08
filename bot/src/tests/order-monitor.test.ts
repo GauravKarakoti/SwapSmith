@@ -1,6 +1,7 @@
 import { OrderMonitor, getBackoffInterval, TERMINAL_STATUSES } from '../services/order-monitor';
 import type { OrderMonitorDeps } from '../services/order-monitor';
 import type { SideShiftOrderStatus } from '../services/sideshift-client';
+import { RateLimitError } from '../services/sideshift-client';
 
 // --- Helpers ---
 
@@ -337,6 +338,188 @@ describe('OrderMonitor', () => {
             await monitor.reconcile();
 
             expect(onStatusChange).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('rate-limit handling', () => {
+        it('pauses polling when RateLimitError is encountered', async () => {
+            jest.useFakeTimers();
+
+            const getOrderStatus = jest.fn()
+                .mockRejectedValueOnce(new RateLimitError(30))
+                .mockResolvedValue({ id: 'order-1', status: 'pending' } as unknown as SideShiftOrderStatus);
+
+            const deps = createMockDeps({ getOrderStatus });
+            const monitor = new OrderMonitor(deps);
+
+            monitor.trackOrder('order-1', 100, new Date());
+            monitor.start();
+
+            // First tick — triggers rate limit
+            jest.advanceTimersByTime(11_000);
+            await Promise.resolve();
+            await Promise.resolve();
+
+            // Verify getOrderStatus was called once (rate-limited)
+            expect(getOrderStatus).toHaveBeenCalledTimes(1);
+
+            // Next few ticks should skip polling due to cooldown
+            jest.advanceTimersByTime(10_000);
+            await Promise.resolve();
+            expect(getOrderStatus).toHaveBeenCalledTimes(1); // no new calls
+
+            jest.advanceTimersByTime(10_000);
+            await Promise.resolve();
+            expect(getOrderStatus).toHaveBeenCalledTimes(1); // no new calls
+
+            // Advance past the 30-second cooldown + another tick interval
+            jest.advanceTimersByTime(20_000); // Total: 51s, well past the 41s cooldown end
+            await Promise.resolve();
+            await Promise.resolve();
+            await Promise.resolve();
+
+            expect(getOrderStatus).toHaveBeenCalledTimes(2); // resumed polling
+
+            monitor.stop();
+        });
+
+        it('sets global cooldown that affects all orders', async () => {
+            jest.useFakeTimers();
+
+            const getOrderStatus = jest.fn()
+                .mockRejectedValueOnce(new RateLimitError(20))
+                .mockResolvedValue({ id: 'order-1', status: 'pending' } as unknown as SideShiftOrderStatus);
+
+            const deps = createMockDeps({ getOrderStatus });
+            const monitor = new OrderMonitor(deps);
+
+            // Track multiple orders
+            monitor.trackOrder('order-1', 100, new Date());
+            monitor.trackOrder('order-2', 200, new Date());
+            monitor.trackOrder('order-3', 300, new Date());
+            monitor.start();
+
+            // First tick — one order triggers rate limit
+            jest.advanceTimersByTime(11_000);
+            await Promise.resolve();
+            await Promise.resolve();
+
+            // getOrderStatus called at least once before rate-limit hits; record count before cooldown
+            const callsBeforeCooldown = getOrderStatus.mock.calls.length;
+            expect(callsBeforeCooldown).toBeGreaterThanOrEqual(1);
+
+            // During cooldown, NO orders should be polled
+            jest.advanceTimersByTime(10_000);
+            await Promise.resolve();
+            expect(getOrderStatus).toHaveBeenCalledTimes(callsBeforeCooldown); // no new calls
+
+            monitor.stop();
+        });
+
+        it('handles rate-limit with numeric Retry-After header', async () => {
+            jest.useFakeTimers();
+
+            const getOrderStatus = jest.fn()
+                .mockRejectedValueOnce(new RateLimitError(45))
+                .mockResolvedValue({ id: 'order-1', status: 'pending' } as unknown as SideShiftOrderStatus);
+
+            const deps = createMockDeps({ getOrderStatus });
+            const monitor = new OrderMonitor(deps);
+
+            monitor.trackOrder('order-1', 100, new Date());
+            monitor.start();
+
+            // Trigger rate limit
+            jest.advanceTimersByTime(11_000);
+            await Promise.resolve();
+            await Promise.resolve();
+
+            // Skip during cooldown
+            jest.advanceTimersByTime(40_000); // 40 seconds (5s remaining)
+            await Promise.resolve();
+            expect(getOrderStatus).toHaveBeenCalledTimes(1);
+
+            // After 45+ seconds, polling resumes
+            jest.advanceTimersByTime(11_000);
+            await Promise.resolve();
+            await Promise.resolve();
+            expect(getOrderStatus).toHaveBeenCalledTimes(2);
+
+            monitor.stop();
+        });
+
+        it('does not treat regular errors as rate-limits', async () => {
+            jest.useFakeTimers();
+
+            const regularError = new Error('Network error');
+
+            const getOrderStatus = jest.fn()
+                .mockRejectedValueOnce(regularError)
+                .mockResolvedValue({ id: 'order-1', status: 'pending' } as unknown as SideShiftOrderStatus);
+
+            const deps = createMockDeps({ getOrderStatus });
+            const monitor = new OrderMonitor(deps);
+
+            monitor.trackOrder('order-1', 100, new Date());
+            monitor.start();
+
+            // First tick — regular error
+            jest.advanceTimersByTime(11_000);
+            await Promise.resolve();
+            await Promise.resolve();
+            expect(getOrderStatus).toHaveBeenCalledTimes(1);
+
+            // Next tick should still poll (no cooldown)
+            jest.advanceTimersByTime(16_000);
+            await Promise.resolve();
+            await Promise.resolve();
+            expect(getOrderStatus).toHaveBeenCalledTimes(2); // should retry immediately
+
+            monitor.stop();
+        });
+
+        it('resumes polling after cooldown expires', async () => {
+            jest.useFakeTimers();
+
+            const getOrderStatus = jest.fn()
+                .mockRejectedValueOnce(new RateLimitError(15))
+                .mockResolvedValueOnce({ id: 'order-1', status: 'processing' } as unknown as SideShiftOrderStatus)
+                .mockResolvedValue({ id: 'order-1', status: 'settled' } as unknown as SideShiftOrderStatus);
+
+            const onStatusChange = jest.fn();
+            const deps = createMockDeps({ getOrderStatus, onStatusChange });
+            const monitor = new OrderMonitor(deps);
+
+            monitor.trackOrder('order-1', 100, new Date());
+            monitor.start();
+
+            // First tick — rate-limited (at 11s)
+            jest.advanceTimersByTime(11_000);
+            await Promise.resolve();
+            await Promise.resolve();
+
+            // During cooldown
+            jest.advanceTimersByTime(10_000);
+            await Promise.resolve();
+            expect(getOrderStatus).toHaveBeenCalledTimes(1);
+
+            // After cooldown, status changes
+            // Order last checked at 11s, backoff is 15s for fresh orders, so next poll at 26s
+            // Cooldown ends at 26s (11s + 15s), so we need to advance past that
+            jest.advanceTimersByTime(11_000); // Now at 32s, cooldown expired, order eligible for polling
+            await Promise.resolve();
+            await Promise.resolve();
+            await Promise.resolve(); // Extra tick for async operations
+            expect(getOrderStatus).toHaveBeenCalledTimes(2);
+            expect(onStatusChange).toHaveBeenCalledWith(
+                100,
+                'order-1',
+                'pending',
+                'processing',
+                expect.objectContaining({ id: 'order-1', status: 'processing' })
+            );
+
+            monitor.stop();
         });
     });
 });
