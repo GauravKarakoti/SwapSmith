@@ -287,8 +287,8 @@ export class OrderMonitor {
             }
         } catch (error) {
             // Handle rate-limit errors specially
-            if (error && typeof error === 'object' && 'name' in error && error.name === 'RateLimitError') {
-                const rateLimitError = error as { retryAfter: number; message: string };
+            if (error && typeof error === 'object' && 'name' in error && error.name === 'RateLimitError' && 'retryAfter' in error) {
+                const rateLimitError = error as { retryAfter: number; name: string };
                 const cooldownMs = rateLimitError.retryAfter * 1000;
                 this.rateLimitCooldownUntil = Date.now() + cooldownMs;
                 logger.warn(
