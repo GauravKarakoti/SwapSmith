@@ -5,6 +5,7 @@ import {
   getPlatformSwapConfig,
   updatePlatformSwapConfig,
 } from '@/lib/admin-service';
+import { logAdminAction, AUDIT_ACTIONS, getIpAddress, getUserAgent } from '@/shared/lib/audit-logger';
 
 async function authenticate(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
@@ -83,8 +84,31 @@ export async function PATCH(req: NextRequest) {
 
     const updated = await updatePlatformSwapConfig(patch, admin.email);
 
-    // Log the change (console – integrate with audit log as needed)
+    // Log the change to audit log
     console.log(`[Admin Config] ${admin.email} updated swap config:`, JSON.stringify(patch));
+
+    // Determine the specific audit action
+    let auditAction = AUDIT_ACTIONS.UPDATE_SWAP_CONFIG;
+    if (typeof body.swapExecutionEnabled === 'boolean') {
+      auditAction = AUDIT_ACTIONS.TOGGLE_EMERGENCY_STOP;
+    } else if (typeof body.sideshiftApiKey === 'string') {
+      auditAction = AUDIT_ACTIONS.UPDATE_API_KEYS;
+    }
+
+    await logAdminAction({
+      adminId: admin.firebaseUid,
+      adminEmail: admin.email,
+      action: auditAction,
+      targetResource: 'platform_config',
+      targetId: 'swap_config',
+      metadata: {
+        ...patch,
+        // Mask the API key in the audit log
+        sideshiftApiKey: patch.sideshiftApiKey ? '***REDACTED***' : undefined,
+      },
+      ipAddress: getIpAddress(req.headers),
+      userAgent: getUserAgent(req.headers),
+    });
 
     const maskedKey = updated.sideshiftApiKey
       ? `${'*'.repeat(Math.max(0, updated.sideshiftApiKey.length - 4))}${updated.sideshiftApiKey.slice(-4)}`
