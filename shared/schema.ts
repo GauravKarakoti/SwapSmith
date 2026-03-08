@@ -144,7 +144,7 @@ export const limitOrders = pgTable('limit_orders', {
   createdAt: timestamp('created_at').defaultNow(),
   lastCheckedAt: timestamp('last_checked_at'),
   conditionOperator: text('condition_operator'), // 'gt' or 'lt'
-  conditionValue: real('condition_value'),
+  conditionValue: numeric('condition_value', { precision: 30, scale: 18 }),
   conditionAsset: text('condition_asset'),
   status: text('status').notNull().default('pending'),
   sideshiftOrderId: text('sideshift_order_id'),
@@ -165,7 +165,7 @@ export const trailingStopOrders = pgTable('trailing_stop_orders', {
   toNetwork: text('to_network'),
   fromAmount: text('from_amount').notNull(),
   settleAddress: text('settle_address'),
-  trailingPercentage: real('trailing_percentage').notNull(),
+  trailingPercentage: numeric('trailing_percentage', { precision: 10, scale: 4 }).notNull(),
   peakPrice: text('peak_price'),
   currentPrice: text('current_price'),
   triggerPrice: text('trigger_price'),
@@ -182,7 +182,7 @@ export const trailingStopOrders = pgTable('trailing_stop_orders', {
   index("idx_trailing_stop_orders_is_active").on(table.isActive),
 ]);
 
-// --- SHARED SCHEMAS (used by both bot and frontend) ---
+// --- SHARED SCHEMAS (used by both bot and frontend) --- (Financial precision updated)
 
 export const coinPriceCache = pgTable('coin_price_cache', {
   id: serial('id').primaryKey(),
@@ -204,7 +204,7 @@ export const userSettings = pgTable('user_settings', {
   userId: text('user_id').notNull().unique(),
   walletAddress: text('wallet_address'),
   theme: text('theme'),
-  slippageTolerance: real('slippage_tolerance'),
+  slippageTolerance: numeric('slippage_tolerance', { precision: 10, scale: 4 }),
   notificationsEnabled: text('notifications_enabled'),
   preferences: text('preferences'),
   emailNotifications: text('email_notifications'),
@@ -221,7 +221,7 @@ export const portfolioTargets = pgTable('portfolio_targets', {
   telegramId: bigint('telegram_id', { mode: 'number' }),
   name: text('name').notNull().default('My Portfolio'), // Added name column
   assets: jsonb('assets').notNull(),
-  driftThreshold: real('drift_threshold').notNull().default(5),
+  driftThreshold: numeric('drift_threshold', { precision: 10, scale: 4 }).notNull().default('5'),
   autoRebalance: boolean('auto_rebalance').notNull().default(false),
   isActive: boolean('is_active').notNull().default(true),
   lastRebalancedAt: timestamp('last_rebalanced_at'),
@@ -297,7 +297,7 @@ export const swapHistory = pgTable('swap_history', {
   quoteId: text('quote_id'),
   fromAsset: text('from_asset').notNull(),
   fromNetwork: text('from_network').notNull(),
-  fromAmount: real('from_amount').notNull(),
+  fromAmount: numeric('from_amount', { precision: 30, scale: 18 }).notNull(),
   toAsset: text('to_asset').notNull(),
   toNetwork: text('to_network').notNull(),
   settleAmount: text('settle_amount').notNull(),
@@ -391,7 +391,7 @@ export const gasEstimates = pgTable('gas_estimates', {
   priorityFee: text('priority_fee'), // for EIP-1559 chains
   baseFee: text('base_fee'), // for EIP-1559 chains
   estimatedTimeSeconds: integer('estimated_time_seconds'), // estimated confirmation time
-  confidence: real('confidence'), // confidence score 0-100
+  confidence: numeric('confidence', { precision: 5, scale: 2 }), // confidence score 0-100
   source: text('source').notNull(), // 'ethgasstation', 'gelato', 'provider', etc.
   expiresAt: timestamp('expires_at').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
@@ -409,7 +409,7 @@ export const gasTokens = pgTable('gas_tokens', {
   network: text('network').notNull(),
   decimals: integer('decimals').notNull().default(18),
   tokenType: text('token_type').notNull(), // 'chi', 'gst', 'custom'
-  discountPercent: real('discount_percent').notNull().default(0), // discount % when using this token
+  discountPercent: numeric('discount_percent', { precision: 5, scale: 2 }).notNull().default('0'), // discount % when using this token
   isActive: boolean('is_active').notNull().default(true),
   metadata: jsonb('metadata'), // additional token metadata
   createdAt: timestamp('created_at').defaultNow(),
@@ -464,7 +464,7 @@ export const gasOptimizationHistory = pgTable('gas_optimization_history', {
   optimizedGasEstimate: text('optimized_gas_estimate').notNull(),
   gasTokenUsed: text('gas_token_used').references(() => gasTokens.symbol),
   gasSaved: text('gas_saved').notNull(),
-  savingsPercent: real('savings_percent').notNull(),
+  savingsPercent: numeric('savings_percent', { precision: 10, scale: 4 }).notNull(),
   optimizationType: text('optimization_type').notNull(), // 'token_discount', 'batching', 'timing', 'combined'
   metadata: jsonb('metadata'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -490,16 +490,16 @@ export const tradingStrategies = pgTable('trading_strategies', {
   parameters: jsonb('parameters').notNull(),
   riskLevel: strategyRiskLevelType('risk_level').notNull().default('medium'),
   subscriptionFee: text('subscription_fee').notNull().default('0'),
-  performanceFee: real('performance_fee').notNull().default(0),
+  performanceFee: numeric('performance_fee', { precision: 10, scale: 4 }).notNull().default('0'),
   minInvestment: text('min_investment').notNull().default('0'),
   isPublic: boolean('is_public').notNull().default(true),
   tags: text('tags').array(),
   status: strategyStatusType('status').notNull().default('active'),
-  totalReturn: real('total_return').notNull().default(0),
-  monthlyReturn: real('monthly_return').notNull().default(0),
-  maxDrawdown: real('max_drawdown').notNull().default(0),
-  volatility: real('volatility').notNull().default(0),
-  sharpeRatio: real('sharpe_ratio').notNull().default(0),
+  totalReturn: numeric('total_return', { precision: 15, scale: 8 }).notNull().default('0'),
+  monthlyReturn: numeric('monthly_return', { precision: 15, scale: 8 }).notNull().default('0'),
+  maxDrawdown: numeric('max_drawdown', { precision: 15, scale: 8 }).notNull().default('0'),
+  volatility: numeric('volatility', { precision: 15, scale: 8 }).notNull().default('0'),
+  sharpeRatio: numeric('sharpe_ratio', { precision: 15, scale: 8 }).notNull().default('0'),
   subscriberCount: integer('subscriber_count').notNull().default(0),
   totalTrades: integer('total_trades').notNull().default(0),
   successfulTrades: integer('successful_trades').notNull().default(0),
@@ -517,9 +517,9 @@ export const strategySubscriptions = pgTable('strategy_subscriptions', {
   subscriberId: integer('subscriber_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   subscriberTelegramId: bigint('subscriber_telegram_id', { mode: 'number' }),
   subscriptionFee: text('subscription_fee'),
-  allocationPercent: real('allocation_percent').notNull().default(100),
+  allocationPercent: numeric('allocation_percent', { precision: 5, scale: 2 }).notNull().default('100'),
   autoRebalance: boolean('auto_rebalance').notNull().default(true),
-  stopLossPercent: real('stop_loss_percent'),
+  stopLossPercent: numeric('stop_loss_percent', { precision: 5, scale: 2 }),
   status: subscriptionStatusType('status').notNull().default('active'),
   joinedAt: timestamp('joined_at').defaultNow(),
   pausedAt: timestamp('paused_at'),
@@ -534,7 +534,7 @@ export const strategyPerformance = pgTable('strategy_performance', {
   id: serial('id').primaryKey(),
   strategyId: integer('strategy_id').notNull().references(() => tradingStrategies.id, { onDelete: 'cascade' }),
   pnl: numeric('pnl', { precision: 20, scale: 8 }).notNull().default('0'),
-  pnlPercent: real('pnl_percent').notNull(),
+  pnlPercent: numeric('pnl_percent', { precision: 15, scale: 8 }).notNull(),
   status: text('status').notNull().default('completed'),
   executedAt: timestamp('executed_at'),
   createdAt: timestamp('created_at').defaultNow(),
