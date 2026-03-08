@@ -104,8 +104,8 @@ export default function Navbar() {
             </span>
           </Link>
 
-          {/* Center Navigation - hidden on mobile, shown on md+ */}
-          <div className="hidden md:flex items-center justify-center px-4">
+          {/* Center Navigation - hidden on mobile/tablet, shown on lg+ (desktop) */}
+          <div className="hidden lg:flex items-center justify-center px-4">
             <div className="flex items-center gap-1 bg-slate-100/80 dark:bg-zinc-800/40 p-1.5 rounded-2xl border border-white/60 dark:border-zinc-800 overflow-hidden shadow-inner backdrop-blur-sm">
               <Link
                 href="/"
@@ -116,7 +116,7 @@ export default function Navbar() {
                 }`}
               >
                 <Home className="w-4 h-4" />
-                <span className="hidden lg:inline">Home</span>
+                <span>Home</span>
               </Link>
 
               {NAV_ITEMS.map(({ href, label, Icon }) => (
@@ -130,7 +130,7 @@ export default function Navbar() {
                   }`}
                 >
                   <Icon className="w-4 h-4" />
-                  <span className="hidden xl:inline">{label}</span>
+                  <span>{label}</span>
                 </Link>
               ))}
             </div>
@@ -141,12 +141,12 @@ export default function Navbar() {
 
           {/* Right Side Actions */}
           <div className="flex items-center gap-2 sm:gap-3 ml-auto">
-            <div className="hidden md:flex items-center gap-3">
+            <div className="hidden lg:flex items-center gap-3">
               <WalletConnector />
               <ThemeToggle />
             </div>
 
-            <div className="hidden md:block relative" ref={profileRef}>
+            <div className="hidden lg:block relative" ref={profileRef}>
               <button
                 onClick={() => setShowProfileMenu((v) => !v)}
                 className="p-1 rounded-full border-2 border-transparent hover:border-blue-500 transition-all active:scale-95 shadow-[0_4px_15px_rgba(0,0,0,0.05)] dark:shadow-none"
@@ -193,7 +193,7 @@ export default function Navbar() {
 
             <button
               onClick={() => setMobileMenuOpen(true)}
-              className="md:hidden p-2 rounded-xl bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 ml-auto border border-slate-200/50 dark:border-transparent shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-none"
+              className="lg:hidden p-2 rounded-xl bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 ml-auto border border-slate-200/50 dark:border-transparent shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-none"
             >
               <Menu className="w-6 h-6" />
             </button>

@@ -1,13 +1,21 @@
-'use client'
-
 import './globals.css'
 import { Inter } from 'next/font/google'
 import { Providers } from './providers'
+import type { Metadata, Viewport } from 'next'
 import { Toaster } from 'react-hot-toast'
 import RewardToast from '@/components/RewardToast'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 const inter = Inter({ subsets: ['latin'] })
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+}
+export const metadata: Metadata = {
+  title: 'SwapSmith',
+  description: 'Voice-Activated Crypto Trading Assistant',
+}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
