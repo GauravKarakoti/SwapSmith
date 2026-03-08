@@ -42,7 +42,8 @@ export class SecurityScanner {
 
       // 2. Simulation (Mocked here, real implementation would simulate buy/sell tx)
       // If code size is very small, might be a proxy.
-      const isProxy = bytecode.length < 1000; 
+      const byteLength = (bytecode.length - 2) / 2; // Convert hex string length to byte length
+      const isProxy = byteLength < (1000 - 2) / 2;
 
       // 3. Check Verified Status (Placeholder for Explorer API call)
       const contractVerified = !isProxy; // Assume proxies are verified implementation pattern or riskier
