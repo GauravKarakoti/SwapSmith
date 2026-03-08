@@ -260,7 +260,9 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
       // Firefox-specific optimizations
       if (browserInfo.isFirefox) {
         // Firefox handles these constraints better
-        audioConstraints.latency = { ideal: 0.01 };
+        // Note: latency is not a standard MediaTrackConstraints property
+        // Using advanced constraints for Firefox optimization
+        (audioConstraints as any).latency = { ideal: 0.01 };
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({
