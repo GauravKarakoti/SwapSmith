@@ -69,7 +69,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     // Extract real user IP for geo-compliance checks
-    const userIP = extractUserIP(req);
+    const userIP = extractUserIP(req) || '127.0.0.1';
 
     // Pass settleAddress and real user IP to the function
     const result = await createCheckout(settleAsset, settleNetwork, settleAmount, settleAddress, userIP);
