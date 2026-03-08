@@ -173,7 +173,7 @@ export default function ScannerPage() {
                     </div>
                     <div>
                       <div className="flex justify-between items-center mb-1">
-                        <span className="text-gray-300">Top 10 Hold</span>
+                        <span className="text-gray-300">Top 10 Holders</span>
                         <span className={`font-bold ${report.holderAnalysis.topHoldersShare > 50 ? 'text-red-400' : 'text-green-400'}`}>
                           {report.holderAnalysis.topHoldersShare}%
                         </span>
