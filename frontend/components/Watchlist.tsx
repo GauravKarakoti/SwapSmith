@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Star, Trash2, RefreshCw, ArrowRightLeft, Plus, Search, X, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
+import { useCryptoFavorites } from '@/hooks/useCryptoFavorites';
 
 interface WatchlistItem {
   id: number;
@@ -23,6 +24,7 @@ interface WatchlistProps {
 
 export default function Watchlist({ onSwap }: WatchlistProps) {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { toggleFavorite, isFavorite, sortWithFavorites } = useCryptoFavorites();
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -168,9 +170,17 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
       c.network.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Sort watchlist with favorites first
+  const sortedWatchlist = sortWithFavorites(watchlist);
+
   // Check if a coin is already in watchlist
   const isInWatchlist = (coin: string, network: string) =>
     watchlist.some((item) => item.coin === coin && item.network === network);
+
+  const handleToggleFavorite = (coin: string, name: string, network: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleFavorite({ coin, name, network });
+  };
 
   return (
     <div className="w-full max-w-4xl mx-auto">
@@ -275,7 +285,7 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
       {!loading && watchlist.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <AnimatePresence>
-            {watchlist.map((item) => (
+            {sortedWatchlist.map((item) => (
               <motion.div
                 key={`${item.coin}-${item.network}`}
                 initial={{ opacity: 0, scale: 0.9 }}
@@ -290,9 +300,24 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
                       {item.coin.slice(0, 2).toUpperCase()}
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white">
-                        {item.coin.toUpperCase()}
-                      </h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-gray-900 dark:text-white">
+                          {item.coin.toUpperCase()}
+                        </h3>
+                        <button
+                          onClick={(e) => handleToggleFavorite(item.coin, item.name, item.network, e)}
+                          className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                          title={isFavorite(item.coin, item.network) ? "Remove from favorites" : "Add to favorites"}
+                        >
+                          <Star 
+                            className={`w-4 h-4 ${
+                              isFavorite(item.coin, item.network)
+                                ? 'text-yellow-500 fill-current' 
+                                : 'text-gray-300 dark:text-gray-600'
+                            }`} 
+                          />
+                        </button>
+                      </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">
                         {item.network}
                       </p>
@@ -407,16 +432,28 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
                     </div>
                   ) : (
                     <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                      {filteredCoins.map((token) => {
+                      {sortWithFavorites(filteredCoins).map((token) => {
                         const alreadyAdded = isInWatchlist(token.coin, token.network);
+                        const tokenIsFavorite = isFavorite(token.coin, token.network);
                         return (
-                          <button
+                          <div
                             key={`${token.coin}-${token.network}`}
-                            onClick={() => !alreadyAdded && addToWatchlist(token.coin, token.network, token.name)}
-                            disabled={alreadyAdded || addingToken}
-                            className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                           >
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 flex-1">
+                              <button
+                                onClick={(e) => handleToggleFavorite(token.coin, token.name, token.network, e)}
+                                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+                                title={tokenIsFavorite ? "Remove from favorites" : "Add to favorites"}
+                              >
+                                <Star 
+                                  className={`w-4 h-4 ${
+                                    tokenIsFavorite
+                                      ? 'text-yellow-500 fill-current' 
+                                      : 'text-gray-300 dark:text-gray-600'
+                                  }`} 
+                                />
+                              </button>
                               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
                                 {token.coin.slice(0, 2).toUpperCase()}
                               </div>
@@ -429,14 +466,23 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
                                 </p>
                               </div>
                             </div>
-                            {alreadyAdded ? (
-                              <span className="text-sm text-green-500 font-medium">
-                                In Watchlist
-                              </span>
-                            ) : (
-                              <Plus className="w-5 h-5 text-blue-600" />
-                            )}
-                          </button>
+                            <button
+                              onClick={() => !alreadyAdded && addToWatchlist(token.coin, token.network, token.name)}
+                              disabled={alreadyAdded || addingToken}
+                              className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {alreadyAdded ? (
+                                <span className="text-sm text-green-500 font-medium">
+                                  In Watchlist
+                                </span>
+                              ) : (
+                                <>
+                                  <Plus className="w-4 h-4" />
+                                  Add
+                                </>
+                              )}
+                            </button>
+                          </div>
                         );
                       })}
                     </div>
