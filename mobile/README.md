@@ -2,6 +2,10 @@
 
 This is the dedicated React Native mobile application for SwapSmith, providing a superior, native voice integration experience and a premium dark-themed UI that mirrors the web application.
 
+## PRODUCTION .aab FILE : https://expo.dev/artifacts/eas/uKsrKD7WPb3G8tMvMDgjcR.aab
+## ANDROID APK: https://expo.dev/accounts/gauravkarakoti/projects/SwapSmith/builds/b291d479-9abe-49d9-b311-001ddf585f7b
+![Download QR](./assets/QR.png)
+
 ## 📱 Prerequisites
 
 Before you begin, ensure you have the following installed:

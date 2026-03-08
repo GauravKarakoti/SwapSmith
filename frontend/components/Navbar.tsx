@@ -18,6 +18,7 @@ import {
   Info,
   ChevronRight,
   Star,
+  ShieldCheck,
 } from "lucide-react";
 import Image from "next/image";
 import { useAuth } from "@/hooks/useAuth";
@@ -28,6 +29,7 @@ import MarketSentimentWidget from "@/components/MarketSentimentWidget";
 const NAV_ITEMS = [
   { href: "/prices", label: "Live Prices", Icon: TrendingUp },
   { href: "/yield-scout", label: "Yield Scout", Icon: Trophy },
+  { href: "/scanner", label: "Scanner", Icon: ShieldCheck },
   { href: "/contributors", label: "Contributors", Icon: Users },
   { href: "/about", label: "About", Icon: Info },
 ];

@@ -1,22 +1,12 @@
-import { parseWithLLM, ParsedCommand } from './groq-client';
+import { parseWithLLM } from './groq-client';
+import type { ParsedCommand, ParseResult as ParseResultType, NextAction, FallbackAction, Condition } from '../types/ParsedCommand';
 import logger from './logger';
 import { parseDCA } from './nl-dca';
 import { detectLimitOrder } from './nl-limit-orders';
 
-export { ParsedCommand };
+export type { ParsedCommand };
 
-export type ParseResult =
-  | ParsedCommand
-  | {
-    success: false;
-    validationErrors: string[];
-    intent?: string;
-    confidence?: number;
-    parsedMessage?: string;
-    requiresConfirmation?: boolean;
-    originalInput?: string;
-    [key: string]: any;
-  };
+export type ParseResult = ParseResultType;
 
 const REGEX_TOKENS = /([A-Z]{2,10})\s+(to|into|for|→|->)\s+([A-Z]{2,10})/i;
 const REGEX_FROM_TO = /from\s+([A-Z]{2,10})\s+to\s+([A-Z]{2,10})/i;
@@ -155,8 +145,8 @@ const buildSwapResult = (
   }: Partial<ParsedCommand> & { 
     intent: ParsedCommand['intent']; 
     confidence: number;
-    nextActions?: any[];
-    fallbackAction?: any;
+    nextActions?: NextAction[];
+    fallbackAction?: FallbackAction;
     alternativeInterpretations?: string[];
     suggestedClarifications?: string[];
   }
@@ -204,28 +194,20 @@ const buildSwapResult = (
 /**
  * Enhanced function to parse complex conditional and multi-step commands
  */
-function parseComplexConditional(input: string): {
+interface ComplexConditionalAnalysis {
   hasComplexConditions: boolean;
-  primaryCondition?: any;
-  secondaryConditions?: any[];
+  primaryCondition?: Condition;
+  secondaryConditions?: Array<Record<string, unknown>>;
   multiStep?: boolean;
-  nextActions?: any[];
+  nextActions?: NextAction[];
   hasFallback?: boolean;
-  fallbackAction?: any;
+  fallbackAction?: FallbackAction;
   validationErrors: string[];
   confidence: number;
-} {
-  const result: {
-    hasComplexConditions: boolean;
-    primaryCondition?: any;
-    secondaryConditions?: any[];
-    multiStep?: boolean;
-    nextActions?: any[];
-    hasFallback?: boolean;
-    fallbackAction?: any;
-    validationErrors: string[];
-    confidence: number;
-  } = {
+}
+
+function parseComplexConditional(input: string): ComplexConditionalAnalysis {
+  const result: ComplexConditionalAnalysis = {
     hasComplexConditions: false,
     validationErrors: [],
     confidence: 100
@@ -320,7 +302,7 @@ function parseComplexConditional(input: string): {
 
 export async function parseUserCommand(
   userInput: string,
-  conversationHistory: any = [], // Replaced fallbackToLLM to fix "Cannot find name" errors
+  conversationHistory: Array<Record<string, string>> = [],
   inputType: 'text' | 'voice' = 'text'
 ): Promise<ParseResult> {
   // Graceful handling if someone passes a boolean for legacy fallbackToLLM

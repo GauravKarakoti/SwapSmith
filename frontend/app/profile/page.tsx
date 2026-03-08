@@ -365,21 +365,30 @@ export default function ProfilePage() {
 
   // Load swap history
   useEffect(() => {
-    if (user?.uid) {
-      setLoadingHistory(true)
-      fetch(`/api/swap-history?userId=${user.uid}`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.history) {
-            setWalletHistory(data.history)
-            const stats = calculatePortfolioStats(data.history)
-            setPortfolioStats(stats)
-          }
-        })
-        .catch(err => console.error('Failed to load swap history:', err))
-        .finally(() => setLoadingHistory(false))
-    }
-  }, [user])
+    const loadSwapHistory = async () => {
+      if (!user?.uid) return;
+      
+      setLoadingHistory(true);
+      try {
+        const res = await fetch(`/api/swap-history?userId=${user.uid}`);
+        const data = await res.json();
+        
+        if (data.history) {
+          setWalletHistory(data.history);
+          const stats = calculatePortfolioStats(data.history);
+          setPortfolioStats(stats);
+        }
+      } catch (err) {
+        console.error('Failed to load swap history:', err);
+        // Optionally show user-visible error
+        // setError('Failed to load swap history');
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+
+    loadSwapHistory();
+  }, [user]);
 
   // Save preferences and email notifications
   useEffect(() => {

@@ -1,6 +1,10 @@
 import axios from 'axios';
-import { SIDESHIFT_CONFIG, getApiUrl } from '../../shared/config/sideshift';
+import { SIDESHIFT_CONFIG, getApiUrl, getApiEndpoint } from '../../shared/config/sideshift';
 import { validateDepositAddressForNetwork } from './addressValidation';
+
+const apiClient = axios.create({
+  baseURL: getApiUrl(),
+});
 
 // API key is now server-side only - client calls backend API routes
 
@@ -64,7 +68,7 @@ export async function createQuote(
 ): Promise<SideShiftQuote> {
   try {
     // Call backend API route instead of SideShift directly
-    const response = await axios.post('/api/sideshift/quote', {
+    const response = await apiClient.post('/api/sideshift/quote', {
       depositCoin: fromAsset,
       depositNetwork: fromNetwork,
       settleCoin: toAsset,
@@ -102,7 +106,7 @@ export async function createCheckout(
 ): Promise<SideShiftCheckoutResponse> {
   try {
     // Call backend API route instead of SideShift directly
-    const response = await axios.post('/api/sideshift/checkout', {
+    const response = await apiClient.post('/api/sideshift/checkout', {
       settleCoin,
       settleNetwork,
       settleAmount,
@@ -135,7 +139,7 @@ export async function getCoins(): Promise<Coin[]> {
   }
 
   try {
-    const response = await axios.get(getApiUrl('coins'));
+    const response = await apiClient.get(getApiUrl('coins'));
     coinsCache = response.data;
     coinsCacheTimestamp = Date.now();
     return response.data;
@@ -178,7 +182,7 @@ export async function getCoinPrices(): Promise<CoinPrice[]> {
     const coinIds = Object.values(coinGeckoMap).map(c => c.id).join(',');
 
     // Fetch prices from CoinGecko free API
-    const response = await axios.get(
+    const response = await apiClient.get(
       `https://api.coingecko.com/api/v3/simple/price`,
       {
         params: {
@@ -239,7 +243,7 @@ export async function getCoinPrices(): Promise<CoinPrice[]> {
             };
           }
 
-          const quoteResponse = await axios.post(
+          const quoteResponse = await apiClient.post(
             getApiUrl('quotes'),
             {
               depositCoin: coin.coin,
@@ -285,7 +289,7 @@ export async function getCoinPrices(): Promise<CoinPrice[]> {
  */
 export async function getCoinPrice(coin: string, network: string): Promise<string | null> {
   try {
-    const quoteResponse = await axios.post(
+    const quoteResponse = await apiClient.post(
       getApiUrl('quotes'),
       {
         depositCoin: coin,
