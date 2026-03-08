@@ -10,7 +10,7 @@ import {
 } from '@/lib/database';
 import { 
   portfolioTargetsQuerySchema, 
-  portfolioTargetsBodySchema,
+  portfolioTargetBodySchema,
   validateInput 
 } from '@/lib/api-validation';
 
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const validation = validateInput(portfolioTargetsBodySchema, body);
+    const validation = validateInput(portfolioTargetBodySchema, body);
     
     if (!validation.success) {
       return NextResponse.json(
@@ -138,7 +138,7 @@ export async function PUT(request: NextRequest) {
 
     const body = await request.json();
     const validation = validateInput(
-      portfolioTargetsBodySchema.extend({ id: portfolioTargetsQuerySchema.shape.id }), 
+      portfolioTargetBodySchema.extend({ id: portfolioTargetsQuerySchema.shape.id }), 
       body
     );
     

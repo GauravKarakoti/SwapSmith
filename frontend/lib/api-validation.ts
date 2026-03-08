@@ -148,7 +148,7 @@ export const strategyCreateBodySchema = z.object({
   creatorTelegramId: z.string().optional(),
   name: schemas.shortString,
   description: schemas.mediumString,
-  parameters: z.record(z.unknown()).optional().default({}),
+  parameters: z.record(z.string(), z.unknown()).optional().default({}),
   riskLevel: z.enum(['low', 'medium', 'high']),
   subscriptionFee: z.string().default('0'),
   performanceFee: z.number().min(0).max(100).default(0),
@@ -172,8 +172,8 @@ export function validateInput<T>(
     }
     
     // Format Zod errors into readable message
-    const errorMessage = result.error.errors
-      .map(err => `${err.path.join('.')}: ${err.message}`)
+    const errorMessage = result.error.issues
+      .map((err) => `${err.path.join('.')}: ${err.message}`)
       .join(', ');
     
     return { success: false, error: errorMessage };
