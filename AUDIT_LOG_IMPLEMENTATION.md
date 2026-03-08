@@ -11,9 +11,9 @@ This implementation adds a comprehensive audit logging system for tracking all p
 - The `@/` path alias maps to `frontend/*` only and does NOT support `@/shared/*`
 
 ### Database Connection Pattern
-- Each file needing database access creates its own connection
-- No shared `db.ts` singleton file exists
-- Pattern: `const rawSql = neon(process.env.DATABASE_URL!); const db = drizzle(rawSql);`
+- Prefer the existing shared database helper modules (e.g., `frontend/lib/database.ts`, `frontend/lib/admin-service.ts`) which create and reuse a single `db` instance per module
+- New routes and handlers should import the shared `db` (or helper functions that use it) instead of creating their own connections
+- For exceptional cases (e.g., standalone scripts) where shared helpers cannot be used, initialize a module-local instance with: `const rawSql = neon(process.env.DATABASE_URL!); const db = drizzle(rawSql);`
 
 ## Database Schema Changes
 
