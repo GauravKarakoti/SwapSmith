@@ -450,7 +450,12 @@ export async function getOrderStatus(orderId: string, userIP?: string): Promise<
     if (axios.isAxiosError(error)) {
       // Handle HTTP 429 (Too Many Requests) with rate-limit error
       if (error.response?.status === 429) {
-        const retryAfter = parseRetryAfter(error.response.headers['retry-after']);
+        const rawRetryAfter = error.response.headers?.['retry-after'];
+        const retryAfterHeader =
+          Array.isArray(rawRetryAfter) ? rawRetryAfter[0] :
+          rawRetryAfter != null ? String(rawRetryAfter) :
+          undefined;
+        const retryAfter = parseRetryAfter(retryAfterHeader);
         throw new RateLimitError(retryAfter);
       }
       throw new Error(error.response?.data?.error?.message || 'Failed to get order status');
