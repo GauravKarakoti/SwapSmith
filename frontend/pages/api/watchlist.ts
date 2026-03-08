@@ -55,12 +55,24 @@ export default async function handler(
     try {
       const watchlist = await getWatchlist(userId);
 
-      // Batch fetch all prices in a single query (fix N+1 problem)
-      const priceMap = await getCachedPricesBatch(
-        watchlist.map(item => ({
-          coin: item.coin,
-          network: item.network
-        }))
+      const watchlistWithPrices = await Promise.all(
+        watchlist.map(async (item) => {
+          const priceData = await getCachedPrice(
+            item.coin,
+            item.network,
+            true
+          );
+
+          const isStale = priceData ? new Date(priceData.expiresAt) < new Date() : false;
+
+          return {
+            ...item,
+            usdPrice: priceData?.usdPrice ?? null,
+            btcPrice: priceData?.btcPrice ?? null,
+            lastUpdated: priceData?.updatedAt ?? null,
+            isStale,
+          };
+        })
       );
 
       const watchlistWithPrices = watchlist.map(item => {

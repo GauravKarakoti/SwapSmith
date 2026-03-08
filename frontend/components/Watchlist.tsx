@@ -16,6 +16,7 @@ interface WatchlistItem {
   usdPrice?: string | null;
   btcPrice?: string | null;
   lastUpdated?: Date | string | null;
+  isStale?: boolean;
 }
 
 interface WatchlistProps {
@@ -32,6 +33,7 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [availableCoins, setAvailableCoins] = useState<{ coin: string; network: string; name: string }[]>([]);
   const [addingToken, setAddingToken] = useState(false);
+  const [refreshingCache, setRefreshingCache] = useState(false);
 
   const fetchWatchlist = useCallback(async () => {
     if (!user) return;
@@ -60,6 +62,21 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
       setLoading(false);
     }
   }, [user]);
+
+  const forceRefreshCache = async () => {
+    try {
+      setRefreshingCache(true);
+      const response = await fetch('/api/prices/refresh', { method: 'POST' });
+      if (!response.ok) throw new Error('Failed to refresh prices');
+      
+      // After cache is refreshed, reload the watchlist
+      await fetchWatchlist();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to refresh prices');
+    } finally {
+      setRefreshingCache(false);
+    }
+  };
 
   // Fetch watchlist on mount or when user changes
   useEffect(() => {
@@ -199,11 +216,12 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={fetchWatchlist}
-            className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-            title="Refresh prices"
+            onClick={forceRefreshCache}
+            disabled={refreshingCache || loading}
+            className="flex items-center gap-2 p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50"
+            title="Force refresh all prices"
           >
-            <RefreshCw className="w-5 h-5" />
+            <RefreshCw className={`w-5 h-5 ${refreshingCache ? 'animate-spin' : ''}`} />
           </button>
           <button
             onClick={handleAddClick}
@@ -340,17 +358,27 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
                 {/* Price */}
                 <div className="mb-3">
                   {item.usdPrice ? (
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-xl font-bold text-gray-900 dark:text-white">
-                        ${parseFloat(item.usdPrice).toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: item.usdPrice && parseFloat(item.usdPrice) < 1 ? 6 : 2,
-                        })}
-                      </span>
-                      {item.btcPrice && (
-                        <span className="text-sm text-gray-500 dark:text-gray-400">
-                          ₿{parseFloat(item.btcPrice).toFixed(8)}
+                    <div>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-xl font-bold text-gray-900 dark:text-white">
+                          ${parseFloat(item.usdPrice).toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: item.usdPrice && parseFloat(item.usdPrice) < 1 ? 6 : 2,
+                          })}
                         </span>
+                        {item.btcPrice && (
+                          <span className="text-sm text-gray-500 dark:text-gray-400">
+                            ₿{parseFloat(item.btcPrice).toFixed(8)}
+                          </span>
+                        )}
+                      </div>
+                      {item.isStale && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <span className="flex h-1.5 w-1.5 rounded-full bg-yellow-500"></span>
+                          <span className="text-[10px] font-medium text-yellow-600 dark:text-yellow-400 uppercase tracking-wider">
+                            Price slightly old
+                          </span>
+                        </div>
                       )}
                     </div>
                   ) : (
@@ -369,10 +397,17 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
                   </button>
                 </div>
 
-                {/* Added Date */}
-                <p className="text-xs text-gray-400 mt-3">
-                  Added {new Date(item.addedAt).toLocaleDateString()}
-                </p>
+                {/* Footer Info */}
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/50">
+                  <p className="text-[10px] text-gray-400">
+                    Added {new Date(item.addedAt).toLocaleDateString()}
+                  </p>
+                  {item.lastUpdated && (
+                    <p className="text-[10px] text-gray-400">
+                      Updated {new Date(item.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  )}
+                </div>
               </motion.div>
             ))}
           </AnimatePresence>

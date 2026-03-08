@@ -38,6 +38,15 @@ function getRawSql() {
   return sqlInstance!;
 }
 
+const db = new Proxy({} as ReturnType<typeof drizzle>, {
+  get(_target, prop) {
+    return (getDb() as unknown as Record<string, unknown>)[prop as string];
+  },
+}) as ReturnType<typeof drizzle>;
+
+const rawSql = ((strings: TemplateStringsArray, ...values: unknown[]) =>
+  getRawSql()(strings, ...values)) as ReturnType<typeof neon>;
+
 export { adminUsers, adminRequests };
 
 // ── Admin User helpers ─────────────────────────────────────────────────────
@@ -90,7 +99,15 @@ export async function getRequestByEmail(email: string): Promise<AdminRequest | n
 export async function createAdminRequest(data: {
   firebaseUid: string;
   email: string;
-    ...data,
+  name: string;
+  approvalToken: string;
+  reason?: string;
+}): Promise<AdminRequest> {
+  const rows = await getDb().insert(adminRequests).values({
+    firebaseUid: data.firebaseUid,
+    email: data.email,
+    name: data.name,
+    approvalToken: data.approvalToken,
     reason: data.reason ?? 'Admin access requested.',
   }).returning();
   return rows[0];
@@ -135,7 +152,7 @@ export interface PlatformAnalytics {
     toAsset: string;
     fromNetwork: string;
     toNetwork: string;
-    fromAmount: number;
+    fromAmount: string; // Changed from number to string for numeric precision
     status: string;
     createdAt: Date | null;
   }[];
@@ -389,7 +406,7 @@ export interface AdminSwapRow {
   quoteId: string | null;
   fromAsset: string;
   fromNetwork: string;
-  fromAmount: number;
+  fromAmount: string; // Changed from number to string for numeric precision
   toAsset: string;
   toNetwork: string;
   settleAmount: string;

@@ -1,5 +1,5 @@
 {
-  "id": "e9817780-a953-4ea7-9f87-88ce82a1cede",
+  "id": "aaaf8e15-ef3c-49b3-8fa2-a3dd7fce8630",
   "prevId": "68cdc843-9972-4b4a-8f69-7f14fe0dd5b1",
   "version": "7",
   "dialect": "postgresql",
@@ -1234,6 +1234,19 @@
           "primaryKey": false,
           "notNull": false,
           "default": "'0'"
+        },
+        "is_hidden": {
+          "name": "is_hidden",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "moderation_reason": {
+          "name": "moderation_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -2680,12 +2693,6 @@
       "name": "strategy_subscriptions",
       "schema": "",
       "columns": {
-        "id": {
-          "name": "id",
-          "type": "serial",
-          "primaryKey": true,
-          "notNull": true
-        },
         "strategy_id": {
           "name": "strategy_id",
           "type": "integer",

@@ -1,300 +1,134 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { NextApiRequest, NextApiResponse } from 'next';
-
 /**
- * Rate Limiting Implementation
- * 
- * Provides multiple rate limiting strategies:
- * 1. In-memory rate limiting for development/single instance
- * 2. IP-based rate limiting with sliding window
- * 3. User-based rate limiting for authenticated requests
- * 4. Endpoint-specific rate limits
+ * Simple in-memory rate limiter for discussion posts
+ * Limits users to 5 posts per hour
  */
+
+interface RateLimitEntry {
+  count: number;
+  resetTime: number;
+}
+
+// In-memory store for rate limiting
+// Key: userId, Value: RateLimitEntry
+const rateLimitStore = new Map<string, RateLimitEntry>();
 
 // Rate limit configuration
-interface RateLimitConfig {
-  windowMs: number;     // Time window in milliseconds
-  maxRequests: number;  // Maximum requests per window
-  message?: string;     // Custom error message
-  skipSuccessfulRequests?: boolean; // Don't count successful requests
-  skipFailedRequests?: boolean;     // Don't count failed requests
-}
+const MAX_POSTS_PER_HOUR = 5;
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour in milliseconds
 
-// Default rate limit configurations
-export const RATE_LIMITS = {
-  // General API rate limits
-  default: { windowMs: 15 * 60 * 1000, maxRequests: 100 }, // 100 requests per 15 minutes
-  strict: { windowMs: 15 * 60 * 1000, maxRequests: 20 },   // 20 requests per 15 minutes
-  
-  // Financial operations (more restrictive)
-  swap: { windowMs: 5 * 60 * 1000, maxRequests: 10 },      // 10 swaps per 5 minutes
-  payment: { windowMs: 10 * 60 * 1000, maxRequests: 5 },   // 5 payments per 10 minutes
-  
-  // Authentication operations
-  auth: { windowMs: 15 * 60 * 1000, maxRequests: 5 },      // 5 auth attempts per 15 minutes
-  
-  // User profile operations
-  profile: { windowMs: 5 * 60 * 1000, maxRequests: 20 },   // 20 profile updates per 5 minutes
-  
-  // Admin operations
-  admin: { windowMs: 5 * 60 * 1000, maxRequests: 50 },     // 50 admin operations per 5 minutes
-} as const;
-
-// In-memory store for rate limiting (use Redis in production)
-class InMemoryStore {
-  private store = new Map<string, { count: number; resetTime: number }>();
-  
-  // Clean up expired entries periodically
-  private cleanupInterval: NodeJS.Timeout;
-  
-  constructor() {
-    // Clean up expired entries every 5 minutes
-    this.cleanupInterval = setInterval(() => {
-      const now = Date.now();
-      for (const [key, value] of this.store.entries()) {
-        if (now > value.resetTime) {
-          this.store.delete(key);
-        }
-      }
-    }, 5 * 60 * 1000);
-  }
-  
-  increment(key: string, windowMs: number): { count: number; resetTime: number } {
-    const now = Date.now();
-    const resetTime = now + windowMs;
-    
-    const existing = this.store.get(key);
-    
-    if (!existing || now > existing.resetTime) {
-      // First request or window expired
-      const entry = { count: 1, resetTime };
-      this.store.set(key, entry);
-      return entry;
+/**
+ * Clean up expired rate limit entries (older than 1 hour)
+ */
+function cleanupExpiredEntries(): void {
+  const now = Date.now();
+  for (const [userId, entry] of rateLimitStore.entries()) {
+    if (entry.resetTime < now) {
+      rateLimitStore.delete(userId);
     }
-    
-    // Increment existing count
-    existing.count++;
-    this.store.set(key, existing);
-    return existing;
-  }
-  
-  get(key: string): { count: number; resetTime: number } | undefined {
-    const entry = this.store.get(key);
-    if (entry && Date.now() <= entry.resetTime) {
-      return entry;
-    }
-    return undefined;
-  }
-  
-  clear(key: string): void {
-    this.store.delete(key);
-  }
-  
-  cleanup() {
-    clearInterval(this.cleanupInterval);
-    this.store.clear();
   }
 }
 
-// Global store instance
-const store = new InMemoryStore();
-
 /**
- * Generate rate limit key based on IP and optional user identifier
+ * Check if a user is rate limited
+ * @param userId - The user ID to check
+ * @returns Object with isLimited flag and remaining attempts
  */
-function generateKey(request: NextRequest | NextApiRequest, prefix: string = 'rl'): string {
-  // Get IP address
-  let ip: string;
-  
-  if ('socket' in request) {
-    // NextApiRequest
-    ip = (request.headers['x-forwarded-for'] as string) || 
-        (request.headers['x-real-ip'] as string) ||
-        request.socket?.remoteAddress ||
-        'unknown';
-  } else {
-    // NextRequest
-    ip = request.headers.get('x-forwarded-for') ||
-        request.headers.get('x-real-ip') ||
-        'unknown';
-  }
-  
-  // Clean IP (take first IP if comma-separated)
-  const cleanIp = Array.isArray(ip) ? ip[0] : ip.split(',')[0].trim();
-  
-  return `${prefix}:${cleanIp}`;
-}
-
-/**
- * Rate limiter for Next.js App Router (middleware)
- */
-export function rateLimitMiddleware(
-  request: NextRequest,
-  config: RateLimitConfig = RATE_LIMITS.default
-): NextResponse | null {
-  const key = generateKey(request, 'api');
-  const { count, resetTime } = store.increment(key, config.windowMs);
-  
-  if (count > config.maxRequests) {
-    const retryAfter = Math.ceil((resetTime - Date.now()) / 1000);
-    
-    console.warn(`[Rate Limit] Blocked request: ${count}/${config.maxRequests}`);
-    
-    return NextResponse.json(
-      { 
-        error: config.message || 'Too many requests',
-        retryAfter: retryAfter
-      },
-      { 
-        status: 429,
-        headers: {
-          'Retry-After': retryAfter.toString(),
-          'X-RateLimit-Limit': config.maxRequests.toString(),
-          'X-RateLimit-Remaining': '0',
-          'X-RateLimit-Reset': Math.ceil(resetTime / 1000).toString(),
-        }
-      }
-    );
-  }
-  
-  // Add rate limit headers to successful responses
-  const response = NextResponse.next();
-  response.headers.set('X-RateLimit-Limit', config.maxRequests.toString());
-  response.headers.set('X-RateLimit-Remaining', (config.maxRequests - count).toString());
-  response.headers.set('X-RateLimit-Reset', Math.ceil(resetTime / 1000).toString());
-  
-  return response;
-}
-
-/**
- * Rate limiter for Pages API routes
- */
-export function rateLimit(
-  req: NextApiRequest,
-  res: NextApiResponse,
-  config: RateLimitConfig = RATE_LIMITS.default
-): boolean {
-  const key = generateKey(req, 'api');
-  const { count, resetTime } = store.increment(key, config.windowMs);
-  
-  // Add rate limit headers
-  const remaining = Math.max(0, config.maxRequests - count);
-  const retryAfter = Math.ceil((resetTime - Date.now()) / 1000);
-  
-  res.setHeader('X-RateLimit-Limit', config.maxRequests);
-  res.setHeader('X-RateLimit-Remaining', remaining);
-  res.setHeader('X-RateLimit-Reset', Math.ceil(resetTime / 1000));
-  
-  if (count > config.maxRequests) {
-    res.setHeader('Retry-After', retryAfter);
-    
-    console.warn(`[Rate Limit] Blocked request: ${count}/${config.maxRequests}`);
-    
-    res.status(429).json({
-      error: config.message || 'Too many requests',
-      retryAfter: retryAfter
-    });
-    
-    return false;
-  }
-  
-  return true;
-}
-
-/**
- * Create a rate-limited API handler wrapper
- */
-export function withRateLimit(
-  handler: (req: NextApiRequest, res: NextApiResponse) => Promise<void>,
-  config: RateLimitConfig = RATE_LIMITS.default
-) {
-  return async (req: NextApiRequest, res: NextApiResponse) => {
-    if (!rateLimit(req, res, config)) {
-      return; // Rate limit exceeded, response already sent
-    }
-    
-    return handler(req, res);
-  };
-}
-
-/**
- * Endpoint-specific rate limiters
- */
-export const rateLimiters = {
-  // Financial operations
-  swap: (req: NextApiRequest, res: NextApiResponse) => 
-    rateLimit(req, res, { ...RATE_LIMITS.swap, message: 'Too many swap requests' }),
-  
-  payment: (req: NextApiRequest, res: NextApiResponse) => 
-    rateLimit(req, res, { ...RATE_LIMITS.payment, message: 'Too many payment requests' }),
-  
-  // Authentication
-  auth: (req: NextApiRequest, res: NextApiResponse) => 
-    rateLimit(req, res, { ...RATE_LIMITS.auth, message: 'Too many authentication attempts' }),
-  
-  // Profile operations
-  profile: (req: NextApiRequest, res: NextApiResponse) => 
-    rateLimit(req, res, { ...RATE_LIMITS.profile, message: 'Too many profile updates' }),
-  
-  // Admin operations
-  admin: (req: NextApiRequest, res: NextApiResponse) => 
-    rateLimit(req, res, { ...RATE_LIMITS.admin, message: 'Too many admin requests' }),
-  
-  // Strict rate limiting
-  strict: (req: NextApiRequest, res: NextApiResponse) => 
-    rateLimit(req, res, { ...RATE_LIMITS.strict, message: 'Too many requests' }),
-  
-  // Default
-  default: (req: NextApiRequest, res: NextApiResponse) => 
-    rateLimit(req, res, RATE_LIMITS.default),
-};
-
-/**
- * Get rate limit status for a request (without incrementing)
- */
-export function getRateLimitStatus(
-  request: NextRequest | NextApiRequest,
-  config: RateLimitConfig = RATE_LIMITS.default
-): { 
-  remaining: number; 
-  resetTime: number; 
+export function checkRateLimit(userId: string): {
   isLimited: boolean;
+  remaining: number;
+  resetTime?: number;
 } {
-  const key = generateKey(request, 'api');
-  const entry = store.get(key);
-  
-  if (!entry) {
+  // Clean up old entries periodically
+  if (Math.random() < 0.1) {
+    cleanupExpiredEntries();
+  }
+
+  const now = Date.now();
+  const entry = rateLimitStore.get(userId);
+
+  // No entry or entry expired - user is not limited
+  if (!entry || entry.resetTime < now) {
     return {
-      remaining: config.maxRequests,
-      resetTime: Date.now() + config.windowMs,
-      isLimited: false
+      isLimited: false,
+      remaining: MAX_POSTS_PER_HOUR - 1, // -1 for the post about to be made
     };
   }
+
+  // Entry exists and is still valid
+  const remaining = MAX_POSTS_PER_HOUR - entry.count;
   
-  const remaining = Math.max(0, config.maxRequests - entry.count);
-  const isLimited = entry.count >= config.maxRequests;
-  
+  if (entry.count >= MAX_POSTS_PER_HOUR) {
+    return {
+      isLimited: true,
+      remaining: 0,
+      resetTime: entry.resetTime,
+    };
+  }
+
   return {
-    remaining,
-    resetTime: entry.resetTime,
-    isLimited
+    isLimited: false,
+    remaining: remaining - 1, // -1 for the post about to be made
   };
 }
 
 /**
- * Clear rate limit for a specific key (useful for testing or admin override)
+ * Record a post attempt for rate limiting
+ * Should be called after successful post creation
  */
-export function clearRateLimit(request: NextRequest | NextApiRequest, prefix: string = 'api'): void {
-  const key = generateKey(request, prefix);
-  store.clear(key);
+export function recordPost(userId: string): void {
+  const now = Date.now();
+  const entry = rateLimitStore.get(userId);
+
+  if (!entry || entry.resetTime < now) {
+    // Create new entry
+    rateLimitStore.set(userId, {
+      count: 1,
+      resetTime: now + RATE_LIMIT_WINDOW_MS,
+    });
+  } else {
+    // Increment existing entry
+    entry.count += 1;
+    rateLimitStore.set(userId, entry);
+  }
 }
 
 /**
- * Cleanup function for graceful shutdown
+ * Get time until rate limit reset for a user
+ * @param userId - The user ID
+ * @returns Minutes until reset, or null if not rate limited
  */
-export function cleanup(): void {
-  store.cleanup();
+export function getTimeUntilReset(userId: string): number | null {
+  const entry = rateLimitStore.get(userId);
+  if (!entry) {
+    return null;
+  }
+
+  const now = Date.now();
+  if (entry.resetTime < now) {
+    return null;
+  }
+
+  return Math.ceil((entry.resetTime - now) / 60000); // Convert to minutes
 }
 
-// Export store for testing
-export { store as _store };
+/**
+ * Reset rate limit for a user (admin function)
+ */
+export function resetUserRateLimit(userId: string): void {
+  rateLimitStore.delete(userId);
+}
+
+/**
+ * Get rate limit stats for monitoring
+ */
+export function getRateLimitStats(): {
+  totalUsers: number;
+  maxPostsPerHour: number;
+  windowMinutes: number;
+} {
+  return {
+    totalUsers: rateLimitStore.size,
+    maxPostsPerHour: MAX_POSTS_PER_HOUR,
+    windowMinutes: RATE_LIMIT_WINDOW_MS / 60000,
+  };
+}

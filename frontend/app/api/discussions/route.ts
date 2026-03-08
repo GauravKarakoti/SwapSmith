@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDiscussions, createDiscussion, deleteDiscussion, likeDiscussion } from '@/lib/database';
 import { adminAuth } from '@/lib/firebase-admin';
+import { checkRateLimit, recordPost, getTimeUntilReset } from '@/lib/rate-limiter';
+import { filterContent } from '@/lib/content-filter';
 
 // GET /api/discussions - Get all discussions or filtered by category
 export async function GET(request: NextRequest) {
@@ -65,6 +67,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check rate limit
+    const rateLimit = checkRateLimit(userId);
+    if (rateLimit.isLimited) {
+      const minutesUntilReset = getTimeUntilReset(userId);
+      return NextResponse.json(
+        { 
+          error: `Rate limit exceeded. You can post again in ${minutesUntilReset} minutes.`,
+          rateLimited: true,
+          resetTime: rateLimit.resetTime,
+        },
+        { 
+          status: 429,
+          headers: {
+            'Retry-After': String(minutesUntilReset ? minutesUntilReset * 60 : 3600),
+          }
+        }
+      );
+    }
+
+    // Filter content for spam, profanity, and phishing
+    const contentFilter = filterContent(content.trim());
+    if (!contentFilter.isClean) {
+      return NextResponse.json(
+        { 
+          error: contentFilter.reason || 'Content contains inappropriate material',
+          blocked: true,
+          issues: contentFilter.detectedIssues,
+        },
+        { status: 400 }
+      );
+    }
+
     const discussion = await createDiscussion(
       userId,
       username,
@@ -72,9 +106,15 @@ export async function POST(request: NextRequest) {
       category || 'general'
     );
 
+    // Record post for rate limiting
+    recordPost(userId);
+
     return NextResponse.json({
       success: true,
       discussion,
+      rateLimit: {
+        remaining: rateLimit.remaining,
+      }
     }, { status: 201 });
 
   } catch (error) {

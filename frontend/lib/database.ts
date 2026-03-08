@@ -50,7 +50,7 @@ export type PriceAlert = typeof priceAlerts.$inferSelect;
 
 // --- COIN PRICE CACHE FUNCTIONS ---
 
-export async function getCachedPrice(coin: string, network: string): Promise<CoinPriceCache | undefined> {
+export async function getCachedPrice(coin: string, network: string, includeExpired: boolean = true): Promise<CoinPriceCache | undefined> {
   if (!db) {
     console.warn('Database not configured');
     return undefined;
@@ -67,7 +67,7 @@ export async function getCachedPrice(coin: string, network: string): Promise<Coi
   if (!cached) return undefined;
   
   // Check if cache is still valid
-  if (new Date(cached.expiresAt) < new Date()) {
+  if (!includeExpired && new Date(cached.expiresAt) < new Date()) {
     return undefined; // Expired
   }
   
@@ -123,7 +123,7 @@ export async function setCachedPrice(
   usdPrice: string | undefined,
   btcPrice: string | undefined,
   available: boolean,
-  ttlMinutes: number = 5
+  ttlMinutes: number = 360 // Default to 6 hours
 ) {
   if (!db) {
     console.warn('Database not configured');
@@ -241,7 +241,7 @@ export async function createSwapHistoryEntry(
     quoteId?: string;
     fromAsset: string;
     fromNetwork: string;
-    fromAmount: number;
+    fromAmount: string; // Changed from number to string for numeric precision
     toAsset: string;
     toNetwork: string;
     settleAmount: string;
@@ -1123,7 +1123,7 @@ export async function createPortfolioTarget(
     userId,
     name,
     assets,
-    driftThreshold,
+    driftThreshold: driftThreshold.toString(), // Convert to string for numeric precision
     autoRebalance,
     isActive: true,
   }).returning();
@@ -1147,9 +1147,18 @@ export async function updatePortfolioTarget(
     return null;
   }
   
+  // Convert driftThreshold to string if provided
+  const processedUpdates: any = {
+    ...updates,
+  };
+  
+  if (updates.driftThreshold !== undefined) {
+    processedUpdates.driftThreshold = updates.driftThreshold.toString();
+  }
+  
   const result = await db.update(portfolioTargets)
     .set({
-      ...updates,
+      ...processedUpdates,
       updatedAt: new Date(),
     })
     .where(and(
