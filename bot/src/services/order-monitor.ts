@@ -206,30 +206,20 @@ export class OrderMonitor {
 
     // --- Internal ---
 
-    /**
-     * Checks if the monitor is currently in rate-limit cooldown.
-     * @returns true if cooldown is active, false otherwise
-     */
-    private isRateLimited(): boolean {
-        if (this.rateLimitCooldownUntil === null) return false;
-        const now = Date.now();
-        if (now >= this.rateLimitCooldownUntil) {
-            // Cooldown expired
-            this.rateLimitCooldownUntil = null;
-            logger.info('[OrderMonitor] Rate-limit cooldown expired. Resuming polling.');
-            return false;
-        }
-        return true;
-    }
-
     /** Single tick: evaluate which orders need polling and poll them. */
     private async tick(): Promise<void> {
         // Skip polling if rate-limited
-        if (this.isRateLimited()) {
-            const remainingMs = this.rateLimitCooldownUntil! - Date.now();
-            const remainingSec = Math.ceil(remainingMs / 1000);
-            logger.debug(`[OrderMonitor] Skipping tick — rate-limited for ${remainingSec} more seconds.`);
-            return;
+        if (this.rateLimitCooldownUntil !== null) {
+            const now = Date.now();
+            if (now < this.rateLimitCooldownUntil) {
+                const remainingMs = this.rateLimitCooldownUntil - now;
+                const remainingSec = Math.ceil(remainingMs / 1000);
+                logger.debug(`[OrderMonitor] Skipping tick — rate-limited for ${remainingSec} more seconds.`);
+                return;
+            }
+            // Cooldown expired
+            this.rateLimitCooldownUntil = null;
+            logger.info('[OrderMonitor] Rate-limit cooldown expired. Resuming polling.');
         }
 
         const now = Date.now();
