@@ -9,6 +9,10 @@ const apiClient = axios.create({
 const AFFILIATE_ID = process.env.NEXT_PUBLIC_AFFILIATE_ID;
 const API_KEY = process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
 
+// ============================================
+// Type Definitions
+// ============================================
+
 export interface SideShiftQuote {
   id?: string;
   depositCoin: string;
@@ -178,6 +182,7 @@ export async function createQuote(
   } catch (error: unknown) {
     if (axios.isAxiosError(error)) {
       const err = error as { response?: { data?: { error?: { message?: string } } } };
+      throw new Error(err.response?.data?.error?.message || 'Failed to create quote');
     }
     throw error;
   }
@@ -202,10 +207,10 @@ export async function createCheckout(
     const validatedData = SideShiftCheckoutResponseSchema.parse(response.data);
 
     return {
-      id: response.data.id,
-      url: response.data.url,
-      settleAmount: response.data.settleAmount,
-      settleCoin: response.data.settleCoin
+      id: validated.id,
+      url: validated.url || `${SIDESHIFT_CONFIG.CHECKOUT_URL}/${validated.id}`,
+      settleAmount: validated.settleAmount,
+      settleCoin: validated.settleCoin
     };
   } catch (error: unknown) {
     if (axios.isAxiosError(error)) {

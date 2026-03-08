@@ -487,6 +487,8 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
 
   const explorerUrl = getExplorerUrl()
 
+  const isTransactionBlocked = safetyCheck?.riskLevel === 'unsafe' || securityScanResult?.riskLevel === 'critical' || securityScanResult?.riskLevel === 'high';
+
   if (isSuccess) {
     return (
       <div className="mt-4 bg-white border border-green-300 rounded-lg p-6 text-center shadow-md">
@@ -608,6 +610,21 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
         )}
       </div>
 
+      {/* Advanced Security Scanner */}
+      <div className="mt-4">
+        <TransactionSecurityScanner
+          fromToken={quote.depositCoin}
+          fromNetwork={quote.depositNetwork}
+          toToken={quote.settleCoin}
+          toNetwork={quote.settleNetwork}
+          fromAmount={quote.depositAmount}
+          contractAddress={quote.depositAddress}
+          userAddress={address || undefined}
+          autoScan={false}
+          onScanComplete={handleSecurityScanComplete}
+        />
+      </div>
+
       <div className="mt-3 mb-3">
         {!safetyCheck ? (
           <button
@@ -649,14 +666,12 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
               </div>
             </div>
 
-            {/* Detailed Checks */}
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
               <div className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
                 <Info className="w-3 h-3" />
                 Safety Check Details
               </div>
 
-              {/* Address Check */}
               <div className="flex items-start gap-2 text-xs">
                 {safetyCheck.checks.address.passed ? (
                   <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
@@ -669,7 +684,6 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
                 </div>
               </div>
 
-              {/* Network Check */}
               <div className="flex items-start gap-2 text-xs">
                 {safetyCheck.checks.network.passed ? (
                   <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
@@ -682,7 +696,6 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
                 </div>
               </div>
 
-              {/* Balance Check */}
               <div className="flex items-start gap-2 text-xs">
                 {safetyCheck.checks.balance.passed ? (
                   <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
@@ -695,7 +708,6 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
                 </div>
               </div>
 
-              {/* Gas Check */}
               <div className="flex items-start gap-2 text-xs">
                 {safetyCheck.checks.gas.passed ? (
                   <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
