@@ -9,12 +9,26 @@ const nextConfig: NextConfig = {
   output: isVercel ? undefined : "standalone",
   
   // Enable compilation for the shared folder
-  transpilePackages: ['@swapsmith/shared'],
+  transpilePackages: ['shared'],
   
   // Only set custom tracing root when NOT on Vercel
   ...(isVercel ? {} : { outputFileTracingRoot: path.join(process.cwd(), '../') }),
 
-  // Leave empty to use defaults, or configure if needed
+  // Security headers for production
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-XSS-Protection', value: '1; mode=block' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        ],
+      },
+    ];
+  },
+
   turbopack: {}
 };
 

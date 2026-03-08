@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { csrfFetch } from '@/hooks/useCsrfToken'
 import { auth } from '@/lib/firebase'
 import { signOut } from 'firebase/auth'
 import {
@@ -109,14 +110,34 @@ function SwapHistoryModal({
   const [error, setError]     = useState('')
 
   useEffect(() => {
-    if (!user.firebaseUid) { setLoading(false); setError('No firebaseUid for this user.'); return }
-    fetch(`/api/admin/users/${encodeURIComponent(user.firebaseUid)}/swaps?limit=100`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.json())
-      .then(d => { if (d.success) setSwaps(d.swaps); else setError(d.error ?? 'Failed'); })
-      .catch(() => setError('Network error'))
-      .finally(() => setLoading(false))
+    const fetchUserSwaps = async () => {
+      if (!user.firebaseUid) {
+        setLoading(false);
+        setError('No firebaseUid for this user.');
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `/api/admin/users/${encodeURIComponent(user.firebaseUid)}/swaps?limit=100`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const data = await response.json();
+        
+        if (data.success) {
+          setSwaps(data.swaps);
+        } else {
+          setError(data.error ?? 'Failed to load swaps');
+        }
+      } catch (err) {
+        console.error('Failed to fetch user swaps:', err);
+        setError('Network error');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserSwaps();
   }, [user.firebaseUid, token])
 
   return (
@@ -226,7 +247,7 @@ function PlanUpdateModal({
     setLoading(true)
     setError('')
     try {
-      const res = await fetch('/api/admin/users', {
+      const res = await csrfFetch('/api/admin/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ firebaseUid: user.firebaseUid, action: 'update_plan', plan: selectedPlan }),
@@ -487,7 +508,7 @@ export default function AdminUsersPage() {
     setToken(tok)
 
     const cached = sessionStorage.getItem('admin-info')
-    if (cached) { try { setAdminInfo(JSON.parse(cached)) } catch {} }
+    if (cached) { try { setAdminInfo(JSON.parse(cached)) } catch (error) { console.error('Error parsing cached admin info:', error) } }
 
     fetchUsers(1, '', tok)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -517,7 +538,7 @@ export default function AdminUsersPage() {
     setActionLoading(true)
     setActionMsg('')
     try {
-      const res = await fetch('/api/admin/users', {
+      const res = await csrfFetch('/api/admin/users', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

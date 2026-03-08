@@ -1,6 +1,7 @@
 import { getUserByWalletOrId, users } from './database';
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
+import logger from './logger';
 
 const sql = neon(process.env.DATABASE_URL!);
 const db = drizzle(sql);
@@ -11,7 +12,7 @@ const db = drizzle(sql);
  */
 export async function ensureUserExists(firebaseUid: string, walletAddress?: string): Promise<number> {
   if (!db) {
-    console.warn('Database not configured');
+    logger.warn('Database not configured');
     throw new Error('Database not configured');
   }
 
@@ -32,12 +33,12 @@ export async function ensureUserExists(firebaseUid: string, walletAddress?: stri
       .limit(1);
 
     if (existingUsers[0]) {
-      console.log('User found with ID:', existingUsers[0].id);
+      logger.info('User found', { userId: existingUsers[0].id });
       return existingUsers[0].id;
     }
 
     // Create new user
-    console.log('Creating new user for Firebase UID:', firebaseUid);
+    logger.info('Creating new user', { firebaseUid });
     const newUser = await db.insert(users)
       .values({
         firebaseUid: firebaseUid,
@@ -47,10 +48,12 @@ export async function ensureUserExists(firebaseUid: string, walletAddress?: stri
       })
       .returning();
 
-    console.log('User created with ID:', newUser[0].id);
+    logger.info('User created', { userId: newUser[0].id });
     return newUser[0].id;
   } catch (error) {
-    console.error('Error ensuring user exists:', error);
+    logger.error('Error ensuring user exists', { 
+      error: error instanceof Error ? error.message : String(error) 
+    });
     throw error;
   }
 }
@@ -72,7 +75,9 @@ export async function getUserIdFromFirebaseUid(firebaseUid: string): Promise<num
 
     return existingUsers[0]?.id || null;
   } catch (error) {
-    console.error('Error getting user ID:', error);
+    logger.error('Error getting user ID', { 
+      error: error instanceof Error ? error.message : String(error) 
+    });
     return null;
   }
 }

@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getLeaderboard } from '@/lib/database';
+import { verifyAuth } from '@/lib/auth-helpers';
 
 export async function GET(request: NextRequest) {
   try {
-    const userId = request.headers.get('x-user-id');
+    // Verify Firebase authentication token (optional for leaderboard viewing)
+    const authResult = await verifyAuth(request);
+    const userId = authResult.success ? authResult.userId : undefined;
+
     const leaderboard = await getLeaderboard(100);
 
     // Mark current user if authenticated
@@ -12,7 +16,7 @@ export async function GET(request: NextRequest) {
       userName: (entry.walletAddress && typeof entry.walletAddress === 'string')
         ? `${entry.walletAddress.slice(0, 6)}...${entry.walletAddress.slice(-4)}` 
         : `User ${entry.userId}`,
-      isCurrentUser: userId ? entry.userId === parseInt(userId) : false,
+      isCurrentUser: userId ? entry.userId === userId : false,
     }));
 
     return NextResponse.json(enrichedLeaderboard);

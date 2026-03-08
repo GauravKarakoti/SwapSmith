@@ -1,7 +1,7 @@
 import { Telegraf } from 'telegraf';
 import axios from 'axios';
 import { eq, and, or, isNull, lte } from 'drizzle-orm';
-import { db, limitOrders, LimitOrder, updateLimitOrderStatus, type User } from '../services/database';
+import { db, limitOrders, LimitOrder, updateLimitOrderStatus, addWatchedOrder, type User } from '../services/database';
 import { getCoins, createQuote, createOrder } from '../services/sideshift-client';
 import logger, { handleError } from '../services/logger';
 import { batchLoadUsersByTelegramIds } from '../utils/dataLoader';
@@ -257,9 +257,22 @@ export class LimitOrderWorker {
         throw new Error('Failed to create SideShift order');
       }
 
-      // 4. Update DB
-      await updateLimitOrderStatus(order.id, 'executed', sideshiftOrder.id);
-      logger.info(`✅ Order #${order.id} executed via SideShift (Order ID: ${sideshiftOrder.id})`);
+      // 4. Update DB & Watch
+      try {
+        await updateLimitOrderStatus(order.id, 'executed', sideshiftOrder.id);
+        await addWatchedOrder(Number(order.telegramId), sideshiftOrder.id, 'pending');
+        logger.info(`✅ Order #${order.id} executed via SideShift (Order ID: ${sideshiftOrder.id})`);
+      } catch (err) {
+        // If adding the watched order fails after marking as executed, attempt to revert
+        logger.error('Failed to update DB & watch order; attempting to revert limit order status', err);
+        try {
+          // Revert to a safe, pre-executed status so the order can be retried/handled
+          await updateLimitOrderStatus(order.id, 'pending', undefined);
+        } catch (revertErr) {
+          logger.error('Failed to revert limit order status after watch-order failure', revertErr);
+        }
+        throw err;
+      }
 
 
       // 5. Notify User
@@ -328,7 +341,7 @@ export class LimitOrderWorker {
               orderId: order.id,
               telegramId: order.telegramId,
               message: `Failed to send failure notification for order #${order.id}`
-            }, null, true);
+            }, null, true, 'high');
           }
         }
       }

@@ -136,7 +136,7 @@ export async function getUserPortfolioHoldings(
       if (!holdings[fromKey]) {
         holdings[fromKey] = { amount: 0, network: swap.fromNetwork };
       }
-      holdings[fromKey].amount += swap.fromAmount;
+      holdings[fromKey].amount += parseFloat(swap.fromAmount.toString()); // Convert numeric to number
 
       // Subtract from holdings (to asset) - assuming they sold
       const toKey = `${swap.toAsset}-${swap.toNetwork}`;
@@ -148,7 +148,7 @@ export async function getUserPortfolioHoldings(
 
     // Get unique coins
     const uniqueCoins = [...new Set(Object.keys(holdings).map(k => k.split('-')[0]))];
-    
+
     // Fetch prices
     const prices = await fetchPrices(uniqueCoins);
 
@@ -160,7 +160,7 @@ export async function getUserPortfolioHoldings(
       const [coin, network] = key.split('-');
       const price = prices.get(coin) || 0;
       const value = data.amount * price;
-      
+
       if (value > 0) {
         assets.push({
           coin,
@@ -226,7 +226,7 @@ export async function analyzePortfolioDrift(
 
       const currentPercentage = currentAsset?.percentage || 0;
       const drift = currentPercentage - targetAsset.targetPercentage;
-      const needsRebalance = Math.abs(drift) >= driftThreshold;
+      const needsRebalance = Math.abs(drift) >= parseFloat(driftThreshold.toString()); // Convert numeric to number
 
       let suggestedAction: 'buy' | 'sell' | 'hold' = 'hold';
       let amountToTrade = 0;
@@ -263,8 +263,8 @@ export async function analyzePortfolioDrift(
           targetPercentage: 0,
           currentPercentage: currentAsset.percentage,
           drift: currentAsset.percentage,
-          needsRebalance: currentAsset.percentage >= driftThreshold,
-          suggestedAction: currentAsset.percentage >= driftThreshold ? 'sell' : 'hold',
+          needsRebalance: currentAsset.percentage >= parseFloat(driftThreshold.toString()), // Convert numeric to number
+          suggestedAction: currentAsset.percentage >= parseFloat(driftThreshold.toString()) ? 'sell' : 'hold', // Convert numeric to number
           amountToTrade: currentAsset.value
         });
       }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { csrfFetch } from '@/hooks/useCsrfToken'
 import { auth } from '@/lib/firebase'
 import { signOut } from 'firebase/auth'
 import {
@@ -198,7 +199,7 @@ export default function AdminSwapsPage() {
     if (!t) { router.push('/admin/login'); return }
     token.current = t
     const cached = sessionStorage.getItem('admin-info')
-    if (cached) { try { setAdminInfo(JSON.parse(cached)) } catch {} }
+    if (cached) { try { setAdminInfo(JSON.parse(cached)) } catch (error) { console.error('Error parsing cached admin info:', error) } }
   }, [router])
 
   const authHeaders = useCallback(() => ({
@@ -245,7 +246,9 @@ export default function AdminSwapsPage() {
       const res = await fetch('/api/admin/swaps/metrics', { headers: authHeaders() })
       const data = await res.json()
       if (data.success) setMetrics(data.metrics)
-    } catch { /* ignore */ } finally {
+    } catch (error) {
+      console.error('Error fetching swap metrics:', error)
+    } finally {
       setLoadingMetrics(false)
     }
   }, [authHeaders])
@@ -258,7 +261,9 @@ export default function AdminSwapsPage() {
       const res = await fetch('/api/admin/swaps/config', { headers: authHeaders() })
       const data = await res.json()
       if (data.success) setConfig(data.config)
-    } catch { /* ignore */ } finally {
+    } catch (error) {
+      console.error('Error fetching swap config:', error)
+    } finally {
       setLoadingConfig(false)
     }
   }, [authHeaders])
@@ -296,7 +301,9 @@ export default function AdminSwapsPage() {
         setSideshiftOrder(data.sideshiftOrder)
         setSideshiftQuote(data.sideshiftQuote)
       }
-    } catch { /* ignore */ } finally {
+    } catch (error) {
+      console.error('Error fetching Sideshift order details:', error)
+    } finally {
       setLoadingDetail(false)
     }
   }, [authHeaders])
@@ -311,7 +318,7 @@ export default function AdminSwapsPage() {
       if (typeof patch.swapExecutionEnabled === 'boolean') body.swapExecutionEnabled = patch.swapExecutionEnabled
       if (patch.sideshiftApiKey !== undefined) body.sideshiftApiKey = patch.sideshiftApiKey
 
-      const res = await fetch('/api/admin/swaps/config', {
+      const res = await csrfFetch('/api/admin/swaps/config', {
         method: 'PATCH',
         headers: authHeaders(),
         body: JSON.stringify(body),

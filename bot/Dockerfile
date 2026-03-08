@@ -38,6 +38,7 @@ ENV NODE_ENV=production
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     postgresql-client \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user
@@ -48,10 +49,15 @@ COPY --from=builder --chown=botuser:nodejs /usr/src/app/bot/package.json ./
 COPY --from=builder --chown=botuser:nodejs /usr/src/app/bot/dist ./dist
 COPY --from=builder --chown=botuser:nodejs /usr/src/app/bot/node_modules ./node_modules
 COPY --from=builder --chown=botuser:nodejs /usr/src/app/bot/scripts ./scripts
-# Copy shared directory if needed by runtime (e.g. imports that weren't bundled)
+
+# Copy shared directory for secrets loading
 COPY --from=builder --chown=botuser:nodejs /usr/src/app/shared ../shared
 
 USER botuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
 
 # Your app's start command
 CMD [ "npm", "run", "start:render" ]

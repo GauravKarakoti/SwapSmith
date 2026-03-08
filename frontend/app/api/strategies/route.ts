@@ -29,6 +29,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // CSRF Protection
+  const csrfError = csrfGuard(request);
+  if (csrfError) {
+    return csrfError;
+  }
+
   try {
     const body = await request.json();
     const { 

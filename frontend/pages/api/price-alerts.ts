@@ -9,6 +9,7 @@ import {
   togglePriceAlert,
   getCachedPrice,
 } from '@/lib/database';
+import { csrfGuard } from '@/lib/csrf';
 
 export default async function handler(
   req: NextApiRequest,
@@ -79,6 +80,11 @@ export default async function handler(
 
   // ➕ POST — Create price alert
   if (req.method === 'POST') {
+    // CSRF Protection
+    if (!csrfGuard(req, res)) {
+      return;
+    }
+
     try {
       const { coin, network, name, targetPrice, condition } = req.body;
 
@@ -127,6 +133,11 @@ export default async function handler(
 
   // ✏️ PUT — Update price alert
   if (req.method === 'PUT') {
+    // CSRF Protection
+    if (!csrfGuard(req, res)) {
+      return;
+    }
+
     try {
       const { id, targetPrice, condition, isActive } = req.body;
 
@@ -182,6 +193,11 @@ export default async function handler(
 
   // ❌ DELETE — Delete price alert
   if (req.method === 'DELETE') {
+    // CSRF Protection
+    if (!csrfGuard(req, res)) {
+      return;
+    }
+
     try {
       const { id } = req.body;
 
@@ -213,6 +229,11 @@ export default async function handler(
 
   // 🔁 PATCH — Toggle price alert active state
   if (req.method === 'PATCH') {
+    // CSRF Protection
+    if (!csrfGuard(req, res)) {
+      return;
+    }
+
     try {
       const { id, isActive } = req.body;
 

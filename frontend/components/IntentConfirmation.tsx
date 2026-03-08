@@ -37,46 +37,61 @@ export default function IntentConfirmation({ command, onConfirm }: IntentConfirm
   const confidenceColor = command.confidence >= 80 ? 'text-green-600' :
                           command.confidence >= 60 ? 'text-yellow-600' : 'text-red-600';
 
+  // Render different confirmation content based on intent
   const renderIntentDetails = () => {
     switch (command.intent) {
-      case 'stake':
+      case 'portfolio':
         return (
-          <>
-            <p className="text-sm text-gray-700 mb-2">I understand you want to:</p>
-            <div className="bg-white text-gray-900 p-3 rounded border text-sm space-y-2">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Action:</span>
-                <span className="font-semibold text-purple-700">STAKE</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Amount:</span>
-                <span><strong>{command.amount || 'All'} {command.fromAsset}</strong></span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Chain:</span>
-                <span>{command.fromChain || 'Auto-detect'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Provider:</span>
-                <span className="text-blue-600">{getStakingProvider(command.fromAsset)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Est. APR:</span>
-                <span className="text-green-600 font-medium">{getEstimatedAPR(command.fromAsset)}</span>
-              </div>
-            </div>
-          </>
+          <div className="bg-white text-gray-900 p-3 rounded border text-sm">
+            <p className="mb-2">
+              Portfolio Strategy: <strong>{command.amount} {command.fromAsset}</strong>
+            </p>
+            {command.portfolio && (
+              <ul className="space-y-1 text-xs text-gray-600">
+                {command.portfolio.map((item, idx) => (
+                  <li key={idx}>
+                    • {item.percentage}% → {item.toAsset} on {item.toChain}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         );
-      
+
+      case 'dca':
+        return (
+          <div className="bg-white text-gray-900 p-3 rounded border text-sm">
+            <p>
+              DCA: <strong>{command.amount} {command.fromAsset}</strong> → <strong>{command.toAsset}</strong>
+            </p>
+            {command.frequency && (
+              <p className="text-xs text-gray-600 mt-1">
+                Frequency: {command.frequency}
+                {command.dayOfWeek && ` (Day: ${command.dayOfWeek})`}
+                {command.dayOfMonth && ` (Date: ${command.dayOfMonth})`}
+              </p>
+            )}
+          </div>
+        );
+
       case 'swap':
       default:
         return (
-          <>
-            <p className="text-sm text-gray-700 mb-2">I understand you want to:</p>
-            <div className="bg-white text-gray-900 p-3 rounded border text-sm">
-              Swap <strong>{command.amount} {command.fromAsset}</strong> on {command.fromChain} for <strong>{command.toAsset}</strong> on {command.toChain}
-            </div>
-          </>
+          <div className="bg-white text-gray-900 p-3 rounded border text-sm">
+            {command.conditionOperator && command.conditionValue ? (
+              <p>
+                Limit Order: Swap <strong>{command.amount} {command.fromAsset}</strong> → <strong>{command.toAsset}</strong>
+                <br />
+                <span className="text-xs text-gray-600">
+                  When {command.conditionAsset || command.fromAsset} is {command.conditionOperator === 'gt' ? 'above' : 'below'} ${command.conditionValue}
+                </span>
+              </p>
+            ) : (
+              <p>
+                Swap <strong>{command.amount} {command.fromAsset}</strong> on {command.fromChain || 'ethereum'} for <strong>{command.toAsset}</strong> on {command.toChain || 'ethereum'}
+              </p>
+            )}
+          </div>
         );
     }
   };
@@ -89,6 +104,7 @@ export default function IntentConfirmation({ command, onConfirm }: IntentConfirm
       </div>
       
       <div className="mb-3">
+        <p className="text-sm text-gray-700 mb-2">I understand you want to:</p>
         {renderIntentDetails()}
       </div>
 
