@@ -1,6 +1,7 @@
 import Groq from "groq-sdk";
 import { safeParseJSON } from "@/lib/safeParse";
 import { logGroqUsage } from "@/lib/stats-service";
+import { loadSecret } from "../../shared/utils/secrets-loader";
 
 // Global singleton declaration to prevent multiple instances during hot reload
 declare global {
@@ -16,8 +17,11 @@ declare global {
  */
 function getGroqClient(): Groq {
   if (!global._groqClient) {
+    // Use secure secrets loader instead of direct environment variable access
+    const apiKey = loadSecret('groq_api_key', 'GROQ_API_KEY');
+    
     global._groqClient = new Groq({
-      apiKey: process.env.GROQ_API_KEY,
+      apiKey,
     });
   }
   return global._groqClient;
@@ -35,6 +39,29 @@ export interface ParsedCommand {
   toChain: string | null;
   amount: number | null;
   amountType?: "exact" | "percentage" | "all" | null;
+
+  // Enhanced Conditional Fields
+  conditions?: {
+    type: "price_above" | "price_below" | "balance_threshold" | "time_based" | "market_condition";
+    asset: string;
+    value: number;
+    operator?: "gt" | "lt" | "gte" | "lte" | "eq";
+    secondary_conditions?: Array<{
+      type: string;
+      asset: string;
+      value: number;
+      operator: string;
+      logic: "AND" | "OR";
+    }>;
+    fallback_action?: {
+      intent: string;
+      fromAsset: string;
+      toAsset: string;
+      amount: number;
+      rawText?: string;
+      needsParsing?: boolean;
+    };
+  };
 
   // Portfolio Fields
   portfolio?: {
@@ -63,6 +90,26 @@ export interface ParsedCommand {
   fromProject?: string | null;
   toProject?: string | null;
 
+  // Enhanced Multi-Step and Ambiguity Handling
+  nextActions?: Array<{
+    rawText: string;
+    needsParsing: boolean;
+    intent?: string;
+    fromAsset?: string;
+    toAsset?: string;
+    amount?: number;
+  }>;
+  fallbackAction?: {
+    rawText: string;
+    needsParsing: boolean;
+    intent?: string;
+    fromAsset?: string;
+    toAsset?: string;
+    amount?: number;
+  };
+  alternativeInterpretations?: string[];
+  suggestedClarifications?: string[];
+
   confidence: number;
   validationErrors: string[];
   parsedMessage: string;
@@ -71,6 +118,22 @@ export interface ParsedCommand {
 }
 
 const systemPrompt = `
+You are SwapSmith, an advanced DeFi AI agent.
+Your job is to parse natural language into specific JSON commands.
+
+MODES:
+1. "swap": User wants to exchange one asset for another (e.g., "Swap ETH for USDC").
+   - Can include CONDITIONS for Limit Orders (e.g., "Swap ETH to USDC when ETH price is above 4000").
+2. "dca": User wants to set up recurring swaps (e.g., "DCA 100 USDC to BTC every Friday" or "Buy ETH daily").
+3. "portfolio": User wants to split one input asset into multiple output assets (e.g., "Split 1 ETH into 50% BTC and 50% SOL").
+4. "checkout":
+   - User wants to create a payment link.
+   - User says "Send [amount] [asset] to [address]" (Generate a link to pay that address).
+   - User says "I want to receive [amount] [asset]" (Generate a link for their own wallet).
+5. "yield_scout": User asking for high APY/Yield info.
+6. "stake": User wants to stake tokens for passive yield (e.g., "Stake 2 ETH" or "Stake my MATIC").
+
+STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
 You are SwapSmith, an advanced DeFi AI agent specialized in parsing natural language into precise JSON commands.
 Your job is to handle complex, ambiguous, and edge-case trading commands with high accuracy.
 
@@ -456,6 +519,16 @@ export async function transcribeAudio(file: File): Promise<string> {
       temperature: 0.0,
     });
 
+    if (!parsed.settleAsset) errors.push("Asset to receive/send not specified");
+    if (!parsed.settleAmount || parsed.settleAmount <= 0) {
+      errors.push("Invalid amount specified");
+    } else if (parsed.intent === "stake") {
+      if (!parsed.fromAsset) errors.push("Token to stake not specified");
+      // Amount can be null for "stake all" scenarios, so only validate if provided
+      if (parsed.amount !== null && parsed.amount !== undefined && parsed.amount <= 0) {
+        errors.push("Invalid amount specified");
+      }
+    }
     // Log usage for monitoring
     await logGroqUsage({
       userId: 'anonymous',
