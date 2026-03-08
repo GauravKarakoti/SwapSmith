@@ -404,7 +404,7 @@ describe('OrderMonitor', () => {
             await Promise.resolve();
             await Promise.resolve();
 
-            // getOrderStatus called at most once before rate-limit hits
+            // getOrderStatus called at least once before rate-limit hits; record count before cooldown
             const callsBeforeCooldown = getOrderStatus.mock.calls.length;
             expect(callsBeforeCooldown).toBeGreaterThanOrEqual(1);
 
