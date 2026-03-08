@@ -1,4 +1,6 @@
-import { useCallback } from 'react';
+'use client'
+
+import { useState, useCallback } from 'react';
 
 export enum ErrorType {
   API_FAILURE = 'api_failure',
@@ -9,6 +11,15 @@ export enum ErrorType {
   UNKNOWN_ERROR = 'unknown_error'
 }
 
+export interface ErrorState {
+  message: string | null;
+  type: ErrorType | null;
+  isLoading: boolean;
+  isRetrying: boolean;
+  retryCount: number;
+  context?: ErrorContext;
+}
+
 export interface ErrorContext {
   operation?: string;
   retryable?: boolean;
@@ -16,11 +27,32 @@ export interface ErrorContext {
 }
 
 export interface UseErrorHandlerReturn {
+  errorState: ErrorState;
   handleError: (error: unknown, type: ErrorType, context?: ErrorContext) => string;
   getErrorMessage: (error: unknown, type: ErrorType, context?: ErrorContext) => string;
+  setLoading: (loading: boolean) => void;
+  clearError: () => void;
+  executeWithRecovery: <T,>(
+    fn: () => Promise<T>,
+    operation: string,
+    maxRetries?: number
+  ) => Promise<T | null>;
+  retry: (fn: () => Promise<void>) => Promise<void>;
 }
 
+const BACKOFF_MULTIPLIER = 2;
+const INITIAL_DELAY_MS = 1000;
+const MAX_DELAY_MS = 30000;
+
 export const useErrorHandler = (): UseErrorHandlerReturn => {
+  const [errorState, setErrorState] = useState<ErrorState>({
+    message: null,
+    type: null,
+    isLoading: false,
+    isRetrying: false,
+    retryCount: 0,
+  });
+
   const getErrorMessage = useCallback((error: unknown, type: ErrorType, context?: ErrorContext): string => {
     // Log technical details for debugging
     const errorObj = error as Error;
@@ -80,14 +112,128 @@ export const useErrorHandler = (): UseErrorHandlerReturn => {
   const handleError = useCallback((error: unknown, type: ErrorType, context?: ErrorContext): string => {
     const message = getErrorMessage(error, type, context);
     
-    // Additional error tracking could be added here
-    // e.g., send to analytics service, error reporting service
+    // Update error state
+    setErrorState(prev => ({
+      ...prev,
+      message,
+      type,
+      context,
+    }));
     
     return message;
   }, [getErrorMessage]);
 
+  const setLoading = useCallback((loading: boolean) => {
+    setErrorState(prev => ({
+      ...prev,
+      isLoading: loading,
+    }));
+  }, []);
+
+  const clearError = useCallback(() => {
+    setErrorState(prev => ({
+      ...prev,
+      message: null,
+      type: null,
+      retryCount: 0,
+    }));
+  }, []);
+
+  // Calculate backoff delay
+  const calculateBackoffDelay = useCallback((retryCount: number): number => {
+    let delay = INITIAL_DELAY_MS * Math.pow(BACKOFF_MULTIPLIER, retryCount);
+    delay = Math.min(delay, MAX_DELAY_MS);
+    // Add jitter (±20%)
+    delay = delay * (0.8 + Math.random() * 0.4);
+    return delay;
+  }, []);
+
+  // Sleep utility
+  const sleep = useCallback((ms: number): Promise<void> => {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }, []);
+
+  // Execute with retry logic
+  const executeWithRecovery = useCallback(
+    async <T,>(
+      fn: () => Promise<T>,
+      operation: string,
+      maxRetries: number = 2
+    ): Promise<T | null> => {
+      clearError();
+      setLoading(true);
+      let lastError: unknown;
+
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const result = await fn();
+          setLoading(false);
+          return result;
+        } catch (error) {
+          lastError = error;
+          const errorObj = error as Error;
+          
+          // Determine if retryable
+          const isRetryable = 
+            errorObj?.message?.includes('network') ||
+            errorObj?.message?.includes('timeout') ||
+            errorObj?.message?.includes('ECONNREFUSED') ||
+            errorObj?.message?.includes('ENOTFOUND');
+
+          if (attempt < maxRetries && isRetryable) {
+            const delay = calculateBackoffDelay(attempt);
+            console.warn(`[${operation}] Attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
+            await sleep(delay);
+            continue;
+          }
+
+          break;
+        }
+      }
+
+      // Failed after all retries
+      const errorType = (lastError as Error)?.message?.includes('network')
+        ? ErrorType.NETWORK_ERROR
+        : ErrorType.API_FAILURE;
+
+      handleError(lastError, errorType, { operation, retryable: true });
+      setLoading(false);
+      return null;
+    },
+    [clearError, setLoading, handleError, calculateBackoffDelay, sleep]
+  );
+
+  // Retry failed operation
+  const retry = useCallback(
+    async (fn: () => Promise<void>) => {
+      setErrorState(prev => ({
+        ...prev,
+        isRetrying: true,
+        retryCount: prev.retryCount + 1,
+      }));
+
+      try {
+        await executeWithRecovery(fn, 'retry-operation', 2);
+        clearError();
+      } catch (error) {
+        handleError(error, ErrorType.UNKNOWN_ERROR);
+      } finally {
+        setErrorState(prev => ({
+          ...prev,
+          isRetrying: false,
+        }));
+      }
+    },
+    [executeWithRecovery, clearError, handleError]
+  );
+
   return {
+    errorState,
     handleError,
-    getErrorMessage
+    getErrorMessage,
+    setLoading,
+    clearError,
+    executeWithRecovery,
+    retry,
   };
 };

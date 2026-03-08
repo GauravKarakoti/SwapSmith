@@ -5,8 +5,10 @@ import { toast } from 'react-hot-toast';
  */
 export async function authenticatedFetch(
   url: string,
-  options: RequestInit = {}
+  options: RequestInit & { suppressErrorToast?: boolean } = {}
 ): Promise<Response> {
+  const { suppressErrorToast = false, ...requestOptions } = options;
+
   // Get user ID from localStorage or session
   let userId = localStorage.getItem('user-db-id');
   
@@ -37,7 +39,7 @@ export async function authenticatedFetch(
     }
   }
   
-  const headers = new Headers(options.headers);
+  const headers = new Headers(requestOptions.headers);
   
   if (userId) {
     headers.set('x-user-id', userId);
@@ -45,11 +47,11 @@ export async function authenticatedFetch(
   
   try {
     const response = await fetch(url, {
-      ...options,
+      ...requestOptions,
       headers,
     });
 
-    if (!response.ok) {
+    if (!response.ok && !suppressErrorToast) {
       const clone = response.clone();
       try {
         const errorData = await clone.json();
@@ -63,7 +65,9 @@ export async function authenticatedFetch(
     return response;
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Network Error';
-    toast.error(msg);
+    if (!suppressErrorToast) {
+      toast.error(msg);
+    }
     throw error;
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
 import Image from "next/image";
 import { Plus, ChevronDown, ArrowUp, X, FileText, Loader2, Check, Archive } from "lucide-react";
 
@@ -150,9 +150,11 @@ interface ClaudeChatInputProps {
     onStopRecording?: () => void;
     isConnected?: boolean;
     disabled?: boolean;
+    inputRef?: React.RefObject<HTMLTextAreaElement | null>;
+    onVoiceError?: (error: string) => void;
 }
 
-export const ClaudeChatInput: React.FC<ClaudeChatInputProps> = ({ 
+export const ClaudeChatInput = forwardRef<HTMLTextAreaElement, ClaudeChatInputProps>(({ 
     onSendMessage, 
     isRecording = false, 
     isAudioSupported = false, 
@@ -160,14 +162,37 @@ export const ClaudeChatInput: React.FC<ClaudeChatInputProps> = ({
     onStopRecording,
     isConnected = false,
     disabled = false 
-}) => {
+    inputRef: externalInputRef,
+    onVoiceError 
+}, ref) => {
     const [message, setMessage] = useState("");
     const [files, setFiles] = useState<AttachedFile[]>([]);
     const [pastedContent, setPastedContent] = useState<AttachedFile[]>([]);
     const [isDragging, setIsDragging] = useState(false);
+    const [voiceError, setVoiceError] = useState<string | null>(null);
 
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Expose textarea ref to parent
+    useImperativeHandle(ref, () => textareaRef.current!, []);
+
+    // Combine internal ref with external ref
+    const combinedRef = useCallback((element: HTMLTextAreaElement | null) => {
+        (textareaRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = element;
+        if (externalInputRef && 'current' in externalInputRef) {
+            (externalInputRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = element;
+        }
+    }, [externalInputRef]);
+
+    // Handle voice errors - auto-focus text input
+    useEffect(() => {
+        if (voiceError && onVoiceError) {
+            onVoiceError(voiceError);
+            // Auto-focus the text input
+            textareaRef.current?.focus();
+        }
+    }, [voiceError, onVoiceError]);
 
     // Auto-resize textarea
     useEffect(() => {
@@ -316,7 +341,7 @@ export const ClaudeChatInput: React.FC<ClaudeChatInputProps> = ({
                     <div className="relative mb-1">
                         <div className="max-h-96 w-full overflow-y-auto custom-scrollbar font-sans break-words transition-opacity duration-200 min-h-[2.5rem] pl-1">
                             <textarea
-                                ref={textareaRef}
+                                ref={combinedRef}
                                 value={message}
                                 onChange={(e) => setMessage(e.target.value)}
                                 onPaste={handlePaste}
@@ -386,8 +411,13 @@ export const ClaudeChatInput: React.FC<ClaudeChatInputProps> = ({
                 </div>
             </div>
 
-            {/* Fallback Message */}
-            {!isAudioSupported && (
+            {/* Voice Status Messages */}
+            {voiceError && (
+                <div className="text-amber-500 text-xs mt-2 px-1 text-center font-medium">
+                    🎤 {voiceError} Using text input instead.
+                </div>
+            )}
+            {!isAudioSupported && !voiceError && (
                 <div className="text-red-500 text-xs mt-2 px-1 text-center font-medium">
                     🎤 Voice input is not supported in your browser. Please use Chrome or type your command.
                 </div>

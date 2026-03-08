@@ -10,6 +10,7 @@ import {
   sendAdminApprovedEmail,
   sendAdminRejectedEmail,
 } from '@/lib/admin-email';
+import { logAdminAction, AUDIT_ACTIONS, SYSTEM_ADMIN_ID, getIpAddress, getUserAgent } from '../../../../shared/lib/audit-logger';
 
 const MASTER_ADMIN_EMAIL = process.env.ADMIN_MASTER_EMAIL || '';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -53,6 +54,22 @@ export async function GET(req: NextRequest) {
           approvedBy:  reviewerEmail,
         });
         await sendAdminApprovedEmail(request.email, request.name);
+        
+        // Log approval action
+        await logAdminAction({
+          adminId: SYSTEM_ADMIN_ID,
+          adminEmail: reviewerEmail,
+          action: AUDIT_ACTIONS.APPROVE_ADMIN_REQUEST,
+          targetResource: 'admin_request',
+          targetId: String(request.id),
+          metadata: {
+            requestEmail: request.email,
+            requestName: request.name,
+            requestFirebaseUid: request.firebaseUid,
+          },
+          ipAddress: getIpAddress(req.headers),
+          userAgent: getUserAgent(req.headers),
+        });
       }
       return new Response(
         renderPage('success', `✅ Access approved for ${request.name} (${request.email}). An email has been sent to them.`),
@@ -61,6 +78,23 @@ export async function GET(req: NextRequest) {
     } else {
       await rejectAdminRequest(token, reviewerEmail);
       await sendAdminRejectedEmail(request.email, request.name);
+      
+      // Log rejection action
+      await logAdminAction({
+        adminId: SYSTEM_ADMIN_ID,
+        adminEmail: reviewerEmail,
+        action: AUDIT_ACTIONS.REJECT_ADMIN_REQUEST,
+        targetResource: 'admin_request',
+        targetId: String(request.id),
+        metadata: {
+          requestEmail: request.email,
+          requestName: request.name,
+          requestFirebaseUid: request.firebaseUid,
+        },
+        ipAddress: getIpAddress(req.headers),
+        userAgent: getUserAgent(req.headers),
+      });
+      
       return new Response(
         renderPage('rejected', `❌ Request from ${request.name} (${request.email}) has been rejected.`),
         { headers: { 'Content-Type': 'text/html' } }
