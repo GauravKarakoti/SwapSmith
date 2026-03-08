@@ -1,5 +1,5 @@
-import '@testing-library/jest-dom/vitest';
-import { beforeAll, afterAll, vi, afterEach } from 'vitest';
+/* eslint-disable no-var */
+import '@testing-library/jest-dom';
 
 // ============================================================================
 // DOM API Mocks
@@ -8,15 +8,15 @@ import { beforeAll, afterAll, vi, afterEach } from 'vitest';
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
-  value: vi.fn().mockImplementation(query => ({
+  value: jest.fn().mockImplementation(query => ({
     matches: false,
     media: query,
     onchange: null,
-    addListener: vi.fn(), // deprecated
-    removeListener: vi.fn(), // deprecated
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
+    addListener: jest.fn(),
+    removeListener: jest.fn(),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+    dispatchEvent: jest.fn(),
   })),
 });
 
@@ -79,10 +79,11 @@ Object.defineProperty(window, 'sessionStorage', {
 });
 
 // Mock scrollIntoView and window.scrollTo
-window.HTMLElement.prototype.scrollIntoView = vi.fn();
-window.scrollTo = vi.fn();
+window.HTMLElement.prototype.scrollIntoView = jest.fn();
+window.scrollTo = jest.fn();
 
 // Mock IntersectionObserver
+declare const global: any;
 global.IntersectionObserver = class IntersectionObserver {
   constructor() {}
   disconnect() {}
@@ -91,7 +92,7 @@ global.IntersectionObserver = class IntersectionObserver {
     return [];
   }
   unobserve() {}
-} as unknown as typeof IntersectionObserver;
+};
 
 // Mock ResizeObserver
 global.ResizeObserver = class ResizeObserver {
@@ -99,42 +100,39 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
   observe() {}
   unobserve() {}
-} as unknown as typeof ResizeObserver;
+};
 
 // ============================================================================
 // Next.js Specific Mocks
 // ============================================================================
 
-// Mock next/router
-vi.mock('next/router', () => ({
+jest.mock('next/router', () => ({
   useRouter: () => ({
-    push: vi.fn(),
+    push: jest.fn(),
     pathname: '/',
     query: {},
     asPath: '/',
     events: {
-      on: vi.fn(),
-      off: vi.fn(),
-      emit: vi.fn(),
+      on: jest.fn(),
+      off: jest.fn(),
+      emit: jest.fn(),
     },
   }),
 }));
 
-// Mock next/navigation
-vi.mock('next/navigation', () => ({
+jest.mock('next/navigation', () => ({
   useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-    back: vi.fn(),
-    forward: vi.fn(),
-    refresh: vi.fn(),
+    push: jest.fn(),
+    replace: jest.fn(),
+    back: jest.fn(),
+    forward: jest.fn(),
+    refresh: jest.fn(),
   }),
   usePathname: () => '/',
   useSearchParams: () => new URLSearchParams(),
 }));
 
-// Mock next/image
-vi.mock('next/image', () => ({
+jest.mock('next/image', () => ({
   default: ({ src, alt, ...props }: any) => {
     // eslint-disable-next-line jsx-a11y/alt-text
     return <img src={src} alt={alt} {...props} />;
@@ -150,9 +148,9 @@ const originalWarn = console.warn;
 
 beforeAll(() => {
   // Suppress Next.js and React known warnings in test output
-  console.error = (...args: unknown[]) => {
+  console.error = (...args: any[]) => {
     const message = typeof args[0] === 'string' ? args[0] : '';
-    const supprssedErrors = [
+    const suppressedErrors = [
       'Warning: useLayoutEffect does nothing on the server',
       'Warning: ReactDOM.render',
       'Not implemented: HTMLFormElement.prototype.submit',
@@ -161,13 +159,13 @@ beforeAll(() => {
       'Warning: useId',
     ];
 
-    if (supprssedErrors.some(err => message.includes(err))) {
+    if (suppressedErrors.some(err => message.includes(err))) {
       return;
     }
     originalError.call(console, ...args);
   };
 
-  console.warn = (...args: unknown[]) => {
+  console.warn = (...args: any[]) => {
     const message = typeof args[0] === 'string' ? args[0] : '';
     const suppressedWarnings = [
       'componentWillReceiveProps',
@@ -192,9 +190,8 @@ afterAll(() => {
 // Test Cleanup
 // ============================================================================
 
-// Reset all mocks and storage after each test
 afterEach(() => {
-  vi.clearAllMocks();
+  jest.clearAllMocks();
   localStorageMock.clear();
   sessionStorageMock.clear();
 });
