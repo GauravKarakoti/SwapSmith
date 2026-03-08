@@ -14,6 +14,7 @@ import {
   rewardsLog,
   watchlist,
   priceAlerts,
+  orders, // Import orders for reputation calculation
   portfolioTargets,
   rebalanceHistory,
 } from '../../shared/schema';
@@ -33,6 +34,7 @@ export {
   rewardsLog,
   watchlist,
   priceAlerts,
+  orders,
 };
 
 export type User = typeof users.$inferSelect;
@@ -71,6 +73,48 @@ export async function getCachedPrice(coin: string, network: string): Promise<Coi
   
   return cached;
 }
+
+/**
+ * Batch fetch cached prices for multiple coin-network pairs
+ * Solves N+1 query problem by fetching all prices in a single query
+ * Returns a Map<`${coin}-${network}`, CoinPriceCache> for easy lookup
+ */
+export async function getCachedPricesBatch(
+  coinNetworkPairs: Array<{ coin: string; network: string }>
+): Promise<Map<string, CoinPriceCache>> {
+  if (!db || coinNetworkPairs.length === 0) {
+    return new Map();
+  }
+  
+  // Extract unique coins and networks for efficient filtering
+  const coins = [...new Set(coinNetworkPairs.map(p => p.coin))];
+  const networks = [...new Set(coinNetworkPairs.map(p => p.network))];
+  
+  // Single query: fetch all prices for the coins/networks we need
+  const allResults = await db.select().from(coinPriceCache)
+    .where(and(
+      inArray(coinPriceCache.coin, coins),
+      inArray(coinPriceCache.network, networks)
+    ));
+  
+  // Filter out expired entries and build Map
+  const now = new Date();
+  const priceMap = new Map<string, CoinPriceCache>();
+  
+  allResults.forEach(cache => {
+    // Only include non-expired entries
+    if (new Date(cache.expiresAt) >= now) {
+      const key = `${cache.coin}-${cache.network}`;
+      // Only add if this exact pair was requested
+      if (coinNetworkPairs.some(p => p.coin === cache.coin && p.network === cache.network)) {
+        priceMap.set(key, cache);
+      }
+    }
+  });
+  
+  return priceMap;
+}
+
 
 export async function setCachedPrice(
   coin: string,
@@ -266,12 +310,13 @@ export async function getAgentReputation(): Promise<{ totalSwaps: number; succes
   }
 
   try {
+    // Query orders (bot) to get comprehensive stats
     const result = await db
       .select({
         total: count(),
-        success: count(drizzleSql`CASE WHEN ${swapHistory.status} = 'settled' THEN 1 END`)
+        success: count(drizzleSql`CASE WHEN ${orders.status} = 'settled' THEN 1 END`)
       })
-      .from(swapHistory);
+      .from(orders);
     
     if (!result || result.length === 0) {
        return { totalSwaps: 0, successRate: 0, successCount: 0 };
@@ -1143,3 +1188,5 @@ export async function getRebalanceHistory(portfolioTargetId: number): Promise<Re
 }
 
 export default db;
+
+

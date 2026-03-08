@@ -8,12 +8,12 @@
 
 import axios from 'axios';
 import dotenv from 'dotenv';
-import { SIDESHIFT_CONFIG } from '../../../shared/config/sideshift';
+import { SIDESHIFT_CONFIG, getApiUrl } from '../../../shared/config/sideshift';
 
 dotenv.config();
 
-const AFFILIATE_ID = process.env.SIDESHIFT_AFFILIATE_ID || process.env.NEXT_PUBLIC_AFFILIATE_ID || '';
-const API_KEY = process.env.SIDESHIFT_API_KEY || process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
+const AFFILIATE_ID = process.env.SIDESHIFT_AFFILIATE_ID || process.env.AFFILIATE_ID || '';
+const API_KEY = process.env.SIDESHIFT_API_KEY || process.env.SIDESHIFT_API_KEY;
 const DEFAULT_USER_IP = process.env.SIDESHIFT_CLIENT_IP;
 
 // SideShift API Configuration - use centralized config
@@ -42,7 +42,7 @@ interface BridgeConfig {
 const BRIDGE_CONFIGS: Record<string, BridgeConfig> = {
   sideshift: {
     name: 'sideshift',
-    displayName: 'SideShift.ai',
+    displayName: SIDESHIFT_CONFIG.DISPLAY_NAME,
     supportedChains: ['ethereum', 'polygon', 'arbitrum', 'optimism', 'avalanche', 'bsc', 'base', 'solana'],
     features: { instantExecution: false },
     reliability: { score: 85 },
@@ -195,7 +195,7 @@ async function getSideShiftQuotes(request: BridgeQuoteRequest): Promise<Aggregat
     }
 
     const response = await axios.post(
-      `${SIDESHIFT_BASE_URL}/quotes`,
+      getApiUrl('quotes'),
       {
         depositCoin: request.fromToken,
         depositNetwork: request.fromChain,
@@ -210,7 +210,7 @@ async function getSideShiftQuotes(request: BridgeQuoteRequest): Promise<Aggregat
     const data = response.data;
     const quote: BridgeQuote = {
       bridge: 'sideshift',
-      displayName: 'SideShift.ai',
+      displayName: SIDESHIFT_CONFIG.DISPLAY_NAME,
       fromChain: request.fromChain,
       toChain: request.toChain,
       fromToken: request.fromToken,

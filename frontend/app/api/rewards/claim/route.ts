@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { claimPendingTokens } from '@/lib/database';
+import { verifyAuth } from '@/lib/auth-helpers';
 
 export async function POST(request: NextRequest) {
   try {
-    const userId = request.headers.get('x-user-id');
+    // 🔐 Verify Firebase authentication
+    const auth = await verifyAuth(request);
+    if (!auth.success) {
+      return auth.error!;
+    }
 
-    if (!userId) {
+    if (!auth.userId) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+        { error: 'User ID not found' },
+        { status: 400 }
       );
     }
 
@@ -29,7 +34,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await claimPendingTokens(parseInt(userId), walletAddress);
+    const result = await claimPendingTokens(auth.userId, walletAddress);
 
     if (!result) {
       return NextResponse.json(
