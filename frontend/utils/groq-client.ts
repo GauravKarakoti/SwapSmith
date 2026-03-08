@@ -1,6 +1,7 @@
 import Groq from "groq-sdk";
 import { safeParseJSON } from "@/lib/safeParse";
 import { logGroqUsage } from "@/lib/stats-service";
+import { loadSecret } from "../../shared/utils/secrets-loader";
 
 // Global singleton declaration to prevent multiple instances during hot reload
 declare global {
@@ -16,8 +17,11 @@ declare global {
  */
 function getGroqClient(): Groq {
   if (!global._groqClient) {
+    // Use secure secrets loader instead of direct environment variable access
+    const apiKey = loadSecret('groq_api_key', 'GROQ_API_KEY');
+    
     global._groqClient = new Groq({
-      apiKey: process.env.GROQ_API_KEY,
+      apiKey,
     });
   }
   return global._groqClient;
@@ -35,6 +39,29 @@ export interface ParsedCommand {
   toChain: string | null;
   amount: number | null;
   amountType?: "exact" | "percentage" | "all" | null;
+
+  // Enhanced Conditional Fields
+  conditions?: {
+    type: "price_above" | "price_below" | "balance_threshold" | "time_based" | "market_condition";
+    asset: string;
+    value: number;
+    operator?: "gt" | "lt" | "gte" | "lte" | "eq";
+    secondary_conditions?: Array<{
+      type: string;
+      asset: string;
+      value: number;
+      operator: string;
+      logic: "AND" | "OR";
+    }>;
+    fallback_action?: {
+      intent: string;
+      fromAsset: string;
+      toAsset: string;
+      amount: number;
+      rawText?: string;
+      needsParsing?: boolean;
+    };
+  };
 
   // Portfolio Fields
   portfolio?: {
@@ -62,6 +89,26 @@ export interface ParsedCommand {
   // Staking Fields
   fromProject?: string | null;
   toProject?: string | null;
+
+  // Enhanced Multi-Step and Ambiguity Handling
+  nextActions?: Array<{
+    rawText: string;
+    needsParsing: boolean;
+    intent?: string;
+    fromAsset?: string;
+    toAsset?: string;
+    amount?: number;
+  }>;
+  fallbackAction?: {
+    rawText: string;
+    needsParsing: boolean;
+    intent?: string;
+    fromAsset?: string;
+    toAsset?: string;
+    amount?: number;
+  };
+  alternativeInterpretations?: string[];
+  suggestedClarifications?: string[];
 
   confidence: number;
   validationErrors: string[];

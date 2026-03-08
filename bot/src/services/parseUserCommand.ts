@@ -1,22 +1,12 @@
-import { parseWithLLM, ParsedCommand } from './groq-client';
+import { parseWithLLM } from './groq-client';
+import type { ParsedCommand, ParseResult as ParseResultType, NextAction, FallbackAction, Condition } from '../types/ParsedCommand';
 import logger from './logger';
 import { parseDCA } from './nl-dca';
 import { detectLimitOrder } from './nl-limit-orders';
 
-export { ParsedCommand };
+export type { ParsedCommand };
 
-export type ParseResult =
-  | ParsedCommand
-  | {
-    success: false;
-    validationErrors: string[];
-    intent?: string;
-    confidence?: number;
-    parsedMessage?: string;
-    requiresConfirmation?: boolean;
-    originalInput?: string;
-    [key: string]: any;
-  };
+export type ParseResult = ParseResultType;
 
 const REGEX_TOKENS = /([A-Z]{2,10})\s+(to|into|for|→|->)\s+([A-Z]{2,10})/i;
 const REGEX_FROM_TO = /from\s+([A-Z]{2,10})\s+to\s+([A-Z]{2,10})/i;
@@ -24,11 +14,20 @@ const REGEX_AMOUNT_TOKEN = /\b(\d+(?:\.\d+)?[kmb]?)\s+([A-Z]{2,10})\b/i;
 const REGEX_MULTI_SOURCE =
   /(?:^|\s)([A-Z]{2,10}|(?:\d+(?:\.\d+)?[kmb]?\s+[A-Z]{2,10}))\s+(?:and|&|\+)\s+([A-Z]{2,10}|(?:\d+(?:\.\d+)?[kmb]?\s+[A-Z]{2,10}))\s+(?:to|into|for)/i;
 
-// Enhanced patterns for better ambiguity detection
+// Enhanced patterns for complex conditional parsing
 const REGEX_AMBIGUOUS_OR = /\b(or|either|maybe)\b/i;
 const REGEX_MULTIPLE_DESTINATIONS = /(?:to|into|for)\s+([A-Z]{2,10})(?:\s+(?:or|and|\+|,)\s+([A-Z]{2,10}))+/i;
-const REGEX_CONDITIONAL = /\b(if|when|only\s+if|provided|assuming)\b/i;
+const REGEX_CONDITIONAL = /\b(if|when|only\s+if|provided|assuming|unless)\b/i;
 const REGEX_PRICE_CONDITION = /(?:price|value|[A-Z]{2,10})\s*(?:is|goes|hits|reaches|drops?|rises?|falls?)?\s*(above|below|over|under|>|<|>=|<=)\s*\$?(\d+(?:\.\d+)?[kmb]?)/i;
+
+// Enhanced multi-step and fallback patterns
+const REGEX_MULTI_STEP = /\b(then|after|next|subsequently|followed\s+by)\b/i;
+const REGEX_FALLBACK = /\b(otherwise|else|or\s+else|if\s+not|alternatively)\b/i;
+const REGEX_SECONDARY_CONDITION = /\b(and|but|also|plus|additionally)\b.*?\b(if|when|only\s+if|provided|assuming)\b/i;
+
+// Enhanced balance and market condition patterns
+const REGEX_BALANCE_CONDITION = /\b(if\s+(?:I\s+)?have|only\s+if\s+(?:my\s+)?balance|provided\s+(?:I\s+)?(?:have|own))\s+(?:(?:more|less)\s+than\s+|at\s+least\s+|over\s+|under\s+)?(\d+(?:\.\d+)?[kmb]?)\s+([A-Z]{2,10})/i;
+const REGEX_MARKET_CONDITION = /\b(market|volatility|volume|trend)\s+(?:is\s+)?(good|bad|high|low|bullish|bearish|stable|volatile)/i;
 
 // Enhanced abbreviation handling
 const COMMON_TYPOS = {
@@ -138,8 +137,19 @@ const buildSwapResult = (
     conditionValue,
     conditionAsset,
     confidence,
-    requiresConfirmation
-  }: Partial<ParsedCommand> & { intent: ParsedCommand['intent']; confidence: number }
+    requiresConfirmation,
+    nextActions,
+    fallbackAction,
+    alternativeInterpretations,
+    suggestedClarifications
+  }: Partial<ParsedCommand> & { 
+    intent: ParsedCommand['intent']; 
+    confidence: number;
+    nextActions?: NextAction[];
+    fallbackAction?: FallbackAction;
+    alternativeInterpretations?: string[];
+    suggestedClarifications?: string[];
+  }
 ): ParsedCommand => ({
   success: true,
   intent,
@@ -174,12 +184,125 @@ const buildSwapResult = (
   validationErrors: [],
   parsedMessage: `Parsed: Swap ${amount ?? '?'} ${fromAsset ?? '?'} → ${toAsset ?? 'USDC'}`,
   requiresConfirmation: requiresConfirmation ?? false,
-  originalInput: userInput
+  originalInput: userInput,
+  ...(nextActions && { nextActions }),
+  ...(fallbackAction && { fallbackAction }),
+  ...(alternativeInterpretations && { alternativeInterpretations }),
+  ...(suggestedClarifications && { suggestedClarifications })
 });
+
+/**
+ * Enhanced function to parse complex conditional and multi-step commands
+ */
+interface ComplexConditionalAnalysis {
+  hasComplexConditions: boolean;
+  primaryCondition?: Condition;
+  secondaryConditions?: Array<Record<string, unknown>>;
+  multiStep?: boolean;
+  nextActions?: NextAction[];
+  hasFallback?: boolean;
+  fallbackAction?: FallbackAction;
+  validationErrors: string[];
+  confidence: number;
+}
+
+function parseComplexConditional(input: string): ComplexConditionalAnalysis {
+  const result: ComplexConditionalAnalysis = {
+    hasComplexConditions: false,
+    validationErrors: [],
+    confidence: 100
+  };
+
+  // Check for multi-step commands
+  const hasMultiStep = REGEX_MULTI_STEP.test(input);
+  if (hasMultiStep) {
+    result.hasComplexConditions = true;
+    result.multiStep = true;
+    
+    // Split on multi-step keywords and parse each part
+    const parts = input.split(/\b(?:then|after|next|subsequently|followed\s+by)\b/i);
+    if (parts.length > 1) {
+      result.nextActions = parts.slice(1).map(part => ({
+        rawText: part.trim(),
+        needsParsing: true
+      }));
+      result.validationErrors.push("Multi-step execution requires manual confirmation for subsequent actions");
+      result.confidence = Math.min(result.confidence, 75);
+    }
+  }
+
+  // Check for fallback actions
+  const hasFallback = REGEX_FALLBACK.test(input);
+  if (hasFallback) {
+    result.hasComplexConditions = true;
+    result.hasFallback = true;
+    
+    // Split on fallback keywords
+    const parts = input.split(/\b(?:otherwise|else|or\s+else|if\s+not|alternatively)\b/i);
+    if (parts.length > 1) {
+      result.fallbackAction = {
+        rawText: parts[1].trim(),
+        needsParsing: true
+      };
+      result.confidence = Math.min(result.confidence, 80);
+    }
+  }
+
+  // Check for secondary conditions
+  const hasSecondaryCondition = REGEX_SECONDARY_CONDITION.test(input);
+  if (hasSecondaryCondition) {
+    result.hasComplexConditions = true;
+    result.secondaryConditions = [];
+    
+    // Look for balance conditions
+    const balanceMatch = input.match(REGEX_BALANCE_CONDITION);
+    if (balanceMatch) {
+      const [, amount, asset] = balanceMatch;
+      result.secondaryConditions.push({
+        type: 'balance_threshold',
+        asset: asset.toUpperCase(),
+        value: parseScaledNumber(amount),
+        operator: 'gte',
+        logic: 'AND'
+      });
+    }
+
+    // Look for market conditions
+    const marketMatch = input.match(REGEX_MARKET_CONDITION);
+    if (marketMatch) {
+      result.secondaryConditions.push({
+        type: 'market_condition',
+        condition: marketMatch[2].toLowerCase(),
+        logic: 'AND'
+      });
+      result.validationErrors.push(`Market condition '${marketMatch[2]}' cannot be automatically evaluated`);
+      result.confidence = Math.min(result.confidence, 60);
+    }
+  }
+
+  // Enhanced price condition parsing
+  const priceMatch = input.match(REGEX_PRICE_CONDITION);
+  if (priceMatch) {
+    const [, operator, rawValue] = priceMatch;
+    const value = parseScaledNumber(rawValue);
+    
+    if (!isNaN(value)) {
+      result.hasComplexConditions = true;
+      result.primaryCondition = {
+        type: ['above', 'over', '>', '>='].includes(operator.toLowerCase()) ? 'price_above' : 'price_below',
+        asset: 'BTC', // Default, should be extracted from context
+        value,
+        operator: ['above', 'over', '>', '>='].includes(operator.toLowerCase()) ? 'gte' : 'lte'
+      };
+    }
+  }
+
+  return result;
+}
 
 export async function parseUserCommand(
   userInput: string,
-  conversationHistory: any = [], // Replaced fallbackToLLM to fix "Cannot find name" errors
+  conversationHistory: Array<Record<string, string>> = [],
   inputType: 'text' | 'voice' = 'text'
 ): Promise<ParseResult> {
   // Graceful handling if someone passes a boolean for legacy fallbackToLLM
@@ -201,56 +324,146 @@ export async function parseUserCommand(
   const originalInput = userInput;
   const preprocessedInput = preprocessInput(userInput);
   
-  // Enhanced ambiguity detection
+  // Enhanced ambiguity detection with better error handling
   const hasAmbiguousOr = REGEX_AMBIGUOUS_OR.test(preprocessedInput);
   const hasMultipleDestinations = REGEX_MULTIPLE_DESTINATIONS.test(preprocessedInput);
   const hasConditionals = REGEX_CONDITIONAL.test(preprocessedInput);
   
   if (hasAmbiguousOr || hasMultipleDestinations) {
     const destinations = preprocessedInput.match(REGEX_MULTIPLE_DESTINATIONS);
+    const detectedAssets = destinations ? [destinations[1], destinations[2]] : [];
+    
+    // Try to extract amount and source asset for better context
+    const amountMatch = preprocessedInput.match(REGEX_AMOUNT_TOKEN);
+    const fromAssetMatch = preprocessedInput.match(/(?:swap|convert|sell)\s+(?:my\s+)?(?:(\d+(?:\.\d+)?[kmb]?)\s+)?([A-Z]{2,10})/i);
+    
+    const amount = amountMatch ? parseScaledNumber(amountMatch[1]) : null;
+    const fromAsset = fromAssetMatch?.[2] || amountMatch?.[2];
+    
     return {
-      success: false, // <-- FIXED: Must be false for partial/ambiguous results
+      success: false,
       intent: 'swap',
+      fromAsset,
+      amount,
+      amountType: amount ? 'exact' : null,
+      toAsset: null,
       validationErrors: destinations 
-        ? [`Multiple destination assets detected: ${destinations[1]}, ${destinations[2]}. Please specify one.`]
+        ? [`Multiple destination assets detected: ${detectedAssets.join(', ')}. Please specify one.`]
         : ['Command contains ambiguous language. Please be more specific.'],
       confidence: 20,
-      parsedMessage: 'Ambiguous command detected - clarification needed',
+      parsedMessage: `Ambiguous command: ${amount || '?'} ${fromAsset || '?'} → [${detectedAssets.join(' or ') || 'unclear destination'}]`,
       requiresConfirmation: true,
-      originalInput
+      originalInput,
+      alternativeInterpretations: detectedAssets.length > 0 ? detectedAssets.map(asset => 
+        `Swap ${amount || 'all'} ${fromAsset || 'assets'} to ${asset}`
+      ) : [
+        "Clarify the destination asset",
+        "Specify exact amounts and assets"
+      ],
+      suggestedClarifications: detectedAssets.length > 0 ? [
+        `Which asset would you prefer: ${detectedAssets.join(' or ')}?`,
+        "Would you like to split between multiple assets instead?"
+      ] : [
+        "Please specify which asset you want to swap to",
+        "What is your intended destination asset?"
+      ]
     };
   }
 
-  // Enhanced conditional parsing
+  // Enhanced conditional parsing with complex command support
   if (hasConditionals) {
-    const priceCondition = preprocessedInput.match(REGEX_PRICE_CONDITION);
-    if (priceCondition) {
-      const [, operator, rawValue] = priceCondition;
-      const value = parseScaledNumber(rawValue);
-      
-      if (!isNaN(value)) {
-        const conditionType = ['above', 'over', '>', '>='].includes(operator.toLowerCase()) 
-          ? 'price_above' : 'price_below';
+    const complexAnalysis = parseComplexConditional(preprocessedInput);
+    
+    if (complexAnalysis.hasComplexConditions) {
+      // Handle complex multi-condition or multi-step commands
+      const priceCondition = preprocessedInput.match(REGEX_PRICE_CONDITION);
+      if (priceCondition) {
+        const [, operator, rawValue] = priceCondition;
+        const value = parseScaledNumber(rawValue);
         
-        // Try to extract basic swap info
-        const tokenMatch = preprocessedInput.match(REGEX_TOKENS);
-        const amountMatch = preprocessedInput.match(REGEX_AMOUNT_TOKEN);
+        if (!isNaN(value)) {
+          const conditionType = ['above', 'over', '>', '>='].includes(operator.toLowerCase()) 
+            ? 'price_above' : 'price_below';
+          
+          // Try to extract basic swap info
+          const tokenMatch = preprocessedInput.match(REGEX_TOKENS);
+          const amountMatch = preprocessedInput.match(REGEX_AMOUNT_TOKEN);
+          
+          // Build enhanced conditions object
+          const conditions: any = {
+            type: conditionType,
+            asset: tokenMatch?.[3] || 'BTC',
+            value,
+            operator: conditionType === 'price_above' ? 'gte' : 'lte'
+          };
+
+          // Add secondary conditions if present
+          if (complexAnalysis.secondaryConditions?.length) {
+            conditions.secondary_conditions = complexAnalysis.secondaryConditions;
+          }
+
+          // Add fallback action if present
+          if (complexAnalysis.fallbackAction) {
+            conditions.fallback_action = complexAnalysis.fallbackAction;
+          }
+
+          const result = buildSwapResult(originalInput, {
+            intent: 'limit_order',
+            fromAsset: tokenMatch?.[1] || (amountMatch?.[2]),
+            toAsset: tokenMatch?.[3],
+            amount: amountMatch ? parseScaledNumber(amountMatch[1]) : null,
+            amountType: amountMatch ? 'exact' : null,
+            conditions,
+            confidence: complexAnalysis.confidence,
+            requiresConfirmation: true,
+            nextActions: complexAnalysis.nextActions,
+            fallbackAction: complexAnalysis.fallbackAction,
+            alternativeInterpretations: complexAnalysis.hasFallback ? [
+              "Set up multiple separate orders",
+              "Create conditional order with manual fallback"
+            ] : undefined,
+            suggestedClarifications: complexAnalysis.validationErrors.length > 0 ? [
+              "Should I break this into multiple simpler commands?",
+              "Which conditions are most important to you?"
+            ] : undefined
+          });
+
+          // Add validation errors from complex analysis
+          result.validationErrors = complexAnalysis.validationErrors;
+          
+          return result;
+        }
+      }
+    } else {
+      // Handle simple conditional commands (existing logic)
+      const priceCondition = preprocessedInput.match(REGEX_PRICE_CONDITION);
+      if (priceCondition) {
+        const [, operator, rawValue] = priceCondition;
+        const value = parseScaledNumber(rawValue);
         
-        return buildSwapResult(originalInput, {
-          intent: 'limit_order', // Changed from 'swap' to 'limit_order' for conditional orders
-          fromAsset: tokenMatch?.[1] || (amountMatch?.[2]),
-          toAsset: tokenMatch?.[3],
-          amount: amountMatch ? parseScaledNumber(amountMatch[1]) : null,
-          amountType: amountMatch ? 'exact' : null,
-          conditions: {
-            type: conditionType as "price_above" | "price_below",
-            asset: tokenMatch?.[3] || 'BTC', // Default to BTC if not specified
-            value
-            // <-- FIXED: Removed invalid 'operator' property from this object
-          },
-          confidence: 75,
-          requiresConfirmation: true
-        });
+        if (!isNaN(value)) {
+          const conditionType = ['above', 'over', '>', '>='].includes(operator.toLowerCase()) 
+            ? 'price_above' : 'price_below';
+          
+          // Try to extract basic swap info
+          const tokenMatch = preprocessedInput.match(REGEX_TOKENS);
+          const amountMatch = preprocessedInput.match(REGEX_AMOUNT_TOKEN);
+          
+          return buildSwapResult(originalInput, {
+            intent: 'limit_order',
+            fromAsset: tokenMatch?.[1] || (amountMatch?.[2]),
+            toAsset: tokenMatch?.[3],
+            amount: amountMatch ? parseScaledNumber(amountMatch[1]) : null,
+            amountType: amountMatch ? 'exact' : null,
+            conditions: {
+              type: conditionType as "price_above" | "price_below",
+              asset: tokenMatch?.[3] || 'BTC',
+              value
+            },
+            confidence: 75,
+            requiresConfirmation: true
+          });
+        }
       }
     }
   }

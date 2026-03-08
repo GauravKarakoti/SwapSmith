@@ -57,6 +57,9 @@ async function main() {
 
   const totalSupply = await rewardtoken.totalSupply();
   console.log(`    Total supply     : ${ethers.formatEther(totalSupply)} SMTH`);
+  
+  const mintingCap = await token.mintingCap();
+  console.log(`    Minting cap      : ${ethers.formatEther(mintingCap)} SMTH`);
 
   if (chainId === 11155111n) {
     console.log(

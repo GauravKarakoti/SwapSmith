@@ -4,6 +4,13 @@ import dotenv from 'dotenv';
 import * as Sentry from '@sentry/node';
 import fs from 'fs';
 import path from 'path';
+import type { 
+  ErrorNotificationDetails, 
+  LogSeverity, 
+  LogContext, 
+  ErrorDetails as ErrorDetailsType,
+  TelegrafContext 
+} from '../types/Logger';
 
 dotenv.config();
 
@@ -34,17 +41,8 @@ if (!fs.existsSync(ERROR_LOG_DIR)) {
   fs.mkdirSync(ERROR_LOG_DIR, { recursive: true });
 }
 
-interface ErrorDetails {
-  errorType: string;
-  details: any;
-  userId?: string;
-  timestamp: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  context?: any;
-}
-
 // Enhanced error notification system with multiple fallbacks
-async function sendErrorNotifications(errorDetails: ErrorDetails, sendAlert: boolean = true) {
+async function sendErrorNotifications(errorDetails: ErrorNotificationDetails, sendAlert: boolean = true) {
   if (!sendAlert) return;
 
   const { errorType, details, userId, timestamp, severity } = errorDetails;
@@ -165,10 +163,10 @@ async function sendErrorNotifications(errorDetails: ErrorDetails, sendAlert: boo
 
 export async function handleError(
   errorType: string,
-  details: any,
-  ctx?: any,
+  details: ErrorDetailsType,
+  ctx?: TelegrafContext,
   sendAlert: boolean = true,
-  severity: 'low' | 'medium' | 'high' | 'critical' = 'medium'
+  severity: LogSeverity = 'medium'
 ) {
   const userId = ctx?.from?.id?.toString() || 'unknown';
   const timestamp = new Date().toISOString();
@@ -183,7 +181,7 @@ export async function handleError(
   });
 
   // Enhanced error details object
-  const errorDetails: ErrorDetails = {
+  const errorDetails: ErrorNotificationDetails = {
     errorType,
     details,
     userId,
@@ -204,16 +202,16 @@ export async function handleError(
 }
 
 // Utility function for different error severities
-export const logCriticalError = (errorType: string, details: any, ctx?: any) => 
+export const logCriticalError = (errorType: string, details: ErrorDetailsType, ctx?: TelegrafContext) => 
   handleError(errorType, details, ctx, true, 'critical');
 
-export const logHighError = (errorType: string, details: any, ctx?: any) => 
+export const logHighError = (errorType: string, details: ErrorDetailsType, ctx?: TelegrafContext) => 
   handleError(errorType, details, ctx, true, 'high');
 
-export const logMediumError = (errorType: string, details: any, ctx?: any) => 
+export const logMediumError = (errorType: string, details: ErrorDetailsType, ctx?: TelegrafContext) => 
   handleError(errorType, details, ctx, true, 'medium');
 
-export const logLowError = (errorType: string, details: any, ctx?: any) => 
+export const logLowError = (errorType: string, details: ErrorDetailsType, ctx?: TelegrafContext) => 
   handleError(errorType, details, ctx, true, 'low');
 
 // Function to get error statistics

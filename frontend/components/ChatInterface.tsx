@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useAccount } from 'wagmi';
-import { Mic, Send, StopCircle, Zap } from 'lucide-react';
+import { Mic, Send, StopCircle, Zap, AlertCircle } from 'lucide-react';
 import SwapConfirmation from './SwapConfirmation';
 import PortfolioSummary, { PortfolioItem } from './PortfolioSummary'; // Added Import
 import TrustIndicators from './TrustIndicators';
@@ -100,16 +100,19 @@ export default function ChatInterface() {
     stopRecording,
     error: audioError,
     resetTranscript,
+    clearError,
     retryCount
   } = useVoiceInput({
     onError: (error) => {
+      // Add clear error message to chat
+      const errorMsg = `🎤 Voice input failed: ${error}\n\n📝 **Please use text input instead.** You can type your command in the input field below.`;
       addMessage({
         role: 'assistant',
-        content: `🎤 Voice input error: ${error}. You can type your command below.`,
+        content: errorMsg,
         type: 'message'
       });
       // Auto-focus text input on voice failure
-      inputRef.current?.focus();
+      setTimeout(() => inputRef.current?.focus(), 100);
     },
     onTranscriptChange: (transcript) => {
       // Update input with real-time transcript from Speech API
@@ -120,6 +123,7 @@ export default function ChatInterface() {
   });
 
   const prevIsRecordingRef = useRef(isRecording);
+  const voiceErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     // If recording just stopped and we have a transcript, send it
@@ -670,7 +674,7 @@ export default function ChatInterface() {
   const handleIntentConfirm = async (confirmed: boolean) => {
     if (confirmed && pendingCommand) {
       if (pendingCommand.intent === 'portfolio') {
-        const confirmedCmd = { ...pendingCommand, requiresConfirmation: false };
+        const confirmedCmd = { ...pendingCommand, requiresConfirmation: false, confidence: pendingCommand.confidence };
 
         if (confirmedCmd.portfolio) {
           const items: PortfolioItem[] = confirmedCmd.portfolio.map((item, index) => ({
@@ -859,7 +863,7 @@ export default function ChatInterface() {
                                 amount: parseFloat(newAmount),
                                 fromChain: quoteData.depositNetwork,
                                 toChain: quoteData.settleNetwork,
-                                confidence: msg.data.confidence || 100,
+                                confidence: msg.data?.confidence ?? 100,
                                 requiresConfirmation: false,
                                 settleAsset: quoteData.settleCoin,
                                 settleNetwork: quoteData.settleNetwork,
@@ -894,26 +898,44 @@ export default function ChatInterface() {
           {/* Subtle glow effect on focus */}
           <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-2xl blur opacity-0 group-focus-within:opacity-100 transition duration-500" />
 
-          <div className="relative flex items-center gap-3 bg-[#161A1E] border border-white/10 p-2 rounded-2xl group-focus-within:border-blue-500/50 transition-all">
+          <div className={`relative flex items-center gap-3 border p-2 rounded-2xl group-focus-within:border-blue-500/50 transition-all ${
+            audioError ? 'bg-red-900/10 border-red-500/30' : 'bg-[#161A1E] border-white/10'
+          }`}>
             <button
               onClick={handleVoiceRecording}
-              disabled={!isAudioSupported}
+              disabled={!isAudioSupported || !!audioError}
+              title={audioError ? `Voice input failed: ${audioError}` : 'Click to start voice recording'}
               className={`p-3 rounded-xl transition-all ${!isAudioSupported ? 'bg-white/5 text-gray-600 cursor-not-allowed' :
+                audioError ? 'bg-red-500/30 text-red-400 cursor-not-allowed' :
                 isRecording ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/40' : 'bg-white/5 text-gray-400 hover:bg-white/10'
                 }`}
             >
-              {isRecording ? <StopCircle className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+              {audioError ? (
+                <AlertCircle className="w-5 h-5" />
+              ) : isRecording ? (
+                <StopCircle className="w-5 h-5" />
+              ) : (
+                <Mic className="w-5 h-5" />
+              )}
             </button>
 
             <input
               ref={inputRef}
               type="text"
               value={isRecording && interimTranscript ? interimTranscript : input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                setInput(e.target.value);
+                // Clear error when user starts typing as fallback
+                if (audioError && e.target.value.trim()) {
+                  clearError();
+                }
+              }}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder={isRecording ? "Listening..." : "Send a command (e.g., 'Swap 1 ETH to USDC')"}
-              className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-white placeholder:text-gray-500 py-3"
-              readOnly={isRecording}
+              placeholder={audioError ? "📝 Microphone failed - please type your command below" : isRecording ? "🎤 Listening..." : "Send a command (e.g., 'Swap 1 ETH to USDC')"}
+              className={`flex-1 bg-transparent border-none focus:ring-0 text-sm text-white placeholder:text-gray-500 placeholder:font-medium py-3 transition-all ${
+                audioError ? 'placeholder:text-red-400/70' : 'placeholder:text-gray-500'
+              }`}
+              readOnly={isRecording && !audioError}
             />
 
             <div className="flex items-center gap-2 pr-2">
@@ -927,11 +949,17 @@ export default function ChatInterface() {
             </div>
           </div>
         </div>
-        {/* Voice Status */}
-        {isRecording && inputMethod && (
+        {/* Voice Status & Error Indicators */}
+        {isRecording && inputMethod && !audioError && (
           <div className="text-blue-400 text-xs mt-2 px-1 text-center font-medium animate-pulse">
             🎤 {inputMethod === 'speech-api' ? 'Listening with speech recognition...' : 'Recording audio for transcription...'}
             {retryCount > 0 && ` (Retry ${retryCount}/3)`}
+          </div>
+        )}
+        {audioError && (
+          <div className="text-red-400 text-xs mt-2 px-2 py-1.5 text-center font-medium bg-red-500/10 rounded-lg border border-red-500/20">
+            ❌ Voice input failed: {audioError}
+            <div className="text-red-300/70 text-[10px] mt-1">Click the microphone button again to retry, or type your command below.</div>
           </div>
         )}
         {!isAudioSupported && (
@@ -939,7 +967,7 @@ export default function ChatInterface() {
             🎤 Voice input is not supported in your browser. Please type your command.
           </div>
         )}
-        {isAudioSupported && compatibility.warnings.length > 0 && !isRecording && (
+        {isAudioSupported && compatibility.warnings.length > 0 && !isRecording && !audioError && (
           <div className="text-amber-400 text-xs mt-2 px-1 text-center">
             ⚠️ {compatibility.warnings[0]}
           </div>
