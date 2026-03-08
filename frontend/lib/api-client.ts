@@ -1,3 +1,5 @@
+import { toast } from 'react-hot-toast';
+
 /**
  * Helper function to make authenticated API calls
  */
@@ -41,10 +43,29 @@ export async function authenticatedFetch(
     headers.set('x-user-id', userId);
   }
   
-  return fetch(url, {
-    ...options,
-    headers,
-  });
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    if (!response.ok) {
+      const clone = response.clone();
+      try {
+        const errorData = await clone.json();
+        const errorMessage = errorData.message || errorData.error || `Error ${response.status}`;
+        toast.error(errorMessage, { id: url }); // Prevent duplicates for same URL
+      } catch {
+        toast.error(`Request failed details: ${response.statusText}`, { id: url });
+      }
+    }
+
+    return response;
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Network Error';
+    toast.error(msg);
+    throw error;
+  }
 }
 
 /**
