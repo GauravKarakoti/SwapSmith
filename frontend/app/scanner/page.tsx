@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { SecurityScanner } from '@/utils/security-scanner';
-import { Chain, createPublicClient, http } from 'viem';
+import { isAddress } from 'viem';
 import { mainnet, bsc, polygon, base } from 'viem/chains';
 import { SecurityReport } from '@/types/security';
-import { AlertTriangle, ShieldCheck, ShieldAlert, BadgeCheck, FileWarning, Search, Coins, ArrowRight, Loader } from 'lucide-react';
+import { AlertTriangle, ShieldCheck, ShieldAlert, BadgeCheck, FileWarning, Search, Loader } from 'lucide-react';
 
 const CHAINS = [
   { id: 'ethereum', name: 'Ethereum', chain: mainnet },
@@ -22,7 +22,7 @@ export default function ScannerPage() {
   const [error, setError] = useState('');
 
   const handleScan = async () => {
-    if (!address) {
+    if (!address || !isAddress(address)) {
       setError('Please enter a valid token address');
       return;
     }
@@ -174,7 +174,7 @@ export default function ScannerPage() {
                     </div>
                     <div>
                       <div className="flex justify-between items-center mb-1">
-                        <span className="text-gray-300">Top 10 Hold</span>
+                        <span className="text-gray-300">Top 10 Holders</span>
                         <span className={`font-bold ${report.holderAnalysis.topHoldersShare > 50 ? 'text-red-400' : 'text-green-400'}`}>
                           {report.holderAnalysis.topHoldersShare}%
                         </span>

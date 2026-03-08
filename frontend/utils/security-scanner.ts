@@ -1,4 +1,4 @@
-import { createPublicClient, http, PublicClient, Chain } from 'viem';
+import { createPublicClient, http, PublicClient, Chain, isAddress } from 'viem';
 import { mainnet, bsc, polygon, base } from 'viem/chains';
 import { SecurityReport } from '@/types/security';
 
@@ -34,15 +34,19 @@ export class SecurityScanner {
 
   async scanToken(tokenAddress: string): Promise<SecurityReport> {
     try {
+      if (!isAddress(tokenAddress)) {
+        throw new Error('Invalid token address format');
+      }
       // 1. Basic Contract Check
-      const bytecode = await this.client.getBytecode({ address: tokenAddress });
+      const bytecode = await this.client.getBytecode({ address: tokenAddress as `0x${string}` });
       if (!bytecode) {
         throw new Error('Not a contract address');
       }
 
       // 2. Simulation (Mocked here, real implementation would simulate buy/sell tx)
       // If code size is very small, might be a proxy.
-      const isProxy = bytecode.length < 1000; 
+      const byteLength = (bytecode.length - 2) / 2; // Convert hex string length to byte length
+      const isProxy = byteLength < (1000 - 2) / 2; 
 
       // 3. Check Verified Status (Placeholder for Explorer API call)
       const contractVerified = !isProxy; // Assume proxies are verified implementation pattern or riskier
@@ -121,7 +125,7 @@ export class SecurityScanner {
         mintable: false,
         buyTax: 0,
         sellTax: 0,
-        overallRiskScore: 0, 
+        overallRiskScore: 100, 
         simulationResult: { canBuy: false, canSell: false },
         holderAnalysis: { topHoldersShare: 0, totalHolders: 0 },
         details: ['Scan failed or invalid address']
