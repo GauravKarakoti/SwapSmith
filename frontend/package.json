@@ -7,9 +7,9 @@
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
@@ -17,7 +17,7 @@
     "@types/matter-js": "^0.20.2",
     "@types/node-cron": "^3.0.11",
     "@types/three": "^0.183.1",
-    "axios": "^1.11.0",
+    "axios": "^1.13.5",
     "dotenv": "^17.3.1",
     "drizzle-kit": "^0.31.9",
     "drizzle-orm": "^0.45.1",
@@ -40,9 +40,12 @@
     "react-dom": "19.2.4",
     "react-hot-toast": "^2.6.0",
     "svg-path-commander": "^2.1.11",
+    "swr": "^2.4.1",
     "three": "^0.183.1",
     "viem": "^2.37.3",
-    "wagmi": "^2.16.9"
+    "wagmi": "^2.16.9",
+    "zod": "^4.3.6"
+    "winston": "^3.19.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -50,16 +53,19 @@
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
-    "@types/jest": "^30.0.0",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^20",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "^5.1.4",
+    "@vitest/coverage-v8": "^4.0.18",
     "baseline-browser-mapping": "^2.9.19",
     "eslint": "^9.18.0",
     "eslint-config-next": "^15.2.0",
-    "jest": "^30.2.0",
+    "jsdom": "^28.1.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.0.18"
   },
   "overrides": {
     "@types/react": "19.2.14",

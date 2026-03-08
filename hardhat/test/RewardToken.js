@@ -133,7 +133,7 @@ describe("RewardToken (SMTH)", function () {
   // ─── mintToTreasury() ─────────────────────────────────────────────────────
 
   describe("mintToTreasury()", function () {
-    it("should allow owner to mint additional tokens", async function () {
+    it("should allow owner to mint additional tokens within cap", async function () {
       const { token, owner } = await loadFixture(deployRewardTokenFixture);
 
       const mintAmount = ethers.parseEther("500000");
@@ -149,6 +149,199 @@ describe("RewardToken (SMTH)", function () {
       await expect(
         token.connect(user1).mintToTreasury(ethers.parseEther("100"))
       ).to.be.revertedWithCustomError(token, "OwnableUnauthorizedAccount");
+    });
+
+    it("should revert if minting would exceed the cap", async function () {
+      const { token, owner } = await loadFixture(deployRewardTokenFixture);
+
+      // Try to mint beyond the 10M cap (current supply: 1M, cap: 10M)
+      const excessAmount = ethers.parseEther("9000001"); // Would make total 10,000,001
+
+      await expect(
+        token.connect(owner).mintToTreasury(excessAmount)
+      ).to.be.revertedWith("RewardToken: minting would exceed cap");
+    });
+
+    it("should emit MaxSupplyReached event when cap is reached", async function () {
+      const { token, owner } = await loadFixture(deployRewardTokenFixture);
+
+      // Mint exactly up to the cap (1M initial + 9M = 10M cap)
+      const mintAmount = ethers.parseEther("9000000");
+      const expectedTotalSupply = ethers.parseEther("10000000");
+
+      await expect(token.connect(owner).mintToTreasury(mintAmount))
+        .to.emit(token, "MaxSupplyReached")
+        .withArgs(expectedTotalSupply, expectedTotalSupply);
+
+      expect(await token.totalSupply()).to.equal(expectedTotalSupply);
+    });
+
+    it("should not emit MaxSupplyReached if cap is not reached", async function () {
+      const { token, owner } = await loadFixture(deployRewardTokenFixture);
+
+      const mintAmount = ethers.parseEther("500000");
+
+      await expect(
+        token.connect(owner).mintToTreasury(mintAmount)
+      ).to.not.emit(token, "MaxSupplyReached");
+    });
+  });
+
+  // ─── setMintingCap() ──────────────────────────────────────────────────────
+
+  describe("setMintingCap()", function () {
+    it("should allow owner to increase the minting cap", async function () {
+      const { token, owner } = await loadFixture(deployRewardTokenFixture);
+
+      const initialCap = await token.mintingCap();
+      const newCap = ethers.parseEther("20000000"); // 20M SMTH
+
+      await expect(token.connect(owner).setMintingCap(newCap))
+        .to.emit(token, "MintingCapUpdated")
+        .withArgs(initialCap, newCap);
+
+      expect(await token.mintingCap()).to.equal(newCap);
+    });
+
+    it("should allow owner to decrease the minting cap to current supply", async function () {
+      const { token, owner } = await loadFixture(deployRewardTokenFixture);
+
+      const currentSupply = await token.totalSupply(); // 1M SMTH
+      const newCap = currentSupply; // Set cap equal to current supply
+
+      await token.connect(owner).setMintingCap(newCap);
+      expect(await token.mintingCap()).to.equal(currentSupply);
+    });
+
+    it("should revert if new cap is below current total supply", async function () {
+      const { token, owner } = await loadFixture(deployRewardTokenFixture);
+
+      const currentSupply = await token.totalSupply(); // 1M SMTH
+      const invalidCap = currentSupply - ethers.parseEther("1"); // Below current supply
+
+      await expect(
+        token.connect(owner).setMintingCap(invalidCap)
+      ).to.be.revertedWith("RewardToken: new cap below current supply");
+    });
+
+    it("should revert if called by a non-owner", async function () {
+      const { token, user1 } = await loadFixture(deployRewardTokenFixture);
+
+      await expect(
+        token.connect(user1).setMintingCap(ethers.parseEther("15000000"))
+      ).to.be.revertedWithCustomError(token, "OwnableUnauthorizedAccount");
+    });
+
+    it("should allow minting after cap is increased", async function () {
+      const { token, owner } = await loadFixture(deployRewardTokenFixture);
+
+      // First, mint up to the original cap
+      await token.connect(owner).mintToTreasury(ethers.parseEther("9000000"));
+      expect(await token.totalSupply()).to.equal(ethers.parseEther("10000000"));
+
+      // Try to mint more - should fail
+      await expect(
+        token.connect(owner).mintToTreasury(ethers.parseEther("1"))
+      ).to.be.revertedWith("RewardToken: minting would exceed cap");
+
+      // Increase the cap
+      await token.connect(owner).setMintingCap(ethers.parseEther("15000000"));
+
+      // Now minting should work
+      await token.connect(owner).mintToTreasury(ethers.parseEther("1000000"));
+      expect(await token.totalSupply()).to.equal(ethers.parseEther("11000000"));
+    });
+  });
+
+  // ─── Minting cap ──────────────────────────────────────────────────────────
+
+  describe("Minting Cap", function () {
+    it("should initialize with a 10M SMTH minting cap", async function () {
+      const { token } = await loadFixture(deployRewardTokenFixture);
+      expect(await token.mintingCap()).to.equal(ethers.parseEther("10000000"));
+    });
+
+    it("should enforce the minting cap across multiple mints", async function () {
+      const { token, owner } = await loadFixture(deployRewardTokenFixture);
+
+      // Mint several times, approaching the cap
+      await token.connect(owner).mintToTreasury(ethers.parseEther("3000000"));
+      await token.connect(owner).mintToTreasury(ethers.parseEther("3000000"));
+      await token.connect(owner).mintToTreasury(ethers.parseEther("2999999"));
+
+      // Total supply should now be 9,999,999 SMTH (1M initial + 8,999,999 minted)
+      expect(await token.totalSupply()).to.equal(ethers.parseEther("9999999"));
+
+      // Trying to mint 2 more should fail (would exceed 10M cap)
+      await expect(
+        token.connect(owner).mintToTreasury(ethers.parseEther("2"))
+      ).to.be.revertedWith("RewardToken: minting would exceed cap");
+
+      // Minting exactly 1 more should succeed and reach the cap
+      await expect(token.connect(owner).mintToTreasury(ethers.parseEther("1")))
+        .to.emit(token, "MaxSupplyReached")
+        .withArgs(ethers.parseEther("10000000"), ethers.parseEther("10000000"));
+    });
+  });
+
+  // ─── Two-step ownership transfer ──────────────────────────────────────────
+
+  describe("Two-step ownership transfer (Ownable2Step)", function () {
+    it("should require two steps to transfer ownership", async function () {
+      const { token, owner, user1 } = await loadFixture(deployRewardTokenFixture);
+
+      // Step 1: Current owner initiates transfer
+      await token.connect(owner).transferOwnership(user1.address);
+
+      // Ownership should not have changed yet
+      expect(await token.owner()).to.equal(owner.address);
+
+      // Step 2: New owner accepts ownership
+      await token.connect(user1).acceptOwnership();
+
+      // Now ownership should be transferred
+      expect(await token.owner()).to.equal(user1.address);
+    });
+
+    it("should emit events during two-step ownership transfer", async function () {
+      const { token, owner, user1 } = await loadFixture(deployRewardTokenFixture);
+
+      // Step 1 should emit OwnershipTransferStarted
+      await expect(token.connect(owner).transferOwnership(user1.address))
+        .to.emit(token, "OwnershipTransferStarted")
+        .withArgs(owner.address, user1.address);
+
+      // Step 2 should emit OwnershipTransferred
+      await expect(token.connect(user1).acceptOwnership())
+        .to.emit(token, "OwnershipTransferred")
+        .withArgs(owner.address, user1.address);
+    });
+
+    it("should revert if non-pending-owner tries to accept ownership", async function () {
+      const { token, owner, user1, user2 } = await loadFixture(deployRewardTokenFixture);
+
+      // Initiate transfer to user1
+      await token.connect(owner).transferOwnership(user1.address);
+
+      // user2 tries to accept (should fail)
+      await expect(
+        token.connect(user2).acceptOwnership()
+      ).to.be.revertedWithCustomError(token, "OwnableUnauthorizedAccount");
+    });
+
+    it("should renounce ownership and clear any pending owner", async function () {
+      const { token, owner, user1 } = await loadFixture(deployRewardTokenFixture);
+
+      // Initiate transfer to user1
+      await token.connect(owner).transferOwnership(user1.address);
+
+      // Renounce ownership; this should set owner and pendingOwner to the zero address
+      await token.connect(owner).renounceOwnership();
+
+      // Ownership should be zero address
+      expect(await token.owner()).to.equal(ethers.ZeroAddress);
+      // Pending owner should also be cleared
+      expect(await token.pendingOwner()).to.equal(ethers.ZeroAddress);
     });
   });
 

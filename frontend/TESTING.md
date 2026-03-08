@@ -1,255 +1,479 @@
-# Jest & Vitest Configuration for SwapSmith Frontend
+# Frontend Testing Guide
 
-This document provides an overview of the Jest testing framework configuration for the SwapSmith frontend application.
+This guide provides comprehensive information about testing in the SwapSmith frontend application using **Vitest** and **Jest**.
 
-## Setup Completed
+## Overview
 
-✅ **Jest Installed** - `npm install --save-dev jest @testing-library/react @testing-library/jest-dom @testing-library/user-event ts-jest jest-environment-jsdom @types/jest`
+The frontend uses **Vitest** as the primary test runner with **Jest** available as an alternative. Both include:
 
-✅ **Configuration Files Created**:
-- `jest.config.ts` - Main Jest configuration
-- `jest.setup.ts` - Test environment setup and global mocks
+- **React Testing Library** for component testing
+- **jsdom** environment for DOM mocking
+- **Path aliases** for clean imports
+- **Code coverage** reporting (70% threshold)
+- **Automatic mocking** of Next.js modules and DOM APIs
 
-✅ **Test Files Created**:
-- `components/__tests__/ChatInterface.test.tsx` - Tests for ChatInterface component
-- `components/__tests__/JestSetup.test.tsx` - Basic Jest setup verification tests
+## Quick Start
 
-✅ **Test Scripts Added to package.json**:
-- `npm test` - Run all tests
-- `npm test:watch` - Run tests in watch mode
-- `npm test:coverage` - Run tests with coverage report
+### Run Tests
 
-## Project Structure
+```bash
+# Watch mode (development)
+npm run test:watch
+
+# Single run (CI)
+npm run test
+
+# With coverage report
+npm run test:coverage
+```
+
+## Test Structure
+
+### File Naming
+
+- **Test files**: `*.test.ts` or `*.test.tsx`
+- **Test directories**: `__tests__/` (optional)
+- **Location**: Collocate with source or in `__tests__/`
+
+### Example Structure
 
 ```
 frontend/
-├── jest.config.ts              # Jest configuration
-├── jest.setup.ts               # Setup file for test environment
-├── package.json                # Updated with test scripts
 ├── components/
-│   ├── ChatInterface.tsx        # Component under test
+│   ├── Button.tsx
+│   ├── Button.test.tsx
 │   └── __tests__/
-│       ├── ChatInterface.test.tsx
-│       └── JestSetup.test.tsx
-└── ...
+│       └── Button.integration.test.tsx
+├── hooks/
+│   ├── useAuth.ts
+│   └── useAuth.test.ts
+└── __tests__/
+    ├── example.test.ts
+    └── TestButton.test.tsx
 ```
 
-## Available Commands
+## Writing Tests
 
-### Run all tests
-```bash
-npm test
-```
-
-### Run tests in watch mode (re-run on file changes)
-```bash
-npm test:watch
-```
-
-### Run tests with coverage report
-```bash
-npm test:coverage
-```
-
-### Run specific test file
-```bash
-npm test -- ChatInterface.test.tsx
-```
-
-### Run tests matching a pattern
-```bash
-npm test -- --testNamePattern="renders"
-```
-
-## Configuration Details
-
-### jest.config.ts
-
-The Jest configuration includes:
-
-- **Test Environment**: jsdom (for DOM testing)
-- **Module Resolution**: Path aliases (@/) configured for project imports
-- **TypeScript Support**: ts-jest transformer for .ts and .tsx files
-- **Test File Patterns**: 
-  - `**/__tests__/**/*.test.ts?(x)`
-  - `**/?(*.)+(spec|test).ts?(x)`
-- **Coverage**: Configured to collect coverage from components, hooks, etc.
-
-### jest.setup.ts
-
-The setup file includes:
-
-- Import of `@testing-library/jest-dom` for extended matchers
-- Suppression of non-critical console warnings
-- Hook stubs for Next.js navigation (can be expanded as needed)
-
-## Testing Strategy
-
-### Component Tests
-
-Component tests verify that components:
-1. Render correctly
-2. Accept user input
-3. Display expected messages
-4. Handle state changes
-5. Manage message history
-
-Example test from `ChatInterface.test.tsx`:
-```typescript
-test('renders ChatInterface component', () => {
-  render(<ChatInterface />);
-  expect(screen.getByText(/Hello! I can help you swap assets/i)).toBeInTheDocument();
-});
-```
-
-### Unit Tests
-
-Basic unit tests verify:
-- Jest configuration is correct
-- Testing library functions are available
-- React component rendering works
-- Mocking capabilities function properly
-
-## Mocking Strategy
-
-### Component Mocks
-
-External components are mocked in test files:
-```typescript
-jest.mock('../SwapConfirmation', () => {
-  return function MockSwapConfirmation() {
-    return <div data-testid="swap-confirmation">Swap Confirmation</div>;
-  };
-});
-```
-
-### Hook Mocks
-
-React hooks and custom hooks are mocked to isolate components:
-```typescript
-jest.mock('wagmi', () => ({
-  useAccount: jest.fn(() => ({
-    address: '0x1234567890123456789012345678901234567890',
-    isConnected: true,
-  })),
-}));
-```
-
-### Module Mocks
-
-External libraries are mocked to prevent dependency issues:
-```typescript
-jest.mock('@/hooks/useErrorHandler', () => ({
-  useErrorHandler: jest.fn(() => ({
-    handleError: jest.fn(),
-  })),
-}));
-```
-
-## Dependencies Installed
-
-- **jest** ^30.2.0 - Testing framework
-- **@testing-library/react** ^16.3.2 - React component testing utilities
-- **@testing-library/jest-dom** - Extended DOM matchers
-- **@testing-library/user-event** - User interaction simulation
-- **ts-jest** ^29.4.6 - TypeScript support for Jest
-- **jest-environment-jsdom** ^30.2.0 - jsdom test environment
-- **@types/jest** - TypeScript types for Jest
-
-## Next Steps
-
-### To write more tests:
-
-1. **Create test file** in `components/__tests__/` directory
-2. **Import component** and testing utilities
-3. **Mock external dependencies** at the top
-4. **Write test cases** using describe/test blocks
-5. **Run tests** with `npm test`
-
-### Example test file structure:
+### Unit Test Example
 
 ```typescript
-import { render, screen } from '@testing-library/react';
-import '@testing-library/jest-dom';
+import { describe, it, expect } from 'vitest';
 
-// Mock external dependencies
-jest.mock('external-library', () => ({...}));
+describe('Utils', () => {
+  it('should add numbers correctly', () => {
+    expect(2 + 3).toBe(5);
+  });
 
-// Import component AFTER mocks
-import MyComponent from '../MyComponent';
-
-describe('MyComponent', () => {
-  test('renders correctly', () => {
-    render(<MyComponent />);
-    expect(screen.getByText(/expected text/i)).toBeInTheDocument();
+  it('should handle negative numbers', () => {
+    expect(-1 + 1).toBe(0);
   });
 });
 ```
 
-### Common Testing Patterns:
+### Component Test Example
 
-**Testing component rendering:**
 ```typescript
-test('renders component', () => {
-  render(<Component />);
-  expect(screen.getByText('expected')).toBeInTheDocument();
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { Button } from '@/components/Button';
+
+describe('Button', () => {
+  it('should render with text', () => {
+    render(<Button>Click me</Button>);
+    expect(screen.getByRole('button')).toHaveTextContent('Click me');
+  });
+
+  it('should call onClick when clicked', async () => {
+    const handleClick = vi.fn();
+    const user = userEvent.setup();
+    
+    render(<Button onClick={handleClick}>Click</Button>);
+    await user.click(screen.getByRole('button'));
+    
+    expect(handleClick).toHaveBeenCalledOnce();
+  });
 });
 ```
 
-**Testing user input:**
+### Hook Test Example
+
 ```typescript
-test('accepts input', async () => {
-  render(<Component />);
-  const input = screen.getByRole('textbox');
-  await userEvent.type(input, 'test');
-  expect(input).toHaveValue('test');
+import { renderHook, act } from '@testing-library/react';
+import { useCounter } from '@/hooks/useCounter';
+
+describe('useCounter', () => {
+  it('should increment counter', () => {
+    const { result } = renderHook(() => useCounter());
+    
+    act(() => {
+      result.current.increment();
+    });
+    
+    expect(result.current.count).toBe(1);
+  });
 });
 ```
 
-**Testing button clicks:**
+## Configuration
+
+### Vitest (`vitest.config.mts`)
+
+Key features:
+
+- **Environment**: jsdom (browser-like)
+- **Globals**: Enabled (describe, it, expect available without imports)
+- **Setup Files**: `vitest.setup.ts`
+- **Path Aliases**: `@/` and `shared/`
+- **Coverage Threshold**: 70% minimum
+- **Isolation**: Tests run in separate processes
+
+### Vitest Setup (`vitest.setup.ts`)
+
+Automatically mocks:
+
+**DOM APIs:**
+- `window.matchMedia` - Media queries
+- `localStorage` - Full implementation
+- `sessionStorage` - Full implementation
+- `scrollIntoView`, `scrollTo` - Scroll APIs
+- `IntersectionObserver`, `ResizeObserver` - Observer APIs
+
+**Next.js Modules:**
+- `next/router` - useRouter hook
+- `next/navigation` - Navigation hooks
+- `next/image` - Image component
+
+### Jest Alternative (`jest.config.js`)
+
+For Jest-based testing:
+
+```bash
+# Install Jest dependencies
+npm install --save-dev jest ts-jest @types/jest jest-junit identity-obj-proxy
+
+# Use Jest instead of Vitest
+# Update package.json: "test": "jest"
+npm test
+```
+
+Jest setup in `jest.setup.js` provides same mocks and configuration.
+
+## Mocking
+
+### Automatic Mocks
+
+Already mocked in setup files - no action needed.
+
+### Custom Module Mocks
+
 ```typescript
-test('handles click', async () => {
-  render(<Component />);
-  const button = screen.getByRole('button');
-  await userEvent.click(button);
-  expect(screen.getByText('result')).toBeInTheDocument();
+import { vi } from 'vitest';
+
+// Mock entire module
+vi.mock('@/lib/api', () => ({
+  fetchData: vi.fn(() => Promise.resolve({ data: 'test' })),
+}));
+
+// Mock function
+const mockFetch = vi.fn(() =>
+  Promise.resolve({ json: () => ({ data: 'test' }) })
+);
+global.fetch = mockFetch;
+
+// Mock with implementation
+const mockWrite = vi.fn().mockImplementation((text) => text.length);
+
+// Use in test
+await mockWrite('Hello');
+expect(mockWrite).toHaveBeenCalledWith('Hello');
+expect(mockWrite).toHaveReturnedWith(5);
+```
+
+## Coverage
+
+### Generate Coverage
+
+```bash
+npm run test:coverage
+```
+
+Generates:
+- **Terminal summary** - In console
+- **HTML report** - `coverage/index.html`
+- **LCOV report** - `coverage/lcov.info`
+- **JSON summary** - `coverage/coverage-summary.json`
+
+### Coverage Thresholds
+
+Set in `vitest.config.mts`:
+
+```
+lines: 70    - Minimum 70% of lines
+functions: 70 - Minimum 70% of functions
+branches: 70 - Minimum 70% of branches
+statements: 70 - Minimum 70% of statements
+```
+
+Tests fail if coverage drops below these levels.
+
+### Excluded Files
+
+- `node_modules/`, `dist/`, `.next/`
+- Configuration files (`*.config.*`)
+- Type definitions (`*.d.ts`)
+- Test files (`**/__tests__/**`, `**/*.test.*`)
+- Special files: `instrumentation.ts`, `middleware.ts`
+
+## Debugging
+
+### VS Code Debugging
+
+Add to `.vscode/launch.json`:
+
+```json
+{
+  "type": "node",
+  "request": "launch",
+  "name": "Debug Vitest",
+  "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/vitest",
+  "args": ["--inspect-brk", "--no-coverage"],
+  "console": "integratedTerminal"
+}
+```
+
+### Console Output
+
+```bash
+# Verbose test names and output
+npm run test -- --reporter=verbose
+
+# Show detailed coverage
+npm run test -- --coverage --all
+
+# Single test file
+npm run test -- components/Button.test.tsx
+
+# Watch single file
+npm run test:watch -- components/Button.test.tsx
+```
+
+### Run Specific Tests
+
+```typescript
+// Run only this test
+it.only('should test this', () => {
+  expect(true).toBe(true);
+});
+
+// Skip this test
+it.skip('should skip', () => {
+  expect(true).toBe(true);
 });
 ```
 
-## Troubleshooting
+## Best Practices
 
-### Tests not found
-- Ensure test files are in `__tests__` directory or named `*.test.ts(x)` or `*.spec.ts(x)`
-- Check jest.config.ts testMatch patterns
+### 1. Test Behavior, Not Implementation
 
-### Module not found errors
-- Mock the module in the test file or jest.setup.ts
-- Check moduleNameMapper in jest.config.ts for path aliases
+```typescript
+// ✅ Good - Tests observable behavior
+it('should disable submit when form is invalid', async () => {
+  render(<Form />);
+  const submit = screen.getByRole('button', { name: /submit/i });
+  expect(submit).toBeDisabled();
+});
 
-### React hooks errors
-- Ensure component is wrapped with necessary providers in test
-- Mock hooks that require context/providers
-- Use `react-dom/test-utils` or `@testing-library/react` render function
+// ❌ Bad - Tests internal state
+it('should set state to false', () => {
+  const { result } = renderHook(() => useState(false));
+  // Directly testing state is fragile
+});
+```
 
-### CSS import errors
-- Jest ignores CSS by default (configured in moduleNameMapper)
-- Add CSS module mock if needed
+### 2. Use Semantic Queries
+
+```typescript
+// ✅ Good - Match user perspective
+screen.getByRole('button', { name: /submit/i });
+screen.getByLabelText(/email/i);
+screen.getByPlaceholderText(/search/i);
+screen.getByText(/welcome/i);
+
+// ❌ Bad - Implementation-dependent
+screen.getByTestId('submit-btn');
+wrapper.find('.button');
+```
+
+### 3. Simulate User Actions
+
+```typescript
+// ✅ Good - Real user interactions
+const user = userEvent.setup();
+await user.click(screen.getByRole('button'));
+await user.type(screen.getByRole('textbox'), 'text');
+
+// ❌ Bad - Bypasses validation
+fireEvent.click(button);
+```
+
+### 4. Wait for Async Content
+
+```typescript
+// ✅ Good - Wait for element
+const element = await screen.findByText('Loaded');
+
+// ❌ Bad - Sync query for async content
+const element = screen.getByText('Loaded');
+```
+
+### 5. Cleanup Automatic
+
+```typescript
+// Vitest handles cleanup:
+// - Mocks cleared and restored
+// - localStorage/sessionStorage cleared
+// - No manual cleanup needed
+```
+
+## Common Patterns
+
+### Testing Form Submission
+
+```typescript
+it('should submit form with valid data', async () => {
+  const user = userEvent.setup();
+  const mockSubmit = vi.fn();
+  
+  render(<ContactForm onSubmit={mockSubmit} />);
+  
+  await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+  await user.click(screen.getByRole('button', { name: /submit/i }));
+  
+  expect(mockSubmit).toHaveBeenCalledWith(
+    expect.objectContaining({ email: 'test@example.com' })
+  );
+});
+```
+
+### Testing Async API Calls
+
+```typescript
+it('should load and display user data', async () => {
+  const mockUser = { id: 1, name: 'John' };
+  
+  vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+    { ok: true, json: () => mockUser } as Response
+  );
+  
+  render(<UserProfile userId={1} />);
+  
+  expect(await screen.findByText('John')).toBeInTheDocument();
+});
+```
+
+### Testing Error Scenarios
+
+```typescript
+it('should display error message on API failure', async () => {
+  vi.spyOn(global, 'fetch').mockRejectedValueOnce(
+    new Error('Network error')
+  );
+  
+  render(<DataComponent />);
+  
+  expect(await screen.findByText(/error/i)).toBeInTheDocument();
+});
+```
+
+### Testing Hooks with Providers
+
+```typescript
+const renderWithProviders = (component: React.ReactElement) => {
+  return render(
+    <AuthProvider>
+      <ThemeProvider>
+        {component}
+      </ThemeProvider>
+    </AuthProvider>
+  );
+};
+
+it('should apply theme from context', () => {
+  renderWithProviders(<ThemedComponent />);
+  expect(screen.getByRole('button')).toHaveClass('dark-theme');
+});
+```
+
+## CI/CD Integration
+
+Tests run automatically on pull requests via GitHub Actions:
+
+- **PR Checks Workflow**: Runs on all PRs
+- **Coverage Reports**: Generated and archived
+- **Build Verification**: Tests must pass before merge
+
+### Local CI Simulation
+
+```bash
+# Run as CI would (single run, with coverage)
+npm run test -- --coverage
+```
 
 ## Resources
 
-- [Jest Documentation](https://jestjs.io/)
+- [Vitest Documentation](https://vitest.dev/)
 - [React Testing Library](https://testing-library.com/react)
-- [Testing Library Best Practices](https://testing-library.com/docs/)
+- [Testing Best Practices](https://kentcdodds.com/blog/common-mistakes-with-react-testing-library)
+- [Jest Documentation](https://jestjs.io/)
 
-## Current Test Status
+## Troubleshooting
 
-Run `npm test` to see current test results. The test suite includes:
+### Tests Not Found
 
-- **ChatInterface Component Tests** - Basic rendering and interaction tests
-- **Jest Setup Tests** - Verification of testing configuration
+- Verify file naming: `*.test.ts(x)` or `*.spec.ts(x)`
+- Check include patterns in `vitest.config.mts`
+- Ensure `__tests__/` directory is readable
 
-Tests verify:
-- ✅ Jest is properly configured
-- ✅ React components render
-- ✅ Testing utilities work correctly
-- ✅ Mock functions are available
+### Module Not Found
+
+```typescript
+// Check vitest.config.mts path aliases
+// Add missing alias or fix import path
+import { Button } from '@/components/Button'; // Uses @ alias
+```
+
+### Test Timeout
+
+```typescript
+// Increase timeout in vitest.config.mts
+testTimeout: 10000, // 10 seconds
+hookTimeout: 10000,
+
+// Or per-test:
+it('slow test', async () => {
+  // ...
+}, { timeout: 20000 });
+```
+
+### Mock Not Working
+
+```typescript
+// Clear previous mock definitions
+vi.clearAllMocks();
+
+// Reset modules
+vi.resetModules();
+```
+
+## Next Steps
+
+1. **Write tests** for critical components
+2. **Monitor coverage** - Aim for 80%+
+3. **Add E2E tests** - Consider Playwright for integration testing
+4. **Integrate with CI** - Tests run on every PR (already configured)
+
+---
+
+**Last Updated**: March 2026  
+**Test Runner**: Vitest 4.0.18 (Jest alternative available)  
+**Coverage Target**: 70% minimum threshold

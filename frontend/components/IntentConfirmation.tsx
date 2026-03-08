@@ -1,6 +1,6 @@
 'use client'
 
-import { CheckCircle, XCircle, AlertTriangle, Sprout, TrendingUp } from 'lucide-react'
+import { CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 import { ParsedCommand } from '@/utils/groq-client'; // Import the new type
 
 interface IntentConfirmationProps {
@@ -8,47 +8,38 @@ interface IntentConfirmationProps {
   onConfirm: (confirmed: boolean) => void;
 }
 
+// Staking provider mapping for display
+const getStakingProvider = (token: string | null): string => {
+  const providers: Record<string, string> = {
+    'ETH': 'Lido (stETH)',
+    'MATIC': 'Stader (MATICx)',
+    'SOL': 'Marinade (mSOL)',
+    'ATOM': 'Stride (stATOM)',
+    'USDC': 'Aave (aUSDC)'
+  };
+  return token ? providers[token.toUpperCase()] || 'Best Available Provider' : 'Best Available Provider';
+};
+
+const getEstimatedAPR = (token: string | null): string => {
+  const rates: Record<string, string> = {
+    'ETH': '3.8%',
+    'MATIC': '4.2%',
+    'SOL': '6.8%',
+    'ATOM': '18.5%',
+    'USDC': '4.5%'
+  };
+  return token ? rates[token.toUpperCase()] || 'Variable' : 'Variable';
+};
+
 export default function IntentConfirmation({ command, onConfirm }: IntentConfirmationProps) {
   if (!command) return null;
 
-  const confidenceColor = command.confidence >= 80 ? 'text-green-600' : 
+  const confidenceColor = command.confidence >= 80 ? 'text-green-600' :
                           command.confidence >= 60 ? 'text-yellow-600' : 'text-red-600';
 
   // Render different confirmation content based on intent
   const renderIntentDetails = () => {
     switch (command.intent) {
-      case 'stake':
-        return (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Sprout className="w-4 h-4 text-green-600" />
-              <span className="font-medium text-green-700">Staking Intent Detected</span>
-            </div>
-            <div className="bg-white text-gray-900 p-3 rounded border text-sm">
-              <p className="mb-2">
-                Stake <strong>{command.amount} {command.stakeAsset || command.fromAsset}</strong>
-                {command.stakeProvider && (
-                  <span> with <strong>{command.stakeProvider}</strong></span>
-                )}
-                {command.stakeChain && command.stakeChain !== 'ethereum' && (
-                  <span> on {command.stakeChain}</span>
-                )}
-              </p>
-              {command.stakingApr && (
-                <div className="flex items-center gap-2 mt-2 p-2 bg-green-50 rounded">
-                  <TrendingUp className="w-4 h-4 text-green-600" />
-                  <span className="text-green-700 font-medium">
-                    Estimated APR: {command.stakingApr}%
-                  </span>
-                </div>
-              )}
-              <p className="text-xs text-gray-500 mt-2">
-                You will receive liquid staking tokens representing your staked position.
-              </p>
-            </div>
-          </div>
-        );
-
       case 'portfolio':
         return (
           <div className="bg-white text-gray-900 p-3 rounded border text-sm">

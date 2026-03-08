@@ -5,7 +5,9 @@ import {
   addToWatchlist,
   removeFromWatchlist,
   getCachedPrice,
+  getCachedPricesBatch,
 } from '@/lib/database';
+import { csrfGuard } from '@/lib/csrf';
 import logger from '@/lib/logger';
 
 export default async function handler(
@@ -21,7 +23,14 @@ export default async function handler(
       .json({ error: 'Unauthorized: No token provided' });
   }
 
-  const idToken = authHeader.split('Bearer ')[1];
+  const tokenParts = authHeader.split('Bearer ');
+  const idToken = tokenParts[1];
+  
+  if (!idToken || idToken.trim().length === 0) {
+    return res
+      .status(401)
+      .json({ error: 'Unauthorized: Invalid token format' });
+  }
 
   let decodedToken;
   try {
@@ -66,6 +75,18 @@ export default async function handler(
         })
       );
 
+      const watchlistWithPrices = watchlist.map(item => {
+        const priceKey = `${item.coin}-${item.network}`;
+        const priceData = priceMap.get(priceKey);
+
+        return {
+          ...item,
+          usdPrice: priceData?.usdPrice ?? null,
+          btcPrice: priceData?.btcPrice ?? null,
+          lastUpdated: priceData?.updatedAt ?? null,
+        };
+      });
+
       return res.status(200).json(watchlistWithPrices);
     } catch (error) {
       logger.error('Error fetching watchlist', { error });
@@ -77,6 +98,11 @@ export default async function handler(
 
   // ➕ POST — Add token to watchlist
   if (req.method === 'POST') {
+    // CSRF Protection
+    if (!csrfGuard(req, res)) {
+      return;
+    }
+
     try {
       const { coin, network, name } = req.body;
 
@@ -116,6 +142,11 @@ export default async function handler(
 
   // ❌ DELETE — Remove token from watchlist
   if (req.method === 'DELETE') {
+    // CSRF Protection
+    if (!csrfGuard(req, res)) {
+      return;
+    }
+
     try {
       const { coin, network } = req.body;
 

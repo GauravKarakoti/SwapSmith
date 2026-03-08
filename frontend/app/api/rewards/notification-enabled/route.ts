@@ -1,21 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { addRewardActivity, getUserRewardActivities } from '@/lib/database';
+import { verifyAuth } from '@/lib/auth-helpers';
 
 const NOTIFICATION_ENABLE_POINTS = 15;
 const NOTIFICATION_ENABLE_TOKENS = '0.15';
 
 export async function POST(request: NextRequest) {
   try {
-    const userId = request.headers.get('x-user-id');
-    
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+    // Verify Firebase authentication token
+    const authResult = await verifyAuth(request);
+    if (!authResult.success) {
+      return authResult.error!;
     }
 
-    const userIdNum = parseInt(userId);
+    const userIdNum = authResult.userId!;
 
     // Check if user already received notification enable reward
     const recentActivities = await getUserRewardActivities(userIdNum, 100);

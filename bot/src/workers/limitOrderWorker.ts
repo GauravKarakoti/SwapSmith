@@ -1,9 +1,10 @@
 import { Telegraf } from 'telegraf';
 import axios from 'axios';
-import { eq, and } from 'drizzle-orm';
-import { db, limitOrders, LimitOrder, updateLimitOrderStatus, getUser } from '../services/database';
+import { eq, and, or, isNull, lte } from 'drizzle-orm';
+import { db, limitOrders, LimitOrder, updateLimitOrderStatus, addWatchedOrder, type User } from '../services/database';
 import { getCoins, createQuote, createOrder } from '../services/sideshift-client';
 import logger, { handleError } from '../services/logger';
+import { batchLoadUsersByTelegramIds } from '../utils/dataLoader';
 
 
 const CHECK_INTERVAL_MS = 60 * 1000; // 60 seconds
@@ -76,22 +77,31 @@ export class LimitOrderWorker {
 
   private async checkOrders() {
     try {
-      // 1. Fetch pending orders using status or isActive
+      // 1. Fetch pending orders using status or isActive, and check retry constraints
       const pendingOrders = await db.select().from(limitOrders)
-        .where(and(eq(limitOrders.isActive, 1), eq(limitOrders.status, 'pending')));
+        .where(
+          and(
+            eq(limitOrders.isActive, 1),
+            eq(limitOrders.status, 'pending'),
+            or(isNull(limitOrders.retryAfter), lte(limitOrders.retryAfter, new Date()))
+          )
+        );
 
       if (pendingOrders.length === 0) return;
 
       logger.info(`🔍 Checking ${pendingOrders.length} pending limit orders...`);
 
+      // OPTIMIZATION: Batch load all users upfront to prevent N+1 queries
+      const telegramIds = pendingOrders.map(o => Number(o.telegramId));
+      const usersByTelegramId = await batchLoadUsersByTelegramIds(telegramIds);
 
       // 2. Identify unique assets to fetch prices for
       const assetsToFetch = new Set<string>();
       for (const order of pendingOrders) {
         if (order.conditionAsset) {
-            assetsToFetch.add(order.conditionAsset);
+          assetsToFetch.add(order.conditionAsset);
         } else if (order.fromAsset) {
-            assetsToFetch.add(order.fromAsset);
+          assetsToFetch.add(order.fromAsset);
         }
       }
 
@@ -111,7 +121,8 @@ export class LimitOrderWorker {
         }
 
         if (this.isConditionMet(order, currentPrice)) {
-          await this.executeOrder(order, currentPrice);
+          const user = usersByTelegramId.get(Number(order.telegramId));
+          await this.executeOrder(order, currentPrice, user);
         }
       }
 
@@ -159,11 +170,11 @@ export class LimitOrderWorker {
       }
 
     } catch (error) {
-        if (axios.isAxiosError(error) && error.response?.status === 429) {
-            logger.warn('⏳ CoinGecko rate limit hit, skipping this check cycle.');
-        } else {
-            logger.error('❌ Failed to fetch prices from CoinGecko:', error instanceof Error ? error.message : String(error));
-        }
+      if (axios.isAxiosError(error) && error.response?.status === 429) {
+        logger.warn('⏳ CoinGecko rate limit hit, skipping this check cycle.');
+      } else {
+        logger.error('❌ Failed to fetch prices from CoinGecko:', error instanceof Error ? error.message : String(error));
+      }
 
     }
 
@@ -172,7 +183,7 @@ export class LimitOrderWorker {
 
   private isConditionMet(order: LimitOrder, currentPrice: number): boolean {
     const { conditionOperator, conditionValue, targetPrice } = order;
-    
+
     // Use conditionValue if available, else fallback to targetPrice parsing
     const target = conditionValue !== null ? conditionValue : parseFloat(targetPrice || '0');
 
@@ -185,116 +196,157 @@ export class LimitOrderWorker {
     return false;
   }
 
-  private async executeOrder(order: LimitOrder, triggerPrice: number) {
+  private async executeOrder(order: LimitOrder, triggerPrice: number, user?: User) {
     const asset = order.conditionAsset || order.fromAsset;
     const target = order.conditionValue || order.targetPrice;
-    
+
     logger.info(`⚡ Condition met for Order #${order.id}: ${asset} is ${triggerPrice} (Target: ${order.conditionOperator} ${target})`);
 
 
     try {
-        // Mark as executing
-        const result = await db.update(limitOrders)
-            .set({
-                status: 'executing',
-                executedAt: new Date()
-            })
-            .where(and(eq(limitOrders.id, order.id), eq(limitOrders.status, 'pending')))
-            .returning();
+      // Mark as executing
+      const result = await db.update(limitOrders)
+        .set({
+          status: 'executing',
+        })
+        .where(and(eq(limitOrders.id, order.id), eq(limitOrders.status, 'pending')))
+        .returning();
 
-        if (result.length === 0) {
-            logger.warn(`⚠️ Order #${order.id} was already picked up or cancelled.`);
-            return;
+      if (result.length === 0) {
+        logger.warn(`⚠️ Order #${order.id} was already picked up or cancelled.`);
+        return;
 
+      }
+
+      // 1. Determine Settle Address
+      // OPTIMIZATION: User already batch-loaded, just use it
+      let settleAddress = order.settleAddress;
+      if (!settleAddress) {
+        if (user?.walletAddress) {
+          settleAddress = user.walletAddress;
+        } else {
+          throw new Error('No settle address provided and no wallet linked to user.');
         }
+      }
 
-        // 1. Determine Settle Address
-        let settleAddress = order.settleAddress;
-        if (!settleAddress) {
-            const user = await getUser(Number(order.telegramId));
-            if (user?.walletAddress) {
-                settleAddress = user.walletAddress;
-            } else {
-                throw new Error('No settle address provided and no wallet linked to user.');
-            }
-        }
+      // 2. Create Quote
+      // Note: order.fromAmount is text, parse it
+      const amount = parseFloat(order.fromAmount);
+      logger.info(`Creating quote for ${amount} ${order.fromAsset} -> ${order.toAsset}`);
 
-        // 2. Create Quote
-        // Note: order.fromAmount is text, parse it
-        const amount = parseFloat(order.fromAmount);
-        logger.info(`Creating quote for ${amount} ${order.fromAsset} -> ${order.toAsset}`);
+      const quote = await createQuote(
+        order.fromAsset,
+        order.fromNetwork, // Used schema field name fromNetwork
+        order.toAsset,
+        order.toNetwork,   // Used schema field name toNetwork
+        amount,
+        undefined // IP
+      );
 
-        const quote = await createQuote(
-            order.fromAsset,
-            order.fromNetwork, // Used schema field name fromNetwork
-            order.toAsset,
-            order.toNetwork,   // Used schema field name toNetwork
-            amount,
-            undefined // IP
-        );
+      if (!quote.id) {
+        throw new Error('Failed to create SideShift quote');
+      }
 
-        if (!quote.id) {
-            throw new Error('Failed to create SideShift quote');
-        }
+      // 3. Create Order
+      logger.info(`Creating order with quote ${quote.id}`);
 
-        // 3. Create Order
-        logger.info(`Creating order with quote ${quote.id}`);
+      // Use settleAddress as refundAddress too for simplicity, or user wallet
+      const sideshiftOrder = await createOrder(quote.id, settleAddress, settleAddress);
 
-        // Use settleAddress as refundAddress too for simplicity, or user wallet
-        const sideshiftOrder = await createOrder(quote.id, settleAddress, settleAddress);
+      if (!sideshiftOrder.id) {
+        throw new Error('Failed to create SideShift order');
+      }
 
-        if (!sideshiftOrder.id) {
-            throw new Error('Failed to create SideShift order');
-        }
-
-        // 4. Update DB
+      // 4. Update DB & Watch
+      try {
         await updateLimitOrderStatus(order.id, 'executed', sideshiftOrder.id);
+        await addWatchedOrder(Number(order.telegramId), sideshiftOrder.id, 'pending');
         logger.info(`✅ Order #${order.id} executed via SideShift (Order ID: ${sideshiftOrder.id})`);
+      } catch (err) {
+        // If adding the watched order fails after marking as executed, attempt to revert
+        logger.error('Failed to update DB & watch order; attempting to revert limit order status', err);
+        try {
+          // Revert to a safe, pre-executed status so the order can be retried/handled
+          await updateLimitOrderStatus(order.id, 'pending', undefined);
+        } catch (revertErr) {
+          logger.error('Failed to revert limit order status after watch-order failure', revertErr);
+        }
+        throw err;
+      }
 
 
-        // 5. Notify User
-        if (this.bot) {
-            const depositAddress = typeof sideshiftOrder.depositAddress === 'object'
-                ? sideshiftOrder.depositAddress.address
-                : sideshiftOrder.depositAddress;
+      // 5. Notify User
+      if (this.bot) {
+        const depositAddress = typeof sideshiftOrder.depositAddress === 'object'
+          ? sideshiftOrder.depositAddress.address
+          : sideshiftOrder.depositAddress;
 
-            const message = `🚀 *Limit Order Triggered!* \n\n` +
-                `Condition: ${asset} reached ${triggerPrice}\n` +
-                `Swap: ${amount} ${order.fromAsset} -> ${order.toAsset}\n\n` +
-                `*Action Required:*\n` +
-                `Send ${amount} ${order.fromAsset} to:\n` +
-                `\`${depositAddress}\`\n\n` +
-                `Order ID: \`${sideshiftOrder.id}\``;
+        const message = `🚀 *Limit Order Triggered!* \n\n` +
+          `Condition: ${asset} reached ${triggerPrice}\n` +
+          `Swap: ${amount} ${order.fromAsset} -> ${order.toAsset}\n\n` +
+          `*Action Required:*\n` +
+          `Send ${amount} ${order.fromAsset} to:\n` +
+          `\`${depositAddress}\`\n\n` +
+          `Order ID: \`${sideshiftOrder.id}\``;
 
-            try {
-                await this.bot.telegram.sendMessage(Number(order.telegramId), message, { parse_mode: 'Markdown' });
-            } catch (err) {
-                logger.error('Failed to send notification to user:', err);
-            }
-
+        try {
+          await this.bot.telegram.sendMessage(Number(order.telegramId), message, { parse_mode: 'Markdown' });
+        } catch (err) {
+          logger.error('Failed to send notification to user:', err);
         }
 
-  } catch (error) {
-        logger.error(`❌ Failed to execute order #${order.id}:`, error);
+      }
+
+    } catch (error) {
+      logger.error(`❌ Failed to execute order #${order.id}:`, error);
+
+      const MAX_RETRIES = 5;
+      const currentRetries = order.retryCount || 0;
+
+      if (currentRetries < MAX_RETRIES) {
+        const nextRetryCount = currentRetries + 1;
+        // Exponential backoff: 2^currentRetries * 1 minute -> 1,2,4,8,16...
+        const backoffMs = Math.pow(2, currentRetries) * 60 * 1000;
+        const nextRetryAfter = new Date(Date.now() + backoffMs);
+
+        await db.update(limitOrders)
+          .set({
+            retryCount: nextRetryCount,
+            retryAfter: nextRetryAfter,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            status: 'pending' // ensure status remains pending
+          })
+          .where(
+            and(
+              eq(limitOrders.id, order.id),
+              eq(limitOrders.status, 'executing'),
+              eq(limitOrders.isActive, 1),
+            )
+          );
+
+        logger.info(`⏳ Scheduled retry ${nextRetryCount}/${MAX_RETRIES} for order #${order.id} at ${nextRetryAfter.toISOString()}`);
+      } else {
+        logger.warn(`🚫 Max retries reached for order #${order.id}, marking as permanently failed.`);
         await updateLimitOrderStatus(order.id, 'failed', undefined, error instanceof Error ? error.message : 'Unknown error');
 
 
         // Notify user of failure if possible
-         if (this.bot) {
-            try {
-                await this.bot.telegram.sendMessage(Number(order.telegramId), `⚠️ Limit Order #${order.id} failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            } catch (e) {
-                await handleError('LimitOrderNotificationError', {
-                    error: e instanceof Error ? e.message : 'Unknown error',
-                    stack: e instanceof Error ? e.stack : undefined,
-                    orderId: order.id,
-                    telegramId: order.telegramId,
-                    message: `Failed to send failure notification for order #${order.id}`
-                }, null, true);
-            }
+        if (this.bot) {
+          try {
+            await this.bot.telegram.sendMessage(Number(order.telegramId), `⚠️ Limit Order #${order.id} permanently failed after ${MAX_RETRIES} retries: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          } catch (e) {
+            await handleError('LimitOrderNotificationError', {
+              error: e instanceof Error ? e.message : 'Unknown error',
+              stack: e instanceof Error ? e.stack : undefined,
+              orderId: order.id,
+              telegramId: order.telegramId,
+              message: `Failed to send failure notification for order #${order.id}`
+            }, null, true, 'high');
+          }
         }
+      }
     }
-}
+  }
 }
 
 export const limitOrderWorker = new LimitOrderWorker();
