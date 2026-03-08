@@ -334,13 +334,13 @@ describe("RewardToken (SMTH)", function () {
       ).to.be.revertedWithCustomError(token, "OwnableUnauthorizedAccount");
     });
 
-    it("should allow canceling ownership transfer by transferring to address(0)", async function () {
+    it("should allow canceling ownership transfer by renouncing ownership", async function () {
       const { token, owner, user1 } = await loadFixture(deployRewardTokenFixture);
 
       // Initiate transfer to user1
       await token.connect(owner).transferOwnership(user1.address);
 
-      // Cancel by renouncing (transferring to address(0))
+      // Cancel by renouncing ownership
       await token.connect(owner).renounceOwnership();
 
       // Ownership should be zero address
