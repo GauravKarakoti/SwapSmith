@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { csrfFetch } from '@/hooks/useCsrfToken'
 import { auth } from '@/lib/firebase'
 import { signOut } from 'firebase/auth'
 import {
@@ -284,13 +285,27 @@ function UserLogsModal({
   const [error, setError]   = useState('')
 
   useEffect(() => {
-    fetch(`/api/admin/coins/adjust?userId=${user.id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.json())
-      .then(d => { if (d.success) setLogs(d.logs); else setError(d.error ?? 'Failed') })
-      .catch(() => setError('Network error'))
-      .finally(() => setLoading(false))
+    const fetchAdjustmentLogs = async () => {
+      try {
+        const response = await fetch(`/api/admin/coins/adjust?userId=${user.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+          setLogs(data.logs);
+        } else {
+          setError(data.error ?? 'Failed to load logs');
+        }
+      } catch (err) {
+        console.error('Failed to fetch adjustment logs:', err);
+        setError('Network error');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAdjustmentLogs();
   }, [user.id, token])
 
   return (
@@ -503,7 +518,9 @@ export default function AdminCoinsPage() {
       })
       const data = await res.json()
       if (data.success) setStats(data.stats)
-    } catch { /* ignore stats fetch errors */ }
+    } catch (error) {
+      console.error('Error fetching coins stats:', error)
+    }
     finally { setStatsLoading(false) }
   }, [])
 
@@ -514,7 +531,7 @@ export default function AdminCoinsPage() {
     if (!tok) { router.push('/admin/login'); return }
     setToken(tok)
     const cached = sessionStorage.getItem('admin-info')
-    if (cached) { try { setAdminInfo(JSON.parse(cached)) } catch {} }
+    if (cached) { try { setAdminInfo(JSON.parse(cached)) } catch (error) { console.error('Error parsing cached admin info:', error) } }
     fetchUsers(1, '', tok, false)
     fetchStats(tok)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -553,7 +570,7 @@ export default function AdminCoinsPage() {
     if (!adjustUser) return
     setAdjustLoading(true); setAdjustMsg('')
     try {
-      const res = await fetch('/api/admin/coins/adjust', {
+      const res = await csrfFetch('/api/admin/coins/adjust', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ targetUserId: adjustUser.id, action, amount, note }),
@@ -576,7 +593,7 @@ export default function AdminCoinsPage() {
   const handleGlobalGift = async (amount: number, note: string) => {
     setGlobalGiftLoading(true); setGlobalGiftMsg('')
     try {
-      const res = await fetch('/api/admin/coins/gift-all', {
+      const res = await csrfFetch('/api/admin/coins/gift-all', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ amount, note }),

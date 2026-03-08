@@ -6,6 +6,9 @@ import { createQuote, createOrder } from './sideshift-client';
 import { handleError, default as logger } from './logger';
 import type { DelayedOrder } from './database';
 
+// Get configured IP or use sensible default
+const SIDESHIFT_CLIENT_IP = process.env.SIDESHIFT_CLIENT_IP || '127.0.0.1';
+
 // Worker configuration
 const WORKER_INTERVAL = '*/5 * * * *'; // Run every 5 minutes
 const DCA_CHECK_INTERVAL = '0 */6 * * *'; // Check DCA every 6 hours
@@ -47,7 +50,7 @@ export async function checkAndExecuteLimitOrders(): Promise<void> {
   } catch (error) {
     await handleError('LimitOrderCheckError', {
       error: error instanceof Error ? error.message : 'Unknown error'
-    }, null, false);
+    }, null, false, 'medium');
   }
 }
 
@@ -114,7 +117,7 @@ async function executeLimitOrder(order: DelayedOrder): Promise<void> {
       error: errorMessage,
       orderId: order.id,
       telegramId: order.telegramId
-    }, null, false);
+    }, null, false, 'high');
 
     // Notify user of failure
     await notifyUser(order.telegramId,
@@ -157,7 +160,7 @@ export async function checkAndExecuteDCA(): Promise<void> {
   } catch (error) {
     await handleError('DCACheckError', {
       error: error instanceof Error ? error.message : 'Unknown error'
-    }, null, false);
+    }, null, false, 'medium');
   }
 }
 
@@ -190,7 +193,7 @@ async function executeDCAPurchase(order: DelayedOrder): Promise<void> {
       order.toAsset,
       toChain,
       order.amount,
-      '1.1.1.1'
+      SIDESHIFT_CLIENT_IP
     );
 
     if (quote.error) {
@@ -229,7 +232,7 @@ async function executeDCAPurchase(order: DelayedOrder): Promise<void> {
       error: errorMessage,
       orderId: order.id,
       telegramId: order.telegramId
-    }, null, false);
+    }, null, false, 'high');
 
     // Notify user of failure
     await notifyUser(order.telegramId,
@@ -280,7 +283,7 @@ async function notifyUser(telegramId: number, message: string): Promise<void> {
       error: error instanceof Error ? error.message : 'Unknown error',
       telegramId,
       message: message.substring(0, 100)
-    }, null, false);
+    }, null, false, 'medium');
   }
 }
 

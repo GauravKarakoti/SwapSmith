@@ -5,6 +5,7 @@
   "main": "schema.ts",
   "scripts": {
     "build": "tsc",
+    "db:bootstrap": "node scripts/bootstrap-migrations.js",
     "db:gen": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
@@ -27,6 +28,7 @@
     "winston": "^3.19.0"
   },
   "devDependencies": {
-    "@types/node": "^25.2.3"
+    "@types/node": "^25.2.3",
+    "typescript": "^5.9.3"
   }
 }

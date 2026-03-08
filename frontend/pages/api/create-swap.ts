@@ -1,24 +1,33 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { createQuote } from '@/utils/sideshift-client';
-import { csrfGuard } from '@/lib/csrf';
+import { withEnhancedCSRF } from '@/lib/enhanced-csrf';
+import { withRateLimit, RATE_LIMITS } from '@/lib/rate-limiter';
 import logger from '@/lib/logger';
 
 const SIDESHIFT_CLIENT_IP = process.env.SIDESHIFT_CLIENT_IP || "127.0.0.1";
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function createSwapHandler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // CSRF Protection
-  if (!csrfGuard(req, res)) {
-    return;
-  }
-
   const { fromAsset, toAsset, amount, fromChain, toChain } = req.body;
 
+  // Input validation
   if (!fromAsset || !toAsset || !amount) {
     return res.status(400).json({ error: 'Missing required parameters' });
+  }
+
+  // Validate amount is a positive number
+  const numAmount = parseFloat(amount);
+  if (isNaN(numAmount) || numAmount <= 0) {
+    return res.status(400).json({ error: 'Invalid amount' });
+  }
+
+  // Validate asset names (basic sanitization)
+  const assetRegex = /^[A-Z0-9]{2,10}$/;
+  if (!assetRegex.test(fromAsset) || !assetRegex.test(toAsset)) {
+    return res.status(400).json({ error: 'Invalid asset format' });
   }
 
   try {
@@ -53,6 +62,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       userIP // Pass the validated IP
     );
     
+    // Add security headers
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    
     res.status(200).json(quote);
   } catch (error: unknown) {
     // ✅ FIX: Changed `error: any` to a safer type guard.
@@ -62,3 +76,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(500).json({ error: errorMessage });
   }
 }
+
+// Apply comprehensive security: Rate limiting + Enhanced CSRF + Financial security headers
+export default withRateLimit(
+  withEnhancedCSRF(createSwapHandler),
+  { ...RATE_LIMITS.swap, message: 'Too many swap requests. Please wait before trying again.' }
+);
