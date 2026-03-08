@@ -9,6 +9,7 @@ import TrustIndicators from './TrustIndicators';
 import IntentConfirmation from './IntentConfirmation';
 import GasFeeDisplay from './GasFeeDisplay';
 import GasComparisonChart from './GasComparisonChart';
+import CopyButton from './CopyButton';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
@@ -808,6 +809,36 @@ export default function ChatInterface() {
                 <div className="space-y-3">
                   <div className="bg-white/[0.04] border border-white/10 text-gray-200 px-5 py-4 rounded-2xl rounded-tl-none text-sm leading-relaxed backdrop-blur-sm">
                     {msg.type === 'message' && <div className="whitespace-pre-line">{msg.content}</div>}
+                    {msg.type === 'checkout_link' && (
+                      <div>
+                        <div className="whitespace-pre-line mb-3">{msg.content}</div>
+                        {msg.data?.url && (
+                          <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-2">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium text-green-800">Payment Link:</span>
+                              <CopyButton 
+                                text={msg.data.url} 
+                                size="sm" 
+                                variant="ghost"
+                                toastMessage="Payment link copied!"
+                                className="text-green-600 hover:text-green-700"
+                              />
+                            </div>
+                            <div className="bg-white p-2 rounded border text-xs font-mono break-all text-gray-600">
+                              {msg.data.url}
+                            </div>
+                            <a 
+                              href={msg.data.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="inline-block mt-2 text-sm text-green-600 hover:text-green-700 hover:underline"
+                            >
+                              Open Payment Link →
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {msg.type === 'portfolio_summary' && (
                       <div>
                         <div className="whitespace-pre-line mb-3">{msg.content}</div>
