@@ -1,0 +1,42 @@
+name: Test Reports
+
+on:
+  workflow_run:
+    workflows: ["PR Checks"]
+    types: [completed]
+
+jobs:
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion != 'skipped'
+    
+    steps:
+      - name: Download test artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.payload.workflow_run.id,
+            });
+            
+            if (artifacts.data.artifacts.length === 0) {
+              console.log('No test artifacts found');
+              return;
+            }
+            
+            for (const artifact of artifacts.data.artifacts) {
+              console.log(`Found artifact: ${artifact.name}`);
+            }
+
+      - name: Report workflow status
+        run: |
+          if [ "${{ github.event.workflow_run.conclusion }}" = "failure" ]; then
+            echo "❌ PR Checks Failed"
+            echo "Workflow run: ${{ github.event.workflow_run.html_url }}"
+            exit 1
+          else
+            echo "✅ PR Checks Passed"
+          fi

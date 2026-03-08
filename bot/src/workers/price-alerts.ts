@@ -1,11 +1,12 @@
 import { Telegraf } from 'telegraf';
 import axios from 'axios';
 import { eq } from 'drizzle-orm';
-import { db, users, userSettings } from '../services/database';
+import { db, users, userSettings, type User } from '../services/database';
 import { priceAlerts } from '../../../shared/schema';
 import logger from '../services/logger';
+import { batchLoadUsersByIds } from '../utils/dataLoader';
 
-const CHECK_INTERVAL_MS = 60 * 1000; // 60 seconds
+const CHECK_INTERVAL_MS = parseInt(process.env.PRICE_ALERT_CHECK_INTERVAL_MS ?? '60000', 10);
 
 // Asset ID mapping for CoinGecko
 const ASSET_ID_MAP: Record<string, string> = {
@@ -89,7 +90,8 @@ export class PriceAlertWorker {
       // 3. Fetch prices from CoinGecko
       const prices = await this.fetchPrices(Array.from(assetsToFetch));
 
-      // 4. Check conditions and trigger notifications
+      // 4. Find alerts that need to trigger
+      const alertsToTrigger: typeof activeAlerts = [];
       for (const alert of activeAlerts) {
         const currentPrice = prices.get(alert.coin.toUpperCase());
 
@@ -101,8 +103,24 @@ export class PriceAlertWorker {
         const targetPrice = parseFloat(alert.targetPrice.toString());
         
         if (this.isConditionMet(alert.condition, currentPrice, targetPrice)) {
-          await this.triggerAlert(alert, currentPrice);
+          alertsToTrigger.push(alert);
         }
+      }
+
+      if (alertsToTrigger.length === 0) return;
+
+      // 5. OPTIMIZATION: Batch load all required users to prevent N+1 queries
+      const userIdsNeeded = alertsToTrigger
+        .filter(a => a.userId && !a.telegramId) // Only need users if we need to fetch telegramId
+        .map(a => a.userId as number);
+      
+      const userMap = await batchLoadUsersByIds(userIdsNeeded);
+
+      // 6. Trigger all alerts with user data already loaded
+      for (const alert of alertsToTrigger) {
+        const currentPrice = prices.get(alert.coin.toUpperCase())!;
+        const user = userMap.get(alert.userId as number);
+        await this.triggerAlert(alert, currentPrice, user);
       }
 
     } catch (error) {
@@ -164,7 +182,7 @@ export class PriceAlertWorker {
     return false;
   }
 
-  private async triggerAlert(alert: any, currentPrice: number) {
+  private async triggerAlert(alert: any, currentPrice: number, user?: User) {
     const targetPrice = parseFloat(alert.targetPrice.toString());
     const conditionText = alert.condition === 'gt' ? 'above' : 'below';
     
@@ -181,16 +199,10 @@ export class PriceAlertWorker {
 
       // 2. Get user notification preferences
       let telegramId = alert.telegramId;
-      let userId = alert.userId;
 
-      // Try to get telegramId from users table if not set
-      if (!telegramId && userId) {
-        const user = await db.select().from(users)
-          .where(eq(users.id, userId))
-          .limit(1);
-        if (user[0]?.telegramId) {
-          telegramId = user[0].telegramId;
-        }
+      // OPTIMIZATION: User already batch-loaded, just check if we have it
+      if (!telegramId && user?.telegramId) {
+        telegramId = user.telegramId;
       }
 
       // 3. Send Telegram notification if bot is available

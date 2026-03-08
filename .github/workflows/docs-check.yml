@@ -1,0 +1,87 @@
+name: Documentation Check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '**.md'
+      - '.github/**'
+      - 'frontend/**'
+      - 'bot/**'
+      - 'shared/**'
+
+jobs:
+  markdown-lint:
+    name: Markdown Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install markdownlint-cli
+        run: npm install -g markdownlint-cli
+
+      - name: Lint markdown files
+        run: |
+          echo "Checking markdown files..."
+          markdownlint '**/*.md' --fix || true
+        continue-on-error: true
+
+  readme-check:
+    name: README Completeness
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check main README exists
+        run: |
+          if [ ! -f README.md ]; then
+            echo "❌ Root README.md not found"
+            exit 1
+          fi
+          echo "✅ Root README.md exists"
+
+      - name: Check frontend README exists
+        run: |
+          if [ ! -f frontend/README.md ]; then
+            echo "⚠️  Warning: frontend/README.md not found"
+          else
+            echo "✅ frontend/README.md exists"
+          fi
+
+      - name: Check bot README exists
+        run: |
+          if [ ! -f bot/README.md ]; then
+            echo "⚠️  Warning: bot/README.md not found"
+          else
+            echo "✅ bot/README.md exists"
+          fi
+
+  changelog-check:
+    name: Changelog Update Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check if changelog should be updated
+        run: |
+          # Get changed files
+          git fetch origin main
+          CHANGED_FILES=$(git diff --name-only origin/main...HEAD) || true
+          
+          # Check if any source files were changed
+          if echo "$CHANGED_FILES" | grep -E "^(frontend|bot|shared)/" | grep -v "test" | grep -v ".md" > /dev/null; then
+            if ! echo "$CHANGED_FILES" | grep -E "CHANGELOG|CHANGES|RELEASE" > /dev/null; then
+              echo "ℹ️  Info: Consider updating CHANGELOG if this includes notable changes"
+            fi
+          fi
