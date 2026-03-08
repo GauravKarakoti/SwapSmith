@@ -1,5 +1,8 @@
 import axios from 'axios';
 import { yieldConfig } from '@/config/yield.config';
+import logger from '@/lib/logger';
+
+
 
 export interface YieldPool {
   chain: string;
@@ -39,7 +42,7 @@ export async function getTopStablecoinYields(): Promise<YieldPool[]> {
 
   } catch (error: unknown) {
     const err = error as Error;
-    console.error("Yield fetch error:", err);
+    logger.error("Yield fetch error:", { error: err.message });
     return [];
   }
 }

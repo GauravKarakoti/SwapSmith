@@ -12,6 +12,7 @@ SwapSmith allows you to execute complex, cross-chain cryptocurrency swaps using 
 - **Cross-Chain Magic:** Seamlessly swap between 200+ assets across 40+ chains.
 - **Voice Input:** (Experimental) Use your microphone to command the agent.
 - **Secure:** Your keys stay yours. Transactions are only executed after your explicit confirmation.
+- **Security Scanner:** Analyze tokens for potential honeypots and risks before swapping.
 - **Real-Time Quotes:** Always get the best available rate via SideShift.
 
 ## 🛠️ How It Works
@@ -43,17 +44,30 @@ SwapSmith allows you to execute complex, cross-chain cryptocurrency swaps using 
     npm install
     ```
 
-3.  **Environment Variables:**
+3.  **Set up environment variables:**
     ```bash
-    cp .env.example .env
+    # Copy template files
+    cp bot/.env.example bot/.env
+    cp frontend/.env.example frontend/.env
+    cp hardhat/.env.example hardhat/.env
+    cp shared/.env.example shared/.env
+    
+    # Fill in your actual API keys and secrets in each .env file
+    # (These are ignored by git for security)
     ```
 
-4.  **Run the development server:**
+4.  **Install security pre-commit hook** (prevents accidental secret leaks):
+    ```bash
+    ./.githooks/install-hooks.sh
+    ```
+    ⚠️ **Important:** Never commit `.env` files. They contain sensitive credentials.
+
+5.  **Run the development server:**
     ```bash
     npm run dev
     ```
 
-5.  **Open your browser:**
+6.  **Open your browser:**
     Navigate to [http://localhost:3000](http://localhost:3000).
 
 ## 💡 How to Use

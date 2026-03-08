@@ -1,5 +1,9 @@
 {
   "dependencies": {
-    "zod": "^4.3.6"
+    "telegraf": "^4.16.3",
+    "telegraf-ratelimit": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.3"
   }
 }

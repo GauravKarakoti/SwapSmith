@@ -1,6 +1,6 @@
 import axios from 'axios';
 import * as db from './database';
-import { handleError } from './logger';
+import { handleError, default as logger } from './logger';
 
 // CoinGecko API base URL
 const COINGECKO_API_URL = 'https://api.coingecko.com/api/v3';
@@ -101,7 +101,7 @@ export async function getCurrentPrice(asset: string): Promise<number | null> {
   const coinId = getCoinGeckoId(asset);
   
   if (!coinId) {
-    console.warn(`No CoinGecko mapping found for asset: ${asset}`);
+    logger.warn(`No CoinGecko mapping found for asset: ${asset}`);
     return null;
   }
 
@@ -139,7 +139,7 @@ export async function getCurrentPrice(asset: string): Promise<number | null> {
       error: error instanceof Error ? error.message : 'Unknown error',
       asset,
       coinId 
-    }, null, false);
+    }, null, false, 'low');
     return null;
   }
 }
@@ -196,7 +196,7 @@ export async function getMultiplePrices(assets: string[]): Promise<Record<string
     await handleError('PriceFetchError', { 
       error: error instanceof Error ? error.message : 'Unknown error',
       assets: uniqueAssets 
-    }, null, false);
+    }, null, false, 'low');
     return {};
   }
 }
@@ -289,7 +289,7 @@ export async function getPriceChange(asset: string, days: number = 1): Promise<n
       error: error instanceof Error ? error.message : 'Unknown error',
       asset,
       days 
-    }, null, false);
+    }, null, false, 'low');
     return null;
   }
 }

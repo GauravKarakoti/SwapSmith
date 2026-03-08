@@ -10,7 +10,9 @@ export function safeParseLLMJson(raw: string): any {
   // Attempt direct parse first
   try {
     return JSON.parse(cleaned);
-  } catch {}
+  } catch (error) {
+    // Fall through to try extracting JSON from the string
+  }
 
   // Try extracting first JSON object using bracket matching
   const firstBrace = cleaned.indexOf("{");
@@ -20,7 +22,9 @@ export function safeParseLLMJson(raw: string): any {
     const jsonSubstring = cleaned.slice(firstBrace, lastBrace + 1);
     try {
         return JSON.parse(jsonSubstring);
-    } catch {}
+    } catch (error) {
+      // Fall through to throw error below
+    }
   }
 
   throw new Error("Failed to extract valid JSON from LLM response");

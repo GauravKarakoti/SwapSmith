@@ -1,20 +1,31 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { executePortfolioStrategy } from '../services/portfolio-service';
 
-// Mock dependencies
 jest.mock('../services/sideshift-client', () => ({
   createQuote: jest.fn(),
   createOrder: jest.fn(),
 }));
 
 jest.mock('../services/database', () => ({
-  createOrderEntry: jest.fn(),
-  addWatchedOrder: jest.fn(),
+  db: {
+    transaction: jest.fn((callback: any) => callback({
+      insert: jest.fn().mockReturnValue({
+        values: jest.fn().mockReturnValue({
+          onConflictDoNothing: jest.fn()
+        })
+      })
+    }))
+  },
+  orders: {},
+  watchedOrders: {}
 }));
 
 jest.mock('../services/logger', () => ({
-  info: jest.fn(),
-  error: jest.fn(),
+  __esModule: true,
+  default: {
+    info: jest.fn(),
+    error: jest.fn(),
+  }
 }));
 
 const mockCreateQuote = require('../services/sideshift-client').createQuote;
@@ -23,7 +34,7 @@ const mockDb = require('../services/database');
 
 describe('executePortfolioStrategy', () => {
   const userId = 12345;
-  const validCommand = {
+  const validCommand: any = {
     fromAsset: 'USDC',
     fromChain: 'ethereum',
     amount: 1000,
@@ -52,27 +63,20 @@ describe('executePortfolioStrategy', () => {
     expect(result.successfulOrders).toHaveLength(2);
     expect(result.failedSwaps).toHaveLength(0);
 
-    // Verify Sideshift calls
     expect(mockCreateQuote).toHaveBeenCalledTimes(2);
     expect(mockCreateOrder).toHaveBeenCalledTimes(2);
-
-    // Verify DB calls
-    expect(mockDb.createOrderEntry).toHaveBeenCalledTimes(2);
-    expect(mockDb.addWatchedOrder).toHaveBeenCalledTimes(2);
+    expect(mockDb.db.transaction).toHaveBeenCalledTimes(1);
   });
 
-  it('should handle partial failure gracefully', async () => {
-    // Fail the second quote
+  it('should rollback on failure (all-or-nothing)', async () => {
     mockCreateQuote
       .mockResolvedValueOnce({ id: 'quote_1', settleAmount: '0.5' })
       .mockRejectedValueOnce(new Error('Liquidity Error'));
 
-    const result = await executePortfolioStrategy(userId, validCommand);
+    await expect(executePortfolioStrategy(userId, validCommand))
+      .rejects.toThrow('Liquidity Error');
 
-    expect(result.successfulOrders).toHaveLength(1);
-    expect(result.failedSwaps).toHaveLength(1);
-    expect(result.failedSwaps[0].asset).toBe('BTC');
-    expect(result.failedSwaps[0].reason).toBe('Liquidity Error');
+    expect(mockDb.db.transaction).not.toHaveBeenCalled();
   });
 
   it('should validate empty portfolio', async () => {
@@ -86,13 +90,12 @@ describe('executePortfolioStrategy', () => {
       ...validCommand,
       amount: 100,
       portfolio: [
-        { toAsset: 'A', percentage: 33.333 },
-        { toAsset: 'B', percentage: 33.333 },
-        { toAsset: 'C', percentage: 33.334 }
+        { toAsset: 'A', toChain: 'ethereum', percentage: 33.333 },
+        { toAsset: 'B', toChain: 'ethereum', percentage: 33.333 },
+        { toAsset: 'C', toChain: 'ethereum', percentage: 33.334 }
       ]
     };
 
-    // Spy on createQuote arguments to check amounts
     await executePortfolioStrategy(userId, splitCommand);
 
     const calls = mockCreateQuote.mock.calls;
@@ -102,9 +105,6 @@ describe('executePortfolioStrategy', () => {
 
     expect(amount1).toBeCloseTo(33.333, 3);
     expect(amount2).toBeCloseTo(33.333, 3);
-    // The last one should pick up any microscopic remainder if we subtracted,
-    // but here we assigned remainingAmount.
-    // 100 - 33.333 - 33.333 = 33.334
     expect(amount3).toBeCloseTo(33.334, 3);
     expect(amount1 + amount2 + amount3).toBeCloseTo(100, 5);
   });

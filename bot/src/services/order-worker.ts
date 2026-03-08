@@ -3,8 +3,11 @@ import { Telegraf } from 'telegraf';
 import * as db from './database';
 import * as priceMonitor from './price-monitor';
 import { createQuote, createOrder } from './sideshift-client';
-import { handleError } from './logger';
+import { handleError, default as logger } from './logger';
 import type { DelayedOrder } from './database';
+
+// Get configured IP or use sensible default
+const SIDESHIFT_CLIENT_IP = process.env.SIDESHIFT_CLIENT_IP || '127.0.0.1';
 
 // Worker configuration
 const WORKER_INTERVAL = '*/5 * * * *'; // Run every 5 minutes
@@ -21,17 +24,17 @@ export function initializeWorker(telegrafBot: Telegraf) {
 
   // Schedule limit order checks every 5 minutes
   cron.schedule(WORKER_INTERVAL, async () => {
-    console.log('[OrderWorker] Checking limit orders...');
+    logger.info('[OrderWorker] Checking limit orders...');
     await checkAndExecuteLimitOrders();
   });
 
   // Schedule DCA checks every 6 hours
   cron.schedule(DCA_CHECK_INTERVAL, async () => {
-    console.log('[OrderWorker] Checking DCA schedules...');
+    logger.info('[OrderWorker] Checking DCA schedules...');
     await checkAndExecuteDCA();
   });
 
-  console.log('[OrderWorker] Order worker initialized with cron jobs');
+  logger.info('[OrderWorker] Order worker initialized with cron jobs');
 }
 
 /**
@@ -47,7 +50,7 @@ export async function checkAndExecuteLimitOrders(): Promise<void> {
   } catch (error) {
     await handleError('LimitOrderCheckError', {
       error: error instanceof Error ? error.message : 'Unknown error'
-    }, null, false);
+    }, null, false, 'medium');
   }
 }
 
@@ -56,7 +59,7 @@ export async function checkAndExecuteLimitOrders(): Promise<void> {
  */
 async function executeLimitOrder(order: DelayedOrder): Promise<void> {
   try {
-    console.log(`[OrderWorker] Executing limit order ${order.id} for user ${order.telegramId}`);
+    logger.info(`[OrderWorker] Executing limit order ${order.id} for user ${order.telegramId}`);
 
     // Validate settle address
     if (!order.settleAddress) {
@@ -106,7 +109,7 @@ async function executeLimitOrder(order: DelayedOrder): Promise<void> {
       `Please complete the transaction by sending ${quote.depositAmount} ${quote.depositCoin} to the deposit address.`
     );
 
-    console.log(`[OrderWorker] Limit order ${order.id} executed successfully`);
+    logger.info(`[OrderWorker] Limit order ${order.id} executed successfully`);
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -114,7 +117,7 @@ async function executeLimitOrder(order: DelayedOrder): Promise<void> {
       error: errorMessage,
       orderId: order.id,
       telegramId: order.telegramId
-    }, null, false);
+    }, null, false, 'high');
 
     // Notify user of failure
     await notifyUser(order.telegramId,
@@ -157,7 +160,7 @@ export async function checkAndExecuteDCA(): Promise<void> {
   } catch (error) {
     await handleError('DCACheckError', {
       error: error instanceof Error ? error.message : 'Unknown error'
-    }, null, false);
+    }, null, false, 'medium');
   }
 }
 
@@ -168,7 +171,7 @@ async function executeDCAPurchase(order: DelayedOrder): Promise<void> {
   try {
     const currentCount = order.executionCount || 0;
     const maxCount = order.maxExecutions || 10;
-    console.log(`[OrderWorker] Executing DCA purchase ${currentCount + 1}/${maxCount} for order ${order.id}`);
+    logger.info(`[OrderWorker] Executing DCA purchase ${currentCount + 1}/${maxCount} for order ${order.id}`);
 
     // Validate settle address
     if (!order.settleAddress) {
@@ -190,7 +193,7 @@ async function executeDCAPurchase(order: DelayedOrder): Promise<void> {
       order.toAsset,
       toChain,
       order.amount,
-      '1.1.1.1'
+      SIDESHIFT_CLIENT_IP
     );
 
     if (quote.error) {
@@ -221,7 +224,7 @@ async function executeDCAPurchase(order: DelayedOrder): Promise<void> {
       `Next purchase: ${nextExecutionAt ? nextExecutionAt.toLocaleDateString() : 'N/A'}`
     );
 
-    console.log(`[OrderWorker] DCA purchase for order ${order.id} executed successfully`);
+    logger.info(`[OrderWorker] DCA purchase for order ${order.id} executed successfully`);
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -229,7 +232,7 @@ async function executeDCAPurchase(order: DelayedOrder): Promise<void> {
       error: errorMessage,
       orderId: order.id,
       telegramId: order.telegramId
-    }, null, false);
+    }, null, false, 'high');
 
     // Notify user of failure
     await notifyUser(order.telegramId,
@@ -269,7 +272,7 @@ function calculateNextExecution(frequency: string, currentDate: Date | undefined
  */
 async function notifyUser(telegramId: number, message: string): Promise<void> {
   if (!bot) {
-    console.warn('[OrderWorker] Bot not initialized, cannot send notification');
+    logger.warn('[OrderWorker] Bot not initialized, cannot send notification');
     return;
   }
 
@@ -280,7 +283,7 @@ async function notifyUser(telegramId: number, message: string): Promise<void> {
       error: error instanceof Error ? error.message : 'Unknown error',
       telegramId,
       message: message.substring(0, 100)
-    }, null, false);
+    }, null, false, 'medium');
   }
 }
 

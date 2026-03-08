@@ -1,6 +1,6 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { eq, desc, and, inArray, sql as drizzleSql } from 'drizzle-orm';
+import { eq, desc, and, inArray, sql as drizzleSql, count } from 'drizzle-orm';
 
 // Import all table schemas from shared schema file
 import {
@@ -12,6 +12,11 @@ import {
   users,
   courseProgress,
   rewardsLog,
+  watchlist,
+  priceAlerts,
+  orders, // Import orders for reputation calculation
+  portfolioTargets,
+  rebalanceHistory,
 } from '../../shared/schema';
 
 const sql = neon(process.env.DATABASE_URL!);
@@ -27,6 +32,9 @@ export {
   users,
   courseProgress,
   rewardsLog,
+  watchlist,
+  priceAlerts,
+  orders,
 };
 
 export type User = typeof users.$inferSelect;
@@ -37,6 +45,8 @@ export type UserSettings = typeof userSettings.$inferSelect;
 export type SwapHistory = typeof swapHistory.$inferSelect;
 export type ChatHistory = typeof chatHistory.$inferSelect;
 export type Discussion = typeof discussions.$inferSelect;
+export type Watchlist = typeof watchlist.$inferSelect;
+export type PriceAlert = typeof priceAlerts.$inferSelect;
 
 // --- COIN PRICE CACHE FUNCTIONS ---
 
@@ -63,6 +73,48 @@ export async function getCachedPrice(coin: string, network: string): Promise<Coi
   
   return cached;
 }
+
+/**
+ * Batch fetch cached prices for multiple coin-network pairs
+ * Solves N+1 query problem by fetching all prices in a single query
+ * Returns a Map<`${coin}-${network}`, CoinPriceCache> for easy lookup
+ */
+export async function getCachedPricesBatch(
+  coinNetworkPairs: Array<{ coin: string; network: string }>
+): Promise<Map<string, CoinPriceCache>> {
+  if (!db || coinNetworkPairs.length === 0) {
+    return new Map();
+  }
+  
+  // Extract unique coins and networks for efficient filtering
+  const coins = [...new Set(coinNetworkPairs.map(p => p.coin))];
+  const networks = [...new Set(coinNetworkPairs.map(p => p.network))];
+  
+  // Single query: fetch all prices for the coins/networks we need
+  const allResults = await db.select().from(coinPriceCache)
+    .where(and(
+      inArray(coinPriceCache.coin, coins),
+      inArray(coinPriceCache.network, networks)
+    ));
+  
+  // Filter out expired entries and build Map
+  const now = new Date();
+  const priceMap = new Map<string, CoinPriceCache>();
+  
+  allResults.forEach(cache => {
+    // Only include non-expired entries
+    if (new Date(cache.expiresAt) >= now) {
+      const key = `${cache.coin}-${cache.network}`;
+      // Only add if this exact pair was requested
+      if (coinNetworkPairs.some(p => p.coin === cache.coin && p.network === cache.network)) {
+        priceMap.set(key, cache);
+      }
+    }
+  });
+  
+  return priceMap;
+}
+
 
 export async function setCachedPrice(
   coin: string,
@@ -243,8 +295,50 @@ export async function updateSwapHistoryStatus(sideshiftOrderId: string, status: 
   }
   
   await db.update(swapHistory)
-    .set({ status, txHash, updatedAt: new Date() })
+    .set({
+      status,
+      txHash: txHash || undefined,
+      updatedAt: new Date(),
+    })
     .where(eq(swapHistory.sideshiftOrderId, sideshiftOrderId));
+}
+
+export async function getAgentReputation(): Promise<{ totalSwaps: number; successRate: number; successCount: number }> {
+  if (!db) {
+    console.warn('Database not configured');
+    return { totalSwaps: 0, successRate: 0, successCount: 0 };
+  }
+
+  try {
+    // Query orders (bot) to get comprehensive stats
+    const result = await db
+      .select({
+        total: count(),
+        success: count(drizzleSql`CASE WHEN ${orders.status} = 'settled' THEN 1 END`)
+      })
+      .from(orders);
+    
+    if (!result || result.length === 0) {
+       return { totalSwaps: 0, successRate: 0, successCount: 0 };
+    }
+
+    const row = result[0];
+    const totalSwaps = Number(row.total);
+    const successCount = Number(row.success);
+    
+    const successRate = totalSwaps > 0 
+      ? (successCount / totalSwaps) * 100 
+      : 0;
+      
+    return {
+      totalSwaps,
+      successRate: Math.round(successRate * 10) / 10,
+      successCount
+    };
+  } catch (error) {
+    console.error('Error fetching agent reputation:', error);
+    return { totalSwaps: 0, successRate: 0, successCount: 0 };
+  }
 }
 
 // --- CHAT HISTORY FUNCTIONS ---
@@ -755,4 +849,344 @@ export async function getLeaderboard(limit: number = 100): Promise<Array<{
   }));
 }
 
+// --- WATCHLIST FUNCTIONS ---
+
+export async function getWatchlist(userId: string): Promise<Watchlist[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
+  return await db.select().from(watchlist)
+    .where(eq(watchlist.userId, userId))
+    .orderBy(desc(watchlist.addedAt));
+}
+
+export async function addToWatchlist(
+  userId: string,
+  coin: string,
+  network: string,
+  name: string
+): Promise<Watchlist | null> {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  // Check if already in watchlist
+  const existing = await db.select().from(watchlist)
+    .where(and(
+      eq(watchlist.userId, userId),
+      eq(watchlist.coin, coin),
+      eq(watchlist.network, network)
+    ))
+    .limit(1);
+  
+  if (existing.length > 0) {
+    return existing[0]; // Already in watchlist
+  }
+  
+  const result = await db.insert(watchlist).values({
+    userId,
+    coin,
+    network,
+    name,
+  }).returning();
+  
+  return result[0];
+}
+
+export async function removeFromWatchlist(
+  userId: string,
+  coin: string,
+  network: string
+): Promise<boolean> {
+  if (!db) {
+    console.warn('Database not configured');
+    return false;
+  }
+  
+  await db.delete(watchlist)
+    .where(and(
+      eq(watchlist.userId, userId),
+      eq(watchlist.coin, coin),
+      eq(watchlist.network, network)
+    ));
+  
+  return true;
+}
+
+export async function isInWatchlist(
+  userId: string,
+  coin: string,
+  network: string
+): Promise<boolean> {
+  if (!db) {
+    console.warn('Database not configured');
+    return false;
+  }
+  
+  const result = await db.select().from(watchlist)
+    .where(and(
+      eq(watchlist.userId, userId),
+      eq(watchlist.coin, coin),
+      eq(watchlist.network, network)
+    ))
+    .limit(1);
+  
+  return result.length > 0;
+}
+
+// --- PRICE ALERT FUNCTIONS ---
+
+export async function getPriceAlerts(userId: string): Promise<PriceAlert[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
+  return await db.select().from(priceAlerts)
+    .where(eq(priceAlerts.userId, userId))
+    .orderBy(desc(priceAlerts.createdAt));
+}
+
+export async function getActivePriceAlerts(userId: string): Promise<PriceAlert[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
+  return await db.select().from(priceAlerts)
+    .where(and(
+      eq(priceAlerts.userId, userId),
+      eq(priceAlerts.isActive, true)
+    ))
+    .orderBy(desc(priceAlerts.createdAt));
+}
+
+export async function createPriceAlert(
+  userId: string,
+  coin: string,
+  network: string,
+  name: string,
+  targetPrice: string,
+  condition: 'gt' | 'lt',
+  telegramId?: number
+): Promise<PriceAlert | null> {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  const result = await db.insert(priceAlerts).values({
+    userId,
+    telegramId: telegramId || null,
+    coin,
+    network,
+    name,
+    targetPrice,
+    condition,
+    isActive: true,
+  }).returning();
+  
+  return result[0];
+}
+
+export async function updatePriceAlert(
+  alertId: number,
+  userId: string,
+  updates: {
+    targetPrice?: string;
+    condition?: 'gt' | 'lt';
+    isActive?: boolean;
+  }
+): Promise<PriceAlert | null> {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  const result = await db.update(priceAlerts)
+    .set(updates)
+    .where(and(
+      eq(priceAlerts.id, alertId),
+      eq(priceAlerts.userId, userId)
+    ))
+    .returning();
+  
+  return result[0] || null;
+}
+
+export async function deletePriceAlert(alertId: number, userId: string): Promise<boolean> {
+  if (!db) {
+    console.warn('Database not configured');
+    return false;
+  }
+  
+  await db.delete(priceAlerts)
+    .where(and(
+      eq(priceAlerts.id, alertId),
+      eq(priceAlerts.userId, userId)
+    ));
+  
+  return true;
+}
+
+export async function togglePriceAlert(alertId: number, userId: string, isActive: boolean): Promise<PriceAlert | null> {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  const result = await db.update(priceAlerts)
+    .set({ isActive })
+    .where(and(
+      eq(priceAlerts.id, alertId),
+      eq(priceAlerts.userId, userId)
+    ))
+    .returning();
+  
+  return result[0] || null;
+}
+
+export async function markPriceAlertTriggered(alertId: number): Promise<boolean> {
+  if (!db) {
+    console.warn('Database not configured');
+    return false;
+  }
+  
+  await db.update(priceAlerts)
+    .set({ 
+      isActive: false,
+      triggeredAt: new Date()
+    })
+    .where(eq(priceAlerts.id, alertId));
+  
+  return true;
+}
+
+export async function getAllActivePriceAlerts(): Promise<PriceAlert[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
+  return await db.select().from(priceAlerts)
+    .where(eq(priceAlerts.isActive, true));
+}
+
+// --- PORTFOLIO TARGET FUNCTIONS ---
+
+export type PortfolioTarget = typeof portfolioTargets.$inferSelect;
+export type RebalanceHistoryEntry = typeof rebalanceHistory.$inferSelect;
+
+export async function getPortfolioTargets(userId: string): Promise<PortfolioTarget[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
+  return await db.select().from(portfolioTargets)
+    .where(eq(portfolioTargets.userId, userId))
+    .orderBy(desc(portfolioTargets.createdAt));
+}
+
+export async function getPortfolioTargetById(id: number, userId: string): Promise<PortfolioTarget | null> {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  const result = await db.select().from(portfolioTargets)
+    .where(and(
+      eq(portfolioTargets.id, id),
+      eq(portfolioTargets.userId, userId)
+    ))
+    .limit(1);
+  
+  return result[0] || null;
+}
+
+export async function createPortfolioTarget(
+  userId: string,
+  name: string,
+  assets: Record<string, unknown>[],
+  driftThreshold: number = 5.0,
+  autoRebalance: boolean = false
+): Promise<PortfolioTarget | null> {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  const result = await db.insert(portfolioTargets).values({
+    userId,
+    name,
+    assets,
+    driftThreshold,
+    autoRebalance,
+    isActive: true,
+  }).returning();
+  
+  return result[0];
+}
+
+export async function updatePortfolioTarget(
+  id: number,
+  userId: string,
+  updates: {
+    name?: string;
+    assets?: Record<string, unknown>[];
+    driftThreshold?: number;
+    autoRebalance?: boolean;
+    isActive?: boolean;
+  }
+): Promise<PortfolioTarget | null> {
+  if (!db) {
+    console.warn('Database not configured');
+    return null;
+  }
+  
+  const result = await db.update(portfolioTargets)
+    .set({
+      ...updates,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(portfolioTargets.id, id),
+      eq(portfolioTargets.userId, userId)
+    ))
+    .returning();
+  
+  return result[0] || null;
+}
+
+export async function deletePortfolioTarget(id: number, userId: string): Promise<boolean> {
+  if (!db) {
+    console.warn('Database not configured');
+    return false;
+  }
+  
+  await db.delete(portfolioTargets)
+    .where(and(
+      eq(portfolioTargets.id, id),
+      eq(portfolioTargets.userId, userId)
+    ));
+  
+  return true;
+}
+
+export async function getRebalanceHistory(portfolioTargetId: number): Promise<RebalanceHistoryEntry[]> {
+  if (!db) {
+    console.warn('Database not configured');
+    return [];
+  }
+  
+  return await db.select().from(rebalanceHistory)
+    .where(eq(rebalanceHistory.portfolioTargetId, portfolioTargetId))
+    .orderBy(desc(rebalanceHistory.createdAt));
+}
+
 export default db;
+
+

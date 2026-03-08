@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "SwapSmith",
+    "slug": "SwapSmith",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "favicon": "./assets/icon.png",
+      "predictiveBackGestureEnabled": false,
+      "package": "com.swapsmith"
+    },
+    "web": {
+      "favicon": "./assets/icon.png"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-asset"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "919c70a9-9497-4764-aba9-f142e0941134"
+      }
+    }
+  }
+}

@@ -9,9 +9,12 @@ import CoinCardSkeleton from '@/components/CoinCardSkeleton';
 import Navbar from '@/components/Navbar';
 import TopCryptoSection from '@/components/TopCryptoSection';
 import { getCoinPrices, CoinPrice } from '@/utils/sideshift-client';
-import Footer from '@/components/Footer';
+import Footer from '@/components/Footer'
+import FullPageAd from '@/components/FullPageAd'
+import { usePricesFullPageAd } from '@/hooks/useAds';
 
 export default function PricesPage() {
+  const { showAd, dismiss: dismissAd } = usePricesFullPageAd()
   const [coins, setCoins] = useState<CoinPrice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +84,7 @@ export default function PricesPage() {
 
   return (
     <>
+      {showAd && <FullPageAd variant="features" duration={10000} onDismiss={dismissAd} />}
       <Navbar />
       <div className="min-h-screen bg-primary pt-24 sm:pt-32 pb-20 transition-colors duration-500">
         

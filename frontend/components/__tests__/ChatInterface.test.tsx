@@ -1,19 +1,19 @@
-import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import '@testing-library/jest-dom';
+import '@testing-library/jest-dom/vitest';
+import { vi } from 'vitest';
 
 // Mock all external dependencies BEFORE importing the component
-jest.mock('wagmi', () => ({
-  useAccount: jest.fn(() => ({
+vi.mock('wagmi', () => ({
+  useAccount: vi.fn(() => ({
     address: '0x1234567890123456789012345678901234567890',
     isConnected: true,
   })),
 }));
 
-jest.mock('@/hooks/useErrorHandler', () => ({
-  useErrorHandler: jest.fn(() => ({
-    handleError: jest.fn((err, type, options) => 'An error occurred'),
+vi.mock('@/hooks/useErrorHandler', () => ({
+  useErrorHandler: vi.fn(() => ({
+    handleError: vi.fn((_err, _type, _options) => 'An error occurred'),
   })),
   ErrorType: {
     VOICE_ERROR: 'VOICE_ERROR',
@@ -22,54 +22,54 @@ jest.mock('@/hooks/useErrorHandler', () => ({
   },
 }));
 
-jest.mock('@/hooks/useAudioRecorder', () => ({
-  useAudioRecorder: jest.fn(() => ({
+vi.mock('@/hooks/useAudioRecorder', () => ({
+  useAudioRecorder: vi.fn(() => ({
     isRecording: false,
     isSupported: false,
-    startRecording: jest.fn(),
-    stopRecording: jest.fn(),
+    startRecording: vi.fn(),
+    stopRecording: vi.fn(),
     error: null,
   })),
 }));
 
-jest.mock('@/hooks/useAuth', () => ({
-  useAuth: jest.fn(() => ({
+vi.mock('@/hooks/useAuth', () => ({
+  useAuth: vi.fn(() => ({
     user: null,
     isAuthenticated: false,
     isLoading: false,
   })),
 }));
 
-jest.mock('../SwapConfirmation', () => {
-  return function MockSwapConfirmation() {
+vi.mock('../SwapConfirmation', () => ({
+  default: function MockSwapConfirmation() {
     return <div data-testid="swap-confirmation">Swap Confirmation</div>;
-  };
-});
+  }
+}));
 
-jest.mock('../TrustIndicators', () => {
-  return function MockTrustIndicators() {
+vi.mock('../TrustIndicators', () => ({
+  default: function MockTrustIndicators() {
     return <div data-testid="trust-indicators">Trust Indicators</div>;
-  };
-});
+  }
+}));
 
-jest.mock('../IntentConfirmation', () => {
-  return function MockIntentConfirmation() {
+vi.mock('../IntentConfirmation', () => ({
+  default: function MockIntentConfirmation() {
     return <div data-testid="intent-confirmation">Intent Confirmation</div>;
-  };
-});
+  }
+}));
 
 // NOW import the component after mocking dependencies
 import ChatInterface from '../ChatInterface';
 
 describe('ChatInterface Component', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    global.fetch = jest.fn();
+    vi.clearAllMocks();
+    global.fetch = vi.fn();
     localStorage.clear();
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   test('renders ChatInterface component', () => {
@@ -90,22 +90,30 @@ describe('ChatInterface Component', () => {
   });
 
   test('allows user to type in the input field', async () => {
+    const user = userEvent.setup();
     render(<ChatInterface />);
     const inputElement = screen.getAllByRole('textbox')[0] as HTMLInputElement;
     
-    await userEvent.type(inputElement, 'Swap 10 ETH');
+    await act(async () => {
+      await user.type(inputElement, 'Swap 10 ETH');
+    });
     
     expect(inputElement.value).toBe('Swap 10 ETH');
   });
 
   test('clears input field when typing', async () => {
+    const user = userEvent.setup();
     render(<ChatInterface />);
     const inputElement = screen.getAllByRole('textbox')[0] as HTMLInputElement;
     
-    await userEvent.type(inputElement, 'Test');
+    await act(async () => {
+      await user.type(inputElement, 'Test');
+    });
     expect(inputElement.value).toBe('Test');
     
-    await userEvent.clear(inputElement);
+    await act(async () => {
+      await user.clear(inputElement);
+    });
     expect(inputElement.value).toBe('');
   });
 
@@ -119,8 +127,7 @@ describe('ChatInterface Component', () => {
     const greeting = screen.getByText(/Hello! I can help you swap assets/i);
     expect(greeting).toBeInTheDocument();
     
-    const tipText = screen.getByText(/Try our Telegram Bot/i);
-    expect(tipText).toBeInTheDocument();
+    expect(screen.getByText(/Try our Telegram Bot/i)).toBeInTheDocument();
   });
 
   test('component has proper structure', () => {
@@ -131,10 +138,13 @@ describe('ChatInterface Component', () => {
   });
 
   test('accepts input without crashing', async () => {
+    const user = userEvent.setup();
     render(<ChatInterface />);
     const inputElement = screen.getAllByRole('textbox')[0];
     
-    await userEvent.type(inputElement, 'Test message for input');
+    await act(async () => {
+      await user.type(inputElement, 'Test message for input');
+    });
     
     expect(inputElement).toBeInTheDocument();
   });
