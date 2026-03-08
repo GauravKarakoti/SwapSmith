@@ -1,27 +1,8 @@
 import { createQuote, createOrder } from './sideshift-client';
 import { db, orders, watchedOrders } from './database';
 import logger from './logger';
-import type { ParsedCommand } from './parseUserCommand';
-
-interface PortfolioExecutionResult {
-  successfulOrders: Array<{
-    order: any;
-    allocation: any;
-    quoteId: string;
-    swapAmount: number;
-  }>;
-  failedSwaps: Array<{
-    asset: string;
-    reason: string;
-  }>;
-}
-
-interface QuoteOrderPair {
-  quote: any;
-  order: any;
-  allocation: any;
-  swapAmount: number;
-}
+import type { ParsedCommand } from '../types/ParsedCommand';
+import type { Quote, Order, PortfolioAllocation, PortfolioExecutionResult, SuccessfulOrderResult, FailedSwap } from '../types/Quote';
 
 export async function executePortfolioStrategy(
   userId: number,
@@ -33,7 +14,14 @@ export async function executePortfolioStrategy(
     throw new Error('No portfolio allocation found');
   }
 
-  const quotesAndOrders: QuoteOrderPair[] = [];
+  interface LocalQuoteOrderPair {
+    quote: Quote;
+    order: Order;
+    allocation: PortfolioAllocation;
+    swapAmount: number;
+  }
+
+  const quotesAndOrders: LocalQuoteOrderPair[] = [];
   let remainingAmount = amount!;
 
   for (let i = 0; i < portfolio.length; i++) {
@@ -115,7 +103,7 @@ export async function executePortfolioStrategy(
     }
   });
 
-  const successfulOrders = quotesAndOrders.map(({ quote, order, allocation, swapAmount }) => ({
+  const successfulOrders: SuccessfulOrderResult[] = quotesAndOrders.map(({ quote, order, allocation, swapAmount }) => ({
     order,
     allocation,
     quoteId: quote.id!,
