@@ -530,6 +530,18 @@ export default function ChatInterface() {
         return;
       }
 
+      // Handle Stake Intent
+      if (command.intent === 'stake') {
+        if (command.requiresConfirmation || command.confidence < 80) {
+          setPendingCommand(command);
+          addMessage({ role: 'assistant', content: '', type: 'intent_confirmation', data: { parsedCommand: command } });
+        } else {
+          await executeStake(command);
+        }
+        setIsLoading(false);
+        return;
+      }
+
       // Handle Limit Orders (have conditions on swap intent)
       if (command.intent === 'swap' && command.conditionOperator && command.conditionValue) {
         if (command.requiresConfirmation || command.confidence < 80) {
@@ -666,6 +678,60 @@ export default function ChatInterface() {
     } catch (error: unknown) {
       const errorMessage = handleError(error, ErrorType.API_FAILURE, {
         operation: 'limit_order_creation',
+        retryable: true
+      });
+      addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
+    }
+  };
+
+  const executeStake = async (command: ParsedCommand) => {
+    try {
+      const stakeResponse = await fetch('/api/create-stake', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: command.fromAsset,
+          amount: command.amount,
+          chain: command.fromChain,
+          settleAddress: address // Use connected wallet address
+        }),
+      });
+      
+      const result = await stakeResponse.json();
+      if (result.error) throw new Error(result.error);
+      
+      const amountText = command.amount ? `${command.amount} ${command.fromAsset}` : `All ${command.fromAsset}`;
+      
+      addMessage({
+        role: 'assistant',
+        content: `🥩 Stake Prepared!
+
+📊 Staking Details:
+• Amount: ${amountText}
+• Provider: ${result.provider}
+• Receive: ${result.stakingToken}
+• Est. APR: ${result.apr}%
+• Chain: ${result.chain}
+
+Ready to sign the transaction?`,
+        type: 'swap_confirmation', // Reuse swap confirmation UI for signing
+        data: {
+          quoteData: {
+            depositAmount: command.amount?.toString() || 'All',
+            depositCoin: command.fromAsset!,
+            depositNetwork: result.chain,
+            rate: '1',
+            settleAmount: result.stakingToken,
+            settleCoin: result.stakingToken,
+            settleNetwork: result.chain,
+            id: result.orderId
+          },
+          confidence: command.confidence
+        }
+      });
+    } catch (error: unknown) {
+      const errorMessage = handleError(error, ErrorType.API_FAILURE, {
+        operation: 'stake_creation',
         retryable: true
       });
       addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
