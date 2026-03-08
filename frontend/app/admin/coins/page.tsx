@@ -285,13 +285,27 @@ function UserLogsModal({
   const [error, setError]   = useState('')
 
   useEffect(() => {
-    fetch(`/api/admin/coins/adjust?userId=${user.id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.json())
-      .then(d => { if (d.success) setLogs(d.logs); else setError(d.error ?? 'Failed') })
-      .catch(() => setError('Network error'))
-      .finally(() => setLoading(false))
+    const fetchAdjustmentLogs = async () => {
+      try {
+        const response = await fetch(`/api/admin/coins/adjust?userId=${user.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+          setLogs(data.logs);
+        } else {
+          setError(data.error ?? 'Failed to load logs');
+        }
+      } catch (err) {
+        console.error('Failed to fetch adjustment logs:', err);
+        setError('Network error');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAdjustmentLogs();
   }, [user.id, token])
 
   return (

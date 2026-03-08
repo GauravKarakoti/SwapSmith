@@ -1,37 +1,26 @@
 'use client'
 
 import { useState } from 'react'
-import {
-  CheckCircle,
-  AlertCircle,
-  Copy,
-  Check,
-  ShieldCheck,
-  Shield,
-  AlertTriangle,
-  Info,
-  Zap,
-  Wallet,
-} from 'lucide-react'
-import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi'
-import { parseEther, formatEther, type Chain, erc20Abi, formatUnits, parseUnits, encodeFunctionData } from 'viem'
+import { CheckCircle, AlertCircle, ExternalLink, Copy, Check, ShieldCheck, Shield, AlertTriangle, Info, TrendingUp, Zap } from 'lucide-react'
+import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi' // Added usePublicClient
+import { parseEther, formatEther, type Chain } from 'viem'
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
 import { validateDepositAddressForNetwork } from '@/utils/addressValidation'
 import { getCoins, type Coin, type CoinNetwork } from '@/utils/sideshift-client'
 import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift'
 
 export interface QuoteData {
-  depositAmount: string
-  depositCoin: string
-  depositNetwork: string
-  depositAddress: string
-  rate: string
-  settleAmount: string
-  settleCoin: string
-  settleNetwork: string
-  memo?: string
-  expiry?: string
-  id?: string
+  depositAmount: string;
+  depositCoin: string;
+  depositNetwork: string;
+  rate: string;
+  settleAmount: string;
+  settleCoin: string;
+  settleNetwork: string;
+  depositAddress?: string; // Keep only the optional version
+  memo?: string;
+  expiry?: string;
+  id?: string;
 }
 
 interface SwapConfirmationProps {
@@ -52,16 +41,20 @@ const EXPLORER_URLS: { [key: string]: string } = {
   solana: 'https://solscan.io',
 }
 
-const CHAIN_MAP: { [key: string]: Chain & { id: number; name: string } } = {
-  ethereum: { ...mainnet, name: 'Ethereum' },
-  polygon: { ...polygon, name: 'Polygon' },
-  arbitrum: { ...arbitrum, name: 'Arbitrum' },
-  avalanche: { ...avalanche, name: 'Avalanche' },
-  optimism: { ...optimism, name: 'Optimism' },
-  bsc: { ...bsc, name: 'BSC' },
-  base: { ...base, name: 'Base' },
+const SIDESHIFT_TRACKING_URL = SIDESHIFT_CONFIG.TRACKING_URL
+
+// Map network names from your API to wagmi chain objects
+const CHAIN_MAP: { [key: string]: Chain } = {
+  ethereum: mainnet,
+  polygon: polygon,
+  arbitrum: arbitrum,
+  avalanche: avalanche,
+  optimism: optimism,
+  bsc: bsc,
+  base: base,
 }
 
+// Safety Check Result Interface
 interface SafetyCheckResult {
   passed: boolean
   checks: {
@@ -74,82 +67,91 @@ interface SafetyCheckResult {
   overallMessage: string
 }
 
-export default function SwapConfirmation({ quote, confidence: _confidence, onAmountChange }: SwapConfirmationProps) {
+// --- Main Component ---
+export default function SwapConfirmation({ quote, confidence, onAmountChange }: SwapConfirmationProps) {
   const [copiedAddress, setCopiedAddress] = useState(false)
   const [copiedMemo, setCopiedMemo] = useState(false)
-  const [isSimulating, setIsSimulating] = useState(false)
-  const [safetyCheck, setSafetyCheck] = useState<SafetyCheckResult | null>(null)
-  const [walletBalance, setWalletBalance] = useState<string | null>(null)
-  const [isLoadingBalance, setIsLoadingBalance] = useState(false)
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [safetyCheck, setSafetyCheck] = useState<SafetyCheckResult | null>(null);
+  const [walletBalance, setWalletBalance] = useState<string | null>(null);
+  const [isLoadingBalance, setIsLoadingBalance] = useState(false);
 
   const { address, isConnected, chain: connectedChain } = useAccount()
   const { data: hash, error, isPending, isSuccess, sendTransaction } = useSendTransaction()
   const { switchChainAsync } = useSwitchChain()
 
-  const depositChainId = CHAIN_MAP[quote.depositNetwork.toLowerCase()]?.id
-  const publicClient = usePublicClient({ chainId: depositChainId })
+  // Get Chain ID for the deposit network
+  const depositChainId = CHAIN_MAP[quote.depositNetwork.toLowerCase()]?.id;
 
-  const getNetworkName = (network: string) => {
-    return CHAIN_MAP[network.toLowerCase()]?.name || network
-  }
+  // Get a public client specifically for the target chain to run simulations
+  const publicClient = usePublicClient({ chainId: depositChainId });
 
-  const handleMaxClick = async () => {
-    if (!isConnected || !address || !publicClient) return
+  const handleConfirm = async () => {
+    if (!quote) {
+      alert("Error: Deposit address is missing. Cannot proceed.");
+      return;
+    }
 
-    setIsLoadingBalance(true)
+    if (!depositChainId) {
+      alert(`The network "${quote.depositNetwork}" is not supported for this transaction.`);
+      return;
+    }
+
+    if (!sendTransaction) {
+      console.error("Transaction function not available.", error);
+      alert("Could not prepare transaction. Make sure your wallet is connected.");
+      return;
+    }
+
+    // Log quote for debugging to verify depositAddress exists
+    console.log("Swap quote:", quote);
+    
+    // Validate depositAddress before proceeding
+    if (!quote.depositAddress) {
+      console.error("depositAddress is missing from quote:", quote);
+      alert("Error: Deposit address is missing. Cannot proceed with swap.");
+      return;
+    }
+    
+    const transactionDetails = {
+      to: quote.depositAddress as `0x${string}`, // SideShift deposit address
+      value: parseEther(quote.depositAmount),
+      chainId: depositChainId,
+    };
+
     try {
-      let isNativeValue = true
-      let tokenAddress: string | undefined
-      let decimals = 18
-
-      try {
-        const coins = await getCoins()
-        const coinInfo = coins.find((c: Coin) => c.coin.toLowerCase() === quote.depositCoin.toLowerCase())
-        const networkInfo = coinInfo?.networks.find((n: CoinNetwork) => n.network.toLowerCase() === quote.depositNetwork.toLowerCase())
-
-        if (networkInfo?.tokenContract) {
-          isNativeValue = false
-          tokenAddress = networkInfo.tokenContract
+      if (connectedChain?.id !== depositChainId) {
+        if (!switchChainAsync) {
+          alert("Could not switch network. Please do it manually in your wallet.");
+          return;
         }
-      } catch (err) {
-        console.error('Failed to fetch coin info from SideShift; aborting max balance calculation', err)
-        throw err
+        await switchChainAsync({ chainId: depositChainId });
       }
-
-      let balanceRaw: bigint = BigInt(0)
-
-      if (isNativeValue) {
-        balanceRaw = await publicClient.getBalance({ address })
-        decimals = 18
-      } else if (tokenAddress) {
-        const [bal, dec] = await Promise.all([
-          publicClient.readContract({
-            address: tokenAddress as `0x${string}`,
-            abi: erc20Abi,
-            functionName: 'balanceOf',
-            args: [address],
-          }) as Promise<bigint>,
-          publicClient.readContract({
-            address: tokenAddress as `0x${string}`,
-            abi: erc20Abi,
-            functionName: 'decimals',
-          }) as Promise<number>,
-        ])
-        balanceRaw = bal
-        decimals = Number(dec)
+      sendTransaction(transactionDetails);
+    } catch (e) {
+      const switchError = e as Error;
+      console.error('Failed to switch network or send transaction:', switchError);
+      if (switchError.message.includes('User rejected the request')) {
+        alert('You rejected the network switch request. Please approve it to continue.');
+      } else {
+        alert('Failed to switch network. Please try again.');
       }
+    }
+  };
 
-      const formatted = formatUnits(balanceRaw, decimals)
-      setWalletBalance(formatted)
+  const handleFetchBalance = async () => {
+    if (!address || !publicClient) {
+      alert('Wallet not connected or network not supported');
+      return;
+    }
 
-      let finalAmountFormatted = formatted
+    setIsLoadingBalance(true);
+    try {
+      const balance = await publicClient.getBalance({ address });
+      const balanceFormatted = formatEther(balance);
+      setWalletBalance(balanceFormatted);
 
-      if (isNativeValue) {
-        const gasBuffer = parseUnits('0.005', decimals) // 0.005 buffer for gas
-        const maxBalance = balanceRaw > gasBuffer ? balanceRaw - gasBuffer : BigInt(0)
-        finalAmountFormatted = formatUnits(maxBalance, decimals)
-      }
-
+      // Call the callback to update the parent component with the max amount
       if (onAmountChange) {
         onAmountChange(finalAmountFormatted)
       }
@@ -172,96 +174,65 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
         gas: { passed: true, message: '' },
       }
 
-      // Check 1: Address validation
-      {
-        const addressCheck = validateDepositAddressForNetwork(quote.depositNetwork, quote.depositAddress)
-        checks.address.passed = addressCheck.passed
-        checks.address.message = addressCheck.message
-      }
+    try {
+      if (!address) throw new Error("Wallet not connected");
 
-      // Check 2: Network compatibility
-      if (depositChainId) {
-        checks.network.passed = true
-        checks.network.message = `Compatible with ${getNetworkName(quote.depositNetwork)}`
+      // 1. Address Validation Check
+      if (address && address.startsWith('0x') && address.length === 42) {
+        checks.address = { passed: true, message: 'Valid Ethereum address format' };
       } else {
-        checks.network.passed = false
-        checks.network.message = `Network ${quote.depositNetwork} not supported`
+        checks.address = { passed: false, message: 'Invalid address format' };
       }
 
-      // Check 3: Balance check
-      let isNative = true
-      let tokenAddress: string | undefined
-      let decimals = 18
+      // 2. Check if chain is supported for simulation
+      if (!depositChainId || !publicClient) {
+        // Fallback for non-EVM chains (e.g. Bitcoin) where we can't easily simulate via wagmi
+        console.log("Skipping detailed simulation for non-EVM chain");
+        checks.network = { passed: true, message: 'Non-EVM chain (limited validation)' };
+        checks.balance = { passed: true, message: 'Cannot verify balance on non-EVM chain' };
+        checks.gas = { passed: true, message: 'Gas estimation not available' };
 
-      try {
-        const coins = await getCoins()
-        const coinInfo = coins.find((c: Coin) => c.coin.toLowerCase() === quote.depositCoin.toLowerCase())
-        const networkInfo = coinInfo?.networks.find((n: CoinNetwork) => n.network.toLowerCase() === quote.depositNetwork.toLowerCase())
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
-        if (networkInfo?.tokenContract) {
-          isNative = false
-          tokenAddress = networkInfo.tokenContract
-        }
-      } catch (err) {
-        console.warn('Failed to fetch coin info, default to native', err)
+        const result: SafetyCheckResult = {
+          passed: true,
+          checks,
+          riskLevel: 'warning',
+          overallMessage: 'Limited safety checks for non-EVM chain'
+        };
+        setSafetyCheck(result);
+        return;
       }
 
-      let balance = BigInt(0)
-      let nativeBalance = BigInt(0)
-
-      if (!isNative && tokenAddress) {
-        const [bal, dec, natBal] = await Promise.all([
-          publicClient.readContract({
-            address: tokenAddress as `0x${string}`,
-            abi: erc20Abi,
-            functionName: 'balanceOf',
-            args: [address],
-          }) as Promise<bigint>,
-          publicClient.readContract({
-            address: tokenAddress as `0x${string}`,
-            abi: erc20Abi,
-            functionName: 'decimals',
-          }) as Promise<number>,
-          publicClient.getBalance({ address }),
-        ])
-        balance = bal
-        decimals = dec
-        nativeBalance = natBal
+      // 3. Network Check
+      if (connectedChain?.id === depositChainId) {
+        checks.network = { passed: true, message: `Connected to ${getNetworkName(quote.depositNetwork)}` };
       } else {
         balance = await publicClient.getBalance({ address })
         nativeBalance = balance
       }
 
-      const requiredAmount = parseUnits(quote.depositAmount, decimals)
+      // 4. Balance Check
+      const balance = await publicClient.getBalance({ address });
+      const requiredAmount = parseEther(quote.depositAmount);
 
       if (balance >= requiredAmount) {
         checks.balance.passed = true
         checks.balance.message = `Sufficient balance: ${formatUnits(balance, decimals)} available`
       } else {
-        checks.balance.passed = false
-        checks.balance.message = `Insufficient balance: need ${quote.depositAmount}, have ${formatUnits(balance, decimals)}`
+        checks.balance = {
+          passed: false,
+          message: `Insufficient balance. Need ${quote.depositAmount} ${quote.depositCoin}, have ${formatEther(balance).substring(0, 8)}`
+        };
       }
 
-      // Check 4: Gas estimation
+      // 5. Gas Estimation Check
       try {
-        let gasEstimate = BigInt(0)
-        if (!isNative && tokenAddress) {
-          gasEstimate = await publicClient.estimateGas({
-            to: tokenAddress as `0x${string}`,
-            data: encodeFunctionData({
-              abi: erc20Abi,
-              functionName: 'transfer',
-              args: [quote.depositAddress as `0x${string}`, requiredAmount],
-            }),
-            account: address,
-          })
-        } else {
-          gasEstimate = await publicClient.estimateGas({
-            to: quote.depositAddress as `0x${string}`,
-            value: requiredAmount,
-            account: address,
-          })
-        }
+        const gasEstimate = await publicClient.estimateGas({
+          account: address,
+          to: address,
+          value: requiredAmount
+        });
 
         const gasCost = gasEstimate * BigInt(30000000000) // 30 gwei buffer (conservative)
         const hasGas = isNative ? balance >= requiredAmount + gasCost : nativeBalance >= gasCost
@@ -274,12 +245,32 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
           checks.gas.message = `Insufficient gas buffer`
         }
       } catch {
-        checks.gas.passed = true
-        checks.gas.message = 'Gas estimation available'
+        checks.gas = {
+          passed: false,
+          message: 'Gas estimation failed - transaction may fail'
+        };
       }
 
-      const allPassed = Object.values(checks).every((c) => c.passed)
-      const hasWarnings = Object.values(checks).some((c) => !c.passed)
+      // Add a small delay so the user sees the checking state
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      // Determine overall risk level
+      const allPassed = Object.values(checks).every(check => check.passed);
+      const criticalFailed = !checks.balance.passed || !checks.gas.passed;
+
+      let riskLevel: 'safe' | 'warning' | 'unsafe';
+      let overallMessage: string;
+
+      if (allPassed) {
+        riskLevel = 'safe';
+        overallMessage = 'All safety checks passed. Transaction should succeed.';
+      } else if (criticalFailed) {
+        riskLevel = 'unsafe';
+        overallMessage = 'Critical issues detected. Transaction will likely fail.';
+      } else {
+        riskLevel = 'warning';
+        overallMessage = 'Some checks failed. Proceed with caution.';
+      }
 
       const result: SafetyCheckResult = {
         passed: allPassed,
@@ -310,6 +301,11 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
       setIsSimulating(false)
     }
   }
+>>>>>>> 0e4cef795c15b946e650c2cf9da1821b3a59b31a
+
+  const handleSecurityScanComplete = (result: SecurityCheckResult) => {
+    setSecurityScanResult(result);
+  };
 
   const handleConfirm = async () => {
     if (!quote || !quote.depositAddress) {
@@ -651,15 +647,12 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
         ) : (
           <div className="space-y-3">
             {/* Overall Status Banner */}
-            <div
-              className={`flex items-center gap-2 p-3 rounded-lg border ${
-                safetyCheck.riskLevel === 'safe'
-                  ? 'bg-green-50 border-green-200 text-green-700'
-                  : safetyCheck.riskLevel === 'warning'
-                    ? 'bg-yellow-50 border-yellow-200 text-yellow-700'
-                    : 'bg-red-50 border-red-200 text-red-700'
-              }`}
-            >
+            <div className={`flex items-center gap-2 p-3 rounded-lg border ${safetyCheck.riskLevel === 'safe'
+              ? 'bg-green-50 border-green-200 text-green-700'
+              : safetyCheck.riskLevel === 'warning'
+                ? 'bg-yellow-50 border-yellow-200 text-yellow-700'
+                : 'bg-red-50 border-red-200 text-red-700'
+              }`}>
               {safetyCheck.riskLevel === 'safe' && <Shield className="w-5 h-5" />}
               {safetyCheck.riskLevel === 'warning' && <AlertTriangle className="w-5 h-5" />}
               {safetyCheck.riskLevel === 'unsafe' && <AlertCircle className="w-5 h-5" />}
@@ -730,8 +723,58 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
                 </div>
               </div>
             </div>
+
+            {/* Re-run button */}
+            <button
+              onClick={handleSimulate}
+              disabled={isSimulating}
+              className="w-full flex items-center justify-center gap-2 py-2 text-gray-600 hover:text-gray-800 transition-colors text-xs border border-gray-300 rounded-lg hover:border-gray-400"
+            >
+              <TrendingUp className="w-3 h-3" />
+              Re-run Safety Check
+            </button>
           </div>
         )}
+      </div>
+
+      <div className="mt-4 space-y-2">
+        <button
+          onClick={handleConfirm}
+          disabled={!isConnected || isPending || !address || (safetyCheck?.riskLevel === 'unsafe') || false}
+          className={`w-full py-3 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${safetyCheck?.riskLevel === 'safe'
+            ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700'
+            : safetyCheck?.riskLevel === 'warning'
+              ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white hover:from-yellow-600 hover:to-yellow-700'
+              : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700'
+            }`}
+        >
+          {isPending ? 'Check Your Wallet...' : safetyCheck?.riskLevel === 'unsafe' ? 'Transaction Blocked (Unsafe)' : 'Confirm and Send'}
+        </button>
+
+        {explorerUrl && !isSuccess && (
+          <button
+            onClick={() => window.open(explorerUrl, '_blank', 'noopener,noreferrer')}
+            className="w-full flex items-center justify-center gap-2 py-2 text-gray-600 hover:text-gray-800 transition-colors text-sm border border-gray-300 rounded-lg hover:border-gray-400"
+          >
+            View Deposit Address <ExternalLink className="w-3 h-3" />
+          </button>
+        )}
+
+        <div className="flex gap-2 text-xs">
+          <button
+            onClick={() => window.open(SIDESHIFT_CONFIG.HELP_URL, '_blank')}
+            className="text-blue-600 hover:text-blue-800"
+          >
+            Need help?
+          </button>
+          <span className="text-gray-400">•</span>
+          <button
+            onClick={() => window.open(SIDESHIFT_CONFIG.FAQ_URL, '_blank')}
+            className="text-blue-600 hover:text-blue-800"
+          >
+            FAQ
+          </button>
+        </div>
       </div>
 
       {error && (
