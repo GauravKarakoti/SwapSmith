@@ -44,6 +44,7 @@
     "three": "^0.183.1",
     "viem": "^2.37.3",
     "wagmi": "^2.16.9",
+    "zod": "^4.3.6"
     "winston": "^3.19.0"
   },
   "devDependencies": {

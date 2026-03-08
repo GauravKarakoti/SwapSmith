@@ -7,6 +7,7 @@ import {
   getCachedPrice,
   getCachedPricesBatch,
 } from '@/lib/database';
+import { csrfGuard } from '@/lib/csrf';
 import logger from '@/lib/logger';
 
 export default async function handler(
@@ -54,12 +55,24 @@ export default async function handler(
     try {
       const watchlist = await getWatchlist(userId);
 
-      // Batch fetch all prices in a single query (fix N+1 problem)
-      const priceMap = await getCachedPricesBatch(
-        watchlist.map(item => ({
-          coin: item.coin,
-          network: item.network
-        }))
+      const watchlistWithPrices = await Promise.all(
+        watchlist.map(async (item) => {
+          const priceData = await getCachedPrice(
+            item.coin,
+            item.network,
+            true
+          );
+
+          const isStale = priceData ? new Date(priceData.expiresAt) < new Date() : false;
+
+          return {
+            ...item,
+            usdPrice: priceData?.usdPrice ?? null,
+            btcPrice: priceData?.btcPrice ?? null,
+            lastUpdated: priceData?.updatedAt ?? null,
+            isStale,
+          };
+        })
       );
 
       const watchlistWithPrices = watchlist.map(item => {
@@ -85,6 +98,11 @@ export default async function handler(
 
   // ➕ POST — Add token to watchlist
   if (req.method === 'POST') {
+    // CSRF Protection
+    if (!csrfGuard(req, res)) {
+      return;
+    }
+
     try {
       const { coin, network, name } = req.body;
 
@@ -124,6 +142,11 @@ export default async function handler(
 
   // ❌ DELETE — Remove token from watchlist
   if (req.method === 'DELETE') {
+    // CSRF Protection
+    if (!csrfGuard(req, res)) {
+      return;
+    }
+
     try {
       const { coin, network } = req.body;
 

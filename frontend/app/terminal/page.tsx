@@ -156,6 +156,7 @@ export default function TerminalPage() {
   const sessionIdRef = useRef(currentSessionId);
   const loadedSessionRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Data Fetching
   const { data: chatSessions, refetch: refetchSessions } = useChatSessions(
@@ -169,6 +170,8 @@ export default function TerminalPage() {
     isSupported: isAudioSupported,
     startRecording,
     stopRecording,
+    error: audioError,
+    browserInfo,
   } = useAudioRecorder();
 
   /* ------------------------------------------------------------------------ */
@@ -204,6 +207,21 @@ export default function TerminalPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Auto-focus text input on voice error
+  useEffect(() => {
+    if (audioError) {
+      addMessage({
+        role: "assistant",
+        content: audioError,
+        type: "message",
+      });
+      // Auto-focus text input on voice failure
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+    }
+  }, [audioError]);
 
 
   /* ------------------------------------------------------------------------ */
@@ -752,6 +770,7 @@ export default function TerminalPage() {
 
           <div className="p-4 border-t border-[var(--border)] bg-[var(--panel)]/90 backdrop-blur">
             <ClaudeChatInput
+              ref={inputRef}
               onSendMessage={({ message }) => processCommand(message)}
               isRecording={isRecording}
               isAudioSupported={isAudioSupported}
