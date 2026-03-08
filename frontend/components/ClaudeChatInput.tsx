@@ -161,7 +161,7 @@ export const ClaudeChatInput = forwardRef<HTMLTextAreaElement, ClaudeChatInputPr
     onStartRecording, 
     onStopRecording,
     isConnected = false,
-    disabled = false 
+    disabled = false,
     inputRef: externalInputRef,
     onVoiceError 
 }, ref) => {

@@ -21,6 +21,7 @@ import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagm
 import { validateDepositAddressForNetwork } from '@/utils/addressValidation'
 import { getCoins, type Coin, type CoinNetwork } from '@/utils/sideshift-client'
 import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift'
+import CopyButton from './CopyButton'
 
 export interface QuoteData {
   depositAmount: string;
@@ -80,8 +81,7 @@ interface SafetyCheckResult {
   overallMessage: string
 }
 
-// --- Main Component ---
-export default function SwapConfirmation({ quote, confidence, onAmountChange }: SwapConfirmationProps) {
+export default function SwapConfirmation({ quote, confidence: _confidence, onAmountChange }: SwapConfirmationProps) {
   const [copiedAddress, setCopiedAddress] = useState(false)
   const [copiedMemo, setCopiedMemo] = useState(false)
   const [isSimulating, setIsSimulating] = useState(false)
@@ -94,8 +94,8 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
   const { switchChainAsync } = useSwitchChain()
   const { data: hash, isPending, isSuccess, error, sendTransaction } = useSendTransaction()
 
-  // Get Chain ID for the deposit network
-  const depositChainId = CHAIN_MAP[quote.depositNetwork.toLowerCase()]?.id;
+  const depositChainId = CHAIN_MAP[quote.depositNetwork.toLowerCase()]?.id
+  const publicClient = usePublicClient({ chainId: depositChainId })
 
   // Clear wallet-related state when wallet disconnects
   useEffect(() => {
@@ -293,10 +293,6 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
     }
   }
 
-  const handleSecurityScanComplete = (result: SecurityCheckResult) => {
-    setSecurityScanResult(result);
-  };
-
   const handleSecurityScanComplete = (result: ScannerSecurityCheckResult) => {
     setSecurityScanResult(result)
   }
@@ -448,21 +444,6 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
     }
   }
 
-  const copyToClipboard = async (text: string, type: 'address' | 'memo') => {
-    try {
-      await navigator.clipboard.writeText(text)
-      if (type === 'address') {
-        setCopiedAddress(true)
-        setTimeout(() => setCopiedAddress(false), 2000)
-      } else {
-        setCopiedMemo(true)
-        setTimeout(() => setCopiedMemo(false), 2000)
-      }
-    } catch (err) {
-      console.error('Failed to copy:', err)
-    }
-  }
-
   const getExplorerUrl = () => {
     const networkKey = quote.depositNetwork.toLowerCase()
     const baseUrl = EXPLORER_URLS[networkKey]
@@ -488,7 +469,7 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
     securityScanResult?.riskLevel === 'critical' ||
     securityScanResult?.riskLevel === 'high'
 
-  const isTransactionBlocked = safetyCheck?.riskLevel === 'unsafe' || securityScanResult?.riskLevel === 'critical' || securityScanResult?.riskLevel === 'high';
+  const isTransactionBlocked = safetyCheck?.riskLevel === 'unsafe';
 
   if (isSuccess) {
     return (
@@ -496,6 +477,24 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
         <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-2" />
         <h4 className="font-bold text-gray-900">Swap Initiated!</h4>
         <p className="text-sm text-gray-600">Track your transaction on the explorer.</p>
+        
+        {hash && (
+          <div className="mt-3 p-2 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-gray-500">Transaction Hash:</span>
+              <CopyButton 
+                text={hash} 
+                size="sm" 
+                variant="ghost"
+                toastMessage="Transaction hash copied!"
+              />
+            </div>
+            <div className="text-xs font-mono text-gray-600 break-all">
+              {hash}
+            </div>
+          </div>
+        )}
+        
         {explorerUrl && (
           <a href={explorerUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline mt-2 block">
             View on Explorer {'>'}
@@ -562,11 +561,14 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
         </div>
 
         <div className="pt-2">
-          <div className="flex justify-between text-[11px] text-gray-500 mb-1 px-1">
+          <div className="flex justify-between items-center text-[11px] text-gray-500 mb-1 px-1">
             <span>Deposit Address</span>
-            <button onClick={() => copyToClipboard(quote.depositAddress, 'address')} className="text-blue-600 hover:underline">
-              {copiedAddress ? 'Copied!' : 'Copy Address'}
-            </button>
+            <CopyButton 
+              text={quote.depositAddress} 
+              size="sm" 
+              variant="ghost"
+              toastMessage="Deposit address copied!"
+            />
           </div>
           <div className="bg-gray-50 border border-gray-200 p-2 rounded text-[10px] font-mono break-all text-gray-600">
             {quote.depositAddress}
@@ -591,13 +593,12 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
           <div className="border-t pt-3">
             <div className="flex justify-between items-start mb-2">
               <span className="text-gray-600 font-medium">Memo/Tag:</span>
-              <button
-                onClick={() => copyToClipboard(quote.memo!, 'memo')}
-                className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
-              >
-                {copiedMemo ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                {copiedMemo ? 'Copied!' : 'Copy'}
-              </button>
+              <CopyButton 
+                text={quote.memo} 
+                size="sm" 
+                variant="ghost"
+                toastMessage="Memo copied!"
+              />
             </div>
             <div className="bg-yellow-50 p-2 rounded text-xs font-mono break-all border border-yellow-200">
               Important: Include this memo
