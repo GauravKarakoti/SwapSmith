@@ -1,7 +1,10 @@
-import apiClient from '../lib/axios-client';
+import axios from 'axios';
 import { SIDESHIFT_CONFIG, getApiUrl } from '../../shared/config/sideshift';
 import { validateDepositAddressForNetwork } from './addressValidation';
 
+const apiClient = axios.create({
+  baseURL: getApiUrl(),
+});
 // API key is now server-side only - client calls backend API routes
 
 export interface SideShiftQuote {
