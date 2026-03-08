@@ -9,7 +9,6 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
 }
-
 export const metadata: Metadata = {
   title: 'SwapSmith',
   description: 'Voice-Activated Crypto Trading Assistant',
