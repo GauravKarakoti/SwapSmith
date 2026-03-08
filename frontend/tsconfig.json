@@ -21,6 +21,7 @@
     ],
     "paths": {
       "@/*": ["./*"],
+      "@shared/*": ["../shared/*"],
       "shared/*": ["../shared/*"],
       "dotenv": ["./node_modules/dotenv"],
       "drizzle-kit": ["./node_modules/drizzle-kit"],
