@@ -3,9 +3,9 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { BarChart2, Users, ArrowLeftRight, Coins, RefreshCw, LogOut, Menu, X } from 'lucide-react'
+import { BarChart2, Users, ArrowLeftRight, Coins, RefreshCw, LogOut, Menu, X, Shield } from 'lucide-react'
 
-export type AdminPage = 'dashboard' | 'users' | 'swaps' | 'coins'
+export type AdminPage = 'dashboard' | 'users' | 'swaps' | 'coins' | 'audit-log'
 
 export interface AdminNavbarProps {
   activePage: AdminPage
@@ -22,6 +22,7 @@ const NAV_ITEMS = [
   { label: 'Users',      icon: Users,           path: '/admin/users',     key: 'users'     },
   { label: 'Swaps',      icon: ArrowLeftRight,  path: '/admin/swaps',     key: 'swaps'     },
   { label: 'Test Coins', icon: Coins,           path: '/admin/coins',     key: 'coins'     },
+  { label: 'Audit Log',  icon: Shield,          path: '/admin/audit-log', key: 'audit-log', superAdminOnly: true },
 ] as const
 
 export default function AdminNavbar({ activePage, adminInfo, onLogout, onRefresh, lastRefresh }: AdminNavbarProps) {
@@ -138,7 +139,10 @@ export default function AdminNavbar({ activePage, adminInfo, onLogout, onRefresh
             </span>
           )}
 
-          {NAV_ITEMS.map(({ label, icon: Icon, path, key }) => {
+          {NAV_ITEMS.map(({ label, icon: Icon, path, key, superAdminOnly }) => {
+            // Skip super_admin only items if user is not super_admin
+            if (superAdminOnly && adminInfo?.role !== 'super_admin') return null
+            
             const isActive = activePage === key
             return (
               <button
@@ -268,7 +272,10 @@ export default function AdminNavbar({ activePage, adminInfo, onLogout, onRefresh
             )}
 
             {/* Nav buttons */}
-            {NAV_ITEMS.map(({ label, icon: Icon, path, key }) => {
+            {NAV_ITEMS.map(({ label, icon: Icon, path, key, superAdminOnly }) => {
+              // Skip super_admin only items if user is not super_admin
+              if (superAdminOnly && adminInfo?.role !== 'super_admin') return null
+              
               const isActive = activePage === key
               return (
                 <button
