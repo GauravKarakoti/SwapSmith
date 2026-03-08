@@ -16,7 +16,7 @@ The original RewardToken contract had critical security vulnerabilities:
 - **Added**: `mintingCap` state variable (initialized to 10M SMTH)
 - **Enforcement**: `mintToTreasury()` reverts if minting would exceed cap
 - **Transparency**: `MaxSupplyReached` event emitted when cap is hit
-- **Benefit**: Users can now verify on-chain that supply cannot exceed 10M tokens
+- **Benefit**: Users can now verify on-chain that total supply cannot exceed the current `mintingCap` (initially 10M tokens) unless governance increases it
 
 ### 2. Governance-Controlled Cap Updates ✅
 - **Added**: `setMintingCap()` function for adjusting the cap
