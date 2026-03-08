@@ -10,17 +10,17 @@ export interface Message {
   content: string;
   timestamp: Date;
   type?:
-    | 'message'
-    | 'intent_confirmation'
-    | 'swap_confirmation'
-    | 'yield_info'
-    | 'checkout_link';
+  | 'message'
+  | 'intent_confirmation'
+  | 'swap_confirmation'
+  | 'yield_info'
+  | 'checkout_link';
   data?:
-    | ParsedCommand
-    | { quoteData: Record<string, unknown>; confidence: number }
-    | { url: string }
-    | { parsedCommand: ParsedCommand }
-    | Record<string, unknown>;
+  | ParsedCommand
+  | { quoteData: Record<string, unknown>; confidence: number }
+  | { url: string }
+  | { parsedCommand: ParsedCommand }
+  | Record<string, unknown>;
 }
 
 /**
@@ -122,7 +122,7 @@ export function buildPortfolioCommands(command: ParsedCommand): ParsedCommand[] 
     toAsset: item.toAsset,
     toChain: item.toChain,
     portfolio: undefined,
-    confidence: 100,
+    confidence: command.confidence,
   }));
 }
 

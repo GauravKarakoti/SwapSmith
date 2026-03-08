@@ -4,6 +4,9 @@ import fs from 'fs';
 import logger, { handleError } from './logger';
 import { loadSecret } from '../../../shared/utils/secrets-loader';
 import { sanitizeLLMPrompt, validateAndSanitizeLLMInput } from '../../../shared/utils/validation';
+import type { ParsedCommand } from '../types/ParsedCommand';
+import type { ConversationMessage, GroqMessage, TranscriptionResponse } from '../types/Message';
+import type { ErrorDetails } from '../types/Logger';
 
 import { analyzeCommand, generateContextualHelp } from './contextual-help';
 
@@ -16,116 +19,6 @@ function getGroqClient(): Groq {
   return new Groq({
     apiKey,
   });
-}
-
-
-export interface ParsedCommand {
-  success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "swap_and_stake" | "unknown"; // Added "swap_and_stake" intent
-  
-  // Single Swap Fields
-  fromAsset: string | null;
-  fromChain: string | null;
-  toAsset: string | null;
-  toChain: string | null;
-  amount: number | null;
-  amountType?: "exact" | "absolute" | "percentage" | "all" | "exclude" | null; // Extended with 'absolute'
-
-  excludeAmount?: number;
-  excludeToken?: string;
-  quoteAmount?: number;
-
-  // Enhanced Conditional Fields
-  conditions?: {
-    type: "price_above" | "price_below" | "balance_threshold" | "time_based" | "market_condition";
-    asset: string;
-    value: number;
-    operator?: "gt" | "lt" | "gte" | "lte" | "eq";
-    timeframe?: "1m" | "5m" | "1h" | "1d";
-    secondary_conditions?: Array<{
-      type: string;
-      asset: string;
-      value: number;
-      operator: string;
-      logic: "AND" | "OR";
-    }>;
-    fallback_action?: {
-      intent: string;
-      fromAsset: string;
-      toAsset: string;
-      amount: number;
-      conditions?: object;
-      rawText?: string;
-      needsParsing?: boolean;
-    };
-  };
-  
-  // Portfolio Fields
-  portfolio?: {
-    toAsset: string;
-    toChain: string;
-    percentage: number;
-  }[];
-  driftThreshold?: number;
-  autoRebalance?: boolean;
-  portfolioName?: string;
-
-  // DCA Fields
-  frequency?: "daily" | "weekly" | "monthly" | string | null;
-  dayOfWeek?: string | null;
-  dayOfMonth?: string | null;
-  totalAmount?: number;
-  numPurchases?: number;
-
-  // Checkout Fields
-  settleAsset: string | null;
-  settleNetwork: string | null;
-  settleAmount: number | null;
-  settleAddress: string | null;
-
-  // Yield Fields
-  fromProject: string | null;
-  fromYield: number | null;
-  toProject: string | null;
-  toYield: number | null;
-
-  // Stake Fields
-  estimatedApy?: number | null;
-  stakeProtocol?: string | null;
-  stakePool?: string | null;
-
-  // Limit Order Fields (Legacy - kept for compatibility, prefer 'conditions')
-  conditionOperator?: 'gt' | 'lt';
-  conditionValue?: number;
-  conditionAsset?: string;
-  targetPrice?: number;
-  condition?: 'above' | 'below';
-
-  // Enhanced Multi-Step and Ambiguity Handling
-  nextActions?: Array<{
-    rawText: string;
-    needsParsing: boolean;
-    intent?: string;
-    fromAsset?: string;
-    toAsset?: string;
-    amount?: number;
-  }>;
-  fallbackAction?: {
-    rawText: string;
-    needsParsing: boolean;
-    intent?: string;
-    fromAsset?: string;
-    toAsset?: string;
-    amount?: number;
-  };
-  alternativeInterpretations?: string[];
-  suggestedClarifications?: string[];
-
-  confidence: number;
-  validationErrors: string[];
-  parsedMessage: string;
-  requiresConfirmation?: boolean; 
-  originalInput?: string;        
 }
 
 
@@ -653,7 +546,7 @@ Remember: It's better to ask for clarification than to make incorrect assumption
 // RENAMED from parseUserCommand to parseWithLLM
 export async function parseWithLLM(
   userInput: string,
-  conversationHistory: any[] = [],
+  conversationHistory: ConversationMessage[] = [],
   inputType: 'text' | 'voice' = 'text'
 ): Promise<ParsedCommand> {
   // ============================================
@@ -696,7 +589,7 @@ export async function parseWithLLM(
     // Use sanitized and delimited input to prevent prompt injection
     const sanitizedUserInput = sanitizeLLMPrompt(sanitized);
     
-    const messages: any[] = [
+    const messages: GroqMessage[] = [
         { role: "system", content: currentSystemPrompt },
         ...conversationHistory,
         { role: "user", content: sanitizedUserInput }
@@ -714,7 +607,10 @@ export async function parseWithLLM(
     logger.info("LLM Parsed:", parsed);
     return validateParsedCommand(parsed, userInput, inputType);
   } catch (error) {
-    logger.error("Groq Error:", error);
+    const errorDetails: ErrorDetails = error instanceof Error 
+      ? { message: error.message, stack: error.stack }
+      : { message: 'Unknown error' };
+    logger.error("Groq Error:", errorDetails);
 
     return {
       success: false, intent: "unknown", confidence: 0,
@@ -734,7 +630,10 @@ export async function transcribeAudio(mp3FilePath: string): Promise<string> {
     });
     return transcription.text;
   } catch (error) {
-    await handleError('TranscriptionError', { error: error instanceof Error ? error.message : 'Unknown error', filePath: mp3FilePath }, null, false, 'low');
+    const errorDetails: ErrorDetails = error instanceof Error
+      ? { message: error.message, stack: error.stack }
+      : { message: 'Unknown error' };
+    await handleError('TranscriptionError', { ...errorDetails, filePath: mp3FilePath }, null, false, 'low');
     throw error;
   }
 }
