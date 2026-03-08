@@ -8,10 +8,33 @@ interface IntentConfirmationProps {
   onConfirm: (confirmed: boolean) => void;
 }
 
+// Staking provider mapping for display
+const getStakingProvider = (token: string | null): string => {
+  const providers: Record<string, string> = {
+    'ETH': 'Lido (stETH)',
+    'MATIC': 'Stader (MATICx)',
+    'SOL': 'Marinade (mSOL)',
+    'ATOM': 'Stride (stATOM)',
+    'USDC': 'Aave (aUSDC)'
+  };
+  return token ? providers[token.toUpperCase()] || 'Best Available Provider' : 'Best Available Provider';
+};
+
+const getEstimatedAPR = (token: string | null): string => {
+  const rates: Record<string, string> = {
+    'ETH': '3.8%',
+    'MATIC': '4.2%',
+    'SOL': '6.8%',
+    'ATOM': '18.5%',
+    'USDC': '4.5%'
+  };
+  return token ? rates[token.toUpperCase()] || 'Variable' : 'Variable';
+};
+
 export default function IntentConfirmation({ command, onConfirm }: IntentConfirmationProps) {
   if (!command) return null;
 
-  const confidenceColor = command.confidence >= 80 ? 'text-green-600' : 
+  const confidenceColor = command.confidence >= 80 ? 'text-green-600' :
                           command.confidence >= 60 ? 'text-yellow-600' : 'text-red-600';
 
   // Render different confirmation content based on intent

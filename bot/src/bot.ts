@@ -185,6 +185,37 @@ const FREQUENCY_TO_HOURS: Record<string, number> = {
 bot.on(message('text'), async (ctx) => {
   if (ctx.message.text.startsWith('/')) return;
 
+  /* ---------------- Address Resolution ---------------- */
+
+  if (
+    state?.parsedCommand &&
+    !state.parsedCommand.settleAddress &&
+    ['swap', 'checkout', 'portfolio', 'limit_order', 'stake'].includes(
+      state.parsedCommand.intent
+    )
+  ) {
+    const resolved = await resolveAddress(userId, text.trim());
+    const targetChain =
+      state.parsedCommand.toChain ||
+      state.parsedCommand.settleNetwork ||
+      state.parsedCommand.fromChain ||
+      'ethereum';
+
+    if (resolved.address && isValidAddress(resolved.address, targetChain)) {
+      const updated = { ...state.parsedCommand, settleAddress: resolved.address };
+      await db.setConversationState(userId, { parsedCommand: updated });
+
+      return ctx.reply(
+        `✅ Address resolved:\n\`${resolved.originalInput}\` → \`${resolved.address}\``,
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([
+            Markup.button.callback('✅ Yes', `confirm_${updated.intent}`),
+            Markup.button.callback('❌ No', 'cancel_swap'),
+          ]),
+        }
+      );
+    }
   const userId = ctx.from.id;
   const userInput = ctx.message.text;
 
@@ -194,10 +225,105 @@ bot.on(message('text'), async (ctx) => {
   const parsed = await parseUserCommand(userInput, conversationHistory);
 
   if (!parsed.success) {
-    if (parsed.validationErrors && parsed.validationErrors.length > 0) {
-      await ctx.reply(`❌ I couldn't understand that completely: ${parsed.validationErrors.join(', ')}`);
-    } else {
-      await ctx.reply("🤔 I'm not sure what you mean. Could you rephrase?");
+    return ctx.replyWithMarkdown(
+      parsed.validationErrors?.join('\n') || '❌ I didn’t understand.'
+    );
+  }
+
+  /* ---------------- Yield Scout ---------------- */
+
+  if (parsed.intent === 'yield_scout') {
+    const yields = await getTopStablecoinYields();
+    return ctx.replyWithMarkdown(
+      `📈 *Top Stablecoin Yields:*\n\n${formatYieldPools(yields)}`
+    );
+  }
+
+  /* ---------------- Stake ---------------- */
+
+  if (parsed.intent === 'stake') {
+    await db.setConversationState(userId, { parsedCommand: parsed });
+    
+    const { fromAsset, amount, fromChain, toProject } = parsed;
+    const { getStakingProvider, isStakingSupported } = await import('./services/yield-client');
+    
+    // Check if token is supported for staking
+    if (!isStakingSupported(fromAsset!)) {
+      return ctx.replyWithMarkdown(
+        `❌ *Staking not supported for ${fromAsset}*\n\n` +
+        `Supported tokens: ETH, MATIC, SOL, ATOM, USDC\n\n` +
+        `Try: "Stake ETH" or "Stake MATIC"`
+      );
+    }
+    
+    // Get the best staking provider
+    const provider = getStakingProvider(fromAsset!, toProject || undefined);
+    
+    if (!provider) {
+      return ctx.replyWithMarkdown(
+        `❌ *No staking provider found for ${fromAsset}*`
+      );
+    }
+    
+    const amountText = amount ? `${amount} ${fromAsset}` : `All ${fromAsset}`;
+    const chainText = fromChain || provider.chain;
+    
+    let msg = `🥩 *Stake ${fromAsset}*\n\n`;
+    msg += `Amount: ${amountText}\n`;
+    msg += `Chain: ${chainText}\n`;
+    msg += `Provider: ${provider.provider}\n`;
+    msg += `Receive: ${provider.stakingToken}\n`;
+    msg += `Est. APR: ${provider.apr}%\n\n`;
+    
+    if (provider.supportsRestaking) {
+      msg += `✅ Supports restaking\n\n`;
+    }
+    
+    msg += `Proceed with staking?`;
+    
+    return ctx.replyWithMarkdown(
+      msg,
+      Markup.inlineKeyboard([
+        Markup.button.callback('✅ Yes', 'confirm_stake'),
+        Markup.button.callback('❌ Cancel', 'cancel_swap'),
+      ])
+    );
+  }
+
+  /* ---------------- Portfolio ---------------- */
+
+  if (parsed.intent === 'portfolio') {
+    await db.setConversationState(userId, { parsedCommand: parsed });
+
+    const msg =
+      `📊 *Portfolio Strategy*\n\n` +
+      parsed.portfolio
+        ?.map(
+          (p: any) => `• ${p.percentage}% → ${p.toAsset} on ${p.toChain}`
+        )
+        .join('\n');
+
+    return ctx.replyWithMarkdown(
+      msg || '',
+      Markup.inlineKeyboard([
+        Markup.button.webApp('📱 Batch Sign', MINI_APP_URL),
+        Markup.button.callback('❌ Cancel', 'cancel_swap'),
+      ])
+    );
+  }
+  
+  if (parsed.validationErrors && parsed.validationErrors.length > 0) {
+    await ctx.reply(`❌ I couldn't understand that completely: ${parsed.validationErrors.join(', ')}`);
+  } else {
+    await ctx.reply("🤔 I'm not sure what you mean. Could you rephrase?");
+  }
+
+  /* ---------------- Limit Order ---------------- */
+
+  if (parsed.intent === 'limit_order') {
+    if (!parsed.settleAddress) {
+      await db.setConversationState(userId, { parsedCommand: parsed });
+      return ctx.reply('Please provide the destination wallet address.');
     }
     return;
   }
@@ -281,16 +407,10 @@ bot.action('confirm_dca', async (ctx) => {
   }
 });
 
-bot.action(/deposit_(.+)/, async (ctx) => {
-  const poolId = ctx.match[1];
-  await ctx.answerCbQuery();
-  await ctx.reply(`🚀 Starting deposit flow for pool: ${poolId}`);
-});
-
-bot.action('confirm_limit_order', async (ctx) => {
+bot.action('confirm_stake', async (ctx) => {
   const userId = ctx.from?.id;
-  if (!userId) return;
-
+  if (!userId) return ctx.answerCbQuery('Error');
+  
   const state = await db.getConversationState(userId);
 
   if (!state?.parsedCommand || state.parsedCommand.intent !== 'limit_order') {
