@@ -1,0 +1,131 @@
+@keyframes notFoundOrbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes notFoundOrbitReverse {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+@keyframes notFoundFloat {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-12px); }
+}
+
+@keyframes notFoundSignal {
+  0%, 100% { opacity: 0.45; transform: translate(-50%, -50%) scale(0.96); }
+  50% { opacity: 0.9; transform: translate(-50%, -50%) scale(1.04); }
+}
+
+@keyframes notFoundBeam {
+  0% { transform: translateX(-120%) skewX(-24deg); opacity: 0; }
+  20% { opacity: 0.5; }
+  50% { opacity: 1; }
+  80% { opacity: 0.45; }
+  100% { transform: translateX(220%) skewX(-24deg); opacity: 0; }
+}
+
+@keyframes notFoundNoise {
+  0% { transform: translate3d(0, 0, 0); }
+  25% { transform: translate3d(-1%, 1%, 0); }
+  50% { transform: translate3d(1%, -1%, 0); }
+  75% { transform: translate3d(1%, 1%, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+
+@keyframes notFoundScanline {
+  0%, 100% { transform: translate(-50%, -50%) rotate(0deg); opacity: 0.35; }
+  50% { transform: translate(-50%, -50%) rotate(180deg); opacity: 1; }
+}
+
+@keyframes notFoundPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 20px 80px rgba(14,165,233,0.18); }
+  50% { transform: scale(1.03); box-shadow: 0 28px 100px rgba(14,165,233,0.26); }
+}
+
+.grid {
+  background-image:
+    linear-gradient(rgba(15, 23, 42, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.05) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.85), transparent 82%);
+}
+
+:global(.dark) .grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+}
+
+.noise {
+  background-image: radial-gradient(rgba(15, 23, 42, 0.08) 0.7px, transparent 0.7px);
+  background-size: 16px 16px;
+  animation: notFoundNoise 8s steps(6) infinite;
+}
+
+:global(.dark) .noise {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 0.7px, transparent 0.7px);
+}
+
+.orbit {
+  animation: notFoundOrbit 22s linear infinite;
+}
+
+.orbitReverse {
+  animation: notFoundOrbitReverse 28s linear infinite;
+}
+
+.ringLarge {
+  animation: notFoundOrbit 26s linear infinite;
+}
+
+.ringSmall {
+  animation: notFoundOrbitReverse 18s linear infinite;
+}
+
+.float {
+  animation: notFoundFloat 6.5s ease-in-out infinite;
+}
+
+.signal {
+  animation: notFoundSignal 4.5s ease-in-out infinite;
+}
+
+.beam {
+  background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.3), transparent);
+  filter: blur(10px);
+  animation: notFoundBeam 5.5s ease-in-out infinite;
+}
+
+.panel {
+  transform: perspective(1400px) rotateX(5deg) rotateY(-6deg);
+  transform-style: preserve-3d;
+}
+
+.digitCard {
+  animation: notFoundFloat 7.5s ease-in-out infinite;
+}
+
+.core {
+  animation: notFoundPulse 4.8s ease-in-out infinite;
+}
+
+.scanline {
+  transform-origin: center;
+  animation: notFoundScanline 5.8s linear infinite;
+}
+
+@media (max-width: 1023px) {
+  .panel {
+    transform: none;
+  }
+
+  .noise {
+    opacity: 0.12;
+  }
+}
+
+:global(body[data-page-type='not-found'] [data-rht-toaster]) {
+  display: none !important;
+}
