@@ -1,5 +1,4 @@
 import axios, { AxiosError } from 'axios';
-import { toast } from 'react-hot-toast';
 
 /**
  * Global API Client with centralized error handling
@@ -13,13 +12,16 @@ const apiClient = axios.create({
 
 apiClient.interceptors.response.use(
   (response) => response,
-  (error: AxiosError) => {
+  async (error: AxiosError) => {
     let message = 'An unexpected error occurred';
 
     if (error.response) {
       // Server responded with a status code outside 2xx range
       const data = error.response.data as any;
-      message = data?.message || data?.error?.message || `Error ${error.response.status}: ${error.message}`;
+      message =
+        data?.message ||
+        (typeof data?.error === 'string' ? data.error : data?.error?.message) ||
+        `Error ${error.response.status}: ${error.message}`;
     } else if (error.request) {
       // The request was made but no response was received
       message = 'Network error: No response from server. Please check your connection.';
@@ -28,10 +30,13 @@ apiClient.interceptors.response.use(
       message = error.message;
     }
 
-    // Use toast to display user-friendly error
-    toast.error(message, {
-      id: 'api-error', // Prevent duplicate toasts
-    });
+    // Use toast to display user-friendly error only on client side
+    if (typeof window !== 'undefined') {
+      const { toast } = await import('react-hot-toast');
+      toast.error(message, {
+        id: 'api-error', // Prevent duplicate toasts
+      });
+    }
 
     return Promise.reject(error);
   }

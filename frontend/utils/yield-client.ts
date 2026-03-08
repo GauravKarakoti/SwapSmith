@@ -1,6 +1,7 @@
-import apiClient from '@/lib/axios-client';
+import axios from 'axios';
 import { yieldConfig } from '@/config/yield.config';
 import logger from '@/lib/logger';
+
 
 
 export interface YieldPool {
@@ -14,7 +15,7 @@ export interface YieldPool {
 
 export async function getTopStablecoinYields(): Promise<YieldPool[]> {
   try {
-    const response = await apiClient.get('https://yields.llama.fi/pools');
+    const response = await axios.get('https://yields.llama.fi/pools');
     const data = response.data.data;
     const allowedAssets = new Set<string>(yieldConfig.assets);
     const allowedChains = new Set<string>(yieldConfig.chains);
