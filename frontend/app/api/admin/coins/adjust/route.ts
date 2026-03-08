@@ -6,7 +6,7 @@ import {
   getUserCoinLogs,
 } from '@/lib/admin-service';
 import { neon } from '@neondatabase/serverless';
-import { logAdminAction, AUDIT_ACTIONS, getIpAddress, getUserAgent } from '@/shared/lib/audit-logger';
+import { logAdminAction, AUDIT_ACTIONS, getIpAddress, getUserAgent } from '../../../../../shared/lib/audit-logger';
 
 const rawSql = neon(process.env.DATABASE_URL!);
 

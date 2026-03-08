@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth } from '@/lib/firebase-admin';
 import { getAdminByFirebaseUid } from '@/lib/admin-service';
-import { db } from '@/shared/lib/db';
-import { adminAuditLog } from '@/shared/schema';
+import { neon } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/neon-http';
+import { adminAuditLog } from '../../../../shared/schema';
 import { desc, and, eq, gte, sql } from 'drizzle-orm';
-import { logAdminAction, AUDIT_ACTIONS, getIpAddress, getUserAgent } from '@/shared/lib/audit-logger';
+import { logAdminAction, AUDIT_ACTIONS, getIpAddress, getUserAgent } from '../../../../shared/lib/audit-logger';
+
+const rawSql = neon(process.env.DATABASE_URL!);
+const db = drizzle(rawSql);
 
 async function authenticate(req: NextRequest) {
   const authHeader = req.headers.get('authorization');

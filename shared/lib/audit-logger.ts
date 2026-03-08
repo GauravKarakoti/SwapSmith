@@ -1,6 +1,10 @@
-import { db } from '@/shared/lib/db';
-import { adminAuditLog } from '@/shared/schema';
-import type { AdminAuditLog } from '@/shared/schema';
+import { neon } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/neon-http';
+import { adminAuditLog } from '../schema';
+import type { AdminAuditLog } from '../schema';
+
+const rawSql = neon(process.env.DATABASE_URL!);
+const db = drizzle(rawSql);
 
 /**
  * Interface for logging admin actions

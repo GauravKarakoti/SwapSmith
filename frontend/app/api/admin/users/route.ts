@@ -5,7 +5,7 @@ import {
   getAdminUsersList,
   updateUserAdminStatus,
 } from '@/lib/admin-service';
-import { logAdminAction, AUDIT_ACTIONS, getIpAddress, getUserAgent } from '@/shared/lib/audit-logger';
+import { logAdminAction, AUDIT_ACTIONS, getIpAddress, getUserAgent } from '../../../../shared/lib/audit-logger';
 
 // ── Auth helper ───────────────────────────────────────────────────────────
 
