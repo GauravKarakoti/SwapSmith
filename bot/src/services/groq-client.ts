@@ -3,6 +3,9 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import logger, { handleError } from './logger';
 import { loadSecret } from '../../../shared/utils/secrets-loader';
+import type { ParsedCommand } from '../types/ParsedCommand';
+import type { ConversationMessage, GroqMessage, TranscriptionResponse } from '../types/Message';
+import type { ErrorDetails } from '../types/Logger';
 
 import { analyzeCommand, generateContextualHelp } from './contextual-help';
 
@@ -20,7 +23,7 @@ function getGroqClient(): Groq {
 
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "swap_and_stake" | "unknown"; // Added "swap_and_stake" intent
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "stake" | "unknown";
   
   // Single Swap Fields
   fromAsset: string | null;
@@ -34,29 +37,11 @@ export interface ParsedCommand {
   excludeToken?: string;
   quoteAmount?: number;
 
-  // Enhanced Conditional Fields
+  // Conditional Fields
   conditions?: {
-    type: "price_above" | "price_below" | "balance_threshold" | "time_based" | "market_condition";
+    type: "price_above" | "price_below";
     asset: string;
     value: number;
-    operator?: "gt" | "lt" | "gte" | "lte" | "eq";
-    timeframe?: "1m" | "5m" | "1h" | "1d";
-    secondary_conditions?: Array<{
-      type: string;
-      asset: string;
-      value: number;
-      operator: string;
-      logic: "AND" | "OR";
-    }>;
-    fallback_action?: {
-      intent: string;
-      fromAsset: string;
-      toAsset: string;
-      amount: number;
-      conditions?: object;
-      rawText?: string;
-      needsParsing?: boolean;
-    };
   };
   
   // Portfolio Fields
@@ -88,37 +73,12 @@ export interface ParsedCommand {
   toProject: string | null;
   toYield: number | null;
 
-  // Stake Fields
-  estimatedApy?: number | null;
-  stakeProtocol?: string | null;
-  stakePool?: string | null;
-
   // Limit Order Fields (Legacy - kept for compatibility, prefer 'conditions')
   conditionOperator?: 'gt' | 'lt';
   conditionValue?: number;
   conditionAsset?: string;
   targetPrice?: number;
   condition?: 'above' | 'below';
-
-  // Enhanced Multi-Step and Ambiguity Handling
-  nextActions?: Array<{
-    rawText: string;
-    needsParsing: boolean;
-    intent?: string;
-    fromAsset?: string;
-    toAsset?: string;
-    amount?: number;
-  }>;
-  fallbackAction?: {
-    rawText: string;
-    needsParsing: boolean;
-    intent?: string;
-    fromAsset?: string;
-    toAsset?: string;
-    amount?: number;
-  };
-  alternativeInterpretations?: string[];
-  suggestedClarifications?: string[];
 
   confidence: number;
   validationErrors: string[];
@@ -167,6 +127,46 @@ SUPPORTED INTENTS:
    Examples: "Swap 100 USDC for ETH and stake it", "Convert my BTC to stETH", "Zap into liquid staking"
    Keywords: "swap and stake", "zap", "stake immediately", "swap to stake", "stake"
    
+4. "yield_scout": User asking for high APY/Yield info.
+   Example: "What are the best yields right now?"
+
+5. "yield_deposit": Deposit assets into yield platforms.
+6. "yield_migrate": Move funds between pools.
+7. "dca": Dollar Cost Averaging.
+8. "limit_order": Buy/Sell at specific price.
+9. "stake": Stake tokens for passive yield.
+   Example: "Stake 2 ETH" -> {"intent": "stake", "token": "ETH", "amount": "2", "chain": "ethereum"}
+   Example: "Stake my MATIC on Polygon" -> {"intent": "stake", "token": "MATIC", "amount": null, "chain": "polygon"}
+
+STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
+
+ADDRESS RESOLUTION:
+- Users can specify addresses as raw wallet addresses (0x...), ENS names (ending in .eth), Lens handles (ending in .lens), Unstoppable Domains (ending in .crypto, .nft, .blockchain, etc.), or nicknames from their address book.
+- If an address is specified, include it in settleAddress field.
+- The system will resolve nicknames, ENS, Lens, and Unstoppable Domains automatically.
+
+IMPORTANT: ENS/ADDRESS HANDLING:
+- When a user says "Swap X ETH to vitalik.eth" or "Send X ETH to vitalik.eth", they mean:
+  * Keep the same asset (ETH)
+  * Send it to the address vitalik.eth
+  * This should be parsed as: toAsset: "ETH", toChain: "ethereum", settleAddress: "vitalik.eth"
+- Patterns to recognize as addresses (not assets):
+  * Ends with .eth (ENS)
+  * Ends with .lens (Lens Protocol)
+  * Ends with .crypto, .nft, .blockchain, .wallet, etc. (Unstoppable Domains)
+  * Starts with 0x followed by 40 hex characters
+  * Looks like a nickname (single word, lowercase, no special chars)
+
+AMBIGUITY HANDLING:
+- If the command is ambiguous (e.g., "swap all my ETH to BTC or USDC"), set confidence low (0-30) and add validation error "Command is ambiguous. Please specify clearly."
+- For complex commands, prefer explicit allocations over assumptions.
+- If multiple interpretations possible, choose the most straightforward and set requiresConfirmation: true.
+- If the user includes conditions such as "only if", "when price is", "above", "below", extract them into a "conditions" object.
+
+RESPONSE FORMAT:
+{
+  "success": boolean,
+  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "stake",
    AUTO-MAPPING for staking commands:
    - ETH -> stETH (Lido) ~3-4% APR
    - SOL -> mSOL (Marinade) ~7-8% APR  
@@ -636,6 +636,17 @@ Remember: It's better to ask for clarification than to make incorrect assumption
 14. "DCA 200 USDC into ETH every month on the 1st"
     -> intent: "dca", fromAsset: "USDC", toAsset: "ETH", amount: 200, frequency: "monthly", dayOfMonth: "1", confidence: 95
 
+15. "Stake 2 ETH"
+    -> intent: "stake", fromAsset: "ETH", fromChain: "ethereum", amount: 2, confidence: 95
+
+16. "Stake 0.5 ETH on Ethereum"
+    -> intent: "stake", fromAsset: "ETH", fromChain: "ethereum", amount: 0.5, confidence: 95
+
+17. "I want to stake my MATIC"
+    -> intent: "stake", fromAsset: "MATIC", fromChain: "polygon", amount: null, amountType: "all", confidence: 90
+
+18. "Stake 1000 USDC for yield"
+    -> intent: "stake", fromAsset: "USDC", amount: 1000, confidence: 95
 15. "Stake 2 ETH with Lido"
     -> intent: "swap_and_stake", fromAsset: "ETH", toAsset: "stETH", amount: 2, confidence: 95
 
@@ -652,7 +663,7 @@ Remember: It's better to ask for clarification than to make incorrect assumption
 // RENAMED from parseUserCommand to parseWithLLM
 export async function parseWithLLM(
   userInput: string,
-  conversationHistory: any[] = [],
+  conversationHistory: ConversationMessage[] = [],
   inputType: 'text' | 'voice' = 'text'
 ): Promise<ParsedCommand> {
   let currentSystemPrompt = systemPrompt;
@@ -666,7 +677,7 @@ export async function parseWithLLM(
   }
 
   try {
-    const messages: any[] = [
+    const messages: GroqMessage[] = [
         { role: "system", content: currentSystemPrompt },
         ...conversationHistory,
         { role: "user", content: userInput }
@@ -684,7 +695,10 @@ export async function parseWithLLM(
     logger.info("LLM Parsed:", parsed);
     return validateParsedCommand(parsed, userInput, inputType);
   } catch (error) {
-    logger.error("Groq Error:", error);
+    const errorDetails: ErrorDetails = error instanceof Error 
+      ? { message: error.message, stack: error.stack }
+      : { message: 'Unknown error' };
+    logger.error("Groq Error:", errorDetails);
 
     return {
       success: false, intent: "unknown", confidence: 0,
@@ -704,7 +718,10 @@ export async function transcribeAudio(mp3FilePath: string): Promise<string> {
     });
     return transcription.text;
   } catch (error) {
-    await handleError('TranscriptionError', { error: error instanceof Error ? error.message : 'Unknown error', filePath: mp3FilePath }, null, false, 'low');
+    const errorDetails: ErrorDetails = error instanceof Error
+      ? { message: error.message, stack: error.stack }
+      : { message: 'Unknown error' };
+    await handleError('TranscriptionError', { ...errorDetails, filePath: mp3FilePath }, null, false, 'low');
     throw error;
   }
 }

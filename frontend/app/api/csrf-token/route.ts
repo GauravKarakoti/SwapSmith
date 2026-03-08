@@ -1,36 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateSecureToken, ENHANCED_CSRF_CONFIG } from '@/lib/enhanced-csrf';
+import { generateCSRFToken, setCSRFToken, CSRF_CONFIG } from '@/lib/csrf-middleware';
 import { applyAPISecurityHeaders } from '@/lib/security-headers';
 
 /**
  * CSRF Token API Route
  * 
- * Provides CSRF tokens for client-side use
+ * Provides CSRF tokens for client-side use in state-changing requests
  * GET /api/csrf-token - Returns current or new CSRF token
  */
 
 export async function GET(request: NextRequest) {
   try {
     // Get existing token or generate new one
-    const existingToken = request.cookies.get(ENHANCED_CSRF_CONFIG.tokenCookie)?.value;
-    const token = existingToken || generateSecureToken();
+    const existingToken = request.cookies.get(CSRF_CONFIG.tokenCookie)?.value;
+    const token = existingToken || generateCSRFToken();
     
-    // Create response with token
+    // Create response with token details
     const response = NextResponse.json({
       token,
-      header: ENHANCED_CSRF_CONFIG.tokenHeader,
+      header: CSRF_CONFIG.tokenHeader,
       success: true
     });
     
-    // Set CSRF token cookie if it doesn't exist
+    // Set CSRF token cookie if it doesn't already exist
     if (!existingToken) {
-      response.cookies.set(ENHANCED_CSRF_CONFIG.tokenCookie, token, ENHANCED_CSRF_CONFIG.cookieSettings);
-      
-      // Set token timestamp
-      response.cookies.set('csrf-token-ts', Date.now().toString(), {
-        ...ENHANCED_CSRF_CONFIG.cookieSettings,
-        httpOnly: true,
-      });
+      setCSRFToken(response, token);
     }
     
     // Apply security headers

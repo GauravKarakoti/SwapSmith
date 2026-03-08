@@ -5,7 +5,9 @@ import {
   addToWatchlist,
   removeFromWatchlist,
   getCachedPrice,
+  getCachedPricesBatch,
 } from '@/lib/database';
+import { csrfGuard } from '@/lib/csrf';
 import logger from '@/lib/logger';
 
 export default async function handler(
@@ -53,21 +55,25 @@ export default async function handler(
     try {
       const watchlist = await getWatchlist(userId);
 
-      const watchlistWithPrices = await Promise.all(
-        watchlist.map(async (item) => {
-          const priceData = await getCachedPrice(
-            item.coin,
-            item.network
-          );
-
-          return {
-            ...item,
-            usdPrice: priceData?.usdPrice ?? null,
-            btcPrice: priceData?.btcPrice ?? null,
-            lastUpdated: priceData?.updatedAt ?? null,
-          };
-        })
+      // Batch fetch all prices in a single query (fix N+1 problem)
+      const priceMap = await getCachedPricesBatch(
+        watchlist.map(item => ({
+          coin: item.coin,
+          network: item.network
+        }))
       );
+
+      const watchlistWithPrices = watchlist.map(item => {
+        const priceKey = `${item.coin}-${item.network}`;
+        const priceData = priceMap.get(priceKey);
+
+        return {
+          ...item,
+          usdPrice: priceData?.usdPrice ?? null,
+          btcPrice: priceData?.btcPrice ?? null,
+          lastUpdated: priceData?.updatedAt ?? null,
+        };
+      });
 
       return res.status(200).json(watchlistWithPrices);
     } catch (error) {
@@ -80,6 +86,11 @@ export default async function handler(
 
   // ➕ POST — Add token to watchlist
   if (req.method === 'POST') {
+    // CSRF Protection
+    if (!csrfGuard(req, res)) {
+      return;
+    }
+
     try {
       const { coin, network, name } = req.body;
 
@@ -119,6 +130,11 @@ export default async function handler(
 
   // ❌ DELETE — Remove token from watchlist
   if (req.method === 'DELETE') {
+    // CSRF Protection
+    if (!csrfGuard(req, res)) {
+      return;
+    }
+
     try {
       const { coin, network } = req.body;
 
