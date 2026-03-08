@@ -3,11 +3,6 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 
-// Mock scrollIntoView for JSDOM
-beforeAll(() => {
-  Element.prototype.scrollIntoView = jest.fn();
-});
-
 // Mock all external dependencies BEFORE importing the component
 jest.mock('wagmi', () => ({
   useAccount: jest.fn(() => ({
