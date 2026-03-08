@@ -121,7 +121,7 @@ export class SecurityScanner {
         mintable: false,
         buyTax: 0,
         sellTax: 0,
-        overallRiskScore: 0, 
+        overallRiskScore: 100,
         simulationResult: { canBuy: false, canSell: false },
         holderAnalysis: { topHoldersShare: 0, totalHolders: 0 },
         details: ['Scan failed or invalid address']
