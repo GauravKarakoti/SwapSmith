@@ -1,131 +1,285 @@
-import { parseWithLLM, ParsedCommand } from './groq-client';
+import { parseWithLLM } from './groq-client';
+import type {
+  ParsedCommand,
+  ParseResult as ParseResultType,
+  Condition
+} from '../types/ParsedCommand';
 import logger from './logger';
 import { parseDCA } from './nl-dca';
 import { detectLimitOrder } from './nl-limit-orders';
 
-export { ParsedCommand };
+export type { ParsedCommand };
+export type ParseResult = ParseResultType;
 
-export type ParseResult =
-  | ParsedCommand
-  | {
-    success: false;
-    validationErrors: string[];
-    intent?: string;
-    confidence?: number;
-    parsedMessage?: string;
-    requiresConfirmation?: boolean;
-    originalInput?: string;
-    [key: string]: any;
-  };
+/* ---------------- REGEX ---------------- */
 
-// Regex Patterns
-const REGEX_EXCLUSION = /(?:everything|all|entire|max)\s*(?:[A-Z]+\s+)?(?:except|but\s+keep)\s+(\d+(\.\d+)?)\s*([A-Z]+)?/i;
-const REGEX_PERCENTAGE = /(\d+(\.\d+)?)\s*(?:%|percent)\s*(?:of\s+(?:my\s+)?)?([A-Z]+)?/i;
+const REGEX_EXCLUSION =
+  /(?:everything|all|entire|max)\s*(?:[A-Z]+\s+)?(?:except|but\s+keep)\s+(\d+(\.\d+)?)\s*([A-Z]+)?/i;
+
+const REGEX_PERCENTAGE =
+  /(\d+(\.\d+)?)\s*(?:%|percent)\s*(?:of\s+(?:my\s+)?)?([A-Z]+)?/i;
+
 const REGEX_HALF = /\b(half)\b\s*(?:of\s+(?:my\s+)?)?([A-Z]+)?/i;
 const REGEX_QUARTER = /\b(quarter)\b\s*(?:of\s+(?:my\s+)?)?([A-Z]+)?/i;
+
 const REGEX_MAX_ALL = /\b(max|all|everything|entire)\b/i;
-const REGEX_ALL_TOKEN = /(max|all|everything|entire)\s+([A-Z]+)/i; // "all ETH"
+const REGEX_ALL_TOKEN = /(max|all|everything|entire)\s+([A-Z]+)/i;
 
-const REGEX_TOKENS = /([A-Z]+)\s+(to|into|for)\s+([A-Z]+)/i; // "ETH to BTC"
-const REGEX_FROM_TO = /from\s+([A-Z]+)\s+to\s+([A-Z]+)/i; // "from ETH to BTC"
-const REGEX_AMOUNT_TOKEN = /\b(\d+(\.\d+)?)\s+(?!to|into|for|from|with|using\b)([A-Z]+)\b/i; // "10 ETH" (exclude prepositions)
+const REGEX_TOKENS = /([A-Z]+)\s+(to|into|for)\s+([A-Z]+)/i;
+const REGEX_FROM_TO = /from\s+([A-Z]+)\s+to\s+([A-Z]+)/i;
 
-// New Regex for Conditions
-const REGEX_CONDITION = /(?:if|when)\s+(?:the\s+)?(?:price|rate|market|value)?\s*(?:of\s+)?([A-Z]+)?\s*(?:is|goes|drops|rises|falls)?\s*(above|below|greater|less|more|under|>|<)\s*(?:than)?\s*(\$?[\d,]+(\.\d+)?\s*[kKmM]?)/i;
+const REGEX_AMOUNT_TOKEN =
+  /\b(\d+(\.\d+)?)\s+(?!to|into|for|from|with|using\b)([A-Z]+)\b/i;
 
-// New Regex for Quote Amount ("Worth")
-const REGEX_QUOTE = /(?:([A-Z]+)\s+)?(?:worth|value|valued\s+at)\s*(?:of)?\s*(\$)?(\d+(\.\d+)?)\s*([A-Z]+)?/i;
+const REGEX_CONDITION =
+  /(?:if|when)\s+(?:the\s+)?(?:price|rate|market|value)?\s*(?:of\s+)?([A-Z]+)?\s*(?:is|goes|drops|rises|falls)?\s*(above|below|greater|less|more|under|>|<)\s*(?:than)?\s*(\$?[\d,]+(\.\d+)?\s*[kKmM]?)/i;
 
-// New Regex for Multiple Source Assets
-const REGEX_MULTI_SOURCE = /(?:^|\s)([A-Z]{2,10}|(?:\d+(?:\.\d+)?\s+[A-Z]{2,10}))\s+(?:and|&)\s+([A-Z]{2,10}|(?:\d+(?:\.\d+)?\s+[A-Z]{2,10}))\s+(?:to|into|for)/i;
+const REGEX_QUOTE =
+  /(?:([A-Z]+)\s+)?(?:worth|value|valued\s+at)\s*(?:of)?\s*(\$)?(\d+(\.\d+)?)\s*([A-Z]+)?/i;
 
-// New Regex for Swap and Stake / Zap intents
-const REGEX_SWAP_STAKE = /(?:swap\s+and\s+stake|zap\s+(?:into|to)|stake\s+(?:my|after|then)|swap\s+(?:to|into)\s+(?:stake|yield))/i;
-const REGEX_STAKE_PROTOCOL = /(?:to\s+)?(aave|compound|yearn|lido|morpho|euler|spark|rocket\s*pool|stakewise)/i;
+const REGEX_MULTI_SOURCE =
+  /(?:^|\s)([A-Z]{2,10}|(?:\d+(?:\.\d+)?\s+[A-Z]{2,10}))\s+(?:and|&)\s+([A-Z]{2,10}|(?:\d+(?:\.\d+)?\s+[A-Z]{2,10}))\s+(?:to|into|for)/i;
 
-// New Regex for Trailing Stop Orders
-const REGEX_TRAILING_STOP = /(?:trailing\s+stop|stop\s+loss|protect\s+profit|trailing)/i;
-const REGEX_TRAILING_PERCENTAGE = /(\d+(\.\d+)?)\s*(?:%|percent)\s*(?:trailing|stop|drop|decline|fall)/i;
-const REGEX_TRAILING_AMOUNT = /(?:trailing\s+stop|stop\s+loss)\s+(?:at\s+)?(\d+(\.\d+)?)\s*(?:%|percent)/i;
-
+/* ---------------- UTILS ---------------- */
 
 function normalizeNumber(val: string): number {
-    val = val.toLowerCase().replace(/[\$,]/g, '');
+  val = val.toLowerCase().replace(/[\$,]/g, '');
 
-    if (val.endsWith("k")) {
-        return parseFloat(val) * 1000;
-    }
-    if (val.endsWith("m")) {
-        return parseFloat(val) * 1000000;
-    }
-    return parseFloat(val);
+  if (val.endsWith('k')) return parseFloat(val) * 1000;
+  if (val.endsWith('m')) return parseFloat(val) * 1000000;
+
+  return parseFloat(val);
 }
 
+/* ---------------- MAIN PARSER ---------------- */
+
 export async function parseUserCommand(
-    userInput: string,
-    conversationHistory: any[] = [],
-    inputType: 'text' | 'voice' = 'text'
+  userInput: string,
+  conversationHistory: Array<Record<string, string>> = [],
+  inputType: 'text' | 'voice' = 'text'
 ): Promise<ParseResult> {
-    let input = userInput.trim();
+  let input = userInput.trim();
 
-    // Pre-processing: Remove fillers
-    input = input.replace(/^(hey|hi|hello|please|kindly|can you)\s+/i, '')
-        .replace(/\s+(please|kindly|immediately|now|right now)$/i, '')
-        .replace(/\b(like)\b/gi, '') // "swap like 100" -> "swap 100"
-        .trim();
+  /* ---- Preprocessing ---- */
 
-    // Check for Swap and Stake / Zap Intent
-    if (REGEX_SWAP_STAKE.test(input)) {
-        const protocolMatch = input.match(REGEX_STAKE_PROTOCOL);
-        const stakeProtocol = protocolMatch ? protocolMatch[1].toLowerCase() : null;
+  input = input
+    .replace(/^(hey|hi|hello|please|kindly|can you)\s+/i, '')
+    .replace(/\s+(please|kindly|immediately|now|right now)$/i, '')
+    .replace(/\b(like)\b/gi, '')
+    .trim();
 
-        let amount: number | null = null;
-        let fromAsset: string | null = null;
-        let toAsset: string | null = null;
+  /* ---- Swap intent detection ---- */
 
-    // Extract amount
-    const amtMatch = input.match(/\b(\d+(\.\d+)?)\b/);
-    if (amtMatch) {
-      amount = parseFloat(amtMatch[1]);
+  const isSwapRelated =
+    /\b(swap|convert|send|transfer|buy|sell|move|exchange)\b/i.test(input);
+
+  if (isSwapRelated) {
+    let intent: ParsedCommand['intent'] = 'swap';
+
+    let amountType: ParsedCommand['amountType'] = null;
+    let amount: number | null = null;
+
+    let fromAsset: string | null = null;
+    let toAsset: string | null = null;
+
+    let excludeAmount: number | undefined;
+    let excludeToken: string | undefined;
+    let quoteAmount: number | undefined;
+
+    let conditionOperator: 'gt' | 'lt' | undefined;
+    let conditionValue: number | undefined;
+    let conditionAsset: string | undefined;
+    let conditions: Condition | undefined;
+
+    let confidence = 10;
+    let validationErrors: string[] = [];
+
+    /* ---- Multi source check ---- */
+
+    if (REGEX_MULTI_SOURCE.test(input)) {
+      return {
+        success: false,
+        intent: 'swap',
+        fromAsset: null,
+        fromChain: null,
+        toAsset: null,
+        toChain: null,
+        amount: null,
+        settleAsset: null,
+        settleNetwork: null,
+        settleAmount: null,
+        settleAddress: null,
+        fromProject: null,
+        fromYield: null,
+        toProject: null,
+        toYield: null,
+        validationErrors: ['Multiple source assets not supported'],
+        confidence: 0,
+        parsedMessage: 'Multiple source assets detected',
+        requiresConfirmation: false,
+        originalInput: userInput
+      };
     }
 
-    // Extract tokens
-    const fromToMatch = input.match(/([A-Z]{2,5})\s+(?:to|into)\s+([A-Z]{2,5})/i);
+    /* ---- Exclusion ---- */
+
+    const exclusionMatch = input.match(REGEX_EXCLUSION);
+    if (exclusionMatch) {
+      amountType = 'all';
+      excludeAmount = parseFloat(exclusionMatch[1]);
+
+      if (exclusionMatch[3]) {
+        excludeToken = exclusionMatch[3].toUpperCase();
+        fromAsset = excludeToken;
+      }
+
+      confidence += 40;
+    }
+
+    /* ---- Percentage ---- */
+
+    const pctMatch = input.match(REGEX_PERCENTAGE);
+    if (pctMatch) {
+      amountType = 'percentage';
+      amount = parseFloat(pctMatch[1]);
+      if (pctMatch[3]) fromAsset = pctMatch[3].toUpperCase();
+      confidence += 40;
+    }
+
+    /* ---- Quote Amount ---- */
+
+    const quoteMatch = input.match(REGEX_QUOTE);
+    if (quoteMatch) {
+      quoteAmount = parseFloat(quoteMatch[3]);
+      if (quoteMatch[1]) fromAsset = quoteMatch[1].toUpperCase();
+      if (quoteMatch[5]) toAsset = quoteMatch[5].toUpperCase();
+      confidence += 30;
+    }
+
+    /* ---- Tokens ---- */
+
+    const fromToMatch = input.match(REGEX_FROM_TO);
     if (fromToMatch) {
       fromAsset = fromToMatch[1].toUpperCase();
       toAsset = fromToMatch[2].toUpperCase();
-    } else {
-      // Try to find single token
-      const tokenMatch = input.match(/([A-Z]{2,5})/);
-      if (tokenMatch) {
-        fromAsset = tokenMatch[1].toUpperCase();
-        toAsset = 'USDC'; // Default to stablecoin
-      }
+      confidence += 40;
     }
 
-    // Default trailing percentage if not specified
-    if (!trailingPercentage) {
-      trailingPercentage = 5.0; // Default 5% trailing stop
+    const tokenMatch = input.match(REGEX_TOKENS);
+    if (tokenMatch && !fromAsset) {
+      fromAsset = tokenMatch[1].toUpperCase();
+      toAsset = tokenMatch[3].toUpperCase();
+      confidence += 30;
     }
+
+    /* ---- Amount ---- */
+
+    const amtTokenMatch = input.match(REGEX_AMOUNT_TOKEN);
+    if (amtTokenMatch) {
+      amount = parseFloat(amtTokenMatch[1]);
+      amountType = 'exact';
+      if (!fromAsset) fromAsset = amtTokenMatch[3].toUpperCase();
+      confidence += 20;
+    }
+
+    /* ---- Limit Condition ---- */
+
+    const conditionMatch = input.match(REGEX_CONDITION);
+    if (conditionMatch) {
+      intent = 'limit_order';
+
+      conditionValue = normalizeNumber(conditionMatch[3]);
+
+      if (conditionMatch[1]) {
+        conditionAsset = conditionMatch[1].toUpperCase();
+      }
+
+      const operatorStr = conditionMatch[2].toLowerCase();
+
+      if (
+        operatorStr.includes('below') ||
+        operatorStr.includes('less') ||
+        operatorStr.includes('<')
+      ) {
+        conditionOperator = 'lt';
+      } else {
+        conditionOperator = 'gt';
+      }
+
+      conditions = {
+        type: conditionOperator === 'gt' ? 'price_above' : 'price_below',
+        asset: conditionAsset || fromAsset || 'ETH',
+        value: conditionValue
+      };
+
+      confidence += 30;
+    }
+
+    if (confidence >= 30) {
+      return {
+        success: true,
+        intent,
+        fromAsset,
+        fromChain: null,
+        toAsset,
+        toChain: null,
+        amount,
+        amountType,
+        excludeAmount,
+        excludeToken,
+        quoteAmount,
+        conditions,
+        portfolio: undefined,
+        frequency: null,
+        dayOfWeek: null,
+        dayOfMonth: null,
+        settleAsset: null,
+        settleNetwork: null,
+        settleAmount: null,
+        settleAddress: null,
+        fromProject: null,
+        fromYield: null,
+        toProject: null,
+        toYield: null,
+        conditionOperator,
+        conditionValue,
+        conditionAsset,
+        targetPrice: conditionValue,
+        condition: conditionOperator === 'gt' ? 'above' : 'below',
+        confidence: Math.min(100, confidence + 30),
+        validationErrors,
+        parsedMessage: `Parsed: ${amount ?? '?'} ${fromAsset ?? '?'} -> ${toAsset ?? '?'}`,
+        requiresConfirmation: false,
+        originalInput: userInput
+      };
+    }
+  }
+
+  /* ---- LLM Fallback ---- */
+
+  logger.info('Fallback to LLM for:', userInput);
+
+  try {
+    const result = await parseWithLLM(userInput, conversationHistory, inputType);
 
     return {
-      success: true,
-      intent: 'trailing_stop',
-      fromAsset: fromAsset || null,
+      ...result,
+      originalInput: userInput
+    };
+  } catch (error) {
+    logger.error('LLM Error', error);
+
+    return {
+      success: false,
+      intent: 'unknown',
+      confidence: 0,
+      validationErrors: ['Parsing failed'],
+      parsedMessage: '',
+      fromAsset: null,
       fromChain: null,
-      toAsset: toAsset || 'USDC',
+      toAsset: null,
       toChain: null,
-      amount: amount || null,
-      amountType: amount ? 'exact' : null,
-      trailingPercentage,
-      excludeAmount: undefined,
-      excludeToken: undefined,
-      quoteAmount: undefined,
-      conditions: undefined,
-      portfolio: undefined,
-      frequency: null,
-      dayOfWeek: null,
-      dayOfMonth: null,
+      amount: null,
       settleAsset: null,
       settleNetwork: null,
       settleAmount: null,
@@ -134,487 +288,8 @@ export async function parseUserCommand(
       fromYield: null,
       toProject: null,
       toYield: null,
-      conditionOperator: undefined,
-      conditionValue: undefined,
-      conditionAsset: undefined,
-      targetPrice: undefined,
-      condition: undefined,
-      confidence: 85,
-      validationErrors: [],
-      parsedMessage: `Parsed: Trailing stop order - Sell ${amount || '?'} ${fromAsset || '?'} if price drops ${trailingPercentage}% from peak`,
-      requiresConfirmation: true,
+      requiresConfirmation: false,
       originalInput: userInput
     };
   }
-
-  // Check for Swap and Stake / Zap Intent
-  if (REGEX_SWAP_STAKE.test(input)) {
-
-    const protocolMatch = input.match(REGEX_STAKE_PROTOCOL);
-    const stakeProtocol = protocolMatch ? protocolMatch[1].toLowerCase() : null;
-    
-    let amount: number | null = null;
-    let fromAsset: string | null = null;
-    let toAsset: string | null = null;
-    
-    const amtMatch = input.match(/\b(\d+(\.\d+)?)\b/);
-    if (amtMatch) {
-      amount = parseFloat(amtMatch[1]);
-    }
-    
-    const fromToMatch = input.match(/([A-Z]{2,5})\s+(?:to|into)\s+([A-Z]{2,5})/i);
-    if (fromToMatch) {
-      fromAsset = fromToMatch[1].toUpperCase();
-      toAsset = fromToMatch[2].toUpperCase();
-    }
-    
-    if (!toAsset) {
-      toAsset = 'USDC';
-    }
-    
-    return {
-      success: true,
-      intent: 'swap_and_stake',
-      fromAsset,
-      fromChain: null,
-      toAsset,
-      toChain: null,
-      amount,
-      amountType: amount ? 'exact' : null,
-      excludeAmount: undefined,
-      excludeToken: undefined,
-      quoteAmount: undefined,
-      conditions: undefined,
-      portfolio: undefined,
-      frequency: null,
-      dayOfWeek: null,
-      dayOfMonth: null,
-      settleAsset: null,
-      settleNetwork: null,
-      settleAmount: null,
-      settleAddress: null,
-      fromProject: stakeProtocol,
-      fromYield: null,
-      toProject: stakeProtocol,
-      toYield: null,
-      conditionOperator: undefined,
-      conditionValue: undefined,
-      conditionAsset: undefined,
-      targetPrice: undefined,
-      condition: undefined,
-      confidence: 80,
-      validationErrors: [],
-      parsedMessage: `Parsed: Swap ${amount || '?'} ${fromAsset || '?'} to ${toAsset} and stake`,
-      requiresConfirmation: true,
-      originalInput: userInput
-    };
-  }
-
-  // 1. Check for Swap Intent Keywords
-  const isSwapRelated = /\b(swap|convert|send|transfer|buy|sell|move|exchange)\b/i.test(input);
-
-  if (isSwapRelated) {
-    let intent: ParsedCommand['intent'] = 'swap';
-    let amountType: ParsedCommand['amountType'] = null;
-    let amount: number | null = null;
-    let excludeAmount: number | undefined;
-    let excludeToken: string | undefined;
-    let quoteAmount: number | undefined;
-    let fromAsset: string | null = null;
-    let toAsset: string | null = null;
-    let confidence = 0;
-    let validationErrors: string[] = [];
-
-    // Boost confidence slightly for explicit swap keywords
-    confidence += 10;
-
-    // Limit Order fields
-    let conditionOperator: 'gt' | 'lt' | undefined;
-    let conditionValue: number | undefined;
-    let conditionAsset: string | undefined;
-    let conditions: ParsedCommand['conditions'];
-
-    // Check Multi-source
-    if (REGEX_MULTI_SOURCE.test(input)) {
-        validationErrors.push('Multiple source assets not supported');
-        return {
-             success: false,
-             intent: 'swap',
-             fromAsset: null, fromChain: null, toAsset: null, toChain: null, amount: null,
-             settleAsset: null, settleNetwork: null, settleAmount: null, settleAddress: null,
-             fromProject: null, fromYield: null, toProject: null, toYield: null,
-             validationErrors,
-             confidence: 0,
-             parsedMessage: 'Multiple source assets detected',
-             requiresConfirmation: false,
-             originalInput: userInput
-        };
-    }
-
-    // A. Detect Exclusion
-    const exclusionMatch = input.match(REGEX_EXCLUSION);
-    if (exclusionMatch) {
-      amountType = 'all';
-      excludeAmount = parseFloat(exclusionMatch[1]);
-      if (exclusionMatch[3]) {
-        excludeToken = exclusionMatch[3].toUpperCase();
-        if (!fromAsset) fromAsset = excludeToken;
-      }
-      confidence += 40;
-    }
-
-    // Attempt to extract token from "all [Token]" if we identified 'all' but missed the token
-    if (amountType === 'all' && !fromAsset) {
-        const allTokenMatch = input.match(REGEX_ALL_TOKEN);
-        if (allTokenMatch) {
-             const token = allTokenMatch[2].toUpperCase();
-             if (!/^(swap|convert|send|transfer|buy|sell|move|exchange)$/i.test(token)) {
-                 fromAsset = token;
-             }
-        }
-
-        const fromToMatch = input.match(/([A-Z]{2,5})\s+(?:to|into)\s+([A-Z]{2,5})/i);
-        if (fromToMatch) {
-            fromAsset = fromToMatch[1].toUpperCase();
-            toAsset = fromToMatch[2].toUpperCase();
-        }
-
-        if (!toAsset) {
-            toAsset = 'USDC';
-        }
-
-        return {
-            success: true,
-            intent: 'swap_and_stake',
-            fromAsset,
-            fromChain: null,
-            toAsset,
-            toChain: null,
-            amount,
-            amountType: amount ? 'exact' : null,
-            excludeAmount: undefined,
-            excludeToken: undefined,
-            quoteAmount: undefined,
-            conditions: undefined,
-            portfolio: undefined,
-            frequency: null,
-            dayOfWeek: null,
-            dayOfMonth: null,
-            settleAsset: null,
-            settleNetwork: null,
-            settleAmount: null,
-            settleAddress: null,
-            fromProject: stakeProtocol,
-            fromYield: null,
-            toProject: stakeProtocol,
-            toYield: null,
-            conditionOperator: undefined,
-            conditionValue: undefined,
-            conditionAsset: undefined,
-            targetPrice: undefined,
-            condition: undefined,
-            confidence: 80,
-            validationErrors: [],
-            parsedMessage: `Parsed: Swap ${amount || '?'} ${fromAsset || '?'} to ${toAsset} and stake`,
-            requiresConfirmation: true,
-            originalInput: userInput
-        };
-    }
-
-    // 1. Check for Swap Intent Keywords
-    const isSwapRelated = /\b(swap|convert|send|transfer|buy|sell|move|exchange)\b/i.test(input);
-
-    if (isSwapRelated) {
-        let intent: ParsedCommand['intent'] = 'swap';
-        let amountType: ParsedCommand['amountType'] = null;
-        let amount: number | null = null;
-        let excludeAmount: number | undefined;
-        let excludeToken: string | undefined;
-        let quoteAmount: number | undefined;
-        let fromAsset: string | null = null;
-        let toAsset: string | null = null;
-        let confidence = 0;
-        let validationErrors: string[] = [];
-
-        // Boost confidence slightly for explicit swap keywords
-        confidence += 10;
-
-        // Limit Order fields
-        let conditionOperator: 'gt' | 'lt' | undefined;
-        let conditionValue: number | undefined;
-        let conditionAsset: string | undefined;
-        let conditions: ParsedCommand['conditions'];
-
-        // Check Multi-source
-        if (REGEX_MULTI_SOURCE.test(input)) {
-            validationErrors.push('Multiple source assets not supported');
-            return {
-                success: false,
-                intent: 'swap',
-                fromAsset: null, fromChain: null, toAsset: null, toChain: null, amount: null,
-                settleAsset: null, settleNetwork: null, settleAmount: null, settleAddress: null,
-                fromProject: null, fromYield: null, toProject: null, toYield: null,
-                validationErrors,
-                confidence: 0,
-                parsedMessage: 'Multiple source assets detected',
-                requiresConfirmation: false,
-                originalInput: userInput
-            };
-        }
-
-        // A. Detect Exclusion
-        const exclusionMatch = input.match(REGEX_EXCLUSION);
-        if (exclusionMatch) {
-            amountType = 'all';
-            excludeAmount = parseFloat(exclusionMatch[1]);
-            if (exclusionMatch[3]) {
-                excludeToken = exclusionMatch[3].toUpperCase();
-                if (!fromAsset) fromAsset = excludeToken;
-            }
-            confidence += 40;
-        }
-
-        // Attempt to extract token from "all [Token]" if we identified 'all' but missed the token
-        if (amountType === 'all' && !fromAsset) {
-            const allTokenMatch = input.match(REGEX_ALL_TOKEN);
-            if (allTokenMatch) {
-                const token = allTokenMatch[2].toUpperCase();
-                if (!/^(swap|convert|send|transfer|buy|sell|move|exchange)$/i.test(token)) {
-                    fromAsset = token;
-                }
-            }
-        }
-
-        // B. Detect Percentage / Max
-        if (amountType !== 'all') {
-            const pctMatch = input.match(REGEX_PERCENTAGE);
-            if (pctMatch) {
-                amountType = 'percentage';
-                amount = parseFloat(pctMatch[1]);
-                if (pctMatch[3]) fromAsset = pctMatch[3].toUpperCase();
-                confidence += 40;
-            } else {
-                const halfMatch = input.match(REGEX_HALF);
-                if (halfMatch) {
-                    amountType = 'percentage';
-                    amount = 50;
-                    if (halfMatch[2]) fromAsset = halfMatch[2].toUpperCase();
-                    confidence += 40;
-                } else {
-                    const quarterMatch = input.match(REGEX_QUARTER);
-                    if (quarterMatch) {
-                        amountType = 'percentage';
-                        amount = 25;
-                        if (quarterMatch[2]) fromAsset = quarterMatch[2].toUpperCase();
-                        confidence += 40;
-                    } else if (REGEX_MAX_ALL.test(input)) {
-                        amountType = 'all';
-                        const allTokenMatch = input.match(REGEX_ALL_TOKEN);
-                        if (allTokenMatch) {
-                            fromAsset = allTokenMatch[2].toUpperCase();
-                        }
-                        confidence += 30;
-                    }
-                }
-            }
-        }
-
-        // C. Detect Quote Amount ("Worth")
-        const quoteMatch = input.match(REGEX_QUOTE);
-        if (quoteMatch) {
-            if (quoteMatch[1]) {
-                const candidate = quoteMatch[1].toUpperCase();
-                if (!/^(swap|convert|send|transfer|buy|sell|move|exchange)$/i.test(candidate)) {
-                    if (!fromAsset) fromAsset = candidate;
-                }
-            }
-            quoteAmount = parseFloat(quoteMatch[3]);
-            if (quoteMatch[5]) {
-                if (!toAsset) toAsset = quoteMatch[5].toUpperCase();
-            }
-            confidence += 30;
-        }
-
-        // D. Detect Tokens
-        if (!fromAsset || !toAsset) {
-            const fromToMatch = input.match(REGEX_FROM_TO);
-            if (fromToMatch) {
-                fromAsset = fromToMatch[1].toUpperCase();
-                toAsset = fromToMatch[2].toUpperCase();
-                confidence += 40;
-            } else {
-                const tokenMatch = input.match(REGEX_TOKENS);
-                if (tokenMatch) {
-                    const token1 = tokenMatch[1].toUpperCase();
-                    const token2 = tokenMatch[3].toUpperCase();
-                    const isVerb = /^(swap|convert|send|transfer|buy|sell|move|exchange)$/i.test(token1);
-
-                    if (!isVerb) {
-                        if (fromAsset && fromAsset !== token1) {
-                        } else {
-                            fromAsset = token1;
-                        }
-                        toAsset = token2;
-                        confidence += 30;
-                    }
-                }
-            }
-        }
-
-        // E. Detect Numeric Amount
-        if (!amount && amountType === null && !quoteAmount) {
-            const amtTokenMatch = input.match(REGEX_AMOUNT_TOKEN);
-            if (amtTokenMatch) {
-                amount = parseFloat(amtTokenMatch[1]);
-                amountType = 'exact';
-                if (!fromAsset) fromAsset = amtTokenMatch[3].toUpperCase();
-                confidence += 20;
-            } else {
-                const numMatch = input.match(/\b(\d+(\.\d+)?)\b/);
-                if (numMatch) {
-                    if (amountType !== 'all') {
-                        amount = parseFloat(numMatch[1]);
-                        amountType = 'exact';
-                        confidence += 10;
-                    }
-                }
-            }
-        }
-
-        // F. Detect Limit Order Condition
-        const conditionMatch = input.match(REGEX_CONDITION);
-        if (conditionMatch) {
-            intent = 'limit_order';
-            const assetStr = conditionMatch[1];
-            const operatorStr = conditionMatch[2].toLowerCase();
-            const valueStr = conditionMatch[3];
-
-            conditionValue = normalizeNumber(valueStr);
-
-            if (assetStr) {
-                const candidate = assetStr.toUpperCase();
-                const ignoredWords = ['IS', 'GOES', 'DROPS', 'RISES', 'FALLS', 'THE', 'PRICE', 'OF'];
-                if (!ignoredWords.includes(candidate)) {
-                    conditionAsset = candidate;
-                }
-            }
-
-            // Logic fix: "drops below" -> lt, "rises above" -> gt
-            if (operatorStr.includes('below') || operatorStr.includes('less') || operatorStr.includes('under') || operatorStr.includes('<') || operatorStr.includes('drops') || operatorStr.includes('falls')) {
-                conditionOperator = 'lt';
-            } else {
-                conditionOperator = 'gt';
-            }
-
-            if (conditionValue) {
-                conditions = {
-                    type: conditionOperator === 'gt' ? "price_above" : "price_below",
-                    asset: conditionAsset || fromAsset || 'ETH',
-                    value: conditionValue
-                };
-            }
-
-            confidence += 30;
-        }
-
-        if (conditionOperator && conditionValue) {
-            conditions = {
-                type: conditionOperator === 'gt' ? 'price_above' : 'price_below',
-                asset: conditionAsset || fromAsset || 'ETH',
-                value: conditionValue
-            };
-        }
-
-        if (confidence >= 30) {
-            if ((conditionOperator || conditionValue) && !conditionAsset && fromAsset) {
-                conditionAsset = fromAsset;
-            }
-
-            if (conditions && !conditions.asset && conditionAsset) {
-                conditions.asset = conditionAsset;
-            }
-
-            let parsedMessage = `Parsed: ${amountType || amount || (quoteAmount ? 'Value ' + quoteAmount : '?')} ${fromAsset || '?'} -> ${toAsset || '?'}`;
-            if (conditionOperator && conditionValue) {
-                parsedMessage += ` if ${conditionAsset || fromAsset} ${conditionOperator === 'gt' ? '>' : '<'} ${conditionValue}`;
-            }
-
-            return {
-                success: true,
-                intent: intent,
-                fromAsset: fromAsset || null,
-                fromChain: null,
-                toAsset: toAsset || null,
-                toChain: null,
-                amount: amount || null,
-                amountType: amountType || 'exact',
-                excludeAmount,
-                excludeToken,
-                quoteAmount,
-                conditions,
-                portfolio: undefined,
-                frequency: null, dayOfWeek: null, dayOfMonth: null,
-                settleAsset: null, settleNetwork: null, settleAmount: null, settleAddress: null,
-                fromProject: null, fromYield: null, toProject: null, toYield: null,
-
-                conditionOperator,
-                conditionValue,
-                conditionAsset,
-                targetPrice: conditionValue,
-                condition: conditionOperator === 'gt' ? 'above' : 'below',
-
-                confidence: Math.min(100, confidence + 30),
-                validationErrors: [],
-                parsedMessage,
-                requiresConfirmation: false,
-                originalInput: userInput
-            };
-        }
-    }
-
-    const hasExplicitTo = /\b(?:to|into|for)\s+[A-Z]{2,10}\b/i.test(input);
-    if ((!fromAsset && amountType !== 'all') || (!hasExplicitTo && amount === null && amountType === null && !conditionOperator && !quoteAmount) || /^\s*(swap|convert)\s+[A-Z]{2,10}\s*$/i.test(input) || /^\s*convert\s+to\s+[A-Z]{2,10}\s*$/i.test(input)) {
-      logger.info('Fallback to LLM for:', userInput);
-      try {
-        const result = await parseWithLLM(userInput, conversationHistory, inputType);
-        if (result.intent === 'portfolio' && Array.isArray(result.portfolio) && result.portfolio.length) {
-          if (total !== 100) {
-            return {
-              ...result,
-              success: false,
-              validationErrors: [...(result.validationErrors ?? []), `Total allocation is ${total}%, but should be 100%`],
-              originalInput: userInput
-            };
-          }
-        }
-        if (result.validationErrors?.length) {
-          return { ...result, success: false, originalInput: userInput };
-        }
-        return { ...result, originalInput: userInput };
-      } catch (error) {
-        logger.error('LLM Error', error);
-        return {
-            ...result,
-            amountType: result.amountType || null,
-            excludeAmount: result.excludeAmount || undefined,
-            excludeToken: result.excludeToken || undefined,
-            quoteAmount: result.quoteAmount || undefined,
-            conditions: result.conditions || undefined,
-            originalInput: userInput
-        };
-    } catch (error) {
-        logger.error("LLM Error", error);
-        return {
-            success: false,
-            intent: 'unknown',
-            confidence: 0,
-            validationErrors: ['Parsing failed'],
-            parsedMessage: '',
-            fromAsset: null, fromChain: null, toAsset: null, toChain: null, amount: null,
-            settleAsset: null, settleNetwork: null, settleAmount: null, settleAddress: null,
-            fromProject: null, fromYield: null, toProject: null, toYield: null,
-            requiresConfirmation: false,
-            originalInput: userInput
-        };
-    }
 }

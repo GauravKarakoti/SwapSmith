@@ -1,35 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { enhancedCSRFMiddleware } from '@/lib/enhanced-csrf';
+import { csrfMiddleware, ensureCSRFToken } from '@/lib/csrf-middleware';
 import { rateLimitMiddleware, RATE_LIMITS } from '@/lib/rate-limiter';
 import { securityMiddleware } from '@/lib/security-headers';
-import { csrfProtectionMiddleware } from '@/lib/csrf';
 
 /**
  * Comprehensive Security Middleware
  * 
- * Handles:
- * 1. Rate limiting for all API routes
- * 2. Enhanced CSRF protection
- * 3. Security headers
+ * Handles in order:
+ * 1. CSRF protection for state-changing API requests
+ * 2. Rate limiting for all API routes
+ * 3. Security headers for all responses
  * 4. Admin dashboard protection
  */
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 🔐 CSRF Protection: Validate and set CSRF tokens for API routes.
-  // Skip for /api/admin/* — those use Firebase ID token auth (inherently CSRF-safe).
-  // Also validates Origin/Referer via enhanced csrfProtectionMiddleware.
-  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/admin/')) {
-    const csrfResponse = csrfProtectionMiddleware(request);
-    // If validation failed (403), return error response immediately.
-    // If validation succeeded (200 with cookie), we return it here because for API routes
-    // there are no further checks (Admin Dashboard is disjoint).
-    // Note: If we had further logic for /api/ we would need to merge headers/cookies.
-    // Currently we assume csrfProtectionMiddleware is the primary guard for /api/.
-    if (csrfResponse) {
-      return csrfResponse;
-    }
-  }
   // 🔐 Admin Dashboard Protection
   if (pathname.startsWith('/admin/dashboard')) {
     const adminSession = request.cookies.get('admin-session');
@@ -45,17 +30,20 @@ export function middleware(request: NextRequest) {
   if (pathname.startsWith('/api/')) {
     let response: NextResponse | null = null;
 
-    // 1. Rate Limiting (apply first to prevent abuse)
+    // 1. Unified CSRF Protection (blocks invalid state-changing requests)
+    response = csrfMiddleware(request);
+    if (response) return response; // CSRF validation failed
+
+    // 2. Rate Limiting (apply before allowing request processing)
     const rateLimitConfig = getRateLimitConfig(pathname);
     response = rateLimitMiddleware(request, rateLimitConfig);
     if (response) return response; // Rate limit exceeded
 
-    // 2. Enhanced CSRF Protection
-    response = enhancedCSRFMiddleware(request);
-    if (response && response.status === 403) return response; // CSRF validation failed
-
-    // 3. Apply security headers to the response
-    const finalResponse = response || NextResponse.next();
+    // 3. Create response and ensure CSRF token is set
+    let finalResponse = NextResponse.next();
+    finalResponse = ensureCSRFToken(finalResponse, request);
+    
+    // 4. Apply security headers
     return securityMiddleware(finalResponse);
   }
 

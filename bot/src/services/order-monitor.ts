@@ -79,6 +79,7 @@ export class OrderMonitor {
     private tickTimer: ReturnType<typeof setInterval> | null = null;
     private activePollCount = 0;
     private deps: OrderMonitorDeps;
+    private isShuttingDown = false;
 
     constructor(deps: OrderMonitorDeps) {
         this.deps = deps;
@@ -89,6 +90,7 @@ export class OrderMonitor {
     /** Start the background polling loop. */
     start(): void {
         if (this.tickTimer) return; // already running
+        this.isShuttingDown = false;
         logger.info(`[OrderMonitor] Started — tracking ${this.tracked.size} order(s)`);
         this.tickTimer = setInterval(() => this.tick(), TICK_INTERVAL);
 
@@ -102,6 +104,33 @@ export class OrderMonitor {
             logger.info('[OrderMonitor] Stopped');
         }
 
+    }
+
+    /** 
+     * Gracefully stop the polling loop and wait for active polls to complete.
+     * Returns a promise that resolves when all active operations are done.
+     */
+    async gracefulStop(timeoutMs: number = 10000): Promise<void> {
+        logger.info('[OrderMonitor] Initiating graceful shutdown...');
+        this.isShuttingDown = true;
+
+        // Stop accepting new ticks
+        if (this.tickTimer) {
+            clearInterval(this.tickTimer);
+            this.tickTimer = null;
+        }
+
+        // Wait for active polls to complete with timeout
+        const startTime = Date.now();
+        while (this.activePollCount > 0) {
+            if (Date.now() - startTime > timeoutMs) {
+                logger.warn(`[OrderMonitor] Graceful shutdown timeout after ${timeoutMs}ms with ${this.activePollCount} active polls remaining`);
+                break;
+            }
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        logger.info(`[OrderMonitor] Graceful shutdown complete. Tracked orders: ${this.tracked.size}, Active polls: ${this.activePollCount}`);
     }
 
     /** Add a new order to the tracking map and persist it. */
@@ -206,6 +235,11 @@ export class OrderMonitor {
 
     /** Single tick: evaluate which orders need polling and poll them. */
     private async tick(): Promise<void> {
+        // Skip tick if shutting down
+        if (this.isShuttingDown) {
+            return;
+        }
+
         const now = Date.now();
         const toPoll: TrackedOrder[] = [];
 
