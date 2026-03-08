@@ -2,10 +2,9 @@
 
 import { useState } from 'react';
 import { SecurityScanner } from '@/utils/security-scanner';
-import { Chain, createPublicClient, http } from 'viem';
 import { mainnet, bsc, polygon, base } from 'viem/chains';
 import { SecurityReport } from '@/types/security';
-import { AlertTriangle, ShieldCheck, ShieldAlert, BadgeCheck, FileWarning, Search, Coins, ArrowRight, Loader } from 'lucide-react';
+import { AlertTriangle, ShieldCheck, ShieldAlert, BadgeCheck, FileWarning, Search, Loader } from 'lucide-react';
 
 const CHAINS = [
   { id: 'ethereum', name: 'Ethereum', chain: mainnet },
