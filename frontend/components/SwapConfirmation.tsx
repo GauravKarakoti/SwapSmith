@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   CheckCircle,
   AlertCircle,
@@ -88,6 +88,15 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
 
   const depositChainId = CHAIN_MAP[quote.depositNetwork.toLowerCase()]?.id
   const publicClient = usePublicClient({ chainId: depositChainId })
+
+  // Clear wallet-related state when wallet disconnects
+  useEffect(() => {
+    if (!isConnected) {
+      setWalletBalance(null)
+      setIsLoadingBalance(false)
+      setSafetyCheck(null)
+    }
+  }, [isConnected])
 
   const getNetworkName = (network: string) => {
     return CHAIN_MAP[network.toLowerCase()]?.name || network
