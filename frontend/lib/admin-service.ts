@@ -61,9 +61,6 @@ export async function getAdminByFirebaseUid(uid: string): Promise<AdminUser | nu
 export async function getAdminByEmail(email: string): Promise<AdminUser | null> {
   const rows = await getDb().select().from(adminUsers)
     .where(eq(adminUsers.email, email))
-    .limit(1);
-  return rows[0] ?? null;
-}
 
 export async function createAdminUser(data: {
   firebaseUid: string;
@@ -155,7 +152,7 @@ export interface PlatformAnalytics {
     toAsset: string;
     fromNetwork: string;
     toNetwork: string;
-    fromAmount: number;
+    fromAmount: string; // Changed from number to string for numeric precision
     status: string;
     createdAt: Date | null;
   }[];
@@ -409,7 +406,7 @@ export interface AdminSwapRow {
   quoteId: string | null;
   fromAsset: string;
   fromNetwork: string;
-  fromAmount: number;
+  fromAmount: string; // Changed from number to string for numeric precision
   toAsset: string;
   toNetwork: string;
   settleAmount: string;

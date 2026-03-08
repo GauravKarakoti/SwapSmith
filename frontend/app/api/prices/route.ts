@@ -24,9 +24,10 @@ export async function GET(request: NextRequest) {
 
     // If specific coin requested, serve from cache
     if (coin && network) {
-      const cached = await getCachedPrice(coin, network);
+      const cached = await getCachedPrice(coin, network, true);
       
       if (cached) {
+        const isStale = new Date(cached.expiresAt) < new Date();
         return NextResponse.json({
           coin: cached.coin,
           network: cached.network,
@@ -35,7 +36,9 @@ export async function GET(request: NextRequest) {
           btcPrice: cached.btcPrice,
           available: cached.available === 'true',
           cached: true,
+          isStale,
           expiresAt: cached.expiresAt,
+          updatedAt: cached.updatedAt,
         }, {
           headers: {
             'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
@@ -54,26 +57,25 @@ export async function GET(request: NextRequest) {
 
     // Get all cached prices from database
     const cachedPrices = await getAllCachedPrices();
-    const validPrices = cachedPrices.filter(p => 
-      new Date(p.expiresAt) > new Date() && 
-      p.usdPrice !== null && 
-      p.usdPrice !== undefined &&
-      p.usdPrice !== ''
-    );
-
-    console.log(`[Prices API] Serving ${validPrices.length} cached prices from database (filtered from ${cachedPrices.length} total)`);
-
-    return NextResponse.json({
-      prices: validPrices.map(p => ({
+    const pricesWithStaleInfo = cachedPrices
+      .filter(p => p.usdPrice !== null && p.usdPrice !== undefined && p.usdPrice !== '')
+      .map(p => ({
         coin: p.coin,
         network: p.network,
         name: p.name,
         usdPrice: p.usdPrice,
         btcPrice: p.btcPrice,
         available: p.available === 'true',
-      })),
+        isStale: new Date(p.expiresAt) < new Date(),
+        updatedAt: p.updatedAt,
+      }));
+
+    console.log(`[Prices API] Serving ${pricesWithStaleInfo.length} cached prices from database`);
+
+    return NextResponse.json({
+      prices: pricesWithStaleInfo,
       cached: true,
-      count: validPrices.length,
+      count: pricesWithStaleInfo.length,
       message: 'Prices are automatically refreshed every 6 hours',
     }, {
       headers: {
