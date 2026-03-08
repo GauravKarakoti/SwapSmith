@@ -4,15 +4,13 @@
 
 // Common profanity terms (basic list - can be expanded)
 const PROFANITY_LIST = [
-  'spam',
-  'scam',
-  'fake',
-  'phishing',
-  'hack',
-  'exploit',
-  // Add more terms as needed
+  'fuck',
+  'shit',
+  'bitch',
+  'asshole',
+  'bastard',
+  // Add more profanity terms as needed
 ];
-
 // Known phishing and malicious domains (basic list - can be expanded)
 const PHISHING_DOMAINS = [
   'bit.ly',
