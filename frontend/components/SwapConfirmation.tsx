@@ -524,6 +524,15 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
               <Wallet className="w-3 h-3" /> {isLoadingBalance ? '...' : 'USE MAX'}
             </button>
           </div>
+          {walletBalance && !isLoadingBalance && (
+            <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded block mb-2">
+              Balance: {parseFloat(walletBalance).toFixed(4)} {quote.depositCoin}
+            </span>
+          )}
+          <div className="flex justify-between items-end">
+            <span className="text-xl font-bold text-blue-900">{quote.depositAmount}</span>
+            <span className="text-sm font-medium text-blue-700">{quote.depositCoin} ({quote.depositNetwork})</span>
+          </div>
 
           {walletBalance && !isLoadingBalance && (
             <div className="mt-2 text-xs text-gray-600">

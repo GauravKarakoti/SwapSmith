@@ -333,6 +333,8 @@ export const discussions = pgTable('discussions', {
   category: text('category').default('general'),
   likes: text('likes').default('0'),
   replies: text('replies').default('0'),
+  isHidden: boolean('is_hidden').default(false).notNull(),
+  moderationReason: text('moderation_reason'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at'),
 }, (table) => [
