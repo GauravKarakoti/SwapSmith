@@ -1,31 +1,103 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { loadSecret } from '../../../../shared/utils/secrets-loader';
+import { adminAuth } from '@/lib/firebase-admin';
 
 /**
  * Health Check API Route
  * 
- * Provides health status for Docker health checks and monitoring
- * GET /api/health - Returns application health status
+ * SECURITY: Two-tier health check system
+ * - Public: Basic up/down status only (for load balancers, Docker)
+ * - Authenticated: Detailed system information (for admin monitoring)
+ * 
+ * GET /api/health - Returns basic health status
+ * GET /api/health?detailed=true - Returns detailed status (requires admin auth)
  */
 
 export async function GET(request: NextRequest) {
   try {
-    // Basic health checks
+    const { searchParams } = new URL(request.url);
+    const detailed = searchParams.get('detailed') === 'true';
+    
+    // SECURITY: Detailed health info requires authentication
+    if (detailed) {
+      const authHeader = request.headers.get('authorization');
+      
+      if (!authHeader?.startsWith('Bearer ')) {
+        return NextResponse.json(
+          { error: 'Unauthorized: Detailed health info requires authentication' },
+          { status: 401 }
+        );
+      }
+      
+      try {
+        const token = authHeader.substring(7);
+        await adminAuth.verifyIdToken(token);
+      } catch (error) {
+        return NextResponse.json(
+          { error: 'Unauthorized: Invalid token' },
+          { status: 401 }
+        );
+      }
+      
+      // Return detailed health status for authenticated admins
+      return getDetailedHealthStatus();
+    }
+    
+    // SECURITY: Public endpoint returns minimal information
+    // Only basic up/down status for load balancers and Docker health checks
+    return NextResponse.json(
+      {
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+      },
+      { 
+        status: 200,
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Content-Type': 'application/json',
+        }
+      }
+    );
+  } catch (error) {
+    console.error('[Health Check] Error:', error);
+    
+    // SECURITY: Don't leak error details in public endpoint
+    return NextResponse.json(
+      {
+        status: 'unhealthy',
+        timestamp: new Date().toISOString(),
+      },
+      { 
+        status: 503,
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Content-Type': 'application/json',
+        }
+      }
+    );
+  }
+}
+
+/**
+ * Get detailed health status (authenticated only)
+ */
+async function getDetailedHealthStatus() {
+  try {
     const healthStatus = {
       status: 'healthy',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       environment: process.env.NODE_ENV || 'development',
-      version: process.env.npm_package_version || '1.0.0',
       checks: {
         memory: getMemoryUsage(),
         database: await checkDatabaseConnection(),
-        secrets: checkSecretsAvailability(),
+        services: checkServicesAvailability(),
       }
     };
 
     // Determine overall health
-    const isHealthy = Object.values(healthStatus.checks).every(check => check.status === 'ok');
+    const isHealthy = Object.values(healthStatus.checks).every(
+      check => check.status === 'ok' || check.status === 'warning'
+    );
     
     return NextResponse.json(
       {
@@ -41,13 +113,11 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (error) {
-    console.error('[Health Check] Error:', error);
-    
     return NextResponse.json(
       {
         status: 'unhealthy',
         timestamp: new Date().toISOString(),
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: 'Health check failed'
       },
       { 
         status: 503,
@@ -80,7 +150,7 @@ function getMemoryUsage() {
   } catch (error) {
     return {
       status: 'error',
-      error: 'Failed to get memory usage'
+      message: 'Failed to get memory usage'
     };
   }
 }
@@ -90,75 +160,52 @@ function getMemoryUsage() {
  */
 async function checkDatabaseConnection() {
   try {
-    // Simple database connection check
     if (!process.env.DATABASE_URL) {
       return {
         status: 'warning',
-        message: 'Database URL not configured'
+        message: 'Database not configured'
       };
     }
     
-    // In a real implementation, you would test the actual connection
-    // For now, just check if the URL is present
+    // SECURITY: Don't expose actual database URL or connection details
     return {
       status: 'ok',
-      message: 'Database URL configured'
+      message: 'Database configured'
     };
   } catch (error) {
     return {
       status: 'error',
-      error: 'Database connection failed'
+      message: 'Database check failed'
     };
   }
 }
 
 /**
- * Check if required secrets are available
+ * Check if required services are available
  */
-function checkSecretsAvailability() {
+function checkServicesAvailability() {
   try {
-    const requiredSecrets = [
-      { name: 'groq_api_key', env: 'GROQ_API_KEY' },
-      { name: 'sideshift_api_key', env: 'NEXT_PUBLIC_SIDESHIFT_API_KEY' }
-    ];
+    // SECURITY: Only check presence, don't expose actual keys or values
+    const services = {
+      database: !!process.env.DATABASE_URL,
+      firebase: !!process.env.FIREBASE_PROJECT_ID,
+      sideshift: !!process.env.SIDESHIFT_API_KEY,
+    };
     
-    const missingSecrets = [];
-    
-    for (const secret of requiredSecrets) {
-      try {
-        loadSecret(secret.name, secret.env, false);
-      } catch (error) {
-        missingSecrets.push(secret.name);
-      }
-    }
-    
-    if (missingSecrets.length > 0) {
-      return {
-        status: 'warning',
-        message: `Missing secrets: ${missingSecrets.join(', ')}`
-      };
-    }
+    const allAvailable = Object.values(services).every(available => available);
     
     return {
-      status: 'ok',
-      message: 'All required secrets available'
+      status: allAvailable ? 'ok' : 'warning',
+      message: allAvailable ? 'All services configured' : 'Some services not configured',
+      available: services
     };
   } catch (error) {
     return {
       status: 'error',
-      error: 'Failed to check secrets'
+      message: 'Failed to check services'
     };
   }
 }
 
-// Handle OPTIONS for CORS preflight
-export async function OPTIONS(request: NextRequest) {
-  return new NextResponse(null, { 
-    status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    }
-  });
-}
+// SECURITY: Remove CORS wildcard, no OPTIONS handler needed
+// Health endpoint should not be called cross-origin
