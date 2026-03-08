@@ -366,7 +366,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
     }));
   };
 
-  render(): ReactNode {
+  render(): React.ReactElement | null {
     if (this.state.hasError && this.state.error) {
       if (this.props.fallback) {
         return this.props.fallback(this.state.error, this.retry);
