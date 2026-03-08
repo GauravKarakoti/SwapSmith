@@ -125,7 +125,7 @@ const LiveStatsCard = () => {
 /* Main Page                                  */
 /* -------------------------------------------------------------------------- */
 
-export default function TerminalPage() {
+function TerminalPage() {
   const { address, isConnected } = useAccount();
   const { handleError } = useErrorHandler();
 
@@ -150,6 +150,8 @@ export default function TerminalPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInputDisabled, setIsInputDisabled] = useState(true); // Block input until history loads
+  const [pendingMessages, setPendingMessages] = useState<Message[]>([]); // Queue for messages sent during loading
 
   // Session Management
   const [currentSessionId, setCurrentSessionId] = useState(crypto.randomUUID());
@@ -178,9 +180,12 @@ export default function TerminalPage() {
   useEffect(() => {
     sessionIdRef.current = currentSessionId;
     loadedSessionRef.current = null;
+    setIsHistoryLoading(true);
+    setIsInputDisabled(true);
+    setPendingMessages([]);
   }, [currentSessionId]);
 
-  // Load chat history
+  // Load chat history with proper race condition handling
   useEffect(() => {
     if (loadedSessionRef.current === currentSessionId) return;
 
@@ -191,30 +196,67 @@ export default function TerminalPage() {
         timestamp: new Date(m.createdAt),
         type: "message" as const,
       }));
+
       queueMicrotask(() => {
-        setMessages(loadedMessages);
+        // Merge loaded history with any pending messages sent during loading
+        setMessages(prev => {
+          // Keep only the initial welcome message if it's a new session
+          const initialMessage = prev.length === 1 && prev[0].role === "assistant" ? prev[0] : null;
+
+          // Combine loaded messages with pending messages, sorted by timestamp
+          const allMessages = [...loadedMessages, ...pendingMessages];
+          allMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+          return initialMessage ? [initialMessage, ...allMessages] : allMessages;
+        });
+
         setIsHistoryLoading(false);
+        setIsInputDisabled(false);
+        setPendingMessages([]); // Clear pending messages after merge
       });
       loadedSessionRef.current = currentSessionId;
     } else {
-      queueMicrotask(() => setIsHistoryLoading(false));
+      queueMicrotask(() => {
+        // No history to load, just add any pending messages
+        if (pendingMessages.length > 0) {
+          setMessages(prev => [...prev, ...pendingMessages]);
+          setPendingMessages([]);
+        }
+        setIsHistoryLoading(false);
+        setIsInputDisabled(false);
+      });
     }
-  }, [dbChatHistory, currentSessionId]);
+  }, [dbChatHistory, currentSessionId, pendingMessages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
 
   /* ------------------------------------------------------------------------ */
   /* Handlers                                   */
   /* ------------------------------------------------------------------------ */
 
   const addMessage = useCallback((msg: Omit<Message, "timestamp">) => {
-    setMessages((prev) => [...prev, { ...msg, timestamp: new Date() }]);
-  }, []);
+    const newMessage = { ...msg, timestamp: new Date() };
+
+    // If history is still loading, add to pending queue
+    if (isHistoryLoading) {
+      setPendingMessages(prev => [...prev, newMessage]);
+    } else {
+      setMessages(prev => [...prev, newMessage]);
+    }
+  }, [isHistoryLoading]);
 
   const handleStartRecording = () => {
+    if (isInputDisabled) {
+      addMessage({
+        role: "assistant",
+        content: "Please wait for chat history to load before sending messages.",
+        type: "message",
+      });
+      return;
+    }
+
     if (!isAudioSupported) {
       addMessage({
         role: "assistant",
@@ -227,6 +269,8 @@ export default function TerminalPage() {
   };
 
   const handleStopRecording = async () => {
+    if (isInputDisabled) return;
+
     setIsLoading(true);
     try {
       const audioBlob = await stopRecording();
@@ -275,6 +319,9 @@ export default function TerminalPage() {
         type: "message",
       },
     ]);
+    setIsHistoryLoading(false);
+    setIsInputDisabled(false);
+    setPendingMessages([]);
   };
 
   const handleSwitchSession = (id: string) => setCurrentSessionId(id);
@@ -366,6 +413,16 @@ export default function TerminalPage() {
 
   const processCommand = async (text: string) => {
     if (!text.trim()) return;
+
+    // Block processing if input is disabled (history still loading)
+    if (isInputDisabled) {
+      addMessage({
+        role: "assistant",
+        content: "Please wait for chat history to load before sending messages.",
+        type: "message",
+      });
+      return;
+    }
 
     // Check terminal usage limit before processing
     const usageCheck = await checkTerminalUsage();
@@ -649,6 +706,16 @@ export default function TerminalPage() {
                 />
               )}
 
+              {/* Loading indicator */}
+              {isHistoryLoading && (
+                <div className="flex items-center justify-center py-4">
+                  <div className="flex items-center gap-2 text-sm text-[var(--muted)]">
+                    <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                    Loading chat history...
+                  </div>
+                </div>
+              )}
+
               {/* Header / Hero */}
               <div className="mb-2">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--panel-soft)]/80 border border-[var(--border)] text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
@@ -732,7 +799,7 @@ export default function TerminalPage() {
                         <a
                           href={(msg.data as { url: string }).url}
                           target="_blank"
-                          rel="noopener noreferrer"
+          rel="noopener noreferrer"
                           className="underline underline-offset-2 text-cyan-400"
                         >
                           {(msg.data as { url: string }).url}
@@ -758,6 +825,7 @@ export default function TerminalPage() {
               onStartRecording={handleStartRecording}
               onStopRecording={handleStopRecording}
               isConnected={isConnected}
+              disabled={isInputDisabled}
             />
           </div>
         </div>
@@ -765,3 +833,5 @@ export default function TerminalPage() {
     </>
   );
 }
+
+export default TerminalPage;

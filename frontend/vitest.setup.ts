@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { beforeAll, afterAll, vi, afterEach } from 'vitest';
+import React from 'react';
 
 // ============================================================================
 // DOM API Mocks
@@ -136,8 +137,7 @@ vi.mock('next/navigation', () => ({
 // Mock next/image
 vi.mock('next/image', () => ({
   default: ({ src, alt, ...props }: any) => {
-    // eslint-disable-next-line jsx-a11y/alt-text
-    return <img src={src} alt={alt} {...props} />;
+    return React.createElement('img', { src, alt, ...props });
   },
 }));
 

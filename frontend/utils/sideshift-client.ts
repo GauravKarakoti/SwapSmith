@@ -3,7 +3,7 @@ import { SIDESHIFT_CONFIG, getApiUrl, getApiEndpoint } from '../../shared/config
 import { validateDepositAddressForNetwork } from './addressValidation';
 
 const apiClient = axios.create({
-  baseURL: getApiUrl(),
+  baseURL: SIDESHIFT_CONFIG.BASE_URL,
 });
 
 // API key is now server-side only - client calls backend API routes

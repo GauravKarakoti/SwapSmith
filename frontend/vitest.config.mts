@@ -13,10 +13,12 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov', 'text-summary', 'json-summary'],
       reportOnFailure: true,
-      lines: 70,
-      functions: 70,
-      branches: 70,
-      statements: 70,
+      thresholds: {
+        lines: 70,
+        functions: 70,
+        branches: 70,
+        statements: 70,
+      },
       exclude: [
         'node_modules/',
         'dist/',
@@ -44,11 +46,6 @@ export default defineConfig({
     hookTimeout: 10000,
     isolate: true,
     pool: 'forks',
-    poolOptions: {
-      forks: {
-        singleFork: true,
-      },
-    },
     mockReset: true,
     restoreMocks: true,
     clearMocks: true,

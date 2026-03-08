@@ -149,6 +149,7 @@ interface ClaudeChatInputProps {
     onStartRecording?: () => void;
     onStopRecording?: () => void;
     isConnected?: boolean;
+    disabled?: boolean;
 }
 
 export const ClaudeChatInput: React.FC<ClaudeChatInputProps> = ({ 
@@ -157,7 +158,8 @@ export const ClaudeChatInput: React.FC<ClaudeChatInputProps> = ({
     isAudioSupported = false, 
     onStartRecording, 
     onStopRecording,
-    isConnected = false 
+    isConnected = false,
+    disabled = false 
 }) => {
     const [message, setMessage] = useState("");
     const [files, setFiles] = useState<AttachedFile[]>([]);
@@ -319,11 +321,12 @@ export const ClaudeChatInput: React.FC<ClaudeChatInputProps> = ({
                                 onChange={(e) => setMessage(e.target.value)}
                                 onPaste={handlePaste}
                                 onKeyDown={handleKeyDown}
-                                placeholder="Type or speak...'Swap ETH for BTC' or 'Recieve 10 USDC'    "
-                                className="w-full bg-transparent border-0 outline-none text-zinc-100 text-[16px] placeholder:text-zinc-500 resize-none overflow-hidden py-0 leading-relaxed block font-normal antialiased"
+                                placeholder={disabled ? "Loading chat history..." : "Type or speak...'Swap ETH for BTC' or 'Recieve 10 USDC'    "}
+                                className={`w-full bg-transparent border-0 outline-none text-zinc-100 text-[16px] placeholder:text-zinc-500 resize-none overflow-hidden py-0 leading-relaxed block font-normal antialiased ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
                                 rows={1}
-                                autoFocus
+                                autoFocus={!disabled}
                                 style={{ minHeight: '1.5em' }}
+                                disabled={disabled}
                             />
                         </div>
                     </div>
@@ -337,14 +340,14 @@ export const ClaudeChatInput: React.FC<ClaudeChatInputProps> = ({
                                 <button
                                     onClick={isRecording ? onStopRecording : onStartRecording}
                                     className={`p-2 rounded-lg transition-all ${
-                                        !isAudioSupported 
+                                        !isAudioSupported || disabled
                                             ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed' 
                                             : isRecording 
                                                 ? 'bg-red-500 text-white animate-pulse' 
                                                 : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
                                     }`}
-                                    disabled={!isAudioSupported}
-                                    title={isRecording ? 'Stop Recording' : !isAudioSupported ? 'Voice input not supported' : 'Start Voice Input'}
+                                    disabled={!isAudioSupported || disabled}
+                                    title={disabled ? 'Loading chat history...' : isRecording ? 'Stop Recording' : !isAudioSupported ? 'Voice input not supported' : 'Start Voice Input'}
                                 >
                                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                         {isRecording ? (
@@ -367,15 +370,15 @@ export const ClaudeChatInput: React.FC<ClaudeChatInputProps> = ({
                         {/* Right: Send Button */}
                         <button
                             onClick={handleSend}
-                            disabled={!hasContent}
+                            disabled={!hasContent || disabled}
                             className={`
                                 inline-flex items-center justify-center relative shrink-0 transition-colors h-8 w-8 rounded-xl active:scale-95
-                                ${hasContent
+                                ${hasContent && !disabled
                                     ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-md'
                                     : 'bg-blue-600/30 text-white/60 cursor-default'}
                             `}
                             type="button"
-                            aria-label="Send message"
+                            aria-label={disabled ? "Loading..." : "Send message"}
                         >
                             <Icons.ArrowUp className="w-4 h-4" />
                         </button>
