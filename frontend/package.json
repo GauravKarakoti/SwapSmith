@@ -44,7 +44,8 @@
     "three": "^0.183.1",
     "viem": "^2.37.3",
     "wagmi": "^2.16.9",
-    "winston": "^3.19.0"
+    "winston": "^3.19.0",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
