@@ -3,6 +3,18 @@
 ## Overview
 This implementation adds a comprehensive audit logging system for tracking all privileged admin actions in the SwapSmith admin dashboard. The system provides an immutable audit trail that meets compliance and security requirements for financial applications.
 
+## ⚠️ Important Implementation Notes
+
+### Import Path Requirements
+- **Shared library files** (e.g., `shared/lib/audit-logger.ts`) MUST use relative imports: `'../schema'`
+- **Frontend code** importing from shared MUST use relative paths: `'../../../../shared/lib/audit-logger'`
+- The `@/` path alias maps to `frontend/*` only and does NOT support `@/shared/*`
+
+### Database Connection Pattern
+- Each file needing database access creates its own connection
+- No shared `db.ts` singleton file exists
+- Pattern: `const rawSql = neon(process.env.DATABASE_URL!); const db = drizzle(rawSql);`
+
 ## Database Schema Changes
 
 ### New Table: `admin_audit_log`
