@@ -1,3 +1,4 @@
+
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import { eq, desc, sql as drizzleSql, and, or, ilike } from 'drizzle-orm';
@@ -14,26 +15,43 @@ import {
 } from '../../shared/schema';
 export type { CoinGiftLog };
 
-const rawSql = neon(process.env.DATABASE_URL!);
-const db = drizzle(rawSql);
+// Database instance - lazily initialized to avoid build-time errors
+let dbInstance: ReturnType<typeof drizzle> | undefined;
+let sqlInstance: ReturnType<typeof neon> | undefined;
+
+function getDb() {
+  if (!dbInstance) {
+    const dbUrl = process.env.DATABASE_URL;
+    if (!dbUrl) {
+      throw new Error('DATABASE_URL is not set');
+    }
+    sqlInstance = neon(dbUrl);
+    dbInstance = drizzle(sqlInstance);
+  }
+  return dbInstance;
+}
+
+function getRawSql() {
+  if (!sqlInstance) {
+    getDb(); // This will initialize both
+  }
+  return sqlInstance!;
+}
 
 export { adminUsers, adminRequests };
 
 // ── Admin User helpers ─────────────────────────────────────────────────────
 
 export async function getAdminByFirebaseUid(uid: string): Promise<AdminUser | null> {
-  const rows = await db.select().from(adminUsers)
+  const rows = await getDb().select().from(adminUsers)
     .where(and(eq(adminUsers.firebaseUid, uid), eq(adminUsers.isActive, true)))
     .limit(1);
   return rows[0] ?? null;
 }
 
 export async function getAdminByEmail(email: string): Promise<AdminUser | null> {
-  const rows = await db.select().from(adminUsers)
+  const rows = await getDb().select().from(adminUsers)
     .where(eq(adminUsers.email, email))
-    .limit(1);
-  return rows[0] ?? null;
-}
 
 export async function createAdminUser(data: {
   firebaseUid: string;
@@ -41,7 +59,7 @@ export async function createAdminUser(data: {
   name: string;
   approvedBy: string;
 }): Promise<AdminUser> {
-  const rows = await db.insert(adminUsers).values({
+  const rows = await getDb().insert(adminUsers).values({
     firebaseUid: data.firebaseUid,
     email: data.email,
     name: data.name,
@@ -56,14 +74,14 @@ export async function createAdminUser(data: {
 // ── Admin Request helpers ──────────────────────────────────────────────────
 
 export async function getPendingRequestByToken(token: string): Promise<AdminRequest | null> {
-  const rows = await db.select().from(adminRequests)
+  const rows = await getDb().select().from(adminRequests)
     .where(and(eq(adminRequests.approvalToken, token), eq(adminRequests.status, 'pending')))
     .limit(1);
   return rows[0] ?? null;
 }
 
 export async function getRequestByEmail(email: string): Promise<AdminRequest | null> {
-  const rows = await db.select().from(adminRequests)
+  const rows = await getDb().select().from(adminRequests)
     .where(eq(adminRequests.email, email))
     .limit(1);
   return rows[0] ?? null;
@@ -72,11 +90,6 @@ export async function getRequestByEmail(email: string): Promise<AdminRequest | n
 export async function createAdminRequest(data: {
   firebaseUid: string;
   email: string;
-  name: string;
-  reason?: string;
-  approvalToken: string;
-}): Promise<AdminRequest> {
-  const rows = await db.insert(adminRequests).values({
     ...data,
     reason: data.reason ?? 'Admin access requested.',
   }).returning();
@@ -84,7 +97,7 @@ export async function createAdminRequest(data: {
 }
 
 export async function approveAdminRequest(token: string, reviewerEmail: string) {
-  await db.update(adminRequests).set({
+  await getDb().update(adminRequests).set({
     status: 'approved',
     reviewedAt: new Date(),
     reviewedBy: reviewerEmail,
@@ -93,7 +106,7 @@ export async function approveAdminRequest(token: string, reviewerEmail: string) 
 }
 
 export async function rejectAdminRequest(token: string, reviewerEmail: string, reason?: string) {
-  await db.update(adminRequests).set({
+  await getDb().update(adminRequests).set({
     status: 'rejected',
     reviewedAt: new Date(),
     reviewedBy: reviewerEmail,
@@ -139,9 +152,11 @@ export async function getPlatformAnalytics(): Promise<PlatformAnalytics> {
   const weekStr   = startOfWeek.toISOString();
   const monthStr  = startOfMonth.toISOString();
 
+  const database = getDb();
+
   // All counts in one shot via conditional aggregation
   const [[counts], topAssetsRows, topChainsRows, recentSwapsRows, swapsByDayRows, [userCounts]] = await Promise.all([
-    db.select({
+    database.select({
       total:      drizzleSql<number>`count(*)::int`,
       today:      drizzleSql<number>`count(*) filter (where "created_at" >= ${todayStr}::timestamptz)::int`,
       week:       drizzleSql<number>`count(*) filter (where "created_at" >= ${weekStr}::timestamptz)::int`,
@@ -150,7 +165,7 @@ export async function getPlatformAnalytics(): Promise<PlatformAnalytics> {
       failed:     drizzleSql<number>`count(*) filter (where "status" = 'failed')::int`,
     }).from(swapHistory),
 
-    db.select({
+    database.select({
       asset:   swapHistory.fromAsset,
       network: swapHistory.fromNetwork,
       cnt:     drizzleSql<number>`count(*)::int`,
@@ -159,7 +174,7 @@ export async function getPlatformAnalytics(): Promise<PlatformAnalytics> {
       .orderBy(drizzleSql`count(*) desc`)
       .limit(10),
 
-    db.select({
+    database.select({
       chain: swapHistory.fromNetwork,
       cnt:   drizzleSql<number>`count(*)::int`,
     }).from(swapHistory)
@@ -167,7 +182,7 @@ export async function getPlatformAnalytics(): Promise<PlatformAnalytics> {
       .orderBy(drizzleSql`count(*) desc`)
       .limit(10),
 
-    db.select({
+    database.select({
       id:          swapHistory.id,
       userId:      swapHistory.userId,
       fromAsset:   swapHistory.fromAsset,
@@ -181,7 +196,7 @@ export async function getPlatformAnalytics(): Promise<PlatformAnalytics> {
       .orderBy(desc(swapHistory.createdAt))
       .limit(20),
 
-    db.select({
+    database.select({
       date: drizzleSql<string>`date("created_at")::text`,
       cnt:  drizzleSql<number>`count(*)::int`,
     }).from(swapHistory)
@@ -189,7 +204,7 @@ export async function getPlatformAnalytics(): Promise<PlatformAnalytics> {
       .groupBy(drizzleSql`date("created_at")`)
       .orderBy(drizzleSql`date("created_at")`),
 
-    db.select({
+    database.select({
       total:      drizzleSql<number>`count(*)::int`,
       todayActive: drizzleSql<number>`count(*) filter (where "created_at" >= ${todayStr}::timestamptz)::int`,
     }).from(users),
@@ -714,6 +729,87 @@ export async function updateUserAdminStatus(
     });
   }
 }
+
+// ── Admin Plan Management ──────────────────────────────────────────────────
+
+export type PlanValue = 'free' | 'premium' | 'pro';
+export const VALID_PLANS: PlanValue[] = ['free', 'premium', 'pro'];
+
+export interface PlanAuditEntry {
+  ts: string;
+  adminEmail: string;
+  previousPlan: string;
+  newPlan: string;
+}
+
+/**
+ * Update a user's subscription plan (admin-only).
+ * Applies the change to the users table and appends an entry to
+ * userSettings.preferences.planHistory for full audit trail.
+ */
+export async function updateUserPlanAsAdmin(
+  firebaseUid: string,
+  newPlan: PlanValue,
+  adminEmail: string,
+): Promise<{ previousPlan: string }> {
+  // 1. Fetch current plan so we can record it in the audit log
+  const userRows = await rawSql`
+    SELECT plan FROM users WHERE firebase_uid = ${firebaseUid} LIMIT 1
+  ` as { plan: string }[];
+
+  if (userRows.length === 0) {
+    throw new Error(`User not found: ${firebaseUid}`);
+  }
+  const previousPlan = userRows[0].plan ?? 'free';
+
+  // 2. Update the plan on the canonical users table
+  await rawSql`
+    UPDATE users
+    SET plan = ${newPlan}::plan_type, updated_at = now()
+    WHERE firebase_uid = ${firebaseUid}
+  `;
+
+  // 3. Append a plan-change entry to userSettings.preferences.planHistory
+  const settingsRows = await db
+    .select({ preferences: userSettings.preferences })
+    .from(userSettings)
+    .where(eq(userSettings.userId, firebaseUid))
+    .limit(1);
+
+  let prefs: Record<string, unknown> = {};
+  if (settingsRows[0]?.preferences) {
+    try { prefs = JSON.parse(settingsRows[0].preferences); } catch {}
+  }
+
+  const history: PlanAuditEntry[] = Array.isArray(prefs.planHistory)
+    ? (prefs.planHistory as PlanAuditEntry[])
+    : [];
+
+  history.unshift({
+    ts: new Date().toISOString(),
+    adminEmail,
+    previousPlan,
+    newPlan,
+  });
+
+  prefs.planHistory = history.slice(0, 50); // retain last 50 entries
+  const prefsStr = JSON.stringify(prefs);
+
+  if (settingsRows.length > 0) {
+    await db.update(userSettings)
+      .set({ preferences: prefsStr, updatedAt: new Date() })
+      .where(eq(userSettings.userId, firebaseUid));
+  } else {
+    await db.insert(userSettings).values({
+      userId:      firebaseUid,
+      preferences: prefsStr,
+      updatedAt:   new Date(),
+    });
+  }
+
+  return { previousPlan };
+}
+
 // ── Testnet Coin Management ────────────────────────────────────────────────
 
 /**

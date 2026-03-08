@@ -1,10 +1,11 @@
-import { eq, lte, and, sql, gt } from 'drizzle-orm';
+import { eq, lte, and, sql, gt, inArray } from 'drizzle-orm';
 import { db, dcaSchedules, orders, watchedOrders, getUser } from './database';
 import { createQuote, createOrder } from './sideshift-client';
 import logger from './logger';
 
-const RETRY_DELAY_MINUTES = 5;
-const MAX_PROCESSING_TIME_MINUTES = 10;
+const RETRY_DELAY_MINUTES = parseInt(process.env.DCA_RETRY_DELAY_MINUTES ?? '5', 10);
+const MAX_PROCESSING_TIME_MINUTES = parseInt(process.env.DCA_MAX_PROCESSING_TIME_MINUTES ?? '10', 10);
+const SCHEDULER_CHECK_INTERVAL_MS = parseInt(process.env.DCA_SCHEDULER_CHECK_INTERVAL_MS ?? '60000', 10);
 
 export class DCAScheduler {
   private intervalId: NodeJS.Timeout | null = null;
@@ -13,7 +14,7 @@ export class DCAScheduler {
   start() {
     if (this.isRunning) return;
     this.isRunning = true;
-    this.intervalId = setInterval(() => this.processSchedules(), 60 * 1000);
+    this.intervalId = setInterval(() => this.processSchedules(), SCHEDULER_CHECK_INTERVAL_MS);
     logger.info('DCA Scheduler started');
   }
 
@@ -29,8 +30,24 @@ export class DCAScheduler {
   async processSchedules() {
     try {
       const now = new Date();
-      const dueSchedules = await db.select().from(dcaSchedules)
-        .where(and(eq(dcaSchedules.isActive, 1), lte(dcaSchedules.nextExecutionAt, now)));
+
+      const dueSchedules = await db.transaction(async (tx) => {
+        const schedules = await tx.select().from(dcaSchedules)
+          .where(and(eq(dcaSchedules.isActive, 1), lte(dcaSchedules.nextExecutionAt, now)))
+          .for('update', { skipLocked: true });
+
+        if (schedules.length > 0) {
+          const lockTime = new Date();
+          lockTime.setMinutes(lockTime.getMinutes() + MAX_PROCESSING_TIME_MINUTES);
+
+          const ids = schedules.map(s => s.id);
+          await tx.update(dcaSchedules)
+            .set({ nextExecutionAt: lockTime })
+            .where(inArray(dcaSchedules.id, ids));
+        }
+
+        return schedules;
+      });
 
       logger.info(`Checking DCA schedules: found ${dueSchedules.length} due.`);
 
@@ -40,18 +57,11 @@ export class DCAScheduler {
         });
       }
     } catch (e) {
-       logger.error('Error in DCA loop', e);
+      logger.error('Error in DCA loop', e);
     }
   }
 
   private async executeSchedule(schedule: any) {
-    const lockAcquired = await this.acquireLock(schedule.id, schedule.nextExecutionAt);
-    
-    if (!lockAcquired) {
-      logger.info(`DCA ${schedule.id} already being processed, skipping`);
-      return;
-    }
-
     try {
       const user = await getUser(Number(schedule.telegramId));
       if (!user?.walletAddress) {
@@ -107,8 +117,12 @@ export class DCAScheduler {
           lastStatus: 'pending',
         }).onConflictDoNothing();
 
+        const nextExecution = this.calculateNextExecution(schedule.intervalHours);
         await tx.update(dcaSchedules)
-          .set({ ordersExecuted: sql`orders_executed + 1` })
+          .set({
+            ordersExecuted: sql`orders_executed + 1`,
+            nextExecutionAt: nextExecution
+          })
           .where(eq(dcaSchedules.id, schedule.id));
       });
 
@@ -120,24 +134,10 @@ export class DCAScheduler {
     }
   }
 
-  private async acquireLock(scheduleId: number, currentNextExecution: Date): Promise<boolean> {
-    const lockTime = new Date();
-    lockTime.setMinutes(lockTime.getMinutes() + MAX_PROCESSING_TIME_MINUTES);
-
-    const result = await db.update(dcaSchedules)
-      .set({ nextExecutionAt: lockTime })
-      .where(and(
-        eq(dcaSchedules.id, scheduleId),
-        eq(dcaSchedules.nextExecutionAt, currentNextExecution)
-      ))
-      .returning({ id: dcaSchedules.id });
-
-    return result.length > 0;
-  }
 
   private async releaseLock(scheduleId: number, intervalHours: number): Promise<void> {
     const nextExecution = this.calculateNextExecution(intervalHours);
-    
+
     await db.update(dcaSchedules)
       .set({ nextExecutionAt: nextExecution })
       .where(eq(dcaSchedules.id, scheduleId));

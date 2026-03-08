@@ -17,9 +17,13 @@ export const ADDRESS_PATTERNS: Record<string, RegExp> = {
     avalanche: /^0x[a-fA-F0-9]{40}$/,
     optimism: /^0x[a-fA-F0-9]{40}$/,
     fantom: /^0x[a-fA-F0-9]{40}$/,
-    // Bitcoin (Legacy, SegWit v0 bc1q, SegWit v1 Taproot bc1p)
-    // Note: Full Bech32m checksum validation is out of scope here; we match shape + charset.
-    bitcoin: /^(1[a-km-zA-HJ-NP-Z1-9]{25,34}|3[a-km-zA-HJ-NP-Z1-9]{25,34}|(bc1|BC1)[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{25,62})$/,
+    // Bitcoin address validation:
+    // - Legacy P2PKH (starts with 1): 26-35 characters, base58check charset
+    // - Legacy P2SH (starts with 3): 26-35 characters, base58check charset
+    // - SegWit v0 (bc1q): bech32 format, 42 characters total
+    // - SegWit v1/Taproot (bc1p): bech32 format, 62 characters total
+    // Bech32 charset: qpzry9x8gf2tvdw0s3jn54khce6mua7l (32 chars, excludes b, i, o, 1)
+    bitcoin: /^(1[a-km-zA-HJ-NP-Z1-9]{25,34}|3[a-km-zA-HJ-NP-Z1-9]{25,34}|[Bb][Cc]1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{39,59})$/,
     // Litecoin (Legacy, SegWit)
     litecoin: /^([LM3][a-km-zA-HJ-NP-Z1-9]{26,33}|ltc1[a-zA-HJ-NP-Z0-9]{39,59})$/,
     // Solana

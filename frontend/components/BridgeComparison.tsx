@@ -6,7 +6,6 @@
 import { useState } from 'react';
 import { 
   Clock, 
-  Zap, 
   Shield, 
   ChevronDown, 
   CheckCircle, 
@@ -15,11 +14,7 @@ import {
   Info,
   TrendingUp,
   DollarSign,
-  CloudLightning
-} from 'lucide-react';
-
 interface BridgeQuote {
-  bridge: string;
   displayName: string;
   fromChain: string;
   toChain: string;
@@ -354,12 +349,6 @@ export default function BridgeComparison({
               <DollarSign className="w-4 h-4 text-green-600" />
               <span className="text-gray-600 dark:text-gray-400">
                 Best Output: <span className="font-medium text-gray-900 dark:text-white">{bestOutput.toFixed(6)}</span>
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CloudLightning className="w-4 h-4 text-blue-600" />
-              <span className="text-gray-600 dark:text-gray-400">
-                Fastest: <span className="font-medium text-gray-900 dark:text-white">{bestTime}min</span>
               </span>
             </div>
             <div className="flex items-center gap-2">

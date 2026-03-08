@@ -78,6 +78,34 @@
       "when": 1772453882927,
       "tag": "0011_silent_wolverine",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1772547794074,
+      "tag": "0012_burly_trauma",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1772613194931,
+      "tag": "0013_numerous_grandmaster",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1772692506104,
+      "tag": "0014_glamorous_spirit",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1772778190978,
+      "tag": "0015_bright_human_cannonball",
+      "breakpoints": true
     }
   ]
 }

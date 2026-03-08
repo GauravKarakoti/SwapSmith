@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateCourseProgress, addRewardActivity } from '@/lib/database';
+import { verifyAuth } from '@/lib/auth-helpers';
 
 export async function POST(request: NextRequest) {
   try {
-    const userId = request.headers.get('x-user-id');
-    
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+    // Verify Firebase authentication token
+    const authResult = await verifyAuth(request);
+    if (!authResult.success) {
+      return authResult.error!;
     }
+
+    const userId = authResult.userId!.toString();
 
     const { courseId, courseTitle, moduleId, totalModules } = await request.json();
 

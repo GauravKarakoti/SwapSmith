@@ -4,11 +4,35 @@
     "module": "commonjs",
     "moduleResolution": "node",
     "outDir": "./dist",
+    
+    "/* Strict Type Checking */": "",
     "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    
+    "/* Additional Type Checking */": "",
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "useDefineForClassFields": true,
+    
+    "/* Module Resolution */": "",
     "esModuleInterop": true,
     "skipLibCheck": true,
     "downlevelIteration": true,
     "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    
     "paths": {
       "@/*": [
         "./*"
@@ -31,7 +55,10 @@
       "axios": [
         "./node_modules/axios"
       ],
-    },
+      "@neondatabase/serverless": [
+        "./node_modules/@neondatabase/serverless"
+      ]
+    }
   },
   "include": [
     "src/**/*",

@@ -98,77 +98,49 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
       
       if (hasMediaRecorder && hasGetUserMedia) {
         setIsSupported(true);
-        setIsFallbackMode(true);
-        setBrowserInfo({ browser, isUsingFallback: true });
-        console.warn('SpeechRecognition not supported. Using MediaRecorder fallback with Whisper transcription.');
-      } else {
-        setIsSupported(false);
-        setError('Voice input is not supported in this browser.');
-        setBrowserInfo({ browser, isUsingFallback: false });
-      }
-      return;
-    }
-    
-    // SpeechRecognition is available - use native API
-    setIsSupported(true);
-    setBrowserInfo({ browser, isUsingFallback: false });
-    
-    recognitionRef.current = new SpeechRecognition();
-    recognitionRef.current.continuous = false;
-    recognitionRef.current.interimResults = true;
-    recognitionRef.current.lang = 'en-US';
+        const recognition = new SpeechRecognition();
+        recognitionRef.current = recognition;
 
-    recognitionRef.current.onstart = () => {
-      setIsListening(true);
-      setError(null);
-    };
-recognitionRef.current.onend = () => {
-  setIsListening(false);
-};
+        recognition.continuous = false; // We want single command
+        recognition.interimResults = true; // Show results as they come
+        recognition.lang = 'en-US';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-recognitionRef.current.onresult = (event: any) => {
-  let finalTranscript = '';
+        recognition.onstart = () => {
+          setIsListening(true);
+          setError(null);
+        };
 
-  for (let i = event.resultIndex; i < event.results.length; ++i) {
-    finalTranscript += event.results[i][0].transcript;
-  }
+        recognition.onend = () => {
+          setIsListening(false);
+        };
 
-  setTranscript(finalTranscript);
-};
+        recognition.onresult = (event: SpeechRecognitionEvent) => {
+          let finalTranscript = '';
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              finalTranscript += event.results[i][0].transcript;
+            } else {
+              // Handle interim results if needed, but for now we focus on final
+              // You might want to update a live preview here
+              finalTranscript += event.results[i][0].transcript;
+            }
+          }
+          setTranscript(finalTranscript);
+        };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-recognitionRef.current.onerror = (event: any) => {
-  console.error("Speech recognition error:", event.error);
-
-  switch (event.error) {
-    case 'no-speech':
-      setError("No speech detected. Please try again.");
-      break;
-    case 'audio-capture':
-      setError("No microphone found.");
-      break;
-    case 'not-allowed':
-      setError("Microphone permission denied.");
-      break;
-    default:
-      setError("Voice recognition failed. Switching to text input.");
-  }
-      setTranscript(finalTranscript);
-    };
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    recognitionRef.current.onerror = (event: any) => {
-      console.error('Speech recognition error', event.error);
-      
-      // If we get no-speech or audio-capture error, try fallback to MediaRecorder
-      if (event.error === 'no-speech' || event.error === 'audio-capture') {
-        setError('Switching to text-to-speech fallback...');
-        // Could trigger fallback here if needed
-      } else if (event.error === 'not-allowed') {
-        setError('Microphone permission denied.');
-      } else {
-        setError(`Speech recognition error: ${event.error}`);
+        recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+          console.error("Speech recognition error", event.error);
+          if (event.error === 'no-speech') {
+             setError("No speech was detected. Please try again.");
+          } else if (event.error === 'audio-capture') {
+             setError("No microphone was found. Ensure that a microphone is installed.");
+          } else if (event.error === 'not-allowed') {
+             setError("Microphone permission denied.");
+          } else {
+             setError(`Speech recognition error: ${event.error}`);
+          }
+          setIsListening(false);
+        };
       }
       setIsListening(false);
     };
