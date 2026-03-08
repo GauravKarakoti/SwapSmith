@@ -1,4 +1,5 @@
-import type { SideShiftOrderStatus, RateLimitError } from './sideshift-client';
+import type { SideShiftOrderStatus } from './sideshift-client';
+import { RateLimitError } from './sideshift-client';
 import type { Order } from './database';
 import { TERMINAL_STATUSES_LIST } from '../constants';
 import logger from './logger';
@@ -287,13 +288,12 @@ export class OrderMonitor {
             }
         } catch (error) {
             // Handle rate-limit errors specially
-            if (error && typeof error === 'object' && 'name' in error && error.name === 'RateLimitError' && 'retryAfter' in error) {
-                const rateLimitError = error as { retryAfter: number; name: string };
-                const cooldownMs = rateLimitError.retryAfter * 1000;
+            if (error instanceof RateLimitError) {
+                const cooldownMs = error.retryAfter * 1000;
                 this.rateLimitCooldownUntil = Date.now() + cooldownMs;
                 logger.warn(
                     `[OrderMonitor] ⚠️  SideShift API rate limit exceeded (HTTP 429). ` +
-                    `Pausing all polling for ${rateLimitError.retryAfter} seconds.`
+                    `Pausing all polling for ${error.retryAfter} seconds.`
                 );
                 // Don't remove order — will retry after cooldown
             } else {

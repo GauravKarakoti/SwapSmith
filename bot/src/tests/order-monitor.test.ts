@@ -1,6 +1,7 @@
 import { OrderMonitor, getBackoffInterval, TERMINAL_STATUSES } from '../services/order-monitor';
 import type { OrderMonitorDeps } from '../services/order-monitor';
 import type { SideShiftOrderStatus } from '../services/sideshift-client';
+import { RateLimitError } from '../services/sideshift-client';
 
 // --- Helpers ---
 
@@ -344,13 +345,8 @@ describe('OrderMonitor', () => {
         it('pauses polling when RateLimitError is encountered', async () => {
             jest.useFakeTimers();
 
-            // Create a RateLimitError with 30 second retry-after
-            const rateLimitError = new Error('SideShift API rate limit exceeded. Retry after 30 seconds.');
-            (rateLimitError as any).name = 'RateLimitError';
-            (rateLimitError as any).retryAfter = 30;
-
             const getOrderStatus = jest.fn()
-                .mockRejectedValueOnce(rateLimitError)
+                .mockRejectedValueOnce(new RateLimitError(30))
                 .mockResolvedValue({ id: 'order-1', status: 'pending' } as unknown as SideShiftOrderStatus);
 
             const deps = createMockDeps({ getOrderStatus });
@@ -390,12 +386,8 @@ describe('OrderMonitor', () => {
         it('sets global cooldown that affects all orders', async () => {
             jest.useFakeTimers();
 
-            const rateLimitError = new Error('SideShift API rate limit exceeded. Retry after 20 seconds.');
-            (rateLimitError as any).name = 'RateLimitError';
-            (rateLimitError as any).retryAfter = 20;
-
             const getOrderStatus = jest.fn()
-                .mockRejectedValueOnce(rateLimitError)
+                .mockRejectedValueOnce(new RateLimitError(20))
                 .mockResolvedValue({ id: 'order-1', status: 'pending' } as unknown as SideShiftOrderStatus);
 
             const deps = createMockDeps({ getOrderStatus });
@@ -427,12 +419,8 @@ describe('OrderMonitor', () => {
         it('handles rate-limit with numeric Retry-After header', async () => {
             jest.useFakeTimers();
 
-            const rateLimitError = new Error('SideShift API rate limit exceeded. Retry after 45 seconds.');
-            (rateLimitError as any).name = 'RateLimitError';
-            (rateLimitError as any).retryAfter = 45; // numeric seconds
-
             const getOrderStatus = jest.fn()
-                .mockRejectedValueOnce(rateLimitError)
+                .mockRejectedValueOnce(new RateLimitError(45))
                 .mockResolvedValue({ id: 'order-1', status: 'pending' } as unknown as SideShiftOrderStatus);
 
             const deps = createMockDeps({ getOrderStatus });
@@ -493,12 +481,8 @@ describe('OrderMonitor', () => {
         it('resumes polling after cooldown expires', async () => {
             jest.useFakeTimers();
 
-            const rateLimitError = new Error('SideShift API rate limit exceeded. Retry after 15 seconds.');
-            (rateLimitError as any).name = 'RateLimitError';
-            (rateLimitError as any).retryAfter = 15;
-
             const getOrderStatus = jest.fn()
-                .mockRejectedValueOnce(rateLimitError)
+                .mockRejectedValueOnce(new RateLimitError(15))
                 .mockResolvedValueOnce({ id: 'order-1', status: 'processing' } as unknown as SideShiftOrderStatus)
                 .mockResolvedValue({ id: 'order-1', status: 'settled' } as unknown as SideShiftOrderStatus);
 
