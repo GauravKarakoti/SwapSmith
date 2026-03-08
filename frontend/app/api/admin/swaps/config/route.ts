@@ -84,8 +84,15 @@ export async function PATCH(req: NextRequest) {
 
     const updated = await updatePlatformSwapConfig(patch, admin.email);
 
-    // Log the change to audit log
-    console.log(`[Admin Config] ${admin.email} updated swap config:`, JSON.stringify(patch));
+    // Log the change to audit log (with sensitive fields redacted)
+    const redactedPatch = {
+      ...patch,
+      ...(patch.sideshiftApiKey ? { sideshiftApiKey: '***REDACTED***' } : {}),
+    };
+    console.log(
+      `[Admin Config] ${admin.email} updated swap config:`,
+      JSON.stringify(redactedPatch)
+    );
 
     // Determine the specific audit action based on what was updated
     const auditActions = [];

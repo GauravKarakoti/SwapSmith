@@ -49,11 +49,19 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50')));
+    
+    // Parse query params with NaN validation
+    const pageParam = parseInt(searchParams.get('page') || '1');
+    const page = Number.isFinite(pageParam) ? Math.max(1, pageParam) : 1;
+    
+    const limitParam = parseInt(searchParams.get('limit') || '50');
+    const limit = Number.isFinite(limitParam) ? Math.min(100, Math.max(1, limitParam)) : 50;
+    
     const action = searchParams.get('action') || undefined;
     const adminId = searchParams.get('adminId') || undefined;
-    const days = parseInt(searchParams.get('days') || '30');
+    
+    const daysParam = parseInt(searchParams.get('days') || '30');
+    const days = Number.isFinite(daysParam) && daysParam > 0 ? daysParam : 30;
 
     // Build where conditions
     const conditions = [];

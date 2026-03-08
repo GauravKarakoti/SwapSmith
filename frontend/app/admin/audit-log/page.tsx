@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { auth } from '@/lib/firebase'
 import { signOut } from 'firebase/auth'
-import { Shield, Search, Filter, Calendar, User, Activity } from 'lucide-react'
+import { Filter, Calendar, User } from 'lucide-react'
 import AdminNavbar from '@/components/AdminNavbar'
 
 interface AuditLogEntry {
