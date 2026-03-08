@@ -60,6 +60,10 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
 
+  // Timeout refs for cleanup
+  const fallbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Retry configuration
   const MAX_RETRIES = 3;
   const RETRY_DELAY = 1000; // 1 second
@@ -201,11 +205,18 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
       // Automatic fallback to MediaRecorder if available
       if (shouldFallback && compatibility.hasMediaRecorder && compatibility.hasGetUserMedia) {
         console.log('Attempting automatic fallback to MediaRecorder...');
-        setTimeout(async () => {
+        
+        // Clear any existing fallback timeout
+        if (fallbackTimeoutRef.current) {
+          clearTimeout(fallbackTimeoutRef.current);
+        }
+        
+        fallbackTimeoutRef.current = setTimeout(async () => {
           const success = await startMediaRecorder();
           if (success) {
             setError('Switched to audio recording mode');
           }
+          fallbackTimeoutRef.current = null;
         }, 500);
       }
     };
@@ -304,8 +315,15 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
         if (retryCount < MAX_RETRIES) {
           console.log(`Retrying MediaRecorder (attempt ${retryCount + 1}/${MAX_RETRIES})...`);
           setRetryCount(prev => prev + 1);
-          setTimeout(() => {
+          
+          // Clear any existing retry timeout
+          if (retryTimeoutRef.current) {
+            clearTimeout(retryTimeoutRef.current);
+          }
+          
+          retryTimeoutRef.current = setTimeout(() => {
             startMediaRecorder();
+            retryTimeoutRef.current = null;
           }, RETRY_DELAY * (retryCount + 1)); // Exponential backoff
         }
       };
@@ -420,6 +438,18 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      // Clear all timeouts
+      if (fallbackTimeoutRef.current) {
+        clearTimeout(fallbackTimeoutRef.current);
+        fallbackTimeoutRef.current = null;
+      }
+      
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+
+      // Cleanup speech recognition
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort();
@@ -428,10 +458,12 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
         }
       }
 
+      // Cleanup media recorder
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop();
       }
 
+      // Cleanup media stream
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
