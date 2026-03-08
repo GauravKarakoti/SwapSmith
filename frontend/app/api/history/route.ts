@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
       quoteId,
       fromAsset,
       fromNetwork,
-      fromAmount: parseFloat(fromAmount),
+      fromAmount: fromAmount, // Keep as string for numeric precision
       toAsset,
       toNetwork,
       settleAmount,

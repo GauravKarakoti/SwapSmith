@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserSubscribedStrategies } from 'shared/services/strategy-marketplace';
+import { getUserSubscribedStrategies, getUserSubscriptions } from 'shared/services/strategy-marketplace';
 
 export async function GET(request: NextRequest) {
   try {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { addRewardActivity, getUserRewardActivities } from '@/lib/database';
 import { verifyAuth } from '@/lib/auth-helpers';
+import { walletConnectedBodySchema, validateInput } from '@/lib/api-validation';
 
 const WALLET_CONNECT_POINTS = 50;
 const WALLET_CONNECT_TOKENS = '0.5';
@@ -15,14 +16,16 @@ export async function POST(request: NextRequest) {
 
     const userIdNum = authResult.userId!;
     const body = await request.json();
-    const { walletAddress } = body;
+    const validation = validateInput(walletConnectedBodySchema, body);
 
-    if (!walletAddress) {
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'Wallet address required' },
+        { error: validation.error },
         { status: 400 }
       );
     }
+
+    const { walletAddress } = validation.data;
 
     // Check if user already received wallet connection reward
     const recentActivities = await getUserRewardActivities(userIdNum, 100);

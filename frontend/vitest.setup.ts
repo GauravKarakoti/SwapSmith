@@ -1,6 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 import { beforeAll, afterAll, vi, afterEach } from 'vitest';
 
+// ============================================================================
+// DOM API Mocks
+// ============================================================================
+
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
@@ -8,41 +12,73 @@ Object.defineProperty(window, 'matchMedia', {
     matches: false,
     media: query,
     onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
+    addListener: vi.fn(), // deprecated
+    removeListener: vi.fn(), // deprecated
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
     dispatchEvent: vi.fn(),
   })),
 });
 
-// Mock localStorage
+// Mock localStorage with working implementation
+const localStorageMock = (() => {
+  let store: Record<string, string> = {};
+  return {
+    getItem: (key: string) => store[key] || null,
+    setItem: (key: string, value: string) => {
+      store[key] = value.toString();
+    },
+    removeItem: (key: string) => {
+      delete store[key];
+    },
+    clear: () => {
+      store = {};
+    },
+    key: (index: number) => {
+      const keys = Object.keys(store);
+      return keys[index] || null;
+    },
+    get length() {
+      return Object.keys(store).length;
+    },
+  };
+})();
+
 Object.defineProperty(window, 'localStorage', {
-  value: {
-    getItem: vi.fn(() => null),
-    setItem: vi.fn(),
-    removeItem: vi.fn(),
-    clear: vi.fn(),
-    key: vi.fn(),
-    length: 0,
-  },
+  value: localStorageMock,
   writable: true,
 });
 
-// Mock sessionStorage
+// Mock sessionStorage with working implementation
+const sessionStorageMock = (() => {
+  let store: Record<string, string> = {};
+  return {
+    getItem: (key: string) => store[key] || null,
+    setItem: (key: string, value: string) => {
+      store[key] = value.toString();
+    },
+    removeItem: (key: string) => {
+      delete store[key];
+    },
+    clear: () => {
+      store = {};
+    },
+    key: (index: number) => {
+      const keys = Object.keys(store);
+      return keys[index] || null;
+    },
+    get length() {
+      return Object.keys(store).length;
+    },
+  };
+})();
+
 Object.defineProperty(window, 'sessionStorage', {
-  value: {
-    getItem: vi.fn(() => null),
-    setItem: vi.fn(),
-    removeItem: vi.fn(),
-    clear: vi.fn(),
-    key: vi.fn(),
-    length: 0,
-  },
+  value: sessionStorageMock,
   writable: true,
 });
 
-// Mock scrollIntoView
+// Mock scrollIntoView and window.scrollTo
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
 window.scrollTo = vi.fn();
 
@@ -65,19 +101,67 @@ global.ResizeObserver = class ResizeObserver {
   unobserve() {}
 } as unknown as typeof ResizeObserver;
 
-// Suppress specific console errors in tests
+// ============================================================================
+// Next.js Specific Mocks
+// ============================================================================
+
+// Mock next/router
+vi.mock('next/router', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    pathname: '/',
+    query: {},
+    asPath: '/',
+    events: {
+      on: vi.fn(),
+      off: vi.fn(),
+      emit: vi.fn(),
+    },
+  }),
+}));
+
+// Mock next/navigation
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    back: vi.fn(),
+    forward: vi.fn(),
+    refresh: vi.fn(),
+  }),
+  usePathname: () => '/',
+  useSearchParams: () => new URLSearchParams(),
+}));
+
+// Mock next/image
+vi.mock('next/image', () => ({
+  default: ({ src, alt, ...props }: any) => {
+    // eslint-disable-next-line jsx-a11y/alt-text
+    return <img src={src} alt={alt} {...props} />;
+  },
+}));
+
+// ============================================================================
+// Console Output Management
+// ============================================================================
+
 const originalError = console.error;
 const originalWarn = console.warn;
 
 beforeAll(() => {
+  // Suppress Next.js and React known warnings in test output
   console.error = (...args: unknown[]) => {
     const message = typeof args[0] === 'string' ? args[0] : '';
-    if (
-      message.includes('Warning: useLayoutEffect does nothing on the server') ||
-      message.includes('Warning: ReactDOM.render') ||
-      message.includes('Not implemented: HTMLFormElement.prototype.submit') ||
-      message.includes('You provided a `checked` prop to a form field without an `onChange` handler')
-    ) {
+    const supprssedErrors = [
+      'Warning: useLayoutEffect does nothing on the server',
+      'Warning: ReactDOM.render',
+      'Not implemented: HTMLFormElement.prototype.submit',
+      'You provided a `checked` prop to a form field without an `onChange` handler',
+      'Warning: ReactDOM.unmountComponentAtNode',
+      'Warning: useId',
+    ];
+
+    if (supprssedErrors.some(err => message.includes(err))) {
       return;
     }
     originalError.call(console, ...args);
@@ -85,11 +169,14 @@ beforeAll(() => {
 
   console.warn = (...args: unknown[]) => {
     const message = typeof args[0] === 'string' ? args[0] : '';
-    if (
-      message.includes('componentWillReceiveProps') ||
-      message.includes('findDOMNode') ||
-      message.includes('Warning: ReactDOM.render')
-    ) {
+    const suppressedWarnings = [
+      'componentWillReceiveProps',
+      'findDOMNode',
+      'Warning: ReactDOM.render',
+      'Warning: useId',
+    ];
+
+    if (suppressedWarnings.some(warn => message.includes(warn))) {
       return;
     }
     originalWarn.call(console, ...args);
@@ -101,9 +188,13 @@ afterAll(() => {
   console.warn = originalWarn;
 });
 
-// Clear mocks after each test
+// ============================================================================
+// Test Cleanup
+// ============================================================================
+
+// Reset all mocks and storage after each test
 afterEach(() => {
   vi.clearAllMocks();
-  localStorage.clear();
-  sessionStorage.clear();
+  localStorageMock.clear();
+  sessionStorageMock.clear();
 });

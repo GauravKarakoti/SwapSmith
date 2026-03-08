@@ -6,17 +6,84 @@ export interface UseSpeechRecognitionReturn {
   transcript: string;
   isSupported: boolean;
   startRecording: () => void;
-  stopRecording: () => void;
+  stopRecording: () => Promise<string | null>;
   error: string | null;
+  isFallbackMode: boolean;
+  browserInfo: {
+    browser: string;
+    isUsingFallback: boolean;
+  };
+}
+
+// Helper to detect browser
+function detectBrowser(): string {
+  if (typeof navigator === 'undefined') return 'unknown';
+  const userAgent = navigator.userAgent;
+  
+  if (userAgent.includes('Chrome') && !userAgent.includes('Edg')) return 'chrome';
+  if (userAgent.includes('Firefox')) return 'firefox';
+  if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) return 'safari';
+  if (userAgent.includes('Edg')) return 'edge';
+  return 'unknown';
+}
+
+// Helper to get best MIME type for MediaRecorder
+function getBestMimeType(): string {
+  const mimeTypes = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/mp4',
+    'audio/ogg;codecs=opus',
+    'audio/wav'
+  ];
+  
+  for (const mimeType of mimeTypes) {
+    try {
+      if (MediaRecorder.isTypeSupported(mimeType)) {
+        return mimeType;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return 'audio/webm';
+}
+
+// Send audio to Whisper transcription
+async function transcribeWithWhisper(audioBlob: Blob): Promise<string> {
+  const audioFile = new File([audioBlob], 'voice_command.webm', { type: audioBlob.type || 'audio/webm' });
+  const formData = new FormData();
+  formData.append('file', audioFile);
+
+  const response = await fetch('/api/transcribe', {
+    method: 'POST',
+    body: formData
+  });
+
+  const data = await response.json();
+  
+  if (data.error) {
+    throw new Error(data.error);
+  }
+  
+  return data.text || '';
 }
 
 export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const [isSupported, setIsSupported] = useState(true); // Optimistic initially, checked in useEffect
+  const [isSupported, setIsSupported] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isFallbackMode, setIsFallbackMode] = useState(false);
+  const [browserInfo, setBrowserInfo] = useState({ browser: 'unknown', isUsingFallback: false });
 
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null);
+  
+  // MediaRecorder refs for fallback
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -91,16 +158,22 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
           setError(`${browserInfo.name}: Speech recognition initialization failed. Please try refreshing the page.`);
         }
       }
-    }
+      setIsListening(false);
+    };
 
     return () => {
-        if (recognitionRef.current) {
-            try {
-              recognitionRef.current.abort();
-            } catch (e) {
-              // Ignore cleanup errors
-            }
-        }
+      if (recognitionRef.current) {
+          try {
+            recognitionRef.current.abort();
+          } catch (e) {
+            // Ignore cleanup errors
+          }
+      }
+
+      // Cleanup MediaRecorder if exists
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
     };
   }, []);
 
@@ -119,21 +192,103 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
         setTranscript('');
         setError(null);
         recognitionRef.current.start();
-    } catch (err) {
-        // Handle case where start() is called while already running
-        console.warn("Speech recognition already started or failed to start", err);
-        const errorMessage = browserInfo.isFirefox
-          ? "Firefox: Speech recognition failed. Please use audio recording mode."
-          : "Speech recognition failed to start. Please try again.";
-        setError(errorMessage);
+      } catch (err) {
+        console.warn('Speech recognition already started or failed to start', err);
+      }
     }
-  }, [isSupported]);
+  }, [isSupported, isFallbackMode]);
 
-  const stopRecording = useCallback(() => {
-    if (recognitionRef.current && isListening) {
-      recognitionRef.current.stop();
+  const startMediaRecorder = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      
+      const mimeType = getBestMimeType();
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      
+      audioChunksRef.current = [];
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      
+      mediaRecorder.onstop = async () => {
+        setIsListening(false);
+        
+        // Stop all tracks
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+        }
+        
+        // Create blob and transcribe
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        
+        try {
+          const text = await transcribeWithWhisper(audioBlob);
+          setTranscript(text);
+        } catch (err) {
+          const error = err as Error;
+          setError(`Transcription failed: ${error.message}`);
+        }
+      };
+      
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start(100); // Collect data every 100ms
+      setIsListening(true);
+      setError(null);
+    } catch (err) {
+      const error = err as Error;
+      if (error.name === 'NotAllowedError') {
+        setError('Microphone access denied. Please enable microphone permissions.');
+      } else if (error.name === 'NotFoundError') {
+        setError('No microphone found. Please connect a microphone.');
+      } else {
+        setError(`Failed to start recording: ${error.message}`);
+      }
+      setIsListening(false);
     }
-  }, [isListening]);
+  };
+
+  const stopRecording = useCallback(async (): Promise<string | null> => {
+    if (isFallbackMode && mediaRecorderRef.current) {
+      // Stop MediaRecorder and wait for transcription
+      return new Promise((resolve) => {
+        const mediaRecorder = mediaRecorderRef.current;
+        
+        if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+          resolve(null);
+          return;
+        }
+        
+        const onStop = async () => {
+          mediaRecorder.removeEventListener('stop', onStop);
+          
+          // Create blob and transcribe
+          const mimeType = getBestMimeType();
+          const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+          
+          try {
+            const text = await transcribeWithWhisper(audioBlob);
+            resolve(text);
+          } catch (err) {
+            const error = err as Error;
+            setError(`Transcription failed: ${error.message}`);
+            resolve(null);
+          }
+        };
+        
+        mediaRecorder.addEventListener('stop', onStop);
+        mediaRecorder.stop();
+      });
+    } else if (recognitionRef.current && isListening) {
+      recognitionRef.current.stop();
+      return null; // Transcript comes via onresult
+    }
+    
+    return null;
+  }, [isListening, isFallbackMode]);
 
   return {
     isListening,
@@ -141,6 +296,8 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
     isSupported,
     startRecording,
     stopRecording,
-    error
+    error,
+    isFallbackMode,
+    browserInfo
   };
 };

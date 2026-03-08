@@ -2,9 +2,10 @@
  * Client-side CSRF Token Management
  * 
  * Provides utilities for handling CSRF tokens in the browser
+ * Uses the unified CSRF config from csrf-middleware
  */
 
-import { ENHANCED_CSRF_CONFIG } from './enhanced-csrf';
+import { CSRF_CONFIG } from './csrf-middleware';
 
 /**
  * Get CSRF token from cookie
@@ -14,7 +15,7 @@ export function getCSRFTokenFromCookie(): string | null {
   
   const cookies = document.cookie.split(';');
   const csrfCookie = cookies.find(cookie => 
-    cookie.trim().startsWith(`${ENHANCED_CSRF_CONFIG.tokenCookie}=`)
+    cookie.trim().startsWith(`${CSRF_CONFIG.tokenCookie}=`)
   );
   
   return csrfCookie ? csrfCookie.split('=')[1] : null;
@@ -59,7 +60,7 @@ export async function getCSRFToken(): Promise<string | null> {
 }
 
 /**
- * Create headers with CSRF token
+ * Create headers with CSRF token for state-changing requests
  */
 export async function createCSRFHeaders(additionalHeaders: Record<string, string> = {}): Promise<Record<string, string>> {
   const token = await getCSRFToken();
@@ -71,7 +72,7 @@ export async function createCSRFHeaders(additionalHeaders: Record<string, string
   };
   
   if (token) {
-    headers[ENHANCED_CSRF_CONFIG.tokenHeader] = token;
+    headers[CSRF_CONFIG.tokenHeader] = token;
   }
   
   return headers;

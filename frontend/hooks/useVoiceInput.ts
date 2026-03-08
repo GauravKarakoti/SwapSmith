@@ -26,6 +26,7 @@ export interface UseVoiceInputReturn {
   stopRecording: () => Promise<Blob | null>;
   error: string | null;
   resetTranscript: () => void;
+  clearError: () => void;
   retryCount: number;
 }
 
@@ -59,6 +60,10 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Timeout refs for cleanup
+  const fallbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Retry configuration
   const MAX_RETRIES = 3;
@@ -194,6 +199,7 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
             console.error('Fallback to MediaRecorder failed:', fallbackError);
             setError('Voice input unavailable. Please type your message instead.');
           }
+          fallbackTimeoutRef.current = null;
         }, 500);
       }
     };
@@ -351,8 +357,15 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
         if (retryCount < MAX_RETRIES) {
           console.log(`Retrying MediaRecorder (attempt ${retryCount + 1}/${MAX_RETRIES})...`);
           setRetryCount(prev => prev + 1);
-          setTimeout(() => {
+          
+          // Clear any existing retry timeout
+          if (retryTimeoutRef.current) {
+            clearTimeout(retryTimeoutRef.current);
+          }
+          
+          retryTimeoutRef.current = setTimeout(() => {
             startMediaRecorder();
+            retryTimeoutRef.current = null;
           }, RETRY_DELAY * (retryCount + 1)); // Exponential backoff
         }
       };
@@ -397,7 +410,10 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
 
   // Start recording - enhanced Firefox handling
   const startRecording = useCallback(async () => {
-    setError(null);
+    setError(null); // Clear any previous errors
+    setRetryCount(0); // Reset retry count on new attempt
+    setTranscript(''); // Reset transcript for fresh recording
+    setInterimTranscript(''); // Reset interim transcript
 
     // Use browser detection utility
     const browserInfo = detectBrowser();
@@ -484,9 +500,26 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
     setInterimTranscript('');
   }, []);
 
+  // Clear error state (useful for UI to explicitly dismiss errors)
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      // Clear all timeouts
+      if (fallbackTimeoutRef.current) {
+        clearTimeout(fallbackTimeoutRef.current);
+        fallbackTimeoutRef.current = null;
+      }
+      
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+
+      // Cleanup speech recognition
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort();
@@ -495,10 +528,12 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
         }
       }
 
+      // Cleanup media recorder
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop();
       }
 
+      // Cleanup media stream
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
@@ -516,6 +551,7 @@ export const useVoiceInput = (config: VoiceInputConfig = {}): UseVoiceInputRetur
     stopRecording,
     error,
     resetTranscript,
+    clearError,
     retryCount
   };
 };
