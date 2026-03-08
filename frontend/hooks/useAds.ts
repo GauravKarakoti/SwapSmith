@@ -224,9 +224,11 @@ export function useGlobalPromoAd(pathname: string | null) {
     // Never show on terminal/login/register pages
     if (!pathname) return
     if (pathname.startsWith('/terminal') || pathname.startsWith('/login') || pathname.startsWith('/register')) return
+    if (typeof document !== 'undefined' && document.body.dataset.pageType === 'not-found') return
 
     const timer = setTimeout(() => {
       try {
+        if (document.body.dataset.pageType === 'not-found') return
         const now = Date.now()
         const lastShown = Number(localStorage.getItem(PROMO_KEY) ?? 0)
         if (now - lastShown < PROMO_COOLDOWN) return

@@ -1,136 +1,183 @@
-import { createPublicClient, http, PublicClient, Chain, isAddress } from 'viem';
-import { mainnet, bsc, polygon, base } from 'viem/chains';
-import { SecurityReport } from '@/types/security';
+// Re-export security scanner functions for frontend use
+// This file acts as a bridge between the shared service and frontend
 
-const CHAINS: { [key: string]: Chain } = {
-  ethereum: mainnet,
-  bsc: bsc,
-  polygon: polygon,
-  base: base,
-};
+export interface TokenSecurityResult {
+  tokenAddress: string
+  network: string
+  isHoneypot: boolean
+  isMalicious: boolean
+  isVerified: boolean
+  riskScore: number
+  riskFactors: string[]
 
-// RPC URLs - ideally use env variable or fallback public RPCs
-const RPC_URLS: { [key: string]: string } = {
-  ethereum: process.env.NEXT_PUBLIC_ETHEREUM_RPC || 'https://cloudflare-eth.com',
-  bsc: process.env.NEXT_PUBLIC_BSC_RPC || 'https://binance.onfinality.io/public',
-  polygon: process.env.NEXT_PUBLIC_POLYGON_RPC || 'https://polygon-rpc.com',
-  base: process.env.NEXT_PUBLIC_BASE_RPC || 'https://mainnet.base.org',
-};
-
-export class SecurityScanner {
-  private client: PublicClient;
-  private chainName: string;
-
-  constructor(chainName: string) {
-    this.chainName = chainName.toLowerCase();
-    const chain = CHAINS[this.chainName] || mainnet;
-    const rpc = RPC_URLS[this.chainName];
-    
-    this.client = createPublicClient({
-      chain,
-      transport: http(rpc),
-    });
+  contractAnalysis: {
+    isPausable: boolean
+    isMintable: boolean
+    isBlacklisted: boolean
+    hasProxy: boolean
+    ownerAddress: string | null
+    liquidityLocked: boolean
+    buyTax: number
+    sellTax: number
+    cannotSell: boolean
   }
 
-  async scanToken(tokenAddress: string): Promise<SecurityReport> {
-    try {
-      if (!isAddress(tokenAddress)) {
-        throw new Error('Invalid token address format');
-      }
-      // 1. Basic Contract Check
-      // Explicitly cast to Address type for viem compatibility
-      const bytecode = await this.client.getBytecode({ address: tokenAddress as `0x${string}` });
-      if (!bytecode) {
-        throw new Error('Not a contract address');
-      }
+  holderAnalysis: {
+    top10HoldersPercent: number
+    isCentralized: boolean
+  }
 
-      // 2. Simulation (Mocked here, real implementation would simulate buy/sell tx)
-      // If code size is very small, might be a proxy.
-      const byteLength = (bytecode.length - 2) / 2; // Convert hex string length to byte length
-      const isProxy = byteLength < (1000 - 2) / 2;
+  metadata: {
+    name: string | null
+    symbol: string | null
+    decimals: number | null
+    totalSupply: string | null
+  }
+}
 
-      // 3. Check Verified Status (Placeholder for Explorer API call)
-      const contractVerified = !isProxy; // Assume proxies are verified implementation pattern or riskier
+export interface SimulationResult {
+  success: boolean
+  wouldSucceed: boolean
+  gasEstimate: string
+  gasLimit: string
+  error: string | null
+  warnings: string[]
+}
 
-      // 4. Honeypot Check (Placeholder)
-      // Check if transfer function exists and simulates successfully without revert
-      let canBuy = true;
-      let canSell = true;
-      let buyTax = 0;
-      let sellTax = 0;
-      
-      // Heuristic: Check for common scam function signatures in bytecode? Too complex raw.
-      // Instead, we return a simulated report based on address characteristics for demo.
-      
-      // Calculate Risk Score
-      let score = 0;
-      const details: string[] = [];
+export interface SecurityCheckResult {
+  passed: boolean
+  riskScore: number
+  riskLevel: 'safe' | 'low' | 'medium' | 'high' | 'critical'
 
-      if (isProxy) {
-        score += 20;
-        details.push('Contract is a Proxy (implementation can change)');
-      }
+  checks: {
+    tokenSecurity: {
+      passed: boolean
+      message: string
+      details?: TokenSecurityResult
+    }
 
-      // Simulate specific well-known scam addresses (Mock)
-      const isKnownScam = false; 
-      if (isKnownScam) {
-        score = 100;
-        canBuy = false;
-        canSell = false;
-        details.push('Flagged as known scam address');
-      }
+    contractAnalysis: {
+      passed: boolean
+      message: string
+      details?: any
+    }
 
-      // Simulate verified check failure
-      if (!contractVerified) {
-         score += 30;
-         details.push('Contract source code not verified');
-      }
+    addressReputation: {
+      passed: boolean
+      message: string
+      details?: any
+    }
 
-      // Holder analysis (Placeholder)
-      const topHoldersShare = 45; // Mock: 45% held by top 10
-      if (topHoldersShare > 50) {
-        score += 20;
-        details.push('High concentration: Top holders own > 50%');
-      }
-      
-      return {
-        tokenAddress,
-        chain: this.chainName,
-        contractVerified,
-        honeypotLikelihood: score > 80 ? 'high' : score > 40 ? 'medium' : 'low',
-        ownershipRenounced: true, // Mock
-        mintable: false, // Mock
-        buyTax,
-        sellTax,
-        overallRiskScore: Math.min(score, 100),
-        simulationResult: {
-          canBuy,
-          canSell,
-        },
-        holderAnalysis: {
-          topHoldersShare,
-          totalHolders: 1250 // Mock
-        },
-        details
-      };
+    simulation: {
+      passed: boolean
+      message: string
+      details?: SimulationResult
+    }
 
-    } catch (error) {
-      console.error('Scan failed', error);
-      // Return a partial report indicating failure
-       return {
-        tokenAddress,
-        chain: this.chainName,
-        contractVerified: false,
-        honeypotLikelihood: 'high',
-        ownershipRenounced: false,
-        mintable: false,
-        buyTax: 0,
-        sellTax: 0,
-        overallRiskScore: 100,
-        simulationResult: { canBuy: false, canSell: false },
-        holderAnalysis: { topHoldersShare: 0, totalHolders: 0 },
-        details: ['Scan failed or invalid address']
-      };
+    liquidityCheck: {
+      passed: boolean
+      message: string
+      details?: any
     }
   }
+
+  overallMessage: string
+  flags: string[]
+  recommendations: string[]
+}
+
+export interface SecurityScanResponse {
+  success: boolean
+  scanResult: SecurityCheckResult
+
+  metadata: {
+    scannedAt: string
+    fromToken: string
+    fromNetwork: string
+    toToken: string
+    toNetwork: string
+    userId: string
+  }
+
+  error?: string
+}
+
+// Perform security scan via backend API
+export async function performSecurityScan(
+  fromToken: string,
+  fromNetwork: string,
+  toToken: string,
+  toNetwork: string,
+  fromAmount: string,
+  contractAddress?: string,
+  userAddress?: string,
+  userId?: string
+): Promise<SecurityScanResponse> {
+
+  const response = await fetch('/api/security-scan', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      fromToken,
+      fromNetwork,
+      toToken,
+      toNetwork,
+      fromAmount,
+      contractAddress,
+      userAddress,
+      userId
+    })
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json()
+    throw new Error(errorData.error || 'Security scan failed')
+  }
+
+  return response.json()
+}
+
+// Format risk level for UI
+export function getRiskLevelLabel(
+  level: 'safe' | 'low' | 'medium' | 'high' | 'critical'
+): string {
+
+  const labels = {
+    safe: '✅ Safe',
+    low: '🟢 Low Risk',
+    medium: '⚠️ Medium Risk',
+    high: '🔴 High Risk',
+    critical: '🚫 Critical Risk'
+  }
+
+  return labels[level]
+}
+
+// Color for risk score bars
+export function getRiskScoreColor(score: number): string {
+
+  if (score === 0) return '#22c55e'      // green
+  if (score <= 20) return '#84cc16'      // lime
+  if (score <= 50) return '#eab308'      // yellow
+  if (score <= 80) return '#f97316'      // orange
+
+  return '#ef4444'                        // red
+}
+
+// Risk icon helper
+export function getRiskIcon(
+  level: 'safe' | 'low' | 'medium' | 'high' | 'critical'
+): string {
+
+  const icons = {
+    safe: '✓',
+    low: '✓',
+    medium: '!',
+    high: '!!',
+    critical: '✕'
+  }
+
+  return icons[level]
 }

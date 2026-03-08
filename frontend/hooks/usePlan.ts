@@ -25,7 +25,7 @@ export function usePlan() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await authenticatedFetch('/api/plan/status')
+      const res = await authenticatedFetch('/api/plan/status', { suppressErrorToast: true })
       if (res.ok) {
         const data = await res.json()
         setStatus(data)
