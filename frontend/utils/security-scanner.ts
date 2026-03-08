@@ -38,6 +38,7 @@ export class SecurityScanner {
         throw new Error('Invalid token address format');
       }
       // 1. Basic Contract Check
+      // Explicitly cast to Address type for viem compatibility
       const bytecode = await this.client.getBytecode({ address: tokenAddress as `0x${string}` });
       if (!bytecode) {
         throw new Error('Not a contract address');
