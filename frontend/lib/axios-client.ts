@@ -19,7 +19,10 @@ apiClient.interceptors.response.use(
     if (error.response) {
       // Server responded with a status code outside 2xx range
       const data = error.response.data as any;
-      message = data?.message || data?.error?.message || `Error ${error.response.status}: ${error.message}`;
+      message =
+        data?.message ||
+        (typeof data?.error === 'string' ? data.error : data?.error?.message) ||
+        `Error ${error.response.status}: ${error.message}`;
     } else if (error.request) {
       // The request was made but no response was received
       message = 'Network error: No response from server. Please check your connection.';
