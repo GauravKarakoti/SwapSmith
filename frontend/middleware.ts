@@ -1,20 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { enhancedCSRFMiddleware } from '@/lib/enhanced-csrf';
+import { csrfMiddleware, ensureCSRFToken } from '@/lib/csrf-middleware';
 import { rateLimitMiddleware, RATE_LIMITS } from '@/lib/rate-limiter';
 import { securityMiddleware } from '@/lib/security-headers';
 import { csrfProtectionMiddleware } from '@/lib/csrf';
+import { VALIDATION_LIMITS, sanitizeInput } from '@/../shared/utils/validation';
 
 /**
  * Comprehensive Security Middleware
  * 
  * Handles:
- * 1. Rate limiting for all API routes
- * 2. Enhanced CSRF protection
- * 3. Security headers
- * 4. Admin dashboard protection
+ * 1. Input validation & sanitization
+ * 2. Rate limiting for all API routes
+ * 3. Enhanced CSRF protection
+ * 4. Security headers
+ * 5. Admin dashboard protection
+ * 6. Request size enforcement
  */
+
+/**
+ * Validates and enforces input limits on API requests
+ */
+function validateInputSize(request: NextRequest): NextResponse | null {
+  try {
+    const contentLength = parseInt(request.headers.get('content-length') || '0', 10);
+    
+    // Enforce maximum payload size
+    if (contentLength > VALIDATION_LIMITS.INPUT_MAX * 10) {
+      return NextResponse.json(
+        { success: false, error: 'Payload too large' },
+        { status: 413 }
+      );
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Input validation error:', error);
+    return null;
+  }
+}
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // 🔐 Input Validation: Check request size before processing
+  const inputValidationResponse = validateInputSize(request);
+  if (inputValidationResponse) {
+    return inputValidationResponse;
+  }
 
   // 🔐 CSRF Protection: Validate and set CSRF tokens for API routes.
   // Skip for /api/admin/* — those use Firebase ID token auth (inherently CSRF-safe).
@@ -45,17 +76,20 @@ export function middleware(request: NextRequest) {
   if (pathname.startsWith('/api/')) {
     let response: NextResponse | null = null;
 
-    // 1. Rate Limiting (apply first to prevent abuse)
+    // 1. Unified CSRF Protection (blocks invalid state-changing requests)
+    response = csrfMiddleware(request);
+    if (response) return response; // CSRF validation failed
+
+    // 2. Rate Limiting (apply before allowing request processing)
     const rateLimitConfig = getRateLimitConfig(pathname);
     response = rateLimitMiddleware(request, rateLimitConfig);
     if (response) return response; // Rate limit exceeded
 
-    // 2. Enhanced CSRF Protection
-    response = enhancedCSRFMiddleware(request);
-    if (response && response.status === 403) return response; // CSRF validation failed
-
-    // 3. Apply security headers to the response
-    const finalResponse = response || NextResponse.next();
+    // 3. Create response and ensure CSRF token is set
+    let finalResponse = NextResponse.next();
+    finalResponse = ensureCSRFToken(finalResponse, request);
+    
+    // 4. Apply security headers
     return securityMiddleware(finalResponse);
   }
 

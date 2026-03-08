@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { subscribeToStrategy, unsubscribeFromStrategy, pauseSubscription, resumeSubscription } from '../../../../../../shared/services/strategy-marketplace';
+import { csrfGuard } from '@/lib/csrf-app-router';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // CSRF Protection
+  const csrfError = csrfGuard(request);
+  if (csrfError) {
+    return csrfError;
+  }
+
   try {
     const { id } = await params;
     const strategyId = Number(id);
@@ -55,6 +62,12 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // CSRF Protection
+  const csrfError = csrfGuard(request);
+  if (csrfError) {
+    return csrfError;
+  }
+
   try {
     const { id } = await params;
     const strategyId = Number(id);
@@ -99,6 +112,12 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // CSRF Protection
+  const csrfError = csrfGuard(request);
+  if (csrfError) {
+    return csrfError;
+  }
+
   try {
     const { id } = await params;
     const strategyId = Number(id);

@@ -50,7 +50,7 @@ export type PriceAlert = typeof priceAlerts.$inferSelect;
 
 // --- COIN PRICE CACHE FUNCTIONS ---
 
-export async function getCachedPrice(coin: string, network: string): Promise<CoinPriceCache | undefined> {
+export async function getCachedPrice(coin: string, network: string, includeExpired: boolean = true): Promise<CoinPriceCache | undefined> {
   if (!db) {
     console.warn('Database not configured');
     return undefined;
@@ -67,12 +67,54 @@ export async function getCachedPrice(coin: string, network: string): Promise<Coi
   if (!cached) return undefined;
   
   // Check if cache is still valid
-  if (new Date(cached.expiresAt) < new Date()) {
+  if (!includeExpired && new Date(cached.expiresAt) < new Date()) {
     return undefined; // Expired
   }
   
   return cached;
 }
+
+/**
+ * Batch fetch cached prices for multiple coin-network pairs
+ * Solves N+1 query problem by fetching all prices in a single query
+ * Returns a Map<`${coin}-${network}`, CoinPriceCache> for easy lookup
+ */
+export async function getCachedPricesBatch(
+  coinNetworkPairs: Array<{ coin: string; network: string }>
+): Promise<Map<string, CoinPriceCache>> {
+  if (!db || coinNetworkPairs.length === 0) {
+    return new Map();
+  }
+  
+  // Extract unique coins and networks for efficient filtering
+  const coins = [...new Set(coinNetworkPairs.map(p => p.coin))];
+  const networks = [...new Set(coinNetworkPairs.map(p => p.network))];
+  
+  // Single query: fetch all prices for the coins/networks we need
+  const allResults = await db.select().from(coinPriceCache)
+    .where(and(
+      inArray(coinPriceCache.coin, coins),
+      inArray(coinPriceCache.network, networks)
+    ));
+  
+  // Filter out expired entries and build Map
+  const now = new Date();
+  const priceMap = new Map<string, CoinPriceCache>();
+  
+  allResults.forEach(cache => {
+    // Only include non-expired entries
+    if (new Date(cache.expiresAt) >= now) {
+      const key = `${cache.coin}-${cache.network}`;
+      // Only add if this exact pair was requested
+      if (coinNetworkPairs.some(p => p.coin === cache.coin && p.network === cache.network)) {
+        priceMap.set(key, cache);
+      }
+    }
+  });
+  
+  return priceMap;
+}
+
 
 export async function setCachedPrice(
   coin: string,
@@ -81,7 +123,7 @@ export async function setCachedPrice(
   usdPrice: string | undefined,
   btcPrice: string | undefined,
   available: boolean,
-  ttlMinutes: number = 5
+  ttlMinutes: number = 360 // Default to 6 hours
 ) {
   if (!db) {
     console.warn('Database not configured');
@@ -199,7 +241,7 @@ export async function createSwapHistoryEntry(
     quoteId?: string;
     fromAsset: string;
     fromNetwork: string;
-    fromAmount: number;
+    fromAmount: string; // Changed from number to string for numeric precision
     toAsset: string;
     toNetwork: string;
     settleAmount: string;
@@ -1081,7 +1123,7 @@ export async function createPortfolioTarget(
     userId,
     name,
     assets,
-    driftThreshold,
+    driftThreshold: driftThreshold.toString(), // Convert to string for numeric precision
     autoRebalance,
     isActive: true,
   }).returning();
@@ -1105,9 +1147,18 @@ export async function updatePortfolioTarget(
     return null;
   }
   
+  // Convert driftThreshold to string if provided
+  const processedUpdates: any = {
+    ...updates,
+  };
+  
+  if (updates.driftThreshold !== undefined) {
+    processedUpdates.driftThreshold = updates.driftThreshold.toString();
+  }
+  
   const result = await db.update(portfolioTargets)
     .set({
-      ...updates,
+      ...processedUpdates,
       updatedAt: new Date(),
     })
     .where(and(
@@ -1146,3 +1197,5 @@ export async function getRebalanceHistory(portfolioTargetId: number): Promise<Re
 }
 
 export default db;
+
+

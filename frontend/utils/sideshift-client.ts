@@ -1,8 +1,17 @@
 import axios from 'axios';
-import { SIDESHIFT_CONFIG, getApiUrl } from '../../shared/config/sideshift';
+import { SIDESHIFT_CONFIG, getApiUrl, getApiEndpoint } from '../../shared/config/sideshift';
+import { SideShiftQuoteSchema, SideShiftCheckoutResponseSchema, CoinSchema } from '../../shared/schemas/sideshift';
 import { validateDepositAddressForNetwork } from './addressValidation';
 
-// API key is now server-side only - client calls backend API routes
+const apiClient = axios.create({
+  baseURL: getApiUrl(),
+});
+const AFFILIATE_ID = process.env.NEXT_PUBLIC_AFFILIATE_ID;
+const API_KEY = process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
+
+// ============================================
+// Type Definitions
+// ============================================
 
 export interface SideShiftQuote {
   id?: string;
@@ -54,6 +63,89 @@ export interface CoinPrice {
   available: boolean;
 }
 
+// ============================================
+// Zod Schemas for Runtime Validation
+// ============================================
+
+const SideShiftErrorSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+});
+
+const CoinNetworkSchema: z.ZodSchema<CoinNetwork> = z.object({
+  network: z.string(),
+  tokenContract: z.string().optional(),
+  depositAddressType: z.string().optional(),
+  depositOffline: z.boolean().optional(),
+  settleOffline: z.boolean().optional(),
+});
+
+const CoinSchema = z.object({
+  coin: z.string(),
+  name: z.string(),
+  networks: z.array(CoinNetworkSchema),
+  chainData: z.object({
+    chain: z.string(),
+    mainnet: z.boolean(),
+  }).optional(),
+});
+
+const CoinPriceSchema = z.object({
+  coin: z.string(),
+  name: z.string(),
+  network: z.string(),
+  usdPrice: z.string().optional(),
+  btcPrice: z.string().optional(),
+  available: z.boolean(),
+});
+
+const SideShiftQuoteSchema = z.object({
+  id: z.string().optional(),
+  depositCoin: z.string(),
+  depositNetwork: z.string(),
+  settleCoin: z.string(),
+  settleNetwork: z.string(),
+  depositAmount: z.string(),
+  settleAmount: z.string(),
+  rate: z.string(),
+  affiliateId: z.string(),
+  error: SideShiftErrorSchema.optional(),
+  memo: z.string().optional(),
+  expiry: z.string().optional(),
+});
+
+const SideShiftCheckoutResponseSchema = z.object({
+  id: z.string(),
+  url: z.string().optional(),
+  settleAmount: z.string(),
+  settleCoin: z.string(),
+});
+
+// ============================================
+// Validation Helper Functions
+// ============================================
+
+/**
+ * Validates API response data against a Zod schema
+ * @throws Error with detailed validation issues if validation fails
+ */
+function validateResponse<T>(schema: z.ZodSchema<T>, data: unknown, context: string): T {
+  const result = schema.safeParse(data);
+  
+  if (!result.success) {
+    const issues = result.error.issues
+      .map(issue => `${issue.path.join('.')}: ${issue.message}`)
+      .join('; ');
+    throw new Error(`SideShift API response validation failed for ${context}: ${issues}`);
+  }
+  
+  return result.data;
+}
+
+// ============================================
+// API Functions with Validation
+// ============================================
+
 export async function createQuote(
   fromAsset: string,
   fromNetwork: string,
@@ -64,7 +156,7 @@ export async function createQuote(
 ): Promise<SideShiftQuote> {
   try {
     // Call backend API route instead of SideShift directly
-    const response = await axios.post('/api/sideshift/quote', {
+    const response = await apiClient.post('/api/sideshift/quote', {
       depositCoin: fromAsset,
       depositNetwork: fromNetwork,
       settleCoin: toAsset,
@@ -88,8 +180,11 @@ export async function createQuote(
 
     return quote;
   } catch (error: unknown) {
-    const err = error as { response?: { data?: { error?: { message?: string } } } };
-    throw new Error(err.response?.data?.error?.message || 'Failed to create quote');
+    if (axios.isAxiosError(error)) {
+      const err = error as { response?: { data?: { error?: { message?: string } } } };
+      throw new Error(err.response?.data?.error?.message || 'Failed to create quote');
+    }
+    throw error;
   }
 }
 
@@ -102,22 +197,27 @@ export async function createCheckout(
 ): Promise<SideShiftCheckoutResponse> {
   try {
     // Call backend API route instead of SideShift directly
-    const response = await axios.post('/api/sideshift/checkout', {
+    const response = await apiClient.post('/api/sideshift/checkout', {
       settleCoin,
       settleNetwork,
       settleAmount,
       settleAddress,
     });
 
+    const validatedData = SideShiftCheckoutResponseSchema.parse(response.data);
+
     return {
-      id: response.data.id,
-      url: response.data.url,
-      settleAmount: response.data.settleAmount,
-      settleCoin: response.data.settleCoin
+      id: validated.id,
+      url: validated.url || `${SIDESHIFT_CONFIG.CHECKOUT_URL}/${validated.id}`,
+      settleAmount: validated.settleAmount,
+      settleCoin: validated.settleCoin
     };
   } catch (error: unknown) {
-    const err = error as { response?: { data?: { error?: { message?: string } } } };
-    throw new Error(err.response?.data?.error?.message || 'Failed to create checkout');
+    if (axios.isAxiosError(error)) {
+      const err = error as { response?: { data?: { error?: { message?: string } } } };
+      throw new Error(err.response?.data?.error?.message || 'Failed to create checkout');
+    }
+    throw error;
   }
 }
 
@@ -135,13 +235,16 @@ export async function getCoins(): Promise<Coin[]> {
   }
 
   try {
-    const response = await axios.get(getApiUrl('coins'));
+    const response = await apiClient.get(getApiUrl('coins'));
     coinsCache = response.data;
     coinsCacheTimestamp = Date.now();
     return response.data;
   } catch (error: unknown) {
-    const err = error as { response?: { data?: { error?: { message?: string } } } };
-    throw new Error(err.response?.data?.error?.message || 'Failed to fetch coins');
+    if (axios.isAxiosError(error)) {
+      const err = error as { response?: { data?: { error?: { message?: string } } } };
+      throw new Error(err.response?.data?.error?.message || 'Failed to fetch coins');
+    }
+    throw error;
   }
 }
 
@@ -178,7 +281,7 @@ export async function getCoinPrices(): Promise<CoinPrice[]> {
     const coinIds = Object.values(coinGeckoMap).map(c => c.id).join(',');
 
     // Fetch prices from CoinGecko free API
-    const response = await axios.get(
+    const response = await apiClient.get(
       `https://api.coingecko.com/api/v3/simple/price`,
       {
         params: {
@@ -214,7 +317,12 @@ export async function getCoinPrices(): Promise<CoinPrice[]> {
 
     return results;
   } catch (error: unknown) {
-    console.error('CoinGecko API error:', error);
+    // If it's already an Error, rethrow it
+    if (error instanceof Error) {
+      console.error('CoinGecko API error:', error.message);
+    } else {
+      console.error('CoinGecko API error:', error);
+    }
 
     // Fallback: Try to fetch from SideShift with corrected calculation
     try {
@@ -239,7 +347,7 @@ export async function getCoinPrices(): Promise<CoinPrice[]> {
             };
           }
 
-          const quoteResponse = await axios.post(
+          const quoteResponse = await apiClient.post(
             getApiUrl('quotes'),
             {
               depositCoin: coin.coin,
@@ -254,8 +362,11 @@ export async function getCoinPrices(): Promise<CoinPrice[]> {
             }
           );
 
+          // Validate the quote response
+          const validatedQuote = validateResponse(SideShiftQuoteSchema, quoteResponse.data, 'getCoinPrices-fallback');
+
           // Rate is settleAmount / depositAmount, so for 1 unit it's the direct price
-          const settleAmount = parseFloat(quoteResponse.data.settleAmount || quoteResponse.data.rate);
+          const settleAmount = parseFloat(validatedQuote.settleAmount || validatedQuote.rate);
 
           if (settleAmount > 0) {
             return {
@@ -274,7 +385,7 @@ export async function getCoinPrices(): Promise<CoinPrice[]> {
 
       const prices = await Promise.all(pricesPromises);
       return prices.filter((p): p is CoinPrice => p !== null);
-    } catch {
+    } catch (fallbackError) {
       throw new Error('Failed to fetch coin prices from all sources');
     }
   }
@@ -285,7 +396,7 @@ export async function getCoinPrices(): Promise<CoinPrice[]> {
  */
 export async function getCoinPrice(coin: string, network: string): Promise<string | null> {
   try {
-    const quoteResponse = await axios.post(
+    const quoteResponse = await apiClient.post(
       getApiUrl('quotes'),
       {
         depositCoin: coin,
@@ -301,9 +412,13 @@ export async function getCoinPrice(coin: string, network: string): Promise<strin
       }
     );
 
-    const rate = parseFloat(quoteResponse.data.rate);
+    // Validate the quote response
+    const validatedQuote = validateResponse(SideShiftQuoteSchema, quoteResponse.data, 'getCoinPrice');
+
+    const rate = parseFloat(validatedQuote.rate);
     return rate > 0 ? (1 / rate).toFixed(6) : null;
   } catch {
     return null;
   }
 }
+

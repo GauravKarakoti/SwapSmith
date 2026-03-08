@@ -491,7 +491,7 @@ export async function createCheckoutEntry(telegramId: number, checkout: SideShif
     checkoutId: checkout.id,
     settleAsset: checkout.settleCoin,
     settleNetwork: checkout.settleNetwork,
-    settleAmount: amount,
+    settleAmount: amount, // Pass as string for numeric field
     settleAddress: checkout.settleAddress,
     status: 'pending'
   });

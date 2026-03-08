@@ -7,6 +7,7 @@ import {
 } from '@/lib/admin-service';
 import { neon } from '@neondatabase/serverless';
 import { rateLimitMiddleware, RATE_LIMITS } from '@/lib/rate-limiter';
+import { logAdminAction, AUDIT_ACTIONS, getIpAddress, getUserAgent } from '../../../../../shared/lib/audit-logger';
 
 const rawSql = neon(process.env.DATABASE_URL!);
 
@@ -87,6 +88,32 @@ export async function POST(req: NextRequest) {
       action,
       amount:           action === 'reset' ? 0 : amount,
       note,
+    });
+
+    // Log the action to admin audit log
+    const actionToAudit: Record<string, string> = {
+      gift: AUDIT_ACTIONS.GIFT_COINS,
+      deduct: AUDIT_ACTIONS.DEDUCT_COINS,
+      reset: AUDIT_ACTIONS.RESET_COINS,
+    };
+
+    await logAdminAction({
+      adminId: admin.firebaseUid,
+      adminEmail: admin.email,
+      action: actionToAudit[action] || action,
+      targetResource: 'user',
+      targetId: String(targetUserId),
+      metadata: {
+        action,
+        amount: action === 'reset' ? 0 : amount,
+        balanceBefore,
+        balanceAfter,
+        note: note || null,
+        targetFirebaseUid: userRows[0].firebase_uid,
+        walletAddress: userRows[0].wallet_address,
+      },
+      ipAddress: getIpAddress(req.headers),
+      userAgent: getUserAgent(req.headers),
     });
 
     return NextResponse.json({
