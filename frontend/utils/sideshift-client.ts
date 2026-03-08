@@ -1,12 +1,13 @@
 import axios from 'axios';
 import { SIDESHIFT_CONFIG, getApiUrl, getApiEndpoint } from '../../shared/config/sideshift';
+import { SideShiftQuoteSchema, SideShiftCheckoutResponseSchema, CoinSchema } from '../../shared/schemas/sideshift';
 import { validateDepositAddressForNetwork } from './addressValidation';
 
 const apiClient = axios.create({
   baseURL: getApiUrl(),
 });
-
-// API key is now server-side only - client calls backend API routes
+const AFFILIATE_ID = process.env.NEXT_PUBLIC_AFFILIATE_ID;
+const API_KEY = process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
 
 export interface SideShiftQuote {
   id?: string;
@@ -112,6 +113,8 @@ export async function createCheckout(
       settleAmount,
       settleAddress,
     });
+
+    const validatedData = SideShiftCheckoutResponseSchema.parse(response.data);
 
     return {
       id: response.data.id,

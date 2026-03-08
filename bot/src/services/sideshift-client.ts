@@ -2,6 +2,7 @@ import axios from 'axios';
 import { z } from 'zod';
 import dotenv from 'dotenv';
 import { SIDESHIFT_CONFIG, getApiEndpoint } from '../../../shared/config/sideshift';
+import { SideShiftQuoteSchema, SideShiftCheckoutResponseSchema, CoinSchema } from '../../../shared/schemas/sideshift';
 dotenv.config();
 const AFFILIATE_ID = process.env.SIDESHIFT_AFFILIATE_ID || process.env.AFFILIATE_ID || '';
 const API_KEY = process.env.SIDESHIFT_API_KEY || '';
