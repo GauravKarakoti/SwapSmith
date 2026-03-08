@@ -674,7 +674,7 @@ export default function ChatInterface() {
   const handleIntentConfirm = async (confirmed: boolean) => {
     if (confirmed && pendingCommand) {
       if (pendingCommand.intent === 'portfolio') {
-        const confirmedCmd = { ...pendingCommand, requiresConfirmation: false, confidence: 100 };
+        const confirmedCmd = { ...pendingCommand, requiresConfirmation: false, confidence: pendingCommand.confidence };
 
         if (confirmedCmd.portfolio) {
           const items: PortfolioItem[] = confirmedCmd.portfolio.map((item, index) => ({
@@ -863,7 +863,7 @@ export default function ChatInterface() {
                                 amount: parseFloat(newAmount),
                                 fromChain: quoteData.depositNetwork,
                                 toChain: quoteData.settleNetwork,
-                                confidence: 100,
+                                confidence: msg.data?.confidence ?? 100,
                                 requiresConfirmation: false,
                                 settleAsset: quoteData.settleCoin,
                                 settleNetwork: quoteData.settleNetwork,
