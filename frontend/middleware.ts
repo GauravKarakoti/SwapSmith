@@ -2,19 +2,65 @@ import { NextRequest, NextResponse } from 'next/server';
 import { csrfMiddleware, ensureCSRFToken } from '@/lib/csrf-middleware';
 import { rateLimitMiddleware, RATE_LIMITS } from '@/lib/rate-limiter';
 import { securityMiddleware } from '@/lib/security-headers';
+import { csrfProtectionMiddleware } from '@/lib/csrf';
+import { VALIDATION_LIMITS, sanitizeInput } from '@/../shared/utils/validation';
 
 /**
  * Comprehensive Security Middleware
  * 
- * Handles in order:
- * 1. CSRF protection for state-changing API requests
+ * Handles:
+ * 1. Input validation & sanitization
  * 2. Rate limiting for all API routes
- * 3. Security headers for all responses
- * 4. Admin dashboard protection
+ * 3. Enhanced CSRF protection
+ * 4. Security headers
+ * 5. Admin dashboard protection
+ * 6. Request size enforcement
  */
+
+/**
+ * Validates and enforces input limits on API requests
+ */
+function validateInputSize(request: NextRequest): NextResponse | null {
+  try {
+    const contentLength = parseInt(request.headers.get('content-length') || '0', 10);
+    
+    // Enforce maximum payload size
+    if (contentLength > VALIDATION_LIMITS.INPUT_MAX * 10) {
+      return NextResponse.json(
+        { success: false, error: 'Payload too large' },
+        { status: 413 }
+      );
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Input validation error:', error);
+    return null;
+  }
+}
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // 🔐 Input Validation: Check request size before processing
+  const inputValidationResponse = validateInputSize(request);
+  if (inputValidationResponse) {
+    return inputValidationResponse;
+  }
+
+  // 🔐 CSRF Protection: Validate and set CSRF tokens for API routes.
+  // Skip for /api/admin/* — those use Firebase ID token auth (inherently CSRF-safe).
+  // Also validates Origin/Referer via enhanced csrfProtectionMiddleware.
+  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/admin/')) {
+    const csrfResponse = csrfProtectionMiddleware(request);
+    // If validation failed (403), return error response immediately.
+    // If validation succeeded (200 with cookie), we return it here because for API routes
+    // there are no further checks (Admin Dashboard is disjoint).
+    // Note: If we had further logic for /api/ we would need to merge headers/cookies.
+    // Currently we assume csrfProtectionMiddleware is the primary guard for /api/.
+    if (csrfResponse) {
+      return csrfResponse;
+    }
+  }
   // 🔐 Admin Dashboard Protection
   if (pathname.startsWith('/admin/dashboard')) {
     const adminSession = request.cookies.get('admin-session');

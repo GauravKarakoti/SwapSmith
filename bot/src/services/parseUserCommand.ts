@@ -7,6 +7,13 @@ import type {
 import logger from './logger';
 import { parseDCA } from './nl-dca';
 import { detectLimitOrder } from './nl-limit-orders';
+import { 
+  sanitizeInput, 
+  validateAndSanitizeLLMInput,
+  VALIDATION_LIMITS,
+  ConversationHistorySchema,
+  safeParse
+} from '../../../shared/utils/validation';
 
 export type { ParsedCommand };
 export type ParseResult = ParseResultType;
@@ -31,6 +38,114 @@ const REGEX_FROM_TO = /from\s+([A-Z]+)\s+to\s+([A-Z]+)/i;
 const REGEX_AMOUNT_TOKEN =
   /\b(\d+(\.\d+)?)\s+(?!to|into|for|from|with|using\b)([A-Z]+)\b/i;
 
+export async function parseUserCommand(
+  userInput: string,
+  conversationHistory: Array<Record<string, string>> = [],
+  inputType: 'text' | 'voice' = 'text'
+): Promise<ParseResult> {
+  // ============================================
+  // INPUT VALIDATION & SANITIZATION
+  // ============================================
+  
+  // Validate user input with LLM sanitization
+  const { valid, sanitized, errors } = validateAndSanitizeLLMInput(userInput);
+  
+  if (!valid) {
+    return {
+      success: false,
+      validationErrors: errors,
+      confidence: 0,
+      parsedMessage: 'Invalid input format',
+      requiresConfirmation: false,
+      originalInput: userInput
+    };
+  }
+
+  // Validate conversation history
+  const historyValidation = safeParse(ConversationHistorySchema, conversationHistory);
+  if (!historyValidation.success) {
+    conversationHistory = []; // Reset to empty if invalid
+    logger.warn('Invalid conversation history format, resetting', { errors: historyValidation.errors });
+  }
+
+  // Graceful handling if someone passes a boolean for legacy fallbackToLLM
+  if (typeof conversationHistory === 'boolean') {
+    conversationHistory = [];
+  }
+
+  const userInputLength = sanitized.length;
+  if (userInputLength === 0) {
+    return {
+      success: false,
+      validationErrors: ['Input cannot be empty'],
+      confidence: 0,
+      parsedMessage: 'No input provided',
+      requiresConfirmation: false,
+      originalInput: userInput
+    };
+  }
+
+  // Enforce input length limits to prevent ReDoS
+  if (userInputLength > VALIDATION_LIMITS.COMMAND_MAX) {
+    return {
+      success: false,
+      validationErrors: [`Input exceeds maximum length of ${VALIDATION_LIMITS.COMMAND_MAX} characters`],
+      confidence: 0,
+      parsedMessage: 'Input too long',
+      requiresConfirmation: false,
+      originalInput: userInput
+    };
+  }
+
+  const originalInput = userInput;
+  const preprocessedInput = preprocessInput(sanitized);
+  
+  // Enhanced ambiguity detection with better error handling
+  const hasAmbiguousOr = REGEX_AMBIGUOUS_OR.test(preprocessedInput);
+  const hasMultipleDestinations = REGEX_MULTIPLE_DESTINATIONS.test(preprocessedInput);
+  const hasConditionals = REGEX_CONDITIONAL.test(preprocessedInput);
+  
+  if (hasAmbiguousOr || hasMultipleDestinations) {
+    const destinations = preprocessedInput.match(REGEX_MULTIPLE_DESTINATIONS);
+    const detectedAssets = destinations ? [destinations[1], destinations[2]] : [];
+    
+    // Try to extract amount and source asset for better context
+    const amountMatch = preprocessedInput.match(REGEX_AMOUNT_TOKEN);
+    const fromAssetMatch = preprocessedInput.match(/(?:swap|convert|sell)\s+(?:my\s+)?(?:(\d+(?:\.\d+)?[kmb]?)\s+)?([A-Z]{2,10})/i);
+    
+    const amount = amountMatch ? parseScaledNumber(amountMatch[1]) : null;
+    const fromAsset = fromAssetMatch?.[2] || amountMatch?.[2];
+    
+    return {
+      success: false,
+      intent: 'swap',
+      fromAsset,
+      amount,
+      amountType: amount ? 'exact' : null,
+      toAsset: null,
+      validationErrors: destinations 
+        ? [`Multiple destination assets detected: ${detectedAssets.join(', ')}. Please specify one.`]
+        : ['Command contains ambiguous language. Please be more specific.'],
+      confidence: 20,
+      parsedMessage: `Ambiguous command: ${amount || '?'} ${fromAsset || '?'} → [${detectedAssets.join(' or ') || 'unclear destination'}]`,
+      requiresConfirmation: true,
+      originalInput,
+      alternativeInterpretations: detectedAssets.length > 0 ? detectedAssets.map(asset => 
+        `Swap ${amount || 'all'} ${fromAsset || 'assets'} to ${asset}`
+      ) : [
+        "Clarify the destination asset",
+        "Specify exact amounts and assets"
+      ],
+      suggestedClarifications: detectedAssets.length > 0 ? [
+        `Which asset would you prefer: ${detectedAssets.join(' or ')}?`,
+        "Would you like to split between multiple assets instead?"
+      ] : [
+        "Please specify which asset you want to swap to",
+        "What is your intended destination asset?"
+      ]
+    };
+  }
+}
 const REGEX_CONDITION =
   /(?:if|when)\s+(?:the\s+)?(?:price|rate|market|value)?\s*(?:of\s+)?([A-Z]+)?\s*(?:is|goes|drops|rises|falls)?\s*(above|below|greater|less|more|under|>|<)\s*(?:than)?\s*(\$?[\d,]+(\.\d+)?\s*[kKmM]?)/i;
 
