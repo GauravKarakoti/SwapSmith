@@ -87,13 +87,17 @@ export async function PATCH(req: NextRequest) {
     // Log the change to audit log
     console.log(`[Admin Config] ${admin.email} updated swap config:`, JSON.stringify(patch));
 
-    // Determine the specific audit action
-    let auditAction = AUDIT_ACTIONS.UPDATE_SWAP_CONFIG;
+    // Determine the specific audit action based on what was updated
+    const auditActions = [];
     if (typeof body.swapExecutionEnabled === 'boolean') {
-      auditAction = AUDIT_ACTIONS.TOGGLE_EMERGENCY_STOP;
-    } else if (typeof body.sideshiftApiKey === 'string') {
-      auditAction = AUDIT_ACTIONS.UPDATE_API_KEYS;
+      auditActions.push(AUDIT_ACTIONS.TOGGLE_EMERGENCY_STOP);
     }
+    if (typeof body.sideshiftApiKey === 'string') {
+      auditActions.push(AUDIT_ACTIONS.UPDATE_API_KEYS);
+    }
+    
+    // Use UPDATE_SWAP_CONFIG as default or when both are updated
+    const auditAction = auditActions.length === 1 ? auditActions[0] : AUDIT_ACTIONS.UPDATE_SWAP_CONFIG;
 
     await logAdminAction({
       adminId: admin.firebaseUid,
@@ -105,6 +109,7 @@ export async function PATCH(req: NextRequest) {
         ...patch,
         // Mask the API key in the audit log
         sideshiftApiKey: patch.sideshiftApiKey ? '***REDACTED***' : undefined,
+        fieldsUpdated: Object.keys(patch),
       },
       ipAddress: getIpAddress(req.headers),
       userAgent: getUserAgent(req.headers),

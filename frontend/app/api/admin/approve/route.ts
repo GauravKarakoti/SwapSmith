@@ -10,7 +10,7 @@ import {
   sendAdminApprovedEmail,
   sendAdminRejectedEmail,
 } from '@/lib/admin-email';
-import { logAdminAction, AUDIT_ACTIONS, getIpAddress, getUserAgent } from '@/shared/lib/audit-logger';
+import { logAdminAction, AUDIT_ACTIONS, SYSTEM_ADMIN_ID, getIpAddress, getUserAgent } from '@/shared/lib/audit-logger';
 
 const MASTER_ADMIN_EMAIL = process.env.ADMIN_MASTER_EMAIL || '';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
         
         // Log approval action
         await logAdminAction({
-          adminId: 'MASTER_ADMIN',
+          adminId: SYSTEM_ADMIN_ID,
           adminEmail: reviewerEmail,
           action: AUDIT_ACTIONS.APPROVE_ADMIN_REQUEST,
           targetResource: 'admin_request',
@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
       
       // Log rejection action
       await logAdminAction({
-        adminId: 'MASTER_ADMIN',
+        adminId: SYSTEM_ADMIN_ID,
         adminEmail: reviewerEmail,
         action: AUDIT_ACTIONS.REJECT_ADMIN_REQUEST,
         targetResource: 'admin_request',

@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
     };
 
     await logAdminAction({
-      adminId: decoded.uid,
+      adminId: admin.firebaseUid,
       adminEmail: admin.email,
       action: actionToAudit[action] || action,
       targetResource: 'user',

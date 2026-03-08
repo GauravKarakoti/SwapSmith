@@ -20,7 +20,7 @@ export interface AuditLogParams {
  * Logs an admin action to the audit log table
  * 
  * @param params - Audit log parameters
- * @returns Promise<AdminAuditLog | null> - The created audit log entry, or null if failed
+ * @returns Promise<AdminAuditLog | null> - The created audit log entry (first element from returning()), or null if failed
  */
 export async function logAdminAction(params: AuditLogParams): Promise<AdminAuditLog | null> {
   try {
@@ -92,3 +92,9 @@ export const AUDIT_ACTIONS = {
 } as const;
 
 export type AuditAction = typeof AUDIT_ACTIONS[keyof typeof AUDIT_ACTIONS];
+
+/**
+ * System-level admin ID constant for actions performed via email links
+ * (e.g., approve/reject admin requests via master admin email)
+ */
+export const SYSTEM_ADMIN_ID = 'SYSTEM_MASTER_ADMIN';
