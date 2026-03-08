@@ -4,7 +4,7 @@ import { SideShiftQuoteSchema, SideShiftCheckoutResponseSchema, CoinSchema } fro
 import { validateDepositAddressForNetwork } from './addressValidation';
 
 const apiClient = axios.create({
-  baseURL: getApiUrl(),
+  baseURL: SIDESHIFT_CONFIG.BASE_URL,
 });
 const AFFILIATE_ID = process.env.NEXT_PUBLIC_AFFILIATE_ID;
 const API_KEY = process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
