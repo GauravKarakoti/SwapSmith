@@ -180,15 +180,10 @@ describe("RewardToken (SMTH)", function () {
       const { token, owner } = await loadFixture(deployRewardTokenFixture);
 
       const mintAmount = ethers.parseEther("500000");
-      
-      const tx = await token.connect(owner).mintToTreasury(mintAmount);
-      const receipt = await tx.wait();
 
-      // Check that MaxSupplyReached event was not emitted
-      const maxSupplyEvents = receipt.logs.filter(
-        log => log.fragment && log.fragment.name === "MaxSupplyReached"
-      );
-      expect(maxSupplyEvents.length).to.equal(0);
+      await expect(
+        token.connect(owner).mintToTreasury(mintAmount)
+      ).to.not.emit(token, "MaxSupplyReached");
     });
   });
 
