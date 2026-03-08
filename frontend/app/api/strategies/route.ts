@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStrategies, createStrategy } from '../../../../shared/services/strategy-marketplace';
+import { csrfGuard } from '@/lib/csrf-app-router';
 
 export async function GET(request: NextRequest) {
   try {

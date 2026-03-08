@@ -1,9 +1,22 @@
 'use client'
 
 import { useState } from 'react'
-import { CheckCircle, AlertCircle, ExternalLink, Copy, Check, ShieldCheck, Shield, AlertTriangle, Info, TrendingUp, Zap } from 'lucide-react'
-import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi' // Added usePublicClient
-import { parseEther, formatEther, type Chain } from 'viem'
+import {
+  CheckCircle,
+  AlertCircle,
+  Copy,
+  Check,
+  ShieldCheck,
+  Shield,
+  AlertTriangle,
+  Info,
+  Zap,
+  Wallet,
+  TrendingUp
+  ExternalLink
+} from 'lucide-react'
+import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi'
+import { formatEther, type Chain, erc20Abi, formatUnits, parseUnits, encodeFunctionData, parseEther } from 'viem'
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
 import { validateDepositAddressForNetwork } from '@/utils/addressValidation'
 import { getCoins, type Coin, type CoinNetwork } from '@/utils/sideshift-client'
@@ -71,14 +84,15 @@ interface SafetyCheckResult {
 export default function SwapConfirmation({ quote, confidence, onAmountChange }: SwapConfirmationProps) {
   const [copiedAddress, setCopiedAddress] = useState(false)
   const [copiedMemo, setCopiedMemo] = useState(false)
-  const [isSimulating, setIsSimulating] = useState(false);
-  const [safetyCheck, setSafetyCheck] = useState<SafetyCheckResult | null>(null);
-  const [walletBalance, setWalletBalance] = useState<string | null>(null);
-  const [isLoadingBalance, setIsLoadingBalance] = useState(false);
+  const [isSimulating, setIsSimulating] = useState(false)
+  const [safetyCheck, setSafetyCheck] = useState<SafetyCheckResult | null>(null)
+  const [walletBalance, setWalletBalance] = useState<string | null>(null)
+  const [isLoadingBalance, setIsLoadingBalance] = useState(false)
+  const [securityScanResult, setSecurityScanResult] = useState<ScannerSecurityCheckResult | null>(null)
 
   const { address, isConnected, chain: connectedChain } = useAccount()
-  const { data: hash, error, isPending, isSuccess, sendTransaction } = useSendTransaction()
   const { switchChainAsync } = useSwitchChain()
+  const { data: hash, isPending, isSuccess, error, sendTransaction } = useSendTransaction()
 
   // Get Chain ID for the deposit network
   const depositChainId = CHAIN_MAP[quote.depositNetwork.toLowerCase()]?.id;
@@ -141,19 +155,20 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
 
   const handleFetchBalance = async () => {
     if (!address || !publicClient) {
-      alert('Wallet not connected or network not supported');
-      return;
+      alert('Wallet not connected or network not supported')
+      return
     }
 
-    setIsLoadingBalance(true);
-    try {
-      const balance = await publicClient.getBalance({ address });
-      const balanceFormatted = formatEther(balance);
-      setWalletBalance(balanceFormatted);
+    setIsLoadingBalance(true)
 
-      // Call the callback to update the parent component with the max amount
+    try {
+      const balance = await publicClient.getBalance({ address })
+      const balanceFormatted = formatEther(balance)
+
+      setWalletBalance(balanceFormatted)
+
       if (onAmountChange) {
-        onAmountChange(finalAmountFormatted)
+        onAmountChange(balanceFormatted)
       }
     } catch (err) {
       console.error('Failed to fetch balance:', err)
@@ -166,6 +181,7 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
     if (!address || !publicClient) return
 
     setIsSimulating(true)
+
     try {
       const checks = {
         address: { passed: true, message: '' },
@@ -174,138 +190,104 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
         gas: { passed: true, message: '' },
       }
 
-    try {
-      if (!address) throw new Error("Wallet not connected");
+      // Address validation
+      const addressCheck = validateDepositAddressForNetwork(
+        quote.depositNetwork,
+        quote.depositAddress
+      )
 
-      // 1. Address Validation Check
-      if (address && address.startsWith('0x') && address.length === 42) {
-        checks.address = { passed: true, message: 'Valid Ethereum address format' };
-      } else {
-        checks.address = { passed: false, message: 'Invalid address format' };
+      checks.address = {
+        passed: addressCheck.passed,
+        message: addressCheck.message
       }
 
-      // 2. Check if chain is supported for simulation
-      if (!depositChainId || !publicClient) {
-        // Fallback for non-EVM chains (e.g. Bitcoin) where we can't easily simulate via wagmi
-        console.log("Skipping detailed simulation for non-EVM chain");
-        checks.network = { passed: true, message: 'Non-EVM chain (limited validation)' };
-        checks.balance = { passed: true, message: 'Cannot verify balance on non-EVM chain' };
-        checks.gas = { passed: true, message: 'Gas estimation not available' };
-
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        const result: SafetyCheckResult = {
-          passed: true,
-          checks,
-          riskLevel: 'warning',
-          overallMessage: 'Limited safety checks for non-EVM chain'
-        };
-        setSafetyCheck(result);
-        return;
-      }
-
-      // 3. Network Check
+      // Network validation
       if (connectedChain?.id === depositChainId) {
-        checks.network = { passed: true, message: `Connected to ${getNetworkName(quote.depositNetwork)}` };
+        checks.network = {
+          passed: true,
+          message: `Connected to ${quote.depositNetwork}`
+        }
       } else {
-        balance = await publicClient.getBalance({ address })
-        nativeBalance = balance
+        checks.network = {
+          passed: false,
+          message: `Wallet connected to wrong network`
+        }
       }
 
-      // 4. Balance Check
-      const balance = await publicClient.getBalance({ address });
-      const requiredAmount = parseEther(quote.depositAmount);
+      const balance = await publicClient.getBalance({ address })
+      const requiredAmount = parseEther(quote.depositAmount)
 
       if (balance >= requiredAmount) {
-        checks.balance.passed = true
-        checks.balance.message = `Sufficient balance: ${formatUnits(balance, decimals)} available`
+        checks.balance = {
+          passed: true,
+          message: `Sufficient balance`
+        }
       } else {
         checks.balance = {
           passed: false,
-          message: `Insufficient balance. Need ${quote.depositAmount} ${quote.depositCoin}, have ${formatEther(balance).substring(0, 8)}`
-        };
+          message: `Insufficient balance`
+        }
       }
 
-      // 5. Gas Estimation Check
       try {
         const gasEstimate = await publicClient.estimateGas({
           account: address,
           to: address,
           value: requiredAmount
-        });
+        })
 
-        const gasCost = gasEstimate * BigInt(30000000000) // 30 gwei buffer (conservative)
-        const hasGas = isNative ? balance >= requiredAmount + gasCost : nativeBalance >= gasCost
+        const gasCost = gasEstimate * BigInt(30000000000)
 
-        if (hasGas) {
-          checks.gas.passed = true
-          checks.gas.message = `Gas fees: ~${formatEther(gasCost)} estimated`
-        } else {
-          checks.gas.passed = false
-          checks.gas.message = `Insufficient gas buffer`
+        checks.gas = {
+          passed: balance >= requiredAmount + gasCost,
+          message: `Estimated gas: ${formatEther(gasCost)}`
         }
       } catch {
         checks.gas = {
           passed: false,
-          message: 'Gas estimation failed - transaction may fail'
-        };
+          message: 'Gas estimation failed'
+        }
       }
 
-      // Add a small delay so the user sees the checking state
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      // Determine overall risk level
-      const allPassed = Object.values(checks).every(check => check.passed);
-      const criticalFailed = !checks.balance.passed || !checks.gas.passed;
-
-      let riskLevel: 'safe' | 'warning' | 'unsafe';
-      let overallMessage: string;
-
-      if (allPassed) {
-        riskLevel = 'safe';
-        overallMessage = 'All safety checks passed. Transaction should succeed.';
-      } else if (criticalFailed) {
-        riskLevel = 'unsafe';
-        overallMessage = 'Critical issues detected. Transaction will likely fail.';
-      } else {
-        riskLevel = 'warning';
-        overallMessage = 'Some checks failed. Proceed with caution.';
-      }
+      const allPassed = Object.values(checks).every(c => c.passed)
 
       const result: SafetyCheckResult = {
         passed: allPassed,
-        riskLevel: allPassed ? 'safe' : hasWarnings ? 'warning' : 'unsafe',
+        riskLevel: allPassed ? 'safe' : 'warning',
         overallMessage: allPassed
           ? 'All checks passed. Safe to proceed.'
-          : hasWarnings
-            ? 'Some checks failed. Proceed with caution.'
-            : 'Critical issues detected. Do not proceed.',
-        checks,
+          : 'Some checks failed. Proceed carefully.',
+        checks
       }
 
       setSafetyCheck(result)
+
     } catch (err) {
       console.error('Safety check failed:', err)
+
       setSafetyCheck({
         passed: false,
-        riskLevel: 'warning' as const,
-        overallMessage: 'Could not complete all safety checks',
+        riskLevel: 'warning',
+        overallMessage: 'Could not complete safety checks',
         checks: {
           address: { passed: true, message: 'Address format valid' },
-          network: { passed: true, message: 'Network available' },
-          balance: { passed: false, message: 'Could not verify balance' },
-          gas: { passed: false, message: 'Could not estimate gas' },
-        },
+          network: { passed: true, message: 'Network reachable' },
+          balance: { passed: false, message: 'Balance check failed' },
+          gas: { passed: false, message: 'Gas estimation failed' }
+        }
       })
     } finally {
       setIsSimulating(false)
     }
   }
->>>>>>> 0e4cef795c15b946e650c2cf9da1821b3a59b31a
 
   const handleSecurityScanComplete = (result: SecurityCheckResult) => {
     setSecurityScanResult(result);
   };
+
+  const handleSecurityScanComplete = (result: ScannerSecurityCheckResult) => {
+    setSecurityScanResult(result)
+  }
 
   const handleConfirm = async () => {
     if (!quote || !quote.depositAddress) {
@@ -319,7 +301,7 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
     }
 
     if (!sendTransaction) {
-      console.error('Transaction function not available.', error)
+      console.error('Transaction function not available.')
       alert('Could not prepare transaction. Make sure your wallet is connected.')
       return
     }
@@ -387,7 +369,6 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
             console.warn('Could not fetch token decimals, defaulting to 18')
           }
         }
-        const amount = parseUnits(quote.depositAmount, decimals)
 
         // CRITICAL: ERC20 transfer - ensure we're sending to SideShift deposit address
         console.log('Preparing ERC20 transfer:', {
@@ -442,6 +423,7 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
         }
         await switchChainAsync({ chainId: depositChainId })
       }
+
       sendTransaction(transactionDetails)
     } catch (e) {
       const switchError = e as Error
@@ -476,16 +458,23 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
     if (hash && baseUrl) {
       return `${baseUrl}/tx/${hash}`
     }
-    if (baseUrl) {
-      if (networkKey === 'bitcoin') {
-        return `${baseUrl}/addresses/${address}`
-      }
-      return `${baseUrl}/address/${address}`
+
+    if (!baseUrl || !address) {
+      return null
     }
-    return null
+
+    if (networkKey === 'bitcoin') {
+      return `${baseUrl}/addresses/${address}`
+    }
+
+    return `${baseUrl}/address/${address}`
   }
 
   const explorerUrl = getExplorerUrl()
+  const isTransactionBlocked =
+    safetyCheck?.riskLevel === 'unsafe' ||
+    securityScanResult?.riskLevel === 'critical' ||
+    securityScanResult?.riskLevel === 'high'
 
   const isTransactionBlocked = safetyCheck?.riskLevel === 'unsafe' || securityScanResult?.riskLevel === 'critical' || securityScanResult?.riskLevel === 'high';
 
@@ -497,7 +486,7 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
         <p className="text-sm text-gray-600">Track your transaction on the explorer.</p>
         {explorerUrl && (
           <a href={explorerUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline mt-2 block">
-            View on Explorer →
+            View on Explorer {'>'}
           </a>
         )}
       </div>
@@ -516,7 +505,6 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
       </div>
 
       <div className="space-y-4 text-sm">
-        {/* You Send Section */}
         <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
           <div className="flex justify-between items-start mb-2">
             <div>
@@ -544,7 +532,6 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
           )}
         </div>
 
-        {/* You Receive */}
         <div className="bg-green-50 border border-green-100 rounded-lg p-3">
           <span className="text-xs font-semibold text-green-600 uppercase">You Receive Approx.</span>
           <div className="flex justify-between items-end mt-1">
@@ -553,7 +540,6 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
           </div>
         </div>
 
-        {/* Deposit Address Info */}
         <div className="pt-2">
           <div className="flex justify-between text-[11px] text-gray-500 mb-1 px-1">
             <span>Deposit Address</span>
@@ -569,14 +555,15 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
         <div className="mt-6 flex flex-col gap-2 w-full">
           <button
             onClick={handleConfirm}
-            disabled={!isConnected || isPending}
+            disabled={!isConnected || isPending || isTransactionBlocked}
             className="w-full py-3 bg-gray-900 text-white rounded-lg font-bold hover:bg-black transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
           >
             {isPending ? 'Confirming...' : 'Confirm and Send'}
           </button>
-          <p className="text-[10px] text-center text-gray-400">
-            By confirming, you agree to SideShift&apos;s terms and gas fees.
-          </p>
+          <p className="text-[10px] text-center text-gray-400">By confirming, you agree to SideShift&apos;s terms and gas fees.</p>
+          {isTransactionBlocked && (
+            <p className="text-[11px] text-center text-red-600">Transaction blocked by security checks.</p>
+          )}
         </div>
 
         {quote.memo && (
@@ -592,7 +579,7 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
               </button>
             </div>
             <div className="bg-yellow-50 p-2 rounded text-xs font-mono break-all border border-yellow-200">
-              ⚠️ Important: Include this memo
+              Important: Include this memo
               <div className="mt-1 font-semibold">{quote.memo}</div>
             </div>
           </div>
@@ -610,7 +597,6 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
         )}
       </div>
 
-      {/* Advanced Security Scanner */}
       <div className="mt-4">
         <TransactionSecurityScanner
           fromToken={quote.depositCoin}
@@ -646,21 +632,23 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
           </button>
         ) : (
           <div className="space-y-3">
-            {/* Overall Status Banner */}
-            <div className={`flex items-center gap-2 p-3 rounded-lg border ${safetyCheck.riskLevel === 'safe'
-              ? 'bg-green-50 border-green-200 text-green-700'
-              : safetyCheck.riskLevel === 'warning'
-                ? 'bg-yellow-50 border-yellow-200 text-yellow-700'
-                : 'bg-red-50 border-red-200 text-red-700'
-              }`}>
+            <div
+              className={`flex items-center gap-2 p-3 rounded-lg border ${
+                safetyCheck.riskLevel === 'safe'
+                  ? 'bg-green-50 border-green-200 text-green-700'
+                  : safetyCheck.riskLevel === 'warning'
+                    ? 'bg-yellow-50 border-yellow-200 text-yellow-700'
+                    : 'bg-red-50 border-red-200 text-red-700'
+              }`}
+            >
               {safetyCheck.riskLevel === 'safe' && <Shield className="w-5 h-5" />}
               {safetyCheck.riskLevel === 'warning' && <AlertTriangle className="w-5 h-5" />}
               {safetyCheck.riskLevel === 'unsafe' && <AlertCircle className="w-5 h-5" />}
               <div className="flex-1">
                 <div className="font-semibold text-sm">
-                  {safetyCheck.riskLevel === 'safe' && '✅ Safe to Proceed'}
-                  {safetyCheck.riskLevel === 'warning' && '⚠️ Proceed with Caution'}
-                  {safetyCheck.riskLevel === 'unsafe' && '❌ Unsafe Transaction'}
+                  {safetyCheck.riskLevel === 'safe' && 'Safe to Proceed'}
+                  {safetyCheck.riskLevel === 'warning' && 'Proceed with Caution'}
+                  {safetyCheck.riskLevel === 'unsafe' && 'Unsafe Transaction'}
                 </div>
                 <div className="text-xs mt-0.5">{safetyCheck.overallMessage}</div>
               </div>
@@ -784,7 +772,7 @@ export default function SwapConfirmation({ quote, confidence, onAmountChange }: 
       )}
 
       <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
-        💡 Always verify the deposit address and memo (if required) before sending funds.
+        Always verify the deposit address and memo (if required) before sending funds.
       </div>
     </div>
   )

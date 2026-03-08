@@ -1,6 +1,5 @@
 import { Telegraf, Context, Markup } from 'telegraf';
 import { message } from 'telegraf/filters';
-import rateLimit from 'telegraf-ratelimit';
 
 import dotenv from 'dotenv';
 import express from 'express';
@@ -69,16 +68,7 @@ const dcaScheduler = new DCAScheduler();
 
 /* ---------------- Rate Limit ---------------- */
 
-bot.use(
-  rateLimit({
-    window: 60000,
-    limit: 20,
-    keyGenerator: (ctx: Context) => ctx.from?.id?.toString() || 'unknown',
-    onLimitExceeded: async (ctx: Context) => {
-      await ctx.reply('⚠️ Too many requests. Please slow down.');
-    },
-  })
-);
+bot.use(createBotRateLimitMiddleware(getRateLimitConfigFromEnv()));
 
 const app = express();
 
