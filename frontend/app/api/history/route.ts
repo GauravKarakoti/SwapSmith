@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSwapHistory, getSwapHistoryByWallet, createSwapHistoryEntry } from '@/lib/database';
+import { rateLimitMiddleware, RATE_LIMITS } from '@/lib/rate-limiter';
 
 // GET /api/history - Get swap history for authenticated user or wallet
 export async function GET(request: NextRequest) {
+  // SECURITY: Rate limit to prevent database flooding
+  const rateLimitResponse = rateLimitMiddleware(request, RATE_LIMITS.default);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
@@ -43,6 +50,15 @@ export async function GET(request: NextRequest) {
 
 // POST /api/history - Create new swap history entry
 export async function POST(request: NextRequest) {
+  // SECURITY: Rate limit to prevent spam of fake swap history
+  const rateLimitResponse = rateLimitMiddleware(request, {
+    ...RATE_LIMITS.swap,
+    message: 'Too many history entries created. Please try again later.'
+  });
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     const body = await request.json();
     const {

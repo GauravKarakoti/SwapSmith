@@ -6,6 +6,7 @@ import {
   getUserCoinLogs,
 } from '@/lib/admin-service';
 import { neon } from '@neondatabase/serverless';
+import { rateLimitMiddleware, RATE_LIMITS } from '@/lib/rate-limiter';
 
 const rawSql = neon(process.env.DATABASE_URL!);
 
@@ -32,6 +33,15 @@ async function decodeToken(token: string): Promise<{ uid: string } | null> {
  * Adjusts testnet coin balance for a user and writes an audit log entry.
  */
 export async function POST(req: NextRequest) {
+  // SECURITY: Rate limit admin operations to prevent abuse
+  const rateLimitResponse = rateLimitMiddleware(req, {
+    ...RATE_LIMITS.admin,
+    message: 'Too many admin coin adjustments. Please try again later.'
+  });
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     const authHeader = req.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -97,6 +107,12 @@ export async function POST(req: NextRequest) {
  * Returns recent audit logs for a specific user.
  */
 export async function GET(req: NextRequest) {
+  // SECURITY: Rate limit admin operations
+  const rateLimitResponse = rateLimitMiddleware(req, RATE_LIMITS.admin);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     const authHeader = req.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
