@@ -3,7 +3,7 @@ import { RateLimitError } from './sideshift-client';
 import type { Order } from './database';
 import { TERMINAL_STATUSES_LIST } from '../constants';
 import logger from './logger';
-
+import { reputationService } from './reputation-service';
 
 // --- Types ---
 
@@ -50,10 +50,10 @@ export interface OrderMonitorDeps {
 export const TERMINAL_STATUSES = new Set(TERMINAL_STATUSES_LIST);
 
 /** Maximum concurrent API calls to SideShift */
-const MAX_CONCURRENT = 5;
+const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_ORDERS ?? '5', 10);
 
 /** How often the tick loop runs (ms) */
-const TICK_INTERVAL = 10_000; // 10 seconds
+const TICK_INTERVAL = parseInt(process.env.ORDER_MONITOR_TICK_INTERVAL_MS ?? '10000', 10);
 
 // --- Backoff Logic ---
 
@@ -81,6 +81,7 @@ export class OrderMonitor {
     private activePollCount = 0;
     private deps: OrderMonitorDeps;
     private rateLimitCooldownUntil: number | null = null; // timestamp when cooldown ends
+    private isShuttingDown = false;
 
     constructor(deps: OrderMonitorDeps) {
         this.deps = deps;
@@ -91,6 +92,7 @@ export class OrderMonitor {
     /** Start the background polling loop. */
     start(): void {
         if (this.tickTimer) return; // already running
+        this.isShuttingDown = false;
         logger.info(`[OrderMonitor] Started — tracking ${this.tracked.size} order(s)`);
         this.tickTimer = setInterval(() => this.tick(), TICK_INTERVAL);
 
@@ -104,6 +106,33 @@ export class OrderMonitor {
             logger.info('[OrderMonitor] Stopped');
         }
 
+    }
+
+    /** 
+     * Gracefully stop the polling loop and wait for active polls to complete.
+     * Returns a promise that resolves when all active operations are done.
+     */
+    async gracefulStop(timeoutMs: number = 10000): Promise<void> {
+        logger.info('[OrderMonitor] Initiating graceful shutdown...');
+        this.isShuttingDown = true;
+
+        // Stop accepting new ticks
+        if (this.tickTimer) {
+            clearInterval(this.tickTimer);
+            this.tickTimer = null;
+        }
+
+        // Wait for active polls to complete with timeout
+        const startTime = Date.now();
+        while (this.activePollCount > 0) {
+            if (Date.now() - startTime > timeoutMs) {
+                logger.warn(`[OrderMonitor] Graceful shutdown timeout after ${timeoutMs}ms with ${this.activePollCount} active polls remaining`);
+                break;
+            }
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        logger.info(`[OrderMonitor] Graceful shutdown complete. Tracked orders: ${this.tracked.size}, Active polls: ${this.activePollCount}`);
     }
 
     /** Add a new order to the tracking map and persist it. */
@@ -221,6 +250,11 @@ export class OrderMonitor {
             this.rateLimitCooldownUntil = null;
             logger.info('[OrderMonitor] Rate-limit cooldown expired. Resuming polling.');
         }
+        
+        // Skip tick if shutting down
+        if (this.isShuttingDown) {
+            return;
+        }
 
         const now = Date.now();
         const toPoll: TrackedOrder[] = [];
@@ -274,6 +308,13 @@ export class OrderMonitor {
                 if (TERMINAL_STATUSES.has(newStatus)) {
                     this.untrackOrder(order.orderId);
                     logger.info(`[OrderMonitor] Order ${order.orderId} reached terminal state: ${newStatus}`);
+
+                    // Hook into reputation system
+                    if (newStatus === 'settled') {
+                        reputationService.recordSwapOutcome(order.telegramId.toString(), true);
+                    } else if (newStatus === 'failed' || newStatus === 'return_completed') {
+                        reputationService.recordSwapOutcome(order.telegramId.toString(), false);
+                    }
                 }
             }
         } catch (error) {

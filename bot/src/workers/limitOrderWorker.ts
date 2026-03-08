@@ -1,9 +1,10 @@
 import { Telegraf } from 'telegraf';
 import axios from 'axios';
 import { eq, and, or, isNull, lte } from 'drizzle-orm';
-import { db, limitOrders, LimitOrder, updateLimitOrderStatus, getUser } from '../services/database';
+import { db, limitOrders, LimitOrder, updateLimitOrderStatus, addWatchedOrder, type User } from '../services/database';
 import { getCoins, createQuote, createOrder } from '../services/sideshift-client';
 import logger, { handleError } from '../services/logger';
+import { batchLoadUsersByTelegramIds } from '../utils/dataLoader';
 
 
 const CHECK_INTERVAL_MS = 60 * 1000; // 60 seconds
@@ -90,6 +91,9 @@ export class LimitOrderWorker {
 
       logger.info(`🔍 Checking ${pendingOrders.length} pending limit orders...`);
 
+      // OPTIMIZATION: Batch load all users upfront to prevent N+1 queries
+      const telegramIds = pendingOrders.map(o => Number(o.telegramId));
+      const usersByTelegramId = await batchLoadUsersByTelegramIds(telegramIds);
 
       // 2. Identify unique assets to fetch prices for
       const assetsToFetch = new Set<string>();
@@ -117,7 +121,8 @@ export class LimitOrderWorker {
         }
 
         if (this.isConditionMet(order, currentPrice)) {
-          await this.executeOrder(order, currentPrice);
+          const user = usersByTelegramId.get(Number(order.telegramId));
+          await this.executeOrder(order, currentPrice, user);
         }
       }
 
@@ -191,7 +196,7 @@ export class LimitOrderWorker {
     return false;
   }
 
-  private async executeOrder(order: LimitOrder, triggerPrice: number) {
+  private async executeOrder(order: LimitOrder, triggerPrice: number, user?: User) {
     const asset = order.conditionAsset || order.fromAsset;
     const target = order.conditionValue || order.targetPrice;
 
@@ -214,9 +219,9 @@ export class LimitOrderWorker {
       }
 
       // 1. Determine Settle Address
+      // OPTIMIZATION: User already batch-loaded, just use it
       let settleAddress = order.settleAddress;
       if (!settleAddress) {
-        const user = await getUser(Number(order.telegramId));
         if (user?.walletAddress) {
           settleAddress = user.walletAddress;
         } else {
@@ -252,9 +257,22 @@ export class LimitOrderWorker {
         throw new Error('Failed to create SideShift order');
       }
 
-      // 4. Update DB
-      await updateLimitOrderStatus(order.id, 'executed', sideshiftOrder.id);
-      logger.info(`✅ Order #${order.id} executed via SideShift (Order ID: ${sideshiftOrder.id})`);
+      // 4. Update DB & Watch
+      try {
+        await updateLimitOrderStatus(order.id, 'executed', sideshiftOrder.id);
+        await addWatchedOrder(Number(order.telegramId), sideshiftOrder.id, 'pending');
+        logger.info(`✅ Order #${order.id} executed via SideShift (Order ID: ${sideshiftOrder.id})`);
+      } catch (err) {
+        // If adding the watched order fails after marking as executed, attempt to revert
+        logger.error('Failed to update DB & watch order; attempting to revert limit order status', err);
+        try {
+          // Revert to a safe, pre-executed status so the order can be retried/handled
+          await updateLimitOrderStatus(order.id, 'pending', undefined);
+        } catch (revertErr) {
+          logger.error('Failed to revert limit order status after watch-order failure', revertErr);
+        }
+        throw err;
+      }
 
 
       // 5. Notify User
@@ -323,7 +341,7 @@ export class LimitOrderWorker {
               orderId: order.id,
               telegramId: order.telegramId,
               message: `Failed to send failure notification for order #${order.id}`
-            }, null, true);
+            }, null, true, 'high');
           }
         }
       }

@@ -27,11 +27,9 @@ import MarketSentimentWidget from "@/components/MarketSentimentWidget";
 
 const NAV_ITEMS = [
   { href: "/prices", label: "Live Prices", Icon: TrendingUp },
-  { href: "/discussions", label: "Discussions", Icon: MessageSquare },
-  { href: "/terminal", label: "Terminal", Icon: TerminalIcon },
+  { href: "/yield-scout", label: "Yield Scout", Icon: Trophy },
   { href: "/contributors", label: "Contributors", Icon: Users },
-  { href: "/watchlist", label: "Watchlist", Icon: Star },
-  { href: "/strategies", label: "Strategies", Icon: BookOpen },
+  { href: "/about", label: "About", Icon: Info },
 ];
 
 const PROFILE_MENU = [
@@ -39,7 +37,10 @@ const PROFILE_MENU = [
   { href: "/portfolio", label: "Portfolio", Icon: Users },
   { href: "/rewards", label: "Rewards", Icon: Trophy },
   { href: "/learn", label: "Learn", Icon: BookOpen },
-  { href: "/about", label: "About", Icon: Info },
+  { href: "/terminal", label: "Terminal", Icon: TerminalIcon },
+  { href: "/watchlist", label: "Watchlist", Icon: Star },
+  { href: "/strategies", label: "Strategies", Icon: TrendingUp },
+  { href: "/discussions", label: "Discussions", Icon: MessageSquare },
 ];
 
 export default function Navbar() {
