@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { SecurityScanner } from '@/utils/security-scanner';
+import { performSecurityScan } from '@/utils/security-scanner';
 import { isAddress } from 'viem';
 import { mainnet, bsc, polygon, base } from 'viem/chains';
 import { SecurityReport } from '@/types/security';

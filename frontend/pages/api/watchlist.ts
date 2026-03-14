@@ -5,7 +5,6 @@ import {
   addToWatchlist,
   removeFromWatchlist,
   getCachedPrice,
-  getCachedPricesBatch,
 } from '@/lib/database';
 import { csrfGuard } from '@/lib/csrf';
 import logger from '@/lib/logger';
@@ -74,18 +73,6 @@ export default async function handler(
           };
         })
       );
-
-      const watchlistWithPrices = watchlist.map(item => {
-        const priceKey = `${item.coin}-${item.network}`;
-        const priceData = priceMap.get(priceKey);
-
-        return {
-          ...item,
-          usdPrice: priceData?.usdPrice ?? null,
-          btcPrice: priceData?.btcPrice ?? null,
-          lastUpdated: priceData?.updatedAt ?? null,
-        };
-      });
 
       return res.status(200).json(watchlistWithPrices);
     } catch (error) {

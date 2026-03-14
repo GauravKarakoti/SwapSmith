@@ -60,7 +60,8 @@ export async function getAdminByFirebaseUid(uid: string): Promise<AdminUser | nu
 
 export async function getAdminByEmail(email: string): Promise<AdminUser | null> {
   const rows = await getDb().select().from(adminUsers)
-    .where(eq(adminUsers.email, email))
+    .where(eq(adminUsers.email, email));
+}
 
 export async function createAdminUser(data: {
   firebaseUid: string;

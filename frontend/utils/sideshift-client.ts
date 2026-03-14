@@ -1,13 +1,12 @@
 import axios from 'axios';
-import { SIDESHIFT_CONFIG, getApiUrl, getApiEndpoint } from '../../shared/config/sideshift';
-import { SideShiftQuoteSchema, SideShiftCheckoutResponseSchema, CoinSchema } from '../../shared/schemas/sideshift';
+import { SIDESHIFT_CONFIG, getApiUrl } from '../../shared/config/sideshift';
+import { SideShiftQuoteSchema, SideShiftCheckoutResponseSchema } from '../../shared/schemas/sideshift';
 import { validateDepositAddressForNetwork } from './addressValidation';
+import { z } from 'zod';
 
 const apiClient = axios.create({
   baseURL: SIDESHIFT_CONFIG.BASE_URL,
 });
-const AFFILIATE_ID = process.env.NEXT_PUBLIC_AFFILIATE_ID;
-const API_KEY = process.env.NEXT_PUBLIC_SIDESHIFT_API_KEY;
 
 // ============================================
 // Type Definitions
@@ -99,28 +98,6 @@ const CoinPriceSchema = z.object({
   available: z.boolean(),
 });
 
-const SideShiftQuoteSchema = z.object({
-  id: z.string().optional(),
-  depositCoin: z.string(),
-  depositNetwork: z.string(),
-  settleCoin: z.string(),
-  settleNetwork: z.string(),
-  depositAmount: z.string(),
-  settleAmount: z.string(),
-  rate: z.string(),
-  affiliateId: z.string(),
-  error: SideShiftErrorSchema.optional(),
-  memo: z.string().optional(),
-  expiry: z.string().optional(),
-});
-
-const SideShiftCheckoutResponseSchema = z.object({
-  id: z.string(),
-  url: z.string().optional(),
-  settleAmount: z.string(),
-  settleCoin: z.string(),
-});
-
 // ============================================
 // Validation Helper Functions
 // ============================================
@@ -207,10 +184,10 @@ export async function createCheckout(
     const validatedData = SideShiftCheckoutResponseSchema.parse(response.data);
 
     return {
-      id: validated.id,
-      url: validated.url || `${SIDESHIFT_CONFIG.CHECKOUT_URL}/${validated.id}`,
-      settleAmount: validated.settleAmount,
-      settleCoin: validated.settleCoin
+      id: validatedData.id,
+      url: validatedData.url || `${SIDESHIFT_CONFIG.CHECKOUT_URL}/${validatedData.id}`,
+      settleAmount: validatedData.settleAmount,
+      settleCoin: validatedData.settleCoin
     };
   } catch (error: unknown) {
     if (axios.isAxiosError(error)) {

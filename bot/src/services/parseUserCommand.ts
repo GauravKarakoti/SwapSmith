@@ -181,7 +181,6 @@ const input = preprocessInput(sanitized);
 if (REGEX_STAKE_COMMAND.test(input) && !REGEX_SWAP_STAKE.test(input)) {
 const providerMatch = input.match(REGEX_LIQUID_STAKING_PROVIDER);
 
-```
 const stakeProtocol = providerMatch
   ? providerMatch[1]?.toLowerCase()
   : 'lido';
@@ -250,7 +249,6 @@ return {
   requiresConfirmation: true,
   originalInput: userInput
 };
-```
 
 }
 

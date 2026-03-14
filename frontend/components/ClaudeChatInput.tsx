@@ -450,6 +450,6 @@ export const ClaudeChatInput = forwardRef<HTMLTextAreaElement, ClaudeChatInputPr
             </div>
         </div>
     );
-};
+});
 
 export default ClaudeChatInput;

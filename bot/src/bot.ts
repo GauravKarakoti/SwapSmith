@@ -207,6 +207,7 @@ bot.on(message('text'), async (ctx) => {
         }
       );
     }
+  }
   const userId = ctx.from.id;
   const userInput = ctx.message.text;
 

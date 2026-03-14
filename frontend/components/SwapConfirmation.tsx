@@ -12,7 +12,7 @@ import {
   Info,
   Zap,
   Wallet,
-  TrendingUp
+  TrendingUp,
   ExternalLink
 } from 'lucide-react'
 import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi'

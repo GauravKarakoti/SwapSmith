@@ -513,67 +513,6 @@ export const tradingStrategies = pgTable('trading_strategies', {
   index("idx_trading_strategies_is_public").on(table.isPublic),
 ]);
 
-export const strategySubscriptions = pgTable('strategy_subscriptions', {
-  id: serial('id').primaryKey(),
-  strategyId: integer('strategy_id').notNull().references(() => tradingStrategies.id, { onDelete: 'cascade' }),
-  subscriberId: integer('subscriber_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  subscriberTelegramId: bigint('subscriber_telegram_id', { mode: 'number' }),
-  subscriptionFee: text('subscription_fee'),
-  allocationPercent: numeric('allocation_percent', { precision: 5, scale: 2 }).notNull().default('100'),
-  autoRebalance: boolean('auto_rebalance').notNull().default(true),
-  stopLossPercent: numeric('stop_loss_percent', { precision: 5, scale: 2 }),
-  status: subscriptionStatusType('status').notNull().default('active'),
-  joinedAt: timestamp('joined_at').defaultNow(),
-  pausedAt: timestamp('paused_at'),
-  cancelledAt: timestamp('cancelled_at'),
-}, (table) => [
-  index("idx_strategy_subscriptions_strategy_id").on(table.strategyId),
-  index("idx_strategy_subscriptions_subscriber_id").on(table.subscriberId),
-  unique('unique_subscription').on(table.strategyId, table.subscriberId),
-]);
-
-export const strategyPerformance = pgTable('strategy_performance', {
-  id: serial('id').primaryKey(),
-  strategyId: integer('strategy_id').notNull().references(() => tradingStrategies.id, { onDelete: 'cascade' }),
-  pnl: numeric('pnl', { precision: 20, scale: 8 }).notNull().default('0'),
-  pnlPercent: numeric('pnl_percent', { precision: 15, scale: 8 }).notNull(),
-  status: text('status').notNull().default('completed'),
-  executedAt: timestamp('executed_at'),
-  createdAt: timestamp('created_at').defaultNow(),
-}, (table) => [
-  index("idx_strategy_performance_strategy_id").on(table.strategyId),
-  index("idx_strategy_performance_executed_at").on(table.executedAt),
-]);
-
-export const strategyTrades = pgTable('strategy_trades', {
-  id: serial('id').primaryKey(),
-  strategyId: integer('strategy_id').notNull().references(() => tradingStrategies.id, { onDelete: 'cascade' }),
-  sideshiftOrderId: text('sideshift_order_id'),
-  fromAsset: text('from_asset').notNull(),
-  fromNetwork: text('from_network').notNull(),
-  fromAmount: text('from_amount').notNull(),
-  toAsset: text('to_asset').notNull(),
-  toNetwork: text('to_network').notNull(),
-  status: text('status').notNull().default('pending'),
-  settleAmount: text('settle_amount'),
-  error: text('error'),
-  executedAt: timestamp('executed_at'),
-  createdAt: timestamp('created_at').defaultNow(),
-}, (table) => [
-  index("idx_strategy_trades_strategy_id").on(table.strategyId),
-]);
-
-// --- TYPES ---
-
-export type TradingStrategy = typeof tradingStrategies.$inferSelect;
-export type NewTradingStrategy = typeof tradingStrategies.$inferInsert;
-export type StrategySubscription = typeof strategySubscriptions.$inferSelect;
-export type NewStrategySubscription = typeof strategySubscriptions.$inferInsert;
-export type StrategyPerformance = typeof strategyPerformance.$inferSelect;
-export type NewStrategyPerformance = typeof strategyPerformance.$inferInsert;
-export type StrategyTrade = typeof strategyTrades.$inferSelect;
-export type NewStrategyTrade = typeof strategyTrades.$inferInsert;
-
 // --- TYPES ---
 
 // Strategy types commented out until tables are implemented
