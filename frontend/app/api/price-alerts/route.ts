@@ -9,9 +9,16 @@ import {
   getCachedPrice
 } from '@/lib/database';
 import logger from '@/lib/logger';
+import { rateLimitMiddleware, RATE_LIMITS } from '@/lib/rate-limiter';
 
 // GET /api/price-alerts - Get all price alerts for the authenticated user
 export async function GET(request: NextRequest) {
+  // SECURITY: Rate limit to prevent database flooding
+  const rateLimitResponse = rateLimitMiddleware(request, RATE_LIMITS.default);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     const authResult = await verifyAuth(request);
     
@@ -60,6 +67,15 @@ export async function GET(request: NextRequest) {
 
 // POST /api/price-alerts - Create a new price alert
 export async function POST(request: NextRequest) {
+  // SECURITY: Rate limit to prevent unlimited alert creation
+  const rateLimitResponse = rateLimitMiddleware(request, {
+    ...RATE_LIMITS.strict,
+    message: 'Too many price alerts created. Please try again later.'
+  });
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     const authResult = await verifyAuth(request);
     
@@ -146,6 +162,12 @@ export async function POST(request: NextRequest) {
 
 // DELETE /api/price-alerts - Delete a price alert
 export async function DELETE(request: NextRequest) {
+  // SECURITY: Rate limit delete operations
+  const rateLimitResponse = rateLimitMiddleware(request, RATE_LIMITS.default);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     const authResult = await verifyAuth(request);
     
@@ -198,6 +220,12 @@ export async function DELETE(request: NextRequest) {
 
 // PATCH /api/price-alerts - Toggle price alert active status
 export async function PATCH(request: NextRequest) {
+  // SECURITY: Rate limit toggle operations
+  const rateLimitResponse = rateLimitMiddleware(request, RATE_LIMITS.default);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     const authResult = await verifyAuth(request);
     

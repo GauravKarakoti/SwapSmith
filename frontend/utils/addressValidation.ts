@@ -1,4 +1,5 @@
 import { isAddress } from 'viem'
+import { isValidAddress } from '@shared/services/address-validator'
 
 export type AddressValidationResult = { passed: true; message: string } | { passed: false; message: string }
 
@@ -16,10 +17,8 @@ function validateEvmAddress(address: string): AddressValidationResult {
 }
 
 function validateBitcoinAddress(address: string): AddressValidationResult {
-  // Covers legacy (1..., 3...) and bech32 (bc1..., incl. taproot bc1p...)
-  const legacy = /^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$/
-  const bech32 = /^bc1[0-9ac-hj-np-z]{25,79}$/i
-  if (legacy.test(address) || bech32.test(address)) return { passed: true, message: 'Valid Bitcoin address format' }
+  // Use shared validator which supports all Bitcoin address types including Taproot (bc1p)
+  if (isValidAddress(address, 'bitcoin')) return { passed: true, message: 'Valid Bitcoin address format' }
   return { passed: false, message: 'Invalid Bitcoin address format' }
 }
 

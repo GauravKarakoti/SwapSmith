@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import logger, { handleError } from './logger';
 import { loadSecret } from '../../../shared/utils/secrets-loader';
+import { sanitizeLLMPrompt, validateAndSanitizeLLMInput } from '../../../shared/utils/validation';
 import type { ParsedCommand } from '../types/ParsedCommand';
 import type { ConversationMessage, GroqMessage } from '../types/Message';
 import type { ErrorDetails } from '../types/Logger';
@@ -18,6 +19,73 @@ function getGroqClient(): Groq {
   return new Groq({
     apiKey,
   });
+}
+
+
+export interface ParsedCommand {
+  success: boolean;
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "stake" | "unknown";
+  
+  // Single Swap Fields
+  fromAsset: string | null;
+  fromChain: string | null;
+  toAsset: string | null;
+  toChain: string | null;
+  amount: number | null;
+  amountType?: "exact" | "absolute" | "percentage" | "all" | "exclude" | null; // Extended with 'absolute'
+
+  excludeAmount?: number;
+  excludeToken?: string;
+  quoteAmount?: number;
+
+  // Conditional Fields
+  conditions?: {
+    type: "price_above" | "price_below";
+    asset: string;
+    value: number;
+  };
+  
+  // Portfolio Fields
+  portfolio?: {
+    toAsset: string;
+    toChain: string;
+    percentage: number;
+  }[];
+  driftThreshold?: number;
+  autoRebalance?: boolean;
+  portfolioName?: string;
+
+  // DCA Fields
+  frequency?: "daily" | "weekly" | "monthly" | string | null;
+  dayOfWeek?: string | null;
+  dayOfMonth?: string | null;
+  totalAmount?: number;
+  numPurchases?: number;
+
+  // Checkout Fields
+  settleAsset: string | null;
+  settleNetwork: string | null;
+  settleAmount: number | null;
+  settleAddress: string | null;
+
+  // Yield Fields
+  fromProject: string | null;
+  fromYield: number | null;
+  toProject: string | null;
+  toYield: number | null;
+
+  // Limit Order Fields (Legacy - kept for compatibility, prefer 'conditions')
+  conditionOperator?: 'gt' | 'lt';
+  conditionValue?: number;
+  conditionAsset?: string;
+  targetPrice?: number;
+  condition?: 'above' | 'below';
+
+  confidence: number;
+  validationErrors: string[];
+  parsedMessage: string;
+  requiresConfirmation?: boolean; 
+  originalInput?: string;        
 }
 
 
@@ -60,6 +128,46 @@ SUPPORTED INTENTS:
    Examples: "Swap 100 USDC for ETH and stake it", "Convert my BTC to stETH", "Zap into liquid staking"
    Keywords: "swap and stake", "zap", "stake immediately", "swap to stake", "stake"
    
+4. "yield_scout": User asking for high APY/Yield info.
+   Example: "What are the best yields right now?"
+
+5. "yield_deposit": Deposit assets into yield platforms.
+6. "yield_migrate": Move funds between pools.
+7. "dca": Dollar Cost Averaging.
+8. "limit_order": Buy/Sell at specific price.
+9. "stake": Stake tokens for passive yield.
+   Example: "Stake 2 ETH" -> {"intent": "stake", "token": "ETH", "amount": "2", "chain": "ethereum"}
+   Example: "Stake my MATIC on Polygon" -> {"intent": "stake", "token": "MATIC", "amount": null, "chain": "polygon"}
+
+STANDARDIZED CHAINS: ethereum, bitcoin, polygon, arbitrum, avalanche, optimism, bsc, base, solana.
+
+ADDRESS RESOLUTION:
+- Users can specify addresses as raw wallet addresses (0x...), ENS names (ending in .eth), Lens handles (ending in .lens), Unstoppable Domains (ending in .crypto, .nft, .blockchain, etc.), or nicknames from their address book.
+- If an address is specified, include it in settleAddress field.
+- The system will resolve nicknames, ENS, Lens, and Unstoppable Domains automatically.
+
+IMPORTANT: ENS/ADDRESS HANDLING:
+- When a user says "Swap X ETH to vitalik.eth" or "Send X ETH to vitalik.eth", they mean:
+  * Keep the same asset (ETH)
+  * Send it to the address vitalik.eth
+  * This should be parsed as: toAsset: "ETH", toChain: "ethereum", settleAddress: "vitalik.eth"
+- Patterns to recognize as addresses (not assets):
+  * Ends with .eth (ENS)
+  * Ends with .lens (Lens Protocol)
+  * Ends with .crypto, .nft, .blockchain, .wallet, etc. (Unstoppable Domains)
+  * Starts with 0x followed by 40 hex characters
+  * Looks like a nickname (single word, lowercase, no special chars)
+
+AMBIGUITY HANDLING:
+- If the command is ambiguous (e.g., "swap all my ETH to BTC or USDC"), set confidence low (0-30) and add validation error "Command is ambiguous. Please specify clearly."
+- For complex commands, prefer explicit allocations over assumptions.
+- If multiple interpretations possible, choose the most straightforward and set requiresConfirmation: true.
+- If the user includes conditions such as "only if", "when price is", "above", "below", extract them into a "conditions" object.
+
+RESPONSE FORMAT:
+{
+  "success": boolean,
+  "intent": "swap" | "portfolio" | "checkout" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "stake",
    AUTO-MAPPING for staking commands:
    - ETH -> stETH (Lido) ~3-4% APR
    - SOL -> mSOL (Marinade) ~7-8% APR  
@@ -529,6 +637,17 @@ Remember: It's better to ask for clarification than to make incorrect assumption
 14. "DCA 200 USDC into ETH every month on the 1st"
     -> intent: "dca", fromAsset: "USDC", toAsset: "ETH", amount: 200, frequency: "monthly", dayOfMonth: "1", confidence: 95
 
+15. "Stake 2 ETH"
+    -> intent: "stake", fromAsset: "ETH", fromChain: "ethereum", amount: 2, confidence: 95
+
+16. "Stake 0.5 ETH on Ethereum"
+    -> intent: "stake", fromAsset: "ETH", fromChain: "ethereum", amount: 0.5, confidence: 95
+
+17. "I want to stake my MATIC"
+    -> intent: "stake", fromAsset: "MATIC", fromChain: "polygon", amount: null, amountType: "all", confidence: 90
+
+18. "Stake 1000 USDC for yield"
+    -> intent: "stake", fromAsset: "USDC", amount: 1000, confidence: 95
 15. "Stake 2 ETH with Lido"
     -> intent: "swap_and_stake", fromAsset: "ETH", toAsset: "stETH", amount: 2, confidence: 95
 
@@ -548,6 +667,32 @@ export async function parseWithLLM(
   conversationHistory: ConversationMessage[] = [],
   inputType: 'text' | 'voice' = 'text'
 ): Promise<ParsedCommand> {
+  // ============================================
+  // INPUT VALIDATION & SANITIZATION
+  // ============================================
+  
+  // Validate and sanitize user input to prevent prompt injection
+  const { valid, sanitized, errors } = validateAndSanitizeLLMInput(userInput);
+  
+  if (!valid) {
+    return {
+      success: false,
+      intent: 'unknown',
+      confidence: 0,
+      validationErrors: errors,
+      parsedMessage: 'Invalid input',
+      fromAsset: null,
+      fromChain: null,
+      toAsset: null,
+      toChain: null,
+      amount: null,
+      settleAsset: null,
+      settleNetwork: null,
+      settleAmount: null,
+      settleAddress: null,
+    };
+  }
+
   let currentSystemPrompt = systemPrompt;
 
   if (inputType === 'voice') {
@@ -559,10 +704,13 @@ export async function parseWithLLM(
   }
 
   try {
+    // Use sanitized and delimited input to prevent prompt injection
+    const sanitizedUserInput = sanitizeLLMPrompt(sanitized);
+    
     const messages: GroqMessage[] = [
         { role: "system", content: currentSystemPrompt },
         ...conversationHistory,
-        { role: "user", content: userInput }
+        { role: "user", content: sanitizedUserInput }
     ];
 
     const completion = await getGroqClient().chat.completions.create({

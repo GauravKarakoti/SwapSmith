@@ -9,6 +9,7 @@ import TrustIndicators from './TrustIndicators';
 import IntentConfirmation from './IntentConfirmation';
 import GasFeeDisplay from './GasFeeDisplay';
 import GasComparisonChart from './GasComparisonChart';
+import CopyButton from './CopyButton';
 import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
@@ -529,6 +530,18 @@ export default function ChatInterface() {
         return;
       }
 
+      // Handle Stake Intent
+      if (command.intent === 'stake') {
+        if (command.requiresConfirmation || command.confidence < 80) {
+          setPendingCommand(command);
+          addMessage({ role: 'assistant', content: '', type: 'intent_confirmation', data: { parsedCommand: command } });
+        } else {
+          await executeStake(command);
+        }
+        setIsLoading(false);
+        return;
+      }
+
       // Handle Limit Orders (have conditions on swap intent)
       if (command.intent === 'swap' && command.conditionOperator && command.conditionValue) {
         if (command.requiresConfirmation || command.confidence < 80) {
@@ -665,6 +678,60 @@ export default function ChatInterface() {
     } catch (error: unknown) {
       const errorMessage = handleError(error, ErrorType.API_FAILURE, {
         operation: 'limit_order_creation',
+        retryable: true
+      });
+      addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
+    }
+  };
+
+  const executeStake = async (command: ParsedCommand) => {
+    try {
+      const stakeResponse = await fetch('/api/create-stake', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: command.fromAsset,
+          amount: command.amount,
+          chain: command.fromChain,
+          settleAddress: address // Use connected wallet address
+        }),
+      });
+      
+      const result = await stakeResponse.json();
+      if (result.error) throw new Error(result.error);
+      
+      const amountText = command.amount ? `${command.amount} ${command.fromAsset}` : `All ${command.fromAsset}`;
+      
+      addMessage({
+        role: 'assistant',
+        content: `🥩 Stake Prepared!
+
+📊 Staking Details:
+• Amount: ${amountText}
+• Provider: ${result.provider}
+• Receive: ${result.stakingToken}
+• Est. APR: ${result.apr}%
+• Chain: ${result.chain}
+
+Ready to sign the transaction?`,
+        type: 'swap_confirmation', // Reuse swap confirmation UI for signing
+        data: {
+          quoteData: {
+            depositAmount: command.amount?.toString() || 'All',
+            depositCoin: command.fromAsset!,
+            depositNetwork: result.chain,
+            rate: '1',
+            settleAmount: result.stakingToken,
+            settleCoin: result.stakingToken,
+            settleNetwork: result.chain,
+            id: result.orderId
+          },
+          confidence: command.confidence
+        }
+      });
+    } catch (error: unknown) {
+      const errorMessage = handleError(error, ErrorType.API_FAILURE, {
+        operation: 'stake_creation',
         retryable: true
       });
       addMessage({ role: 'assistant', content: errorMessage, type: 'message' });
@@ -808,6 +875,36 @@ export default function ChatInterface() {
                 <div className="space-y-3">
                   <div className="bg-white/[0.04] border border-white/10 text-gray-200 px-5 py-4 rounded-2xl rounded-tl-none text-sm leading-relaxed backdrop-blur-sm">
                     {msg.type === 'message' && <div className="whitespace-pre-line">{msg.content}</div>}
+                    {msg.type === 'checkout_link' && (
+                      <div>
+                        <div className="whitespace-pre-line mb-3">{msg.content}</div>
+                        {msg.data?.url && (
+                          <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-2">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium text-green-800">Payment Link:</span>
+                              <CopyButton 
+                                text={msg.data.url} 
+                                size="sm" 
+                                variant="ghost"
+                                toastMessage="Payment link copied!"
+                                className="text-green-600 hover:text-green-700"
+                              />
+                            </div>
+                            <div className="bg-white p-2 rounded border text-xs font-mono break-all text-gray-600">
+                              {msg.data.url}
+                            </div>
+                            <a 
+                              href={msg.data.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="inline-block mt-2 text-sm text-green-600 hover:text-green-700 hover:underline"
+                            >
+                              Open Payment Link →
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {msg.type === 'portfolio_summary' && (
                       <div>
                         <div className="whitespace-pre-line mb-3">{msg.content}</div>

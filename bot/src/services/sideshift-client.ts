@@ -9,6 +9,57 @@ const API_KEY = process.env['SIDESHIFT_API_KEY'];
 const DEFAULT_USER_IP = process.env['SIDESHIFT_CLIENT_IP'];
 const API_TIMEOUT = parseInt(process.env['SIDESHIFT_API_TIMEOUT_MS']!, 10);
 
+/**
+ * Custom error class for HTTP 429 (Too Many Requests) responses from SideShift API.
+ * Contains the retry-after duration in seconds.
+ */
+export class RateLimitError extends Error {
+  public readonly retryAfter: number; // seconds
+
+  constructor(retryAfter: number) {
+    super(`SideShift API rate limit exceeded. Retry after ${retryAfter} seconds.`);
+    this.name = 'RateLimitError';
+    this.retryAfter = retryAfter;
+    // Maintains proper stack trace for where error was thrown (V8 only)
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, RateLimitError);
+    }
+  }
+}
+
+/**
+ * Parses the Retry-After header from a rate-limit response.
+ * The header can be either:
+ * - A number of seconds (e.g., "120")
+ * - An HTTP date string (e.g., "Wed, 21 Oct 2026 07:28:00 GMT")
+ * 
+ * @param retryAfterHeader - The value of the Retry-After header
+ * @returns The number of seconds to wait before retrying, or 60 if invalid/missing
+ */
+function parseRetryAfter(retryAfterHeader: string | undefined): number {
+  if (!retryAfterHeader) {
+    return 60; // Default: 60 seconds
+  }
+
+  // Try parsing as a number (seconds)
+  const seconds = parseInt(retryAfterHeader, 10);
+  if (!isNaN(seconds) && seconds > 0) {
+    return seconds;
+  }
+
+  // Try parsing as HTTP date
+  const retryDate = new Date(retryAfterHeader);
+  if (!isNaN(retryDate.getTime())) {
+    const now = new Date();
+    const diffMs = retryDate.getTime() - now.getTime();
+    const diffSeconds = Math.ceil(diffMs / 1000);
+    return diffSeconds > 0 ? diffSeconds : 60;
+  }
+
+  // Fallback: 60 seconds
+  return 60;
+}
+
 export interface SideShiftPair {
   depositCoin: string;
   settleCoin: string;
@@ -390,8 +441,34 @@ export async function getOrderStatus(orderId: string, userIP?: string): Promise<
     );
     return validateResponse(SideShiftOrderStatusSchema, response?.data, 'getOrderStatus');
   } catch (error) {
-    const message = extractErrorMessage(error, `Failed to get order status for ${orderId}`);
-    throw new Error(message);
+    // Handle Axios-specific errors
+    if (axios.isAxiosError(error)) {
+
+      // Handle HTTP 429 (Too Many Requests)
+      if (error.response?.status === 429) {
+        const rawRetryAfter = error.response.headers?.['retry-after'];
+
+        const retryAfterHeader =
+          Array.isArray(rawRetryAfter)
+            ? rawRetryAfter[0]
+            : rawRetryAfter != null
+            ? String(rawRetryAfter)
+            : undefined;
+
+        const retryAfter = parseRetryAfter(retryAfterHeader);
+
+        throw new RateLimitError(retryAfter);
+      }
+
+      const message = extractErrorMessage(
+        error,
+        `Failed to get order status for ${orderId}`
+      );
+
+      throw new Error(message);
+    }
+
+    throw new Error(`Failed to get order status for ${orderId}`);
   }
 }
 

@@ -6,6 +6,8 @@ import {
   getUserCoinLogs,
 } from '@/lib/admin-service';
 import { neon } from '@neondatabase/serverless';
+import { rateLimitMiddleware, RATE_LIMITS } from '@/lib/rate-limiter';
+import { logAdminAction, AUDIT_ACTIONS, getIpAddress, getUserAgent } from '../../../../../shared/lib/audit-logger';
 
 const rawSql = neon(process.env.DATABASE_URL!);
 
@@ -32,6 +34,15 @@ async function decodeToken(token: string): Promise<{ uid: string } | null> {
  * Adjusts testnet coin balance for a user and writes an audit log entry.
  */
 export async function POST(req: NextRequest) {
+  // SECURITY: Rate limit admin operations to prevent abuse
+  const rateLimitResponse = rateLimitMiddleware(req, {
+    ...RATE_LIMITS.admin,
+    message: 'Too many admin coin adjustments. Please try again later.'
+  });
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     const authHeader = req.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -79,6 +90,32 @@ export async function POST(req: NextRequest) {
       note,
     });
 
+    // Log the action to admin audit log
+    const actionToAudit: Record<string, string> = {
+      gift: AUDIT_ACTIONS.GIFT_COINS,
+      deduct: AUDIT_ACTIONS.DEDUCT_COINS,
+      reset: AUDIT_ACTIONS.RESET_COINS,
+    };
+
+    await logAdminAction({
+      adminId: admin.firebaseUid,
+      adminEmail: admin.email,
+      action: actionToAudit[action] || action,
+      targetResource: 'user',
+      targetId: String(targetUserId),
+      metadata: {
+        action,
+        amount: action === 'reset' ? 0 : amount,
+        balanceBefore,
+        balanceAfter,
+        note: note || null,
+        targetFirebaseUid: userRows[0].firebase_uid,
+        walletAddress: userRows[0].wallet_address,
+      },
+      ipAddress: getIpAddress(req.headers),
+      userAgent: getUserAgent(req.headers),
+    });
+
     return NextResponse.json({
       success: true,
       action,
@@ -97,6 +134,12 @@ export async function POST(req: NextRequest) {
  * Returns recent audit logs for a specific user.
  */
 export async function GET(req: NextRequest) {
+  // SECURITY: Rate limit admin operations
+  const rateLimitResponse = rateLimitMiddleware(req, RATE_LIMITS.admin);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     const authHeader = req.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {

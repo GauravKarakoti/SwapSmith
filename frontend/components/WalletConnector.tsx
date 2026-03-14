@@ -5,6 +5,7 @@ import { Wallet, LogOut, Loader2 } from 'lucide-react';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
 import { useState, useEffect } from 'react';
 import { trackWalletConnection, showRewardNotification } from '@/lib/rewards-service';
+import CopyButton from './CopyButton';
 import {
   ConnectorAlreadyConnectedError,
   ConnectorNotFoundError,
@@ -99,9 +100,20 @@ export default function WalletConnector() {
           <span className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.15em]">
             {chain?.name || 'Online'}
           </span>
-          <span className="text-xs font-mono font-bold text-blue-400 bg-blue-400/5 px-2 py-0.5 rounded-md border border-blue-400/10">
-            {address?.substring(0, 6)}...{address?.substring(address.length - 4)}
-          </span>
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-mono font-bold text-blue-400 bg-blue-400/5 px-2 py-0.5 rounded-md border border-blue-400/10">
+              {address?.substring(0, 6)}...{address?.substring(address.length - 4)}
+            </span>
+            {address && (
+              <CopyButton 
+                text={address} 
+                size="sm" 
+                variant="ghost"
+                toastMessage="Wallet address copied!"
+                className="text-blue-400 hover:text-blue-300"
+              />
+            )}
+          </div>
         </div>
         <button
           onClick={() => disconnect()}

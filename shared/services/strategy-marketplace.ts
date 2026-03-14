@@ -32,7 +32,7 @@ export interface CreateStrategyInput {
   parameters: Record<string, unknown>;
   riskLevel: 'low' | 'medium' | 'high' | 'aggressive';
   subscriptionFee: string;
-  performanceFee: number;
+  performanceFee: string; // Changed from number to string for numeric precision
   minInvestment: string;
   isPublic?: boolean;
   tags?: string[];
@@ -43,9 +43,9 @@ export interface SubscribeToStrategyInput {
   subscriberId: number;
   subscriberTelegramId?: number;
   subscriptionFee?: string;
-  allocationPercent?: number;
+  allocationPercent?: string; // Changed from number to string for numeric precision
   autoRebalance?: boolean;
-  stopLossPercent?: number;
+  stopLossPercent?: string; // Changed from number to string for numeric precision
 }
 
 /**
@@ -112,7 +112,7 @@ export const subscribeToStrategy = async (input: SubscribeToStrategyInput): Prom
     subscriberId: input.subscriberId,
     subscriberTelegramId: input.subscriberTelegramId,
     subscriptionFee: input.subscriptionFee || strategy.subscriptionFee,
-    allocationPercent: input.allocationPercent || 100,
+    allocationPercent: input.allocationPercent || '100',
     autoRebalance: input.autoRebalance ?? true,
     stopLossPercent: input.stopLossPercent,
     status: 'active',
@@ -150,11 +150,11 @@ export const getStrategies = async (filters?: {
   }
 
   if (filters?.minReturn !== undefined) {
-    conditions.push(gte(tradingStrategies.totalReturn, filters.minReturn));
+    conditions.push(gte(tradingStrategies.totalReturn, filters.minReturn.toString()));
   }
 
   if (filters?.maxDrawdown !== undefined) {
-    conditions.push(lte(tradingStrategies.maxDrawdown, filters.maxDrawdown));
+    conditions.push(lte(tradingStrategies.maxDrawdown, filters.maxDrawdown.toString()));
   }
 
   if (filters?.search) {
@@ -201,11 +201,11 @@ export const getStrategyById = async (id: number): Promise<TradingStrategy | nul
 export const updateStrategyMetrics = async (
   strategyId: number,
   metrics: {
-    totalReturn?: number;
-    monthlyReturn?: number;
-    maxDrawdown?: number;
-    volatility?: number;
-    sharpeRatio?: number;
+    totalReturn?: string;
+    monthlyReturn?: string;
+    maxDrawdown?: string;
+    volatility?: string;
+    sharpeRatio?: string;
   }
 ): Promise<void> => {
   await db
@@ -340,7 +340,7 @@ export const recordStrategyTrade = async (input: {
 export const recordStrategyPerformance = async (input: {
   strategyId: number;
   pnl: string;
-  pnlPercent: number;
+  pnlPercent: string; // Changed from number to string for numeric precision
   status: 'pending' | 'completed' | 'failed';
 }): Promise<StrategyPerformance> => {
   const [performance] = await db.insert(strategyPerformance).values({

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Star, Trash2, RefreshCw, ArrowRightLeft, Plus, Search, X, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
+import { useCryptoFavorites } from '@/hooks/useCryptoFavorites';
 
 interface WatchlistItem {
   id: number;
@@ -15,6 +16,7 @@ interface WatchlistItem {
   usdPrice?: string | null;
   btcPrice?: string | null;
   lastUpdated?: Date | string | null;
+  isStale?: boolean;
 }
 
 interface WatchlistProps {
@@ -23,6 +25,7 @@ interface WatchlistProps {
 
 export default function Watchlist({ onSwap }: WatchlistProps) {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { toggleFavorite, isFavorite, sortWithFavorites } = useCryptoFavorites();
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +33,7 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [availableCoins, setAvailableCoins] = useState<{ coin: string; network: string; name: string }[]>([]);
   const [addingToken, setAddingToken] = useState(false);
+  const [refreshingCache, setRefreshingCache] = useState(false);
 
   const fetchWatchlist = useCallback(async () => {
     if (!user) return;
@@ -58,6 +62,21 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
       setLoading(false);
     }
   }, [user]);
+
+  const forceRefreshCache = async () => {
+    try {
+      setRefreshingCache(true);
+      const response = await fetch('/api/prices/refresh', { method: 'POST' });
+      if (!response.ok) throw new Error('Failed to refresh prices');
+      
+      // After cache is refreshed, reload the watchlist
+      await fetchWatchlist();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to refresh prices');
+    } finally {
+      setRefreshingCache(false);
+    }
+  };
 
   // Fetch watchlist on mount or when user changes
   useEffect(() => {
@@ -168,9 +187,17 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
       c.network.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Sort watchlist with favorites first
+  const sortedWatchlist = sortWithFavorites(watchlist);
+
   // Check if a coin is already in watchlist
   const isInWatchlist = (coin: string, network: string) =>
     watchlist.some((item) => item.coin === coin && item.network === network);
+
+  const handleToggleFavorite = (coin: string, name: string, network: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleFavorite({ coin, name, network });
+  };
 
   return (
     <div className="w-full max-w-4xl mx-auto">
@@ -189,11 +216,12 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={fetchWatchlist}
-            className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-            title="Refresh prices"
+            onClick={forceRefreshCache}
+            disabled={refreshingCache || loading}
+            className="flex items-center gap-2 p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50"
+            title="Force refresh all prices"
           >
-            <RefreshCw className="w-5 h-5" />
+            <RefreshCw className={`w-5 h-5 ${refreshingCache ? 'animate-spin' : ''}`} />
           </button>
           <button
             onClick={handleAddClick}
@@ -275,7 +303,7 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
       {!loading && watchlist.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <AnimatePresence>
-            {watchlist.map((item) => (
+            {sortedWatchlist.map((item) => (
               <motion.div
                 key={`${item.coin}-${item.network}`}
                 initial={{ opacity: 0, scale: 0.9 }}
@@ -290,9 +318,24 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
                       {item.coin.slice(0, 2).toUpperCase()}
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white">
-                        {item.coin.toUpperCase()}
-                      </h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-gray-900 dark:text-white">
+                          {item.coin.toUpperCase()}
+                        </h3>
+                        <button
+                          onClick={(e) => handleToggleFavorite(item.coin, item.name, item.network, e)}
+                          className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                          title={isFavorite(item.coin, item.network) ? "Remove from favorites" : "Add to favorites"}
+                        >
+                          <Star 
+                            className={`w-4 h-4 ${
+                              isFavorite(item.coin, item.network)
+                                ? 'text-yellow-500 fill-current' 
+                                : 'text-gray-300 dark:text-gray-600'
+                            }`} 
+                          />
+                        </button>
+                      </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">
                         {item.network}
                       </p>
@@ -315,17 +358,27 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
                 {/* Price */}
                 <div className="mb-3">
                   {item.usdPrice ? (
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-xl font-bold text-gray-900 dark:text-white">
-                        ${parseFloat(item.usdPrice).toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: item.usdPrice && parseFloat(item.usdPrice) < 1 ? 6 : 2,
-                        })}
-                      </span>
-                      {item.btcPrice && (
-                        <span className="text-sm text-gray-500 dark:text-gray-400">
-                          ₿{parseFloat(item.btcPrice).toFixed(8)}
+                    <div>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-xl font-bold text-gray-900 dark:text-white">
+                          ${parseFloat(item.usdPrice).toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: item.usdPrice && parseFloat(item.usdPrice) < 1 ? 6 : 2,
+                          })}
                         </span>
+                        {item.btcPrice && (
+                          <span className="text-sm text-gray-500 dark:text-gray-400">
+                            ₿{parseFloat(item.btcPrice).toFixed(8)}
+                          </span>
+                        )}
+                      </div>
+                      {item.isStale && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <span className="flex h-1.5 w-1.5 rounded-full bg-yellow-500"></span>
+                          <span className="text-[10px] font-medium text-yellow-600 dark:text-yellow-400 uppercase tracking-wider">
+                            Price slightly old
+                          </span>
+                        </div>
                       )}
                     </div>
                   ) : (
@@ -344,10 +397,17 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
                   </button>
                 </div>
 
-                {/* Added Date */}
-                <p className="text-xs text-gray-400 mt-3">
-                  Added {new Date(item.addedAt).toLocaleDateString()}
-                </p>
+                {/* Footer Info */}
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/50">
+                  <p className="text-[10px] text-gray-400">
+                    Added {new Date(item.addedAt).toLocaleDateString()}
+                  </p>
+                  {item.lastUpdated && (
+                    <p className="text-[10px] text-gray-400">
+                      Updated {new Date(item.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  )}
+                </div>
               </motion.div>
             ))}
           </AnimatePresence>
@@ -407,16 +467,28 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
                     </div>
                   ) : (
                     <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                      {filteredCoins.map((token) => {
+                      {sortWithFavorites(filteredCoins).map((token) => {
                         const alreadyAdded = isInWatchlist(token.coin, token.network);
+                        const tokenIsFavorite = isFavorite(token.coin, token.network);
                         return (
-                          <button
+                          <div
                             key={`${token.coin}-${token.network}`}
-                            onClick={() => !alreadyAdded && addToWatchlist(token.coin, token.network, token.name)}
-                            disabled={alreadyAdded || addingToken}
-                            className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                           >
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 flex-1">
+                              <button
+                                onClick={(e) => handleToggleFavorite(token.coin, token.name, token.network, e)}
+                                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+                                title={tokenIsFavorite ? "Remove from favorites" : "Add to favorites"}
+                              >
+                                <Star 
+                                  className={`w-4 h-4 ${
+                                    tokenIsFavorite
+                                      ? 'text-yellow-500 fill-current' 
+                                      : 'text-gray-300 dark:text-gray-600'
+                                  }`} 
+                                />
+                              </button>
                               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
                                 {token.coin.slice(0, 2).toUpperCase()}
                               </div>
@@ -429,14 +501,23 @@ export default function Watchlist({ onSwap }: WatchlistProps) {
                                 </p>
                               </div>
                             </div>
-                            {alreadyAdded ? (
-                              <span className="text-sm text-green-500 font-medium">
-                                In Watchlist
-                              </span>
-                            ) : (
-                              <Plus className="w-5 h-5 text-blue-600" />
-                            )}
-                          </button>
+                            <button
+                              onClick={() => !alreadyAdded && addToWatchlist(token.coin, token.network, token.name)}
+                              disabled={alreadyAdded || addingToken}
+                              className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {alreadyAdded ? (
+                                <span className="text-sm text-green-500 font-medium">
+                                  In Watchlist
+                                </span>
+                              ) : (
+                                <>
+                                  <Plus className="w-4 h-4" />
+                                  Add
+                                </>
+                              )}
+                            </button>
+                          </div>
                         );
                       })}
                     </div>

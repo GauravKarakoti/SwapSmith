@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { verifyAdminToken } from '@/lib/adminAuth';
 import { giftAllUsers } from '@/lib/admin-service';
+import { logAdminAction, AUDIT_ACTIONS, getIpAddress, getUserAgent } from '../../../../../shared/lib/audit-logger';
 
 export async function POST(req: Request) {
   try {
@@ -21,6 +22,22 @@ export async function POST(req: Request) {
       adminEmail: admin.email ?? 'unknown',
       amount,
       note:      body.note ?? `Broadcast gift of ${amount} coins`,
+    });
+
+    // Log the bulk gift action
+    await logAdminAction({
+      adminId: admin.uid,
+      adminEmail: admin.email ?? 'unknown',
+      action: AUDIT_ACTIONS.GIFT_COINS_ALL,
+      targetResource: 'users',
+      targetId: 'all',
+      metadata: {
+        amount,
+        note: body.note ?? `Broadcast gift of ${amount} coins`,
+        usersAffected: result.usersAffected,
+      },
+      ipAddress: getIpAddress(req.headers),
+      userAgent: getUserAgent(req.headers),
     });
 
     return NextResponse.json({ ok: true, ...result });

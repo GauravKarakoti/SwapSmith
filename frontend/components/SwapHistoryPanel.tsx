@@ -10,6 +10,7 @@
 import { useSwapHistory } from '@/hooks/useCachedData';
 import { useAuth } from '@/hooks/useAuth';
 import { formatDistanceToNow } from 'date-fns';
+import CopyButton from './CopyButton';
 
 interface SwapHistoryProps {
   userId?: string;
@@ -96,7 +97,7 @@ export function SwapHistoryPanel({ userId, walletAddress, limit }: SwapHistoryPr
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="grid grid-cols-2 gap-4 text-sm mb-3">
               <div>
                 <span className="text-gray-400">From:</span>
                 <div className="font-mono">
@@ -110,6 +111,20 @@ export function SwapHistoryPanel({ userId, walletAddress, limit }: SwapHistoryPr
                 </div>
               </div>
             </div>
+
+            {/* Transaction ID with copy button */}
+            {swap.id && (
+              <div className="flex items-center justify-between text-xs text-gray-500 bg-gray-700 p-2 rounded">
+                <span className="font-mono truncate mr-2">ID: {swap.id}</span>
+                <CopyButton 
+                  text={swap.id} 
+                  size="sm" 
+                  variant="ghost"
+                  toastMessage="Transaction ID copied!"
+                  className="text-gray-400 hover:text-gray-300"
+                />
+              </div>
+            )}
           </div>
         ))}
       </div>

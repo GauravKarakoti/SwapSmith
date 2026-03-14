@@ -93,6 +93,15 @@ export default function RewardsPage() {
     }
   }, [connectedWallet, walletAddress])
 
+  // Clear wallet address when wallet disconnects
+  useEffect(() => {
+    if (!isConnected) {
+      setWalletAddress('')
+      setClaimTxHash(null)
+      setClaimError(null)
+    }
+  }, [isConnected])
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/login')

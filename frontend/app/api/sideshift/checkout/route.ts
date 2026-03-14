@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 import { SIDESHIFT_CONFIG, getApiUrl, getCheckoutUrl } from '../../../../../shared/config/sideshift';
+import { rateLimitMiddleware, RATE_LIMITS } from '@/lib/rate-limiter';
 
 const API_KEY = process.env.SIDESHIFT_API_KEY; // Server-side only, no NEXT_PUBLIC_
 const AFFILIATE_ID = process.env.AFFILIATE_ID;
@@ -11,6 +12,16 @@ const AFFILIATE_ID = process.env.AFFILIATE_ID;
  * Keeps API key secure on the server
  */
 export async function POST(req: NextRequest) {
+  // SECURITY: Rate limit to prevent checkout spam and DoS
+  const rateLimitResponse = rateLimitMiddleware(req, {
+    ...RATE_LIMITS.payment,
+    message: 'Too many checkout requests. Please try again later.'
+  });
+  
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     const body = await req.json();
     const { settleCoin, settleNetwork, settleAmount, settleAddress } = body;
