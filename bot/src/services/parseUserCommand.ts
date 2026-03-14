@@ -241,7 +241,7 @@ function parseComplexConditional(input: string): ComplexConditionalAnalysis {
     const parts = input.split(/\b(?:otherwise|else|or\s+else|if\s+not|alternatively)\b/i);
     if (parts.length > 1) {
       result.fallbackAction = {
-        rawText: parts[1].trim(),
+        rawText: parts[1]?.trim(),
         needsParsing: true
       };
       result.confidence = Math.min(result.confidence, 80);
@@ -260,8 +260,8 @@ function parseComplexConditional(input: string): ComplexConditionalAnalysis {
       const [, amount, asset] = balanceMatch;
       result.secondaryConditions.push({
         type: 'balance_threshold',
-        asset: asset.toUpperCase(),
-        value: parseScaledNumber(amount),
+        asset: asset?.toUpperCase(),
+        value: parseScaledNumber(amount as string),
         operator: 'gte',
         logic: 'AND'
       });
@@ -272,7 +272,7 @@ function parseComplexConditional(input: string): ComplexConditionalAnalysis {
     if (marketMatch) {
       result.secondaryConditions.push({
         type: 'market_condition',
-        condition: marketMatch[2].toLowerCase(),
+        condition: marketMatch[2]?.toLowerCase(),
         logic: 'AND'
       });
       result.validationErrors.push(`Market condition '${marketMatch[2]}' cannot be automatically evaluated`);
@@ -284,15 +284,15 @@ function parseComplexConditional(input: string): ComplexConditionalAnalysis {
   const priceMatch = input.match(REGEX_PRICE_CONDITION);
   if (priceMatch) {
     const [, operator, rawValue] = priceMatch;
-    const value = parseScaledNumber(rawValue);
-    
+    const value = parseScaledNumber(rawValue as string);
+
     if (!isNaN(value)) {
       result.hasComplexConditions = true;
       result.primaryCondition = {
-        type: ['above', 'over', '>', '>='].includes(operator.toLowerCase()) ? 'price_above' : 'price_below',
+        type: ['above', 'over', '>', '>='].includes(operator!.toLowerCase()) ? 'price_above' : 'price_below',
         asset: 'BTC', // Default, should be extracted from context
         value,
-        operator: ['above', 'over', '>', '>='].includes(operator.toLowerCase()) ? 'gte' : 'lte'
+        operator: ['above', 'over', '>', '>='].includes(operator!.toLowerCase()) ? 'gte' : 'lte'
       };
     }
   }
@@ -337,7 +337,7 @@ export async function parseUserCommand(
     const amountMatch = preprocessedInput.match(REGEX_AMOUNT_TOKEN);
     const fromAssetMatch = preprocessedInput.match(/(?:swap|convert|sell)\s+(?:my\s+)?(?:(\d+(?:\.\d+)?[kmb]?)\s+)?([A-Z]{2,10})/i);
     
-    const amount = amountMatch ? parseScaledNumber(amountMatch[1]) : null;
+    const amount = amountMatch ? parseScaledNumber(amountMatch[1] as string) : null;
     const fromAsset = fromAssetMatch?.[2] || amountMatch?.[2];
     
     return {
@@ -379,10 +379,10 @@ export async function parseUserCommand(
       const priceCondition = preprocessedInput.match(REGEX_PRICE_CONDITION);
       if (priceCondition) {
         const [, operator, rawValue] = priceCondition;
-        const value = parseScaledNumber(rawValue);
-        
+        const value = parseScaledNumber(rawValue as string);
+
         if (!isNaN(value)) {
-          const conditionType = ['above', 'over', '>', '>='].includes(operator.toLowerCase()) 
+          const conditionType = ['above', 'over', '>', '>='].includes(operator!.toLowerCase()) 
             ? 'price_above' : 'price_below';
           
           // Try to extract basic swap info
@@ -411,7 +411,7 @@ export async function parseUserCommand(
             intent: 'limit_order',
             fromAsset: tokenMatch?.[1] || (amountMatch?.[2]),
             toAsset: tokenMatch?.[3],
-            amount: amountMatch ? parseScaledNumber(amountMatch[1]) : null,
+            amount: amountMatch ? parseScaledNumber(amountMatch[1] as string) : null,
             amountType: amountMatch ? 'exact' : null,
             conditions,
             confidence: complexAnalysis.confidence,
@@ -439,10 +439,10 @@ export async function parseUserCommand(
       const priceCondition = preprocessedInput.match(REGEX_PRICE_CONDITION);
       if (priceCondition) {
         const [, operator, rawValue] = priceCondition;
-        const value = parseScaledNumber(rawValue);
-        
+        const value = parseScaledNumber(rawValue as string);
+
         if (!isNaN(value)) {
-          const conditionType = ['above', 'over', '>', '>='].includes(operator.toLowerCase()) 
+          const conditionType = ['above', 'over', '>', '>='].includes(operator!.toLowerCase()) 
             ? 'price_above' : 'price_below';
           
           // Try to extract basic swap info
@@ -453,7 +453,7 @@ export async function parseUserCommand(
             intent: 'limit_order',
             fromAsset: tokenMatch?.[1] || (amountMatch?.[2]),
             toAsset: tokenMatch?.[3],
-            amount: amountMatch ? parseScaledNumber(amountMatch[1]) : null,
+            amount: amountMatch ? parseScaledNumber(amountMatch[1] as string) : null,
             amountType: amountMatch ? 'exact' : null,
             conditions: {
               type: conditionType as "price_above" | "price_below",
@@ -485,17 +485,17 @@ export async function parseUserCommand(
     let toAsset: string | null = null;
 
     const amtMatch = input.match(/\b(\d+(\.\d+)?)\b/);
-    if (amtMatch) amount = parseFloat(amtMatch[1]);
+    if (amtMatch) amount = parseFloat(amtMatch[1] as string);
 
     const fromToMatch = input.match(/([A-Z]{2,10})\s+(?:to|into|for)\s+([A-Z]{2,10})/i);
     if (fromToMatch) {
-      fromAsset = fromToMatch[1].toUpperCase();
-      toAsset = fromToMatch[2].toUpperCase();
+      fromAsset = fromToMatch[1]!.toUpperCase();
+      toAsset = fromToMatch[2]!.toUpperCase();
     }
 
     if (!fromAsset) {
       const singleAsset = input.match(/\b([A-Z]{2,10})\b/);
-      if (singleAsset) fromAsset = singleAsset[1].toUpperCase();
+      if (singleAsset) fromAsset = singleAsset[1]!.toUpperCase();
     }
 
     return {
@@ -527,7 +527,7 @@ export async function parseUserCommand(
   // Enhanced staking command detection and parsing
   if (REGEX_STAKE_COMMAND.test(input) && !REGEX_SWAP_STAKE.test(input)) {
     const providerMatch = input.match(REGEX_LIQUID_STAKING_PROVIDER);
-    const stakeProtocol = providerMatch ? providerMatch[1].toLowerCase().replace(/\s+/g, '_') : 'lido';
+    const stakeProtocol = providerMatch ? providerMatch[1]?.toLowerCase().replace(/\s+/g, '_') : 'lido';
 
     let amount: number | null = null;
     let amountType: 'exact' | 'percentage' | 'all' | null = null;
@@ -536,15 +536,15 @@ export async function parseUserCommand(
     // Check for "stake all" patterns
     const allMatch = input.match(REGEX_STAKE_ALL);
     if (allMatch) {
-      stakeAsset = allMatch[1].toUpperCase();
+      stakeAsset = allMatch[1]!.toUpperCase();
       amountType = 'all';
     }
 
     // Check for percentage patterns
     const percentageMatch = input.match(REGEX_STAKE_PERCENTAGE);
     if (percentageMatch && !allMatch) {
-      amount = parseFloat(percentageMatch[1]);
-      stakeAsset = percentageMatch[2].toUpperCase();
+      amount = parseFloat(percentageMatch[1]!);
+      stakeAsset = percentageMatch[2]!.toUpperCase();
       amountType = 'percentage';
     }
 
@@ -555,14 +555,14 @@ export async function parseUserCommand(
         amount = parseScaledNumber(amountMatch[1]);
         amountType = 'exact';
       }
-      stakeAsset = amountMatch[2].toUpperCase();
+      stakeAsset = amountMatch[2]!.toUpperCase();
     }
 
     // Fallback: try to find asset after "stake" keyword
     if (!stakeAsset) {
       const assetMatch = input.match(/stake\s+(?:my\s+)?(?:some\s+)?([A-Z]{2,10})/i);
       if (assetMatch) {
-        stakeAsset = assetMatch[1].toUpperCase();
+        stakeAsset = assetMatch[1]!.toUpperCase();
       }
     }
 
@@ -692,29 +692,29 @@ export async function parseUserCommand(
 
     const fromToMatch = input.match(REGEX_FROM_TO) || input.match(REGEX_TOKENS);
     if (fromToMatch) {
-      fromAsset = fromToMatch[1].toUpperCase();
-      toAsset = (fromToMatch[3] ?? fromToMatch[2]).toUpperCase();
+      fromAsset = fromToMatch[1]!.toUpperCase();
+      toAsset = (fromToMatch[3] ?? fromToMatch[2])!.toUpperCase();
       confidence += 35;
     }
 
     const buyWithMatch = input.match(/\bbuy\s+(\d+(?:\.\d+)?)\s+([A-Z]{2,10})\s+with\s+([A-Z]{2,10})\b/i);
     if (buyWithMatch) {
-      amount = parseFloat(buyWithMatch[1]);
+      amount = parseFloat(buyWithMatch[1] as string);
       amountType = 'exact';
-      toAsset = buyWithMatch[2].toUpperCase();
-      fromAsset = buyWithMatch[3].toUpperCase();
+      toAsset = buyWithMatch[2]!.toUpperCase();
+      fromAsset = buyWithMatch[3]!.toUpperCase();
       confidence += 35;
     }
 
     const explicitToMatch = input.match(/\b(?:to|into|for)\s+([A-Z]{2,10})\b/i);
     if (!toAsset && explicitToMatch) {
-      toAsset = explicitToMatch[1].toUpperCase();
+      toAsset = explicitToMatch[1]!.toUpperCase();
       confidence += 10;
     }
 
     const percentageMatch = input.match(/(\d+(?:\.\d+)?)\s*(?:%|percent)/i);
     if (percentageMatch) {
-      amount = parseFloat(percentageMatch[1]);
+      amount = parseFloat(percentageMatch[1] as string);
       amountType = 'percentage';
       confidence += 20;
     } else if (/\bhalf\b/i.test(input)) {
@@ -728,28 +728,28 @@ export async function parseUserCommand(
 
       const ofAsset = input.match(/(?:of\s+(?:my\s+)?)([A-Z]{2,10})\b/i);
       if (ofAsset) {
-        const candidate = ofAsset[1].toUpperCase();
+        const candidate = ofAsset[1]!.toUpperCase();
         if (!stopWords.includes(candidate)) fromAsset = candidate;
       }
 
       if (!fromAsset) {
         const afterPercentAsset = input.match(/(?:%|percent|half)\s+(?:of\s+(?:my\s+)?)?([A-Z]{2,10})\b/i);
         if (afterPercentAsset) {
-          const candidate = afterPercentAsset[1].toUpperCase();
+          const candidate = afterPercentAsset[1]!.toUpperCase();
           if (!stopWords.includes(candidate)) fromAsset = candidate;
         }
       }
 
       if (!fromAsset) {
         const tokenCandidates = [...input.toUpperCase().matchAll(/\b([A-Z]{2,10})\b/g)].map((m) => m[1]);
-        const filtered = tokenCandidates.filter((t) => !stopWords.includes(t));
-        if (filtered.length) fromAsset = filtered[filtered.length - 1];
+        const filtered = tokenCandidates.filter((t) => !stopWords.includes(t as string));
+        if (filtered.length) fromAsset = filtered[filtered.length - 1] as string;
       }
     }
 
     const worthSourceMatch = input.match(/\b(?:swap|convert|sell|buy|send|transfer|move|exchange)\s+([A-Z]{2,10})\s+worth\b/i);
     if (!fromAsset && worthSourceMatch) {
-      fromAsset = worthSourceMatch[1].toUpperCase();
+      fromAsset = worthSourceMatch[1]!.toUpperCase();
       confidence += 10;
     }
 
@@ -762,30 +762,30 @@ export async function parseUserCommand(
 
     const amtMatch = input.match(REGEX_AMOUNT_TOKEN);
     if (amtMatch && amountType !== 'percentage' && amountType !== 'all' && !/\bworth\b/i.test(input)) {
-      amount = parseFloat(amtMatch[1]);
+      amount = parseFloat(amtMatch[1] as string);
       amountType = 'exact';
-      if (!fromAsset) fromAsset = amtMatch[2].toUpperCase();
+      if (!fromAsset) fromAsset = amtMatch[2]!.toUpperCase();
       confidence += 20;
     }
 
     if (!fromAsset) {
       const verbAsset = input.match(/\b(?:swap|convert|send|transfer|buy|sell|move|exchange)\s+(?:my\s+)?([A-Z]{2,10})\b/i);
       if (verbAsset) {
-        const candidate = verbAsset[1].toUpperCase();
+        const candidate = verbAsset[1]!.toUpperCase();
         if (!['ALL','EVERYTHING','MAX','ENTIRE','BALANCE','HALF'].includes(candidate)) fromAsset = candidate;
       }
     }
 
     const exclusionMatch = input.match(/(?:except|but\s+keep)\s+(\d+(?:\.\d+)?)(?:\s*%|\s+([A-Z]{2,10}))?/i);
     if (exclusionMatch) {
-      excludeAmount = parseFloat(exclusionMatch[1]);
+      excludeAmount = parseFloat(exclusionMatch[1] as string);
       excludeToken = exclusionMatch[2]?.toUpperCase() ?? fromAsset ?? undefined;
     }
 
     const quoteMatch = input.match(/\bworth\s+(\d+(?:\.\d+)?)\s+([A-Z]{2,10})\b/i);
     if (quoteMatch) {
-      quoteAmount = parseFloat(quoteMatch[1]);
-      if (!toAsset) toAsset = quoteMatch[2].toUpperCase();
+      quoteAmount = parseFloat(quoteMatch[1] as string);
+      if (!toAsset) toAsset = quoteMatch[2]!.toUpperCase();
       confidence += 10;
     }
 
@@ -800,7 +800,7 @@ export async function parseUserCommand(
       const rawOperator = conditionMatch[3];
       const rawValue = conditionMatch[4];
 
-      conditionValue = parseScaledNumber(rawValue);
+      conditionValue = parseScaledNumber(rawValue as string);
       if (/(above|>|greater)/i.test(rawOperator ?? '')) conditionOperator = 'gt';
       if (/(below|<|less)/i.test(rawOperator ?? '')) conditionOperator = 'lt';
 
@@ -824,7 +824,7 @@ export async function parseUserCommand(
 
     if (!fromAsset && amountType === 'all') {
       const allAssetMatch = input.match(/\b(?:all|max)\s+([A-Z]{2,10})\b/i);
-      if (allAssetMatch) fromAsset = allAssetMatch[1].toUpperCase();
+      if (allAssetMatch) fromAsset = allAssetMatch[1]!.toUpperCase();
     }
 
     if (!fromAsset && !toAsset && !amount && amountType !== 'all') {

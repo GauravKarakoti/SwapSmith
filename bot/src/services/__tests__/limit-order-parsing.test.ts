@@ -1,5 +1,5 @@
 // Helper to mock environment variables if needed
-process.env.GROQ_API_KEY = 'dummy-key'; 
+process.env['GROQ_API_KEY'] = 'dummy-key'; 
 
 jest.mock('../groq-client', () => ({
     ParsedCommand: {},

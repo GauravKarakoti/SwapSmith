@@ -1,5 +1,4 @@
 import winston from 'winston';
-import path from 'path';
 
 // Define log levels
 const levels = {
@@ -22,15 +21,6 @@ const colors = {
 // Add colors to winston
 winston.addColors(colors);
 
-// Create the format for console output
-const consoleFormat = winston.format.combine(
-  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }),
-  winston.format.colorize({ all: true }),
-  winston.format.printf(
-    (info: any) => `${info.timestamp} ${info.level}: ${info.message}`
-  )
-);
-
 // Create the format for file output (without colors)
 const fileFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }),
@@ -44,7 +34,7 @@ const isNodeJS = typeof window === 'undefined' && typeof process !== 'undefined'
 
 // Create the logger instance
 const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
+  level: process.env['LOG_LEVEL'] || 'info',
   levels,
   format: fileFormat,
   transports: [

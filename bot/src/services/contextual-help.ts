@@ -118,14 +118,14 @@ export function generateContextualHelp(
   // Handle invalid fields with specific corrections
   if (analysis.invalidFields.length > 0) {
     const invalidField = analysis.invalidFields[0];
-    if (invalidField.field === 'amount') {
+    if (invalidField?.field === 'amount') {
       return formatMessage(
         "The amount needs to be greater than zero.",
         "Try 'swap 1 ETH to BTC' or 'swap 50% of my ETH'",
         inputType
       );
     }
-    if (invalidField.field === 'portfolio') {
+    if (invalidField?.field === 'portfolio') {
       return formatMessage(
         "I need to know how to split your assets.",
         "Try 'split 1 ETH into 50% BTC and 50% USDC'",

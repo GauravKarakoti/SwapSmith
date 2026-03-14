@@ -7,7 +7,7 @@ import logger from '../services/logger';
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 
-const sql = neon(process.env.DATABASE_URL!);
+const sql = neon(process.env['DATABASE_URL']!);
 
 async function runMigration() {
   try {

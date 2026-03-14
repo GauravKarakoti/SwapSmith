@@ -2,7 +2,7 @@ import { createQuote, createOrder } from './sideshift-client';
 import { db, orders, watchedOrders } from './database';
 import logger from './logger';
 import type { ParsedCommand } from '../types/ParsedCommand';
-import type { Quote, Order, PortfolioAllocation, PortfolioExecutionResult, SuccessfulOrderResult, FailedSwap } from '../types/Quote';
+import type { Quote, Order, PortfolioAllocation, PortfolioExecutionResult, SuccessfulOrderResult } from '../types/Quote';
 
 export async function executePortfolioStrategy(
   userId: number,
@@ -28,7 +28,7 @@ export async function executePortfolioStrategy(
     const allocation = portfolio[i];
     const isLast = i === portfolio.length - 1;
 
-    let swapAmount = (amount! * allocation.percentage) / 100;
+    let swapAmount = (amount! * allocation!.percentage) / 100;
 
     if (isLast) {
       swapAmount = remainingAmount;
@@ -37,7 +37,7 @@ export async function executePortfolioStrategy(
     }
 
     if (swapAmount <= 0) {
-      throw new Error(`Calculated amount too small for ${allocation.toAsset}`);
+      throw new Error(`Calculated amount too small for ${allocation!.toAsset}`);
     }
 
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -45,19 +45,19 @@ export async function executePortfolioStrategy(
     const quote = await createQuote(
       fromAsset!,
       fromChain!,
-      allocation.toAsset,
-      allocation.toChain,
+      allocation!.toAsset,
+      allocation!.toChain,
       swapAmount
     );
 
     if (quote.error) {
-      throw new Error(`Quote failed for ${allocation.toAsset}: ${quote.error.message}`);
+      throw new Error(`Quote failed for ${allocation!.toAsset}: ${quote.error.message}`);
     }
 
     const order = await createOrder(quote.id!, settleAddress!, settleAddress!);
 
     if (!order.id) {
-      throw new Error(`Order creation failed for ${allocation.toAsset}`);
+      throw new Error(`Order creation failed for ${allocation!.toAsset}`);
     }
 
     quotesAndOrders.push({ quote, order, allocation, swapAmount });

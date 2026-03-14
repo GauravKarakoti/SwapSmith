@@ -135,7 +135,7 @@ export const BRIDGE_CONFIGS: Record<string, BridgeConfig> = {
   across: {
     name: 'across',
     displayName: 'Across Protocol',
-    apiBaseUrl: process.env.ACROSS_API_URL || 'https://api.across.to',
+    apiBaseUrl: process.env['ACROSS_API_URL'] || 'https://api.across.to',
     timeout: 10000,
     retryAttempts: 3,
     supportedChains: ['ethereum', 'polygon', 'arbitrum', 'optimism', 'base'],
@@ -156,7 +156,7 @@ export const BRIDGE_CONFIGS: Record<string, BridgeConfig> = {
   stargate: {
     name: 'stargate',
     displayName: 'Stargate',
-    apiBaseUrl: process.env.STARGATE_API_URL || 'https://api.stargateprotocol.com',
+    apiBaseUrl: process.env['STARGATE_API_URL'] || 'https://api.stargateprotocol.com',
     timeout: 15000,
     retryAttempts: 3,
     supportedChains: ['ethereum', 'polygon', 'arbitrum', 'optimism', 'avalanche', 'bsc', 'base'],
@@ -177,7 +177,7 @@ export const BRIDGE_CONFIGS: Record<string, BridgeConfig> = {
   layerzero: {
     name: 'layerzero',
     displayName: 'LayerZero',
-    apiBaseUrl: process.env.LAYERZERO_API_URL || 'https://api.layerzero.finance',
+    apiBaseUrl: process.env['LAYERZERO_API_URL'] || 'https://api.layerzero.finance',
     timeout: 20000,
     retryAttempts: 2,
     supportedChains: ['ethereum', 'polygon', 'arbitrum', 'optimism', 'avalanche', 'bsc', 'base', 'fantom', 'celo'],
@@ -198,7 +198,7 @@ export const BRIDGE_CONFIGS: Record<string, BridgeConfig> = {
   wormhole: {
     name: 'wormhole',
     displayName: 'Wormhole',
-    apiBaseUrl: process.env.WORMHOLE_API_URL || 'https://api.wormhole.io',
+    apiBaseUrl: process.env['WORMHOLE_API_URL'] || 'https://api.wormhole.io',
     timeout: 15000,
     retryAttempts: 3,
     supportedChains: ['ethereum', 'polygon', 'arbitrum', 'optimism', 'avalanche', 'bsc', 'solana', 'base', 'fantom', 'celo'],
@@ -219,7 +219,7 @@ export const BRIDGE_CONFIGS: Record<string, BridgeConfig> = {
   sideshift: {
     name: 'sideshift',
     displayName: 'SideShift.ai',
-    apiBaseUrl: process.env.SIDESHIFT_API_URL || SIDESHIFT_CONFIG.BASE_URL,
+    apiBaseUrl: process.env['SIDESHIFT_API_URL'] || SIDESHIFT_CONFIG.BASE_URL,
     timeout: 15000,
     retryAttempts: 3,
     supportedChains: ['ethereum', 'polygon', 'arbitrum', 'optimism', 'avalanche', 'bsc', 'base', 'solana', 'bitcoin', 'litecoin'],

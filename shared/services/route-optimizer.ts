@@ -4,7 +4,7 @@
  */
 
 import { BridgeQuote } from './bridges/base-bridge-adapter';
-import { BridgePreferences, DEFAULT_BRIDGE_PREFERENCES, BRIDGE_CONFIGS } from '../config/bridge-config';
+import { BridgePreferences, DEFAULT_BRIDGE_PREFERENCES } from '../config/bridge-config';
 
 // Route optimization result
 export interface OptimizedRoute {
@@ -74,10 +74,10 @@ export class RouteOptimizer {
     if (optimizedRoutes.length === 0) {
       return {
         routes: [],
-        fastestRoute: optimizedRoutes[0],
-        cheapestRoute: optimizedRoutes[0],
-        bestValueRoute: optimizedRoutes[0],
-        recommendedRoute: optimizedRoutes[0],
+        fastestRoute: optimizedRoutes[0] as OptimizedRoute,
+        cheapestRoute: optimizedRoutes[0] as OptimizedRoute,
+        bestValueRoute: optimizedRoutes[0] as OptimizedRoute,
+        recommendedRoute: optimizedRoutes[0] as OptimizedRoute,
       };
     }
 
@@ -91,7 +91,7 @@ export class RouteOptimizer {
     const bestValueRoute = this.findBestValueRoute(quotes);
     
     // Recommended is the highest scored
-    const recommendedRoute = optimizedRoutes[0];
+    const recommendedRoute = optimizedRoutes[0] as OptimizedRoute;
 
     return {
       routes: optimizedRoutes,
@@ -267,7 +267,7 @@ export class RouteOptimizer {
     );
     
     return {
-      quote: sorted[0],
+      quote: sorted[0] as BridgeQuote,
       score: 100,
       breakdown: {
         outputScore: 0,
@@ -288,7 +288,7 @@ export class RouteOptimizer {
     );
     
     return {
-      quote: sorted[0],
+      quote: sorted[0] as BridgeQuote,
       score: 100,
       breakdown: {
         outputScore: 0,
@@ -314,7 +314,7 @@ export class RouteOptimizer {
     const sorted = withValue.sort((a, b) => b.value - a.value);
     
     return {
-      quote: sorted[0].quote,
+      quote: sorted[0]!.quote,
       score: 100,
       breakdown: {
         outputScore: 50,

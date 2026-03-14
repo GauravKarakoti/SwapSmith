@@ -12,15 +12,12 @@ import { SIDESHIFT_CONFIG, getApiUrl } from '../../../shared/config/sideshift';
 
 dotenv.config();
 
-const AFFILIATE_ID = process.env.SIDESHIFT_AFFILIATE_ID || process.env.AFFILIATE_ID || '';
-const API_KEY = process.env.SIDESHIFT_API_KEY || process.env.SIDESHIFT_API_KEY;
-const DEFAULT_USER_IP = process.env.SIDESHIFT_CLIENT_IP;
-
-// SideShift API Configuration - use centralized config
-const SIDESHIFT_BASE_URL = process.env.SIDESHIFT_API_URL || SIDESHIFT_CONFIG.BASE_URL;
+const AFFILIATE_ID = process.env['AFFILIATE_ID'];
+const API_KEY = process.env['SIDESHIFT_API_KEY'];
+const DEFAULT_USER_IP = process.env['SIDESHIFT_CLIENT_IP'];
 
 // Bridge API URL for aggregated quotes (optional)
-const BRIDGE_API_URL = process.env.BRIDGE_API_URL || '';
+const BRIDGE_API_URL = process.env['BRIDGE_API_URL'] || '';
 
 // Local bridge configuration
 interface BridgeConfig {
@@ -252,7 +249,7 @@ export async function getSingleBridgeQuote(
   // If SideShift requested, get from API
   if (bridge === 'sideshift') {
     const result = await getSideShiftQuotes(request);
-    return result.quotes[0];
+    return result.quotes[0] as BridgeQuote;
   }
 
   // Try bridge API for other bridges
@@ -318,7 +315,7 @@ export function getBestQuote(
   }
 
   if (quotes.length === 1) {
-    return quotes[0];
+    return quotes[0] as BridgeQuote;
   }
 
   switch (priority) {

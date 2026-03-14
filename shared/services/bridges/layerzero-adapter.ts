@@ -28,18 +28,12 @@ interface LayerZeroQuoteResponse {
   payload: string;
 }
 
-interface LayerZeroOrderResponse {
-  id: string;
-  status: 'pending' | 'completed' | 'failed';
-  destinationTxHash?: string;
-}
-
 export class LayerZeroAdapter extends BaseBridgeAdapter {
   private apiKey: string;
 
   constructor(config: BridgeConfig) {
     super('layerzero', config);
-    this.apiKey = process.env.LAYERZERO_API_KEY || '';
+    this.apiKey = process.env['LAYERZERO_API_KEY'] || '';
   }
 
   /**

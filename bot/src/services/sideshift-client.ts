@@ -2,12 +2,12 @@ import axios from 'axios';
 import { z } from 'zod';
 import dotenv from 'dotenv';
 import { SIDESHIFT_CONFIG, getApiEndpoint } from '../../../shared/config/sideshift';
-import { SideShiftQuoteSchema, SideShiftCheckoutResponseSchema, CoinSchema } from '../../../shared/schemas/sideshift';
+import { SideShiftQuoteSchema, SideShiftCheckoutResponseSchema } from '../../../shared/schemas/sideshift';
 dotenv.config();
-const AFFILIATE_ID = process.env.SIDESHIFT_AFFILIATE_ID || process.env.AFFILIATE_ID || '';
-const API_KEY = process.env.SIDESHIFT_API_KEY || '';
-const DEFAULT_USER_IP = process.env.SIDESHIFT_CLIENT_IP;
-const API_TIMEOUT = parseInt(process.env.SIDESHIFT_API_TIMEOUT_MS ?? '15000', 10);
+const AFFILIATE_ID = process.env['AFFILIATE_ID'];
+const API_KEY = process.env['SIDESHIFT_API_KEY'];
+const DEFAULT_USER_IP = process.env['SIDESHIFT_CLIENT_IP'];
+const API_TIMEOUT = parseInt(process.env['SIDESHIFT_API_TIMEOUT_MS']!, 10);
 
 export interface SideShiftPair {
   depositCoin: string;
@@ -163,22 +163,6 @@ const SideShiftPairSchema = z.object({
   hasMemo: z.boolean(),
 });
 
-const SideShiftQuoteSchema = z.object({
-  id: z.string(),
-  depositCoin: z.string(),
-  depositNetwork: z.string(),
-  depositAddress: z.string(), // Critical: Destination address for user's deposit
-  settleCoin: z.string(),
-  settleNetwork: z.string(),
-  depositAmount: z.string(),
-  settleAmount: z.string(),
-  rate: z.string(),
-  affiliateId: z.string(),
-  error: SideShiftErrorSchema.optional(),
-  memo: z.string().optional(),
-  expiry: z.string().optional(),
-});
-
 const SideShiftOrderDepositAddressSchema = z.union([
   z.string(),
   z.object({
@@ -222,21 +206,6 @@ const SideShiftOrderStatusSchema = z.object({
   settleAmount: z.string().nullable(),
   depositHash: z.string().nullable(),
   settleHash: z.string().nullable(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  error: SideShiftErrorSchema.optional(),
-});
-
-const SideShiftCheckoutResponseSchema = z.object({
-  id: z.string(),
-  url: z.string(),
-  settleCoin: z.string(),
-  settleNetwork: z.string(),
-  settleAddress: z.string(),
-  settleAmount: z.string(),
-  affiliateId: z.string(),
-  successUrl: z.string(),
-  cancelUrl: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
   error: SideShiftErrorSchema.optional(),

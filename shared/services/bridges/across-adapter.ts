@@ -3,7 +3,7 @@
  * Bridge adapter for Across Protocol
  */
 
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 import { BridgeConfig } from '../../config/bridge-config';
 import {
   BaseBridgeAdapter,
@@ -37,21 +37,12 @@ interface AcrossQuoteResponse {
   fillDeadline: number;
 }
 
-interface AcrossOrderStatus {
-  orderId: string;
-  status: 'pending' | 'filled' | 'expired' | 'cancelled';
-  depositTxHash?: string;
-  fillTxHash?: string;
-  fillAmount?: string;
-  fillTimestamp?: number;
-}
-
 export class AcrossAdapter extends BaseBridgeAdapter {
   private apiKey: string;
 
   constructor(config: BridgeConfig) {
     super('across', config);
-    this.apiKey = process.env.ACROSS_API_KEY || '';
+    this.apiKey = process.env['ACROSS_API_KEY']!;
   }
 
   /**
@@ -80,17 +71,12 @@ export class AcrossAdapter extends BaseBridgeAdapter {
       }, this.config.retryAttempts);
 
       const data = response.data;
-      const fromToken = request.fromToken.toUpperCase();
-      const toToken = request.toToken.toUpperCase();
 
       // Calculate fees
       const gasEstimate = BigInt(data.estimatedGas || '200000');
       const gasFee = (gasEstimate * BigInt(data.gasPrice || '20000000000')) / BigInt(1e18);
       const relayerFee = BigInt(data.relayerFee || '0');
       const totalFee = gasFee + relayerFee;
-
-      // Calculate output amount
-      const outputAmount = BigInt(data.outputAmount);
       const outputAmountMin = BigInt(data.outputAmountMin);
 
       const quote: BridgeQuote = createBaseQuote(
@@ -183,7 +169,7 @@ export class AcrossAdapter extends BaseBridgeAdapter {
   /**
    * Get supported tokens for a chain
    */
-  async getSupportedTokens(chain: string): Promise<string[]> {
+  async getSupportedTokens(_chain: string): Promise<string[]> {
     // Common tokens across supported chains
     const commonTokens = ['ETH', 'USDC', 'USDT', 'WBTC', 'DAI', 'WETH'];
     return commonTokens;

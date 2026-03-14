@@ -7,26 +7,25 @@ import path from 'path';
 import type { 
   ErrorNotificationDetails, 
   LogSeverity, 
-  LogContext, 
   ErrorDetails as ErrorDetailsType,
   TelegrafContext 
 } from '../types/Logger';
 
 dotenv.config();
 
-const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
-const SENTRY_DSN = process.env.SENTRY_DSN;
-const ERROR_WEBHOOK_URL = process.env.ERROR_WEBHOOK_URL; // Slack/Discord webhook
-const ERROR_EMAIL = process.env.ERROR_EMAIL; // Email for critical errors
+const ADMIN_CHAT_ID = process.env['ADMIN_CHAT_ID'];
+const SENTRY_DSN = process.env['SENTRY_DSN'];
+const ERROR_WEBHOOK_URL = process.env['ERROR_WEBHOOK_URL']; // Slack/Discord webhook
+const ERROR_EMAIL = process.env['ERROR_EMAIL']; // Email for critical errors
 
 // Initialize Telegram bot for admin alerts (only if token is available)
-const bot = process.env.BOT_TOKEN ? new Telegraf(process.env.BOT_TOKEN!) : null;
+const bot = process.env['BOT_TOKEN'] ? new Telegraf(process.env['BOT_TOKEN']!) : null;
 
 // Initialize Sentry if DSN is provided
 if (SENTRY_DSN) {
   Sentry.init({
     dsn: SENTRY_DSN,
-    environment: process.env.NODE_ENV || 'development',
+    environment: process.env['NODE_ENV'] || 'development',
     tracesSampleRate: 1.0,
   });
   logger.info('Sentry initialized for error tracking');
@@ -151,7 +150,7 @@ async function sendErrorNotifications(errorDetails: ErrorNotificationDetails, se
   }
 
   // 6. Console alert for development
-  if (process.env.NODE_ENV === 'development') {
+  if (process.env['NODE_ENV'] === 'development') {
     console.error(`\n🚨 ${severity.toUpperCase()} ERROR ALERT 🚨`);
     console.error(`Type: ${errorType}`);
     console.error(`User: ${userId || 'unknown'}`);
@@ -228,7 +227,7 @@ export function getErrorStats(): { criticalErrors: number; totalErrors: number; 
     
     // Get last error timestamp
     const lastErrorLine = lines.reverse().find(line => line.includes('] ['));
-    const lastError = lastErrorLine ? lastErrorLine.split(']')[0].replace('[', '') : undefined;
+    const lastError = lastErrorLine ? lastErrorLine.split(']')[0]?.replace('[', '') : undefined;
 
     return { criticalErrors, totalErrors, lastError };
   } catch (error) {

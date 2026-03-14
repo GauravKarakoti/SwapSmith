@@ -5,11 +5,10 @@ import {
   tradingStrategies,
   strategySubscriptions,
   strategyPerformance,
-  strategyTrades,
-  users
+  strategyTrades
 } from '../schema';
 
-const sqlConn = neon(process.env.DATABASE_URL!);
+const sqlConn = neon(process.env['DATABASE_URL']!);
 const db = drizzle(sqlConn);
 
 // Re-export db for use in other modules

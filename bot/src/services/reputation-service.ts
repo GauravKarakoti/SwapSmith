@@ -21,12 +21,12 @@ class ReputationService {
 
     private init() {
         // Only attempt setup if the contract address is provided
-        const address = process.env.REPUTATION_CONTRACT_ADDRESS;
+        const address = process.env['REPUTATION_CONTRACT_ADDRESS'];
         // We expect the bot to have a private key in the environment to make the tx
         // If we have a dedicated REPUTATION_OWNER_PRIVATE_KEY we use it. 
         // Otherwise fallback to something else, but here we require REPUTATION_OWNER_PRIVATE_KEY
-        const rpcUrl = process.env.SEPOLIA_RPC_URL;
-        const privateKey = process.env.REPUTATION_OWNER_PRIVATE_KEY; // The wallet possessing ownership
+        const rpcUrl = process.env['SEPOLIA_RPC_URL'];
+        const privateKey = process.env['REPUTATION_OWNER_PRIVATE_KEY']; // The wallet possessing ownership
 
         if (!address || !rpcUrl || !privateKey) {
             logger.warn('[ReputationService] Missing configuration. On-chain reputation logging is disabled.', {
@@ -67,7 +67,7 @@ class ReputationService {
         try {
             // Broadcast tx
             logger.info(`[ReputationService] Recording swap outcome for agent ${agent} (success=${success})...`);
-            const tx = await this.contract.recordSwap(agent, success);
+            const tx = await this.contract['recordSwap']!(agent, success);
             logger.debug(`[ReputationService] Tx broadcasted: ${tx.hash}. Waiting for confirmation...`);
 
             // Wait for it to land
@@ -95,7 +95,7 @@ class ReputationService {
 
         try {
             // contract.getReputation returns [totalSwaps, successSwaps] as BigInts
-            const result = await this.contract.getReputation(agent);
+            const result = await this.contract['getReputation']!(agent);
             
             // Result is usually an array/object with BigInt properties
             const total = BigInt(result[0]); // Ensure BigInt

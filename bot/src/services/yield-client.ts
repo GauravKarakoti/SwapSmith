@@ -1,10 +1,4 @@
 import axios from 'axios';
-import { getStakingAbi, getStakingSelector, STAKING_FUNCTION_SELECTORS } from '../config/staking-abis';
-import { getOrderStatus } from './sideshift-client';
-import {
-  getPendingOrders,
-  updateOrderStatus,
-} from './database';
 import logger from './logger';
 
 export interface YieldPool {
@@ -111,15 +105,12 @@ export const YIELD_PROTOCOLS: YieldProtocol[] = [
   },
 ];
 
-// No placeholder addresses - all protocols are production-ready
-const PLACEHOLDER_ADDRESSES = new Set<string>([]);
-
 /**
  * Check if an address is a known placeholder
  * @param address - The address to check
  * @returns True if the address is a placeholder (always false now)
  */
-export function isPlaceholderAddress(address: string): boolean {
+export function isPlaceholderAddress(_address: string): boolean {
   return false; // All addresses are now verified and production-ready
 }
 
@@ -214,10 +205,10 @@ export function calculateYieldMigration(relevantPools: YieldPool[], amount: numb
     fromPool = relevantPools.find(p => p.chain.toLowerCase() === chain.toLowerCase());
   }
 
-  const toPool = relevantPools.reduce((highest, p) => p.apy > highest.apy ? p : highest, relevantPools[0]);
+  const toPool = relevantPools.reduce((highest, p) => p.apy > highest!.apy ? p : highest, relevantPools[0]);
 
   if (!fromPool) {
-    fromPool = relevantPools.find(p => p.apy < toPool.apy && p.poolId !== toPool.poolId);
+    fromPool = relevantPools.find(p => p.apy < toPool!.apy && p.poolId !== toPool!.poolId);
   }
 
   if (!fromPool || !toPool) return null;
@@ -303,7 +294,7 @@ export async function findBestYieldPool(
   if (filtered.length === 0) return null;
   
   // Sort by APY and return the best one
-  return filtered.sort((a, b) => b.apy - a.apy)[0];
+  return filtered.sort((a, b) => b.apy - a.apy)[0] as YieldPool;
 }
 
 /**

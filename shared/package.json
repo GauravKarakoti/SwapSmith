@@ -25,7 +25,8 @@
     "drizzle-kit": "^0.31.7",
     "drizzle-orm": "^0.45.1",
     "esbuild": "^0.27.3",
-    "winston": "^3.19.0"
+    "winston": "^3.19.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^25.2.3",

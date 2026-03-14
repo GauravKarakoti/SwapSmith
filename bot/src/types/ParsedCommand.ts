@@ -187,7 +187,7 @@ export interface ParsedCommand {
   // DCA fields
   frequency?: Frequency;
   dayOfWeek?: DayOfWeek;
-  dayOfMonth?: string;
+  dayOfMonth?: string | null;
   totalAmount?: number;
   numPurchases?: number;
   

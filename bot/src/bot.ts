@@ -16,6 +16,7 @@ import { reputationService } from './services/reputation-service';
 import { TERMINAL_STATUSES_LIST } from './constants';
 import { limitOrderWorker } from './workers/limitOrderWorker';
 import { DCAScheduler } from './services/dca-scheduler';
+import { ErrorDetails } from './types/Logger';
 
 dotenv.config();
 
@@ -23,21 +24,21 @@ dotenv.config();
 /* CONFIG */
 /* -------------------------------------------------------------------------- */
 
-const BOT_TOKEN = process.env.BOT_TOKEN!;
+const BOT_TOKEN = process.env['BOT_TOKEN']!;
 const MINI_APP_URL =
-  process.env.MINI_APP_URL || 'https://swapsmithminiapp.netlify.app/';
-const PORT = Number(process.env.PORT || 3000);
+  process.env['MINI_APP_URL'] || 'https://swapsmithminiapp.netlify.app/';
+const PORT = Number(process.env['PORT'] || 3000);
 
 const bot = new Telegraf(BOT_TOKEN);
 
 const orderMonitor = new OrderMonitor({
-  getOrderStatus: (orderId) => getOrderStatus(orderId, process.env.SIDESHIFT_CLIENT_IP || '127.0.0.1'),
+  getOrderStatus: (orderId) => getOrderStatus(orderId, process.env['SIDESHIFT_CLIENT_IP'] || '127.0.0.1'),
   updateOrderStatus: db.updateOrderStatus,
   updateWatchedOrderStatus: db.updateWatchedOrderStatus,
   getPendingOrders: db.getPendingOrders,
   getPendingWatchedOrders: db.getPendingWatchedOrders,
   addWatchedOrder: db.addWatchedOrder,
-  onStatusChange: async (telegramId, orderId, oldStatus, newStatus, orderDetails) => {
+  onStatusChange: async (telegramId, orderId, oldStatus, newStatus, _orderDetails) => {
     try {
       await bot.telegram.sendMessage(
         telegramId,
@@ -358,7 +359,7 @@ bot.action('confirm_swap_and_stake', async (ctx) => {
       parsed.toAsset,
       toNetwork,
       parsed.amount,
-      process.env.SIDESHIFT_CLIENT_IP || '127.0.0.1',
+      process.env['SIDESHIFT_CLIENT_IP'] || '127.0.0.1',
       toNetwork
     );
 
@@ -368,7 +369,7 @@ bot.action('confirm_swap_and_stake', async (ctx) => {
     const zapTx = await createZapTransaction(
       zapQuote,
       parsed.settleAddress,
-      process.env.SIDESHIFT_CLIENT_IP || '127.0.0.1'
+      process.env['SIDESHIFT_CLIENT_IP'] || '127.0.0.1'
     );
 
     await db.createStakeOrder({
@@ -410,7 +411,7 @@ bot.action('confirm_swap_and_stake', async (ctx) => {
       { parse_mode: 'Markdown' }
     );
   } catch (error) {
-    handleError('SwapAndStakeError', error, null, true, 'high');
+    handleError('SwapAndStakeError', error as ErrorDetails, null, true, 'high');
     await ctx.editMessageText(
       '❌ Failed to create swap & stake order. Please try again later.'
     );
@@ -432,9 +433,9 @@ bot.action('cancel_swap', async (ctx) => {
 
 async function start() {
   try {
-    if (process.env.SENTRY_DSN) {
+    if (process.env['SENTRY_DSN']) {
       Sentry.init({
-        dsn: process.env.SENTRY_DSN,
+        dsn: process.env['SENTRY_DSN'],
         tracesSampleRate: 1.0,
       });
     }
@@ -456,17 +457,9 @@ async function start() {
     await bot.launch();
     logger.info('🤖 Bot launched');
 
-    const server = app.listen(PORT, () =>
+    app.listen(PORT, () =>
       logger.info(`🌍 Server running on port ${PORT}`)
     );
-
-    const shutdown = async (signal: string) => {
-      logger.info(`🛑 Shutdown (${signal})`);
-
-      orderMonitor.stop();
-      limitOrderWorker.stop();
-      dcaScheduler.stop();
-      bot.stop(signal);
 
     // Register Telegraf bot for graceful shutdown
     shutdownManager.register({
@@ -484,8 +477,8 @@ async function start() {
     });
 
     logger.info('✅ All services started and shutdown handlers registered');
-  } catch (e) {
-    handleError('StartupFailed', e, null, true, 'critical');
+  } catch(e) {
+    handleError('StartupFailed', e as ErrorDetails, null, true, 'critical');
     process.exit(1);
   }
 }

@@ -110,7 +110,7 @@ export class PortfolioRebalanceWorker {
 
   private formatRebalanceMessage(
     result: Awaited<ReturnType<typeof executePortfolioRebalance>>,
-    analysis: Awaited<ReturnType<typeof analyzePortfolioDrift>>
+    _analysis: Awaited<ReturnType<typeof analyzePortfolioDrift>>
   ): string {
     let message = `📊 *Portfolio Rebalanced*\n\n`;
     

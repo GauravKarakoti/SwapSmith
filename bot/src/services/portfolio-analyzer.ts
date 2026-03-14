@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { eq } from 'drizzle-orm';
-import { db, users } from './database';
-import { portfolioTargets, swapHistory, coinPriceCache } from '../../../shared/schema';
+import { db } from './database';
+import { portfolioTargets, swapHistory } from '../../../shared/schema';
 import logger from './logger';
 
 // Asset ID mapping for CoinGecko
@@ -120,7 +120,7 @@ async function fetchPrices(coins: string[]): Promise<Map<string, number>> {
  */
 export async function getUserPortfolioHoldings(
   userId: string,
-  walletAddress?: string
+  _walletAddress?: string
 ): Promise<CurrentPortfolio> {
   try {
     // Get all swap history for this user
@@ -150,7 +150,7 @@ export async function getUserPortfolioHoldings(
     const uniqueCoins = [...new Set(Object.keys(holdings).map(k => k.split('-')[0]))];
 
     // Fetch prices
-    const prices = await fetchPrices(uniqueCoins);
+    const prices = await fetchPrices(uniqueCoins as string[]);
 
     // Calculate values
     const assets: CurrentPortfolio['assets'] = [];
@@ -158,13 +158,13 @@ export async function getUserPortfolioHoldings(
 
     for (const [key, data] of Object.entries(holdings)) {
       const [coin, network] = key.split('-');
-      const price = prices.get(coin) || 0;
+      const price = prices.get(coin as string) || 0;
       const value = data.amount * price;
 
       if (value > 0) {
         assets.push({
-          coin,
-          network,
+          coin: coin as string,
+          network: network as string,
           amount: data.amount,
           value,
           percentage: 0 // Will calculate after total

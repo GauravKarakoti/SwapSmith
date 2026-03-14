@@ -1,5 +1,4 @@
 import { isPlaceholderAddress } from '../services/yield-client';
-import { getZapQuote } from '../services/stake-client';
 
 describe('Swap and Stake - Validation', () => {
   describe('Placeholder Address Detection', () => {

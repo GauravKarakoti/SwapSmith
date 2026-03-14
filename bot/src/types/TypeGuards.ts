@@ -61,12 +61,12 @@ export function isQuote(value: unknown): value is Quote {
   const q = value as Record<string, unknown>;
   
   return (
-    (isString(q.id) || isString(q.quoteId)) &&
-    isString(q.fromAsset) &&
-    isString(q.toAsset) &&
-    (isString(q.fromAmount) || isNumber(q.fromAmount)) &&
-    (isString(q.toAmount) || isNumber(q.toAmount)) &&
-    (isString(q.settleAmount) || isNumber(q.settleAmount))
+    (isString(q['id']) || isString(q['quoteId'])) &&
+    isString(q['fromAsset']) &&
+    isString(q['toAsset']) &&
+    (isString(q['fromAmount']) || isNumber(q['fromAmount'])) &&
+    (isString(q['toAmount']) || isNumber(q['toAmount'])) &&
+    (isString(q['settleAmount']) || isNumber(q['settleAmount']))
   );
 }
 
@@ -76,8 +76,8 @@ export function isQuote(value: unknown): value is Quote {
 export function isDepositAddress(value: unknown): value is DepositAddress {
   if (!isRecord(value)) return false;
   const d = value as Record<string, unknown>;
-  
-  return isString(d.address) && (isString(d.memo) || d.memo === undefined);
+
+  return isString(d['address']) && (isString(d['memo']) || d['memo'] === undefined);
 }
 
 /**
@@ -88,12 +88,12 @@ export function isOrder(value: unknown): value is Order {
   const o = value as Record<string, unknown>;
   
   return (
-    (isString(o.id) || isString(o.orderId)) &&
-    isString(o.status) &&
-    isNumber(o.createdAt) &&
-    isString(o.fromAsset) &&
-    isString(o.toAsset) &&
-    (isString(o.depositAddress) || isDepositAddress(o.depositAddress))
+    (isString(o['id']) || isString(o['orderId'])) &&
+    isString(o['status']) &&
+    isNumber(o['createdAt']) &&
+    isString(o['fromAsset']) &&
+    isString(o['toAsset']) &&
+    (isString(o['depositAddress']) || isDepositAddress(o['depositAddress']))
   );
 }
 
@@ -107,11 +107,11 @@ export function isOrderStatus(value: unknown): value is OrderStatus {
   const validStatuses = ['pending', 'confirming', 'preparing', 'sending', 'complete', 'failed', 'expired'];
   
   return (
-    isString(os.id) &&
-    validStatuses.includes(os.status as string) &&
-    isString(os.fromAsset) &&
-    isString(os.toAsset) &&
-    isNumber(os.createdAt)
+    isString(os['id']) &&
+    validStatuses.includes(os['status'] as string) &&
+    isString(os['fromAsset']) &&
+    isString(os['toAsset']) &&
+    isNumber(os['createdAt'])
   );
 }
 
@@ -123,11 +123,11 @@ export function isPortfolioAllocation(value: unknown): value is PortfolioAllocat
   const pa = value as Record<string, unknown>;
   
   return (
-    isString(pa.toAsset) &&
-    isString(pa.toChain) &&
-    isNumber(pa.percentage) &&
-    pa.percentage >= 0 &&
-    pa.percentage <= 100
+    isString(pa['toAsset']) &&
+    isString(pa['toChain']) &&
+    isNumber(pa['percentage']) &&
+    pa['percentage'] >= 0 &&
+    pa['percentage'] <= 100
   );
 }
 
@@ -142,11 +142,11 @@ export function isSecondaryCondition(value: unknown): value is SecondaryConditio
   const validLogic = ['AND', 'OR'];
   
   return (
-    isString(sc.type) &&
-    isString(sc.asset) &&
-    isNumber(sc.value) &&
-    validOperators.includes(sc.operator as string) &&
-    validLogic.includes(sc.logic as string)
+    isString(sc['type']) &&
+    isString(sc['asset']) &&
+    isNumber(sc['value']) &&
+    validOperators.includes(sc['operator'] as string) &&
+    validLogic.includes(sc['logic'] as string)
   );
 }
 
@@ -167,10 +167,10 @@ export function isCondition(value: unknown): value is Condition {
   const validOperators = ['gt', 'lt', 'gte', 'lte', 'eq'];
   
   return (
-    validConditionTypes.includes(c.type as string) &&
-    isString(c.asset) &&
-    isNumber(c.value) &&
-    (!c.operator || validOperators.includes(c.operator as string))
+    validConditionTypes.includes(c['type'] as string) &&
+    isString(c['asset']) &&
+    isNumber(c['value']) &&
+    (!c['operator'] || validOperators.includes(c['operator'] as string))
   );
 }
 
@@ -182,8 +182,8 @@ export function isNextAction(value: unknown): value is NextAction {
   const na = value as Record<string, unknown>;
   
   return (
-    isString(na.rawText) &&
-    isBoolean(na.needsParsing)
+    isString(na['rawText']) &&
+    isBoolean(na['needsParsing'])
   );
 }
 
@@ -208,11 +208,11 @@ export function isParsedCommand(value: unknown): value is ParsedCommand {
   ];
   
   return (
-    isBoolean(pc.success) &&
-    validIntents.includes(pc.intent as string) &&
-    isNumber(pc.confidence) &&
-    isArray(pc.validationErrors, isString) &&
-    isString(pc.parsedMessage)
+    isBoolean(pc['success']) &&
+    validIntents.includes(pc['intent'] as string) &&
+    isNumber(pc['confidence']) &&
+    isArray(pc['validationErrors'], isString) &&
+    isString(pc['parsedMessage'])
   );
 }
 
@@ -226,8 +226,8 @@ export function isConversationMessage(value: unknown): value is ConversationMess
   const validRoles = ['system', 'user', 'assistant'];
   
   return (
-    validRoles.includes(cm.role as string) &&
-    isString(cm.content)
+    validRoles.includes(cm['role'] as string) &&
+    isString(cm['content'])
   );
 }
 
@@ -241,8 +241,8 @@ export function isGroqMessage(value: unknown): value is GroqMessage {
   const validRoles = ['system', 'user', 'assistant'];
   
   return (
-    validRoles.includes(gm.role as string) &&
-    isString(gm.content)
+    validRoles.includes(gm['role'] as string) &&
+    isString(gm['content'])
   );
 }
 
@@ -254,9 +254,9 @@ export function isGroqChatCompletionResponse(value: unknown): value is GroqChatC
   const gcr = value as Record<string, unknown>;
   
   return (
-    isArray(gcr.choices) &&
-    isString(gcr.id) &&
-    isString(gcr.model)
+    isArray(gcr['choices']) &&
+    isString(gcr['id']) &&
+    isString(gcr['model'])
   );
 }
 
@@ -275,9 +275,9 @@ export function isLogContext(value: unknown): value is LogContext {
   const lc = value as Record<string, unknown>;
   
   return (
-    (isNumber(lc.chatId) || lc.chatId === undefined) &&
-    (isNumber(lc.messageId) || lc.messageId === undefined) &&
-    (isString(lc.username) || lc.username === undefined)
+    (isNumber(lc['chatId']) || lc['chatId'] === undefined) &&
+    (isNumber(lc['messageId']) || lc['messageId'] === undefined) &&
+    (isString(lc['username']) || lc['username'] === undefined)
   );
 }
 

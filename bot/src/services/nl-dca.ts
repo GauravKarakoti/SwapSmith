@@ -66,9 +66,9 @@ export function parseDCA(input: string): Partial<DCAScheduleNLConfig> | null {
   // Pattern 1: "$X per/every [period]"
   let match = input.match(DCA_PATTERNS[0]);
   if (match) {
-    config.amount = parseFloat(match[1]);
+    config.amount = parseFloat(match[1] as string);
     config.amountType = 'exact';
-    config.frequency = FREQUENCY_MAP[match[2].toLowerCase()] || 'daily';
+    config.frequency = FREQUENCY_MAP[match[2]!.toLowerCase()] || 'daily';
     matchFound = true;
   }
 
@@ -76,7 +76,7 @@ export function parseDCA(input: string): Partial<DCAScheduleNLConfig> | null {
   if (!matchFound) {
     match = input.match(DCA_PATTERNS[1]);
     if (match) {
-      config.amount = parseFloat(match[1]);
+      config.amount = parseFloat(match[1] as string);
       config.amountType = 'exact';
       if (match[2]) config.targetAsset = match[2].toUpperCase();
       const freq = match[3]?.toLowerCase();
@@ -89,9 +89,9 @@ export function parseDCA(input: string): Partial<DCAScheduleNLConfig> | null {
   if (!matchFound) {
     match = input.match(DCA_PATTERNS[2]);
     if (match) {
-      config.amount = parseFloat(match[1]);
+      config.amount = parseFloat(match[1] as string);
       config.amountType = 'exact';
-      config.targetAsset = match[2].toUpperCase();
+      config.targetAsset = match[2]!.toUpperCase();
       const freq = match[3]?.toLowerCase();
       if (freq && FREQUENCY_MAP[freq]) config.frequency = FREQUENCY_MAP[freq];
       matchFound = true;
@@ -102,8 +102,8 @@ export function parseDCA(input: string): Partial<DCAScheduleNLConfig> | null {
   if (!matchFound) {
     match = input.match(DCA_PATTERNS[3]);
     if (match) {
-      config.targetAsset = match[1].toUpperCase();
-      config.amount = parseFloat(match[2]);
+      config.targetAsset = match[1]!.toUpperCase();
+      config.amount = parseFloat(match[2] as string);
       config.amountType = 'exact';
       const freq = match[3]?.toLowerCase();
       if (freq && FREQUENCY_MAP[freq]) config.frequency = FREQUENCY_MAP[freq];
@@ -115,7 +115,7 @@ export function parseDCA(input: string): Partial<DCAScheduleNLConfig> | null {
   if (!matchFound) {
     match = input.match(DCA_PATTERNS[4]);
     if (match) {
-      config.amount = parseFloat(match[1]);
+      config.amount = parseFloat(match[1] as string);
       config.amountType = 'exact';
       const freq = match[2]?.toLowerCase();
       if (freq && FREQUENCY_MAP[freq]) config.frequency = FREQUENCY_MAP[freq];
@@ -143,7 +143,7 @@ export function parseDCA(input: string): Partial<DCAScheduleNLConfig> | null {
   // Extract specific date (e.g. "on the 1st", "5th")
   const dateMatch = normalizedInput.match(/on\s+the\s+(\d+)(?:st|nd|rd|th)/i);
   if (dateMatch) {
-    config.dayOfMonth = parseInt(dateMatch[1]);
+    config.dayOfMonth = parseInt(dateMatch[1] as string);
     if (!config.frequency) config.frequency = 'monthly';
   }
 
@@ -155,7 +155,7 @@ export function parseDCA(input: string): Partial<DCAScheduleNLConfig> | null {
       const keywords = ['DCA', 'BUY', 'SELL', 'INVEST', 'SWAP', 'EVERY', 'DAILY', 'WEEKLY', 'MONTHLY', 'PER', 'IN', 'OF', 'ON', 'THE'];
       const candidates = assets.filter(a => !keywords.includes(a.toUpperCase()));
       if (candidates.length > 0) {
-        config.targetAsset = candidates[0].toUpperCase();
+        config.targetAsset = candidates[0]!.toUpperCase();
       }
     }
   }

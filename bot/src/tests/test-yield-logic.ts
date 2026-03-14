@@ -21,20 +21,12 @@ async function testYieldLogic() {
 
         // Check structure
         const p = pools[0];
-        if (p.chain && p.symbol && p.project && typeof p.apy === 'number') {
+        if (p!.chain && p!.symbol && p!.project && typeof p!.apy === 'number') {
             logger.info("✅ Structure looks correct");
         } else {
             logger.error("❌ Invalid pool structure:", p);
         }
     }
-
-
-    // Simulate Matching Logic
-    const testAsset = 'ETH';
-    // In our simplified logic, we map ETH -> matchingPool (which are stables). 
-    // Wait, the logic in bot.ts tries to find `p.symbol === parsed.fromAsset`. 
-    // Since our yields are only stables (USDC, USDT, DAI), checking for 'ETH' will fail.
-    // This highlights a logic gap: We need to allow swapping *into* the yield asset.
 
     logger.info("\nSimulating Yield Discovery for 'USDC'...");
     const usdcPool = pools.find(p => p.symbol === 'USDC');

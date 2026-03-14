@@ -312,7 +312,7 @@ const schema = {
 // In-memory fallback for development or connection issues
 const memoryState = new Map<number, any>();
 
-const connectionString = process.env.DATABASE_URL || 'postgres://mock:mock@localhost:5432/mock';
+const connectionString = process.env['DATABASE_URL']!;
 const client = neon(connectionString);
 // Initialize drizzle with schema to fix type inference issues
 export const db = drizzle(client, { schema });
@@ -570,8 +570,8 @@ export async function getActiveDCASchedules(): Promise<DCASchedule[]> {
 export async function updateDCAScheduleExecution(
   id: number,
   frequency: string,
-  dayOfWeek?: string,
-  dayOfMonth?: string
+  _dayOfWeek?: string,
+  _dayOfMonth?: string
 ) {
   const now = new Date();
   let nextExecution = new Date(now);
@@ -603,9 +603,9 @@ export async function createDCASchedule(
   toNetwork: string,
   amount: string,
   frequency: 'daily' | 'weekly' | 'monthly',
-  settleAddress: string,
-  dayOfWeek?: number,
-  dayOfMonth?: number
+  _settleAddress: string,
+  _dayOfWeek?: number,
+  _dayOfMonth?: number
 ) {
   const intervalMap = { daily: 24, weekly: 168, monthly: 720 };
   const intervalHours = intervalMap[frequency] || 24;

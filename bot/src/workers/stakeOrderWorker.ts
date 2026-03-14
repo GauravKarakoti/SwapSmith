@@ -111,10 +111,8 @@ async function initiateStaking(order: StakeOrder, swapStatus: any): Promise<void
   try {
     const {
       buildStakingTransaction,
-      formatStakingInstructions,
       isAutoStakingAvailable,
       getEstimatedStakingFee,
-      executeStakingTransaction
     } = await import('../services/stake-client');
 
     const settleAmount = swapStatus.settleAmount || order.settleAmount || '0';
@@ -262,50 +260,6 @@ async function notifySwapStatusChange(order: StakeOrder, newStatus: string): Pro
     statusMessage,
     { parse_mode: 'Markdown' }
   );
-}
-
-/**
- * Notify user of staking completion
- */
-async function notifyStakingCompletion(
-  order: StakeOrder,
-  stakeTxHash: string,
-  settleAmount: string
-): Promise<void> {
-  if (!bot) return;
-
-  const explorerUrl = getExplorerUrl(order.stakeNetwork, stakeTxHash);
-
-  await bot.telegram.sendMessage(
-    order.telegramId,
-    `✅ *Staking Complete!*\n\n` +
-    `*Order:* \`${order.sideshiftOrderId}\`\n` +
-    `*Amount Staked:* ${settleAmount} ${order.stakeAsset}\n` +
-    `*Protocol:* ${order.stakeProtocol}\n` +
-    `*Network:* ${order.stakeNetwork}\n\n` +
-    `🔗 *Transaction:* [View on Explorer](${explorerUrl})\n\n` +
-    `📈 You'll now earn staking rewards automatically!\n` +
-    `You can manage your stake on the ${order.stakeProtocol} platform anytime.`,
-    { parse_mode: 'Markdown' }
-  );
-}
-
-/**
- * Get block explorer URL for a transaction
- */
-function getExplorerUrl(network: string, txHash: string): string {
-  const explorers: Record<string, string> = {
-    ethereum: 'https://etherscan.io/tx/',
-    mainnet: 'https://etherscan.io/tx/',
-    arbitrum: 'https://arbiscan.io/tx/',
-    optimism: 'https://optimistic.etherscan.io/tx/',
-    polygon: 'https://polygonscan.com/tx/',
-    base: 'https://basescan.org/tx/',
-    avalanche: 'https://snowtrace.io/tx/',
-  };
-
-  const baseUrl = explorers[network.toLowerCase()] || 'https://etherscan.io/tx/';
-  return baseUrl + txHash;
 }
 
 /**

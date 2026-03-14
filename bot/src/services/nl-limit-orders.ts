@@ -59,9 +59,9 @@ export function detectLimitOrder(input: string): Partial<LimitOrderNLConfig> | n
     if (isNaN(config.price)) continue;
 
     // Determine condition type
-    if (/(above|>|rises?|hits?)/i.test(conditionWord)) {
+    if (/(above|>|rises?|hits?)/i.test(conditionWord as string)) {
       config.condition = 'above';
-    } else if (/(below|<|drops?)/i.test(conditionWord)) {
+    } else if (/(below|<|drops?)/i.test(conditionWord as string)) {
       config.condition = 'below';
     } else {
       continue;
@@ -75,7 +75,7 @@ export function detectLimitOrder(input: string): Partial<LimitOrderNLConfig> | n
       if (/\b(sell|buy|convert|swap)\b/i.test(input) && action) {
         const assetAfterAction = input.match(new RegExp(`\\b${action}\\s+([A-Z]{2,10})`, 'i'));
         if (assetAfterAction) {
-          config.asset = assetAfterAction[1].toUpperCase();
+          config.asset = assetAfterAction[1]?.toUpperCase();
         }
       }
     }

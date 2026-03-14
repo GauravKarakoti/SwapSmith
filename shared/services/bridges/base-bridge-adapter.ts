@@ -3,7 +3,7 @@
  * Abstract base class for all bridge protocol adapters
  */
 
-import { BridgeConfig, BridgePreferences } from '../../config/bridge-config';
+import { BridgeConfig } from '../../config/bridge-config';
 
 export interface BridgeQuote {
   bridge: string;
@@ -177,7 +177,6 @@ export function createBaseQuote(
   options?: Partial<BridgeQuote>
 ): BridgeQuote {
   const fromAmount = BigInt(request.amount);
-  const toAmountBigInt = BigInt(toAmount);
   // Replace `0n` with `BigInt(0)` to avoid the ES2020 target requirement
   const rate = fromAmount > BigInt(0) 
     ? (Number(toAmount) / Number(request.amount)).toFixed(8)

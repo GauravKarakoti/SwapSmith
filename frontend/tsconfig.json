@@ -29,6 +29,7 @@
       "winston": ["./node_modules/winston"],
       "axios": ["./node_modules/axios"],
       "@neondatabase/serverless": ["./node_modules/@neondatabase/serverless"],
+      "zod": ["./node_modules/zod"],
     },
     "types": ["vitest", "vitest/globals"]
   },

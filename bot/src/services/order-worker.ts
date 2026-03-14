@@ -7,7 +7,7 @@ import { handleError, default as logger } from './logger';
 import type { DelayedOrder } from './database';
 
 // Get configured IP or use sensible default
-const SIDESHIFT_CLIENT_IP = process.env.SIDESHIFT_CLIENT_IP || '127.0.0.1';
+const SIDESHIFT_CLIENT_IP = process.env['SIDESHIFT_CLIENT_IP'] || '127.0.0.1';
 
 // Worker configuration
 const WORKER_INTERVAL = '*/5 * * * *'; // Run every 5 minutes
@@ -84,7 +84,7 @@ async function executeLimitOrder(order: DelayedOrder): Promise<void> {
       order.toAsset,
       toChain,
       order.amount,
-      process.env.SIDESHIFT_CLIENT_IP || '127.0.0.1' // Use configured IP or localhost placeholder
+      process.env['SIDESHIFT_CLIENT_IP'] || '127.0.0.1' // Use configured IP or localhost placeholder
     );
 
     if (quote.error) {

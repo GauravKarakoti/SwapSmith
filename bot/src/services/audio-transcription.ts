@@ -139,7 +139,7 @@ async function performTranscription(audioPath: string, language: string, model: 
  * Placeholder for actual transcription API call
  * Replace with your preferred service (Groq, OpenAI, etc.)
  */
-async function callTranscriptionAPI(audioFile: File, language: string, model: string): Promise<{ text: string; confidence?: number }> {
+async function callTranscriptionAPI(_audioFile: File, _language: string, _model: string): Promise<{ text: string; confidence?: number }> {
   // This is a placeholder implementation
   // Replace with actual API integration
   

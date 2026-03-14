@@ -462,7 +462,7 @@ export async function getBestGasToken(
   if (tokens.length === 0) return null;
   
   // Sort by discount percent (highest first)
-  return tokens.sort((a, b) => b.discountPercent - a.discountPercent)[0];
+  return tokens.sort((a, b) => b.discountPercent - a.discountPercent)[0] as GasToken;
 }
 
 // Check if user should use gas token

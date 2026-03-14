@@ -1,5 +1,5 @@
 import { parseUserCommand } from '../services/parseUserCommand';
-import { generateContextualHelp, analyzeCommand } from '../services/contextual-help';
+import { generateContextualHelp } from '../services/contextual-help';
 
 // Mock Groq to test deterministic parsing paths
 jest.mock('groq-sdk', () => {
@@ -115,7 +115,7 @@ describe('Enhanced AI Parsing - Edge Cases & Ambiguity Handling', () => {
       expect(result.fromAsset).toBe('USDC');
       expect(result.amount).toBe(1000);
       expect(result.portfolio).toHaveLength(3);
-      expect(result.portfolio?.[0].percentage).toBeCloseTo(33.33, 1);
+      expect((result.portfolio as any)[0].percentage).toBeCloseTo(33.33, 1);
     });
   });
 

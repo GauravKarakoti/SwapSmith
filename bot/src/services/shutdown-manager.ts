@@ -6,7 +6,6 @@
  */
 
 import logger from './logger';
-import { OrderMonitor } from './order-monitor';
 
 export interface ShutdownHandler {
   name: string;

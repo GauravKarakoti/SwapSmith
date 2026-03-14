@@ -1,7 +1,7 @@
 // Gas Estimator Service
 // Provides real-time gas price estimation and optimization recommendations
 
-import { GAS_CONFIG, getChainConfig, isEIP1559Supported, calculateGasSavings, getPriorityConfig } from '../config/gas-config';
+import { GAS_CONFIG, calculateGasSavings } from '../config/gas-config';
 import { gasEstimates, gasOptimizationHistory } from '../schema';
 import { eq, and, desc, gt } from 'drizzle-orm';
 import { createHash } from 'crypto';
@@ -160,7 +160,7 @@ async function fetchFromEthGasStation(): Promise<Partial<GasEstimate> | null> {
   try {
     // Dynamic import to avoid module resolution issues
     const axios = await import('axios').then(m => m.default || m);
-    const apiKey = process.env.ETH_GAS_STATION_API_KEY;
+    const apiKey = process.env['ETH_GAS_STATION_API_KEY'];
     const headers: Record<string, string> = {};
     
     if (apiKey) {
@@ -219,7 +219,7 @@ async function fetchFromGelato(chain: string): Promise<Partial<GasEstimate> | nu
 }
 
 
-async function fetchFromProvider(chain: string, network: string): Promise<Partial<GasEstimate> | null> {
+async function fetchFromProvider(_chain: string, _network: string): Promise<Partial<GasEstimate> | null> {
   // This would integrate with your existing provider (e.g., Infura, Alchemy)
   // For now, return null to use fallback
   return null;
@@ -246,8 +246,6 @@ export async function getGasEstimate(
     }
   }
   
-  // Fetch from multiple sources
-  const chainConfig = getChainConfig(chain);
   const estimates: Partial<GasEstimate>[] = [];
   
   // Try multiple sources in order of priority
@@ -451,7 +449,7 @@ export async function getOptimizationRecommendation(
 // Predict gas price trends
 export async function predictGasPrice(
   chain: string,
-  hoursAhead: number = 1
+  _hoursAhead: number = 1
 ): Promise<{
   predictedPrice: string;
   confidence: number;
@@ -557,7 +555,7 @@ export async function recordGasOptimization(
 export function formatGasPrice(
   gasPrice: string,
   unit: string = 'gwei',
-  nativeCurrency: string = 'ETH'
+  _nativeCurrency: string = 'ETH'
 ): string {
   const price = parseFloat(gasPrice);
   

@@ -43,7 +43,7 @@ export class StargateAdapter extends BaseBridgeAdapter {
 
   constructor(config: BridgeConfig) {
     super('stargate', config);
-    this.apiKey = process.env.STARGATE_API_KEY || '';
+    this.apiKey = process.env['STARGATE_API_KEY']!;
   }
 
   /**

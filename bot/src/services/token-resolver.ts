@@ -1,4 +1,4 @@
-import { getCoins, SideShiftCoin } from './sideshift-client';
+import { getCoins } from './sideshift-client';
 import logger from './logger';
 
 

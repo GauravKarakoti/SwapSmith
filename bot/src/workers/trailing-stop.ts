@@ -3,7 +3,7 @@ import { eq, and } from 'drizzle-orm';
 import { db } from '../services/database';
 import { trailingStopOrders } from '../../../shared/schema';
 import logger from '../services/logger';
-import { getCurrentPrice, getMultiplePrices } from '../services/price-monitor';
+import { getMultiplePrices } from '../services/price-monitor';
 import { createQuote, createOrder } from '../services/sideshift-client';
 
 const CHECK_INTERVAL_MS = 60 * 1000;
@@ -113,7 +113,7 @@ export class TrailingStopWorker {
 
   private async triggerTrailingStop(
     order: typeof trailingStopOrders.$inferSelect,
-    currentPrice: number,
+    _currentPrice: number,
     peakPrice: number,
     triggerPrice: number
   ) {
@@ -164,7 +164,7 @@ export class TrailingStopWorker {
         order.toAsset,
         order.toNetwork || 'ethereum',
         parseFloat(order.fromAmount.toString()),
-        process.env.SIDESHIFT_CLIENT_IP || '127.0.0.1'
+        process.env['SIDESHIFT_CLIENT_IP'] || '127.0.0.1'
       );
 
       if (quote.error) {

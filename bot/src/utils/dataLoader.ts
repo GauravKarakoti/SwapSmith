@@ -4,7 +4,7 @@
  */
 
 import { db, users, type User } from '../services/database';
-import { eq, inArray } from 'drizzle-orm';
+import { inArray } from 'drizzle-orm';
 
 /**
  * Batch load users by their IDs

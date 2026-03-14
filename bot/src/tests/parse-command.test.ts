@@ -1,5 +1,3 @@
-import Groq from 'groq-sdk';
-
 const mockCreate = jest.fn();
 
 jest.mock('groq-sdk', () => {
@@ -59,12 +57,6 @@ describe('parseUserCommand', () => {
   });
 
   it('should handle ambiguous command with low confidence', async () => {
-    const mockGroq = Groq as unknown as jest.Mock;
-
-    // mockCreate is already available from the outer scope, 
-    // but we can also access it via the mock instance if strict encapsulation is preferred.
-    // const mockCreate = mockGroq.mock.instances[0].chat.completions.create;
-    
     mockCreate.mockResolvedValue({
       choices: [{
         message: {

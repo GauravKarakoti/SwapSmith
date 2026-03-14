@@ -69,7 +69,6 @@ export class BridgeAggregator {
   async getQuotes(request: BridgeQuoteRequestWithPrefs): Promise<AggregatedQuote> {
     const errors = new Map<string, string>();
     const quotes: BridgeQuote[] = [];
-    const startTime = Date.now();
 
     // Determine which bridges to query
     const bridgesToQuery = this.getBridgesToQuery(request);
@@ -102,8 +101,6 @@ export class BridgeAggregator {
 
     // Sort quotes by different criteria
     const sortedByOutput = this.sortByOutput(quotes);
-    const sortedByFee = this.sortByFee(quotes);
-    const sortedByTime = this.sortByTime(quotes);
 
     // Get best quote based on preferences
     const bestQuote = sortedByOutput[0] || this.createFallbackQuote(request);
@@ -262,18 +259,18 @@ export class BridgeAggregator {
 
     switch (preferences.priority) {
       case 'cost':
-        return this.sortByFee(quotes)[0];
+        return this.sortByFee(quotes)[0] as BridgeQuote;
       
       case 'speed':
-        return this.sortByTime(quotes)[0];
+        return this.sortByTime(quotes)[0] as BridgeQuote;
       
       case 'reliability':
-        return [...quotes].sort((a, b) => b.confidence - a.confidence)[0];
+        return [...quotes].sort((a, b) => b.confidence - a.confidence)[0] as BridgeQuote;
       
       case 'balanced':
       default:
         // Score based on multiple factors
-        return this.scoreQuotes(quotes, preferences)[0];
+        return this.scoreQuotes(quotes, preferences)[0] as BridgeQuote;
     }
   }
 
@@ -282,7 +279,7 @@ export class BridgeAggregator {
    */
   private scoreQuotes(
     quotes: BridgeQuote[],
-    preferences: BridgePreferences
+    _preferences: BridgePreferences
   ): BridgeQuote[] {
     const scored = quotes.map(quote => {
       let score = 0;

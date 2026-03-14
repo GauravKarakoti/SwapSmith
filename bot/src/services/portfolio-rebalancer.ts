@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from './database';
 import { portfolioTargets, rebalanceHistory } from '../../../shared/schema';
-import { analyzePortfolioDrift, type RebalancePlan, type DriftAnalysis } from './portfolio-analyzer';
+import { analyzePortfolioDrift, type DriftAnalysis } from './portfolio-analyzer';
 import { createOrder, createQuote } from './sideshift-client';
 import logger from './logger';
 
@@ -72,7 +72,7 @@ async function executeRebalanceSwap(
  */
 function calculateRebalanceSwaps(
   drifts: DriftAnalysis[],
-  totalPortfolioValue: number
+  _totalPortfolioValue: number
 ): Array<{
   fromAsset: string;
   toAsset: string;
@@ -189,7 +189,7 @@ export async function executePortfolioRebalance(
       startedAt: new Date()
     }).returning();
 
-    const rebalanceId = rebalanceRecord[0].id;
+    const rebalanceId = rebalanceRecord[0]?.id;
 
     // Calculate optimal swaps
     const swaps = calculateRebalanceSwaps(analysis.drifts, analysis.currentPortfolio.totalValue);

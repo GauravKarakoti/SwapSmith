@@ -5,24 +5,24 @@
 
 export const SIDESHIFT_CONFIG = {
   // API Configuration - supports environment overrides
-  BASE_URL: process.env.SIDESHIFT_API_URL || 'https://sideshift.ai/api/v2',
-  PAY_URL: process.env.SIDESHIFT_PAY_URL || 'https://pay.sideshift.ai',
-  
+  BASE_URL: process.env['SIDESHIFT_API_URL'] || 'https://sideshift.ai/api/v2',
+  PAY_URL: process.env['SIDESHIFT_PAY_URL'] || 'https://pay.sideshift.ai',
+
   // Tracking and Navigation URLs
-  TRACKING_URL: process.env.SIDESHIFT_TRACKING_URL || 'https://sideshift.ai/transactions',
-  SUCCESS_URL: process.env.SIDESHIFT_SUCCESS_URL || 'https://sideshift.ai/success',
-  CANCEL_URL: process.env.SIDESHIFT_CANCEL_URL || 'https://sideshift.ai/cancel',
-  
+  TRACKING_URL: process.env['SIDESHIFT_TRACKING_URL'] || 'https://sideshift.ai/transactions',
+  SUCCESS_URL: process.env['SIDESHIFT_SUCCESS_URL'] || 'https://sideshift.ai/success',
+  CANCEL_URL: process.env['SIDESHIFT_CANCEL_URL'] || 'https://sideshift.ai/cancel',
+
   // Checkout Configuration
-  CHECKOUT_URL: process.env.SIDESHIFT_CHECKOUT_URL || 'https://pay.sideshift.ai/checkout',
-  
+  CHECKOUT_URL: process.env['SIDESHIFT_CHECKOUT_URL'] || 'https://pay.sideshift.ai/checkout',
+
   // Documentation URLs
-  HELP_URL: process.env.SIDESHIFT_HELP_URL || 'https://help.sideshift.ai/en/',
-  FAQ_URL: process.env.SIDESHIFT_FAQ_URL || 'https://docs.sideshift.ai/faq/',
-  
+  HELP_URL: process.env['SIDESHIFT_HELP_URL'] || 'https://help.sideshift.ai/en/',
+  FAQ_URL: process.env['SIDESHIFT_FAQ_URL'] || 'https://docs.sideshift.ai/faq/',
+
   // Display Configuration
-  DISPLAY_NAME: process.env.SIDESHIFT_DISPLAY_NAME || 'SideShift.ai',
-  
+  DISPLAY_NAME: process.env['SIDESHIFT_DISPLAY_NAME'] || 'SideShift.ai',
+
   // API Endpoints - commonly used paths
   ENDPOINTS: {
     COINS: 'coins',

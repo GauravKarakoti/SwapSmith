@@ -4,7 +4,7 @@ import fs from 'fs';
 import logger, { handleError } from './logger';
 import { loadSecret } from '../../../shared/utils/secrets-loader';
 import type { ParsedCommand } from '../types/ParsedCommand';
-import type { ConversationMessage, GroqMessage, TranscriptionResponse } from '../types/Message';
+import type { ConversationMessage, GroqMessage } from '../types/Message';
 import type { ErrorDetails } from '../types/Logger';
 
 import { analyzeCommand, generateContextualHelp } from './contextual-help';
@@ -573,7 +573,7 @@ export async function parseWithLLM(
       max_tokens: 2048, 
     });
 
-    const parsed = JSON.parse(completion.choices[0].message.content || '{}');
+    const parsed = JSON.parse(completion.choices[0]?.message.content || '{}');
     logger.info("LLM Parsed:", parsed);
     return validateParsedCommand(parsed, userInput, inputType);
   } catch (error) {

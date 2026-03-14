@@ -1,7 +1,6 @@
 import { 
   YieldPool, 
   YieldProtocol, 
-  getDepositAddress, 
   getProtocolInfo, 
   enrichPoolWithDepositAddress,
   YIELD_PROTOCOLS,
@@ -295,7 +294,7 @@ export function getProtocolsByChain(chain: string): YieldProtocol[] {
  * @param chain - Chain name
  * @returns Best protocol or null
  */
-export function getBestProtocol(symbol: string, chain: string): YieldProtocol | null {
+export function getBestProtocol(_symbol: string, chain: string): YieldProtocol | null {
   const protocols = getProtocolsByChain(chain);
   
   if (protocols.length === 0) return null;
@@ -465,7 +464,7 @@ export function isAutoStakingAvailable(protocol: string, network: string): boole
  * @param amount - Amount to stake
  * @returns Estimated fee in USD
  */
-export function getEstimatedStakingFee(protocol: string, amount: string): number {
+export function getEstimatedStakingFee(protocol: string, _amount: string): number {
   // Base fee estimation (in real implementation, would use gas APIs)
   const baseFee = 5; // $5 base
 

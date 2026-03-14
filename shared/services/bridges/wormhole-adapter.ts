@@ -31,19 +31,12 @@ interface WormholeQuoteResponse {
   vaa?: string;
 }
 
-interface WormholeOrderResponse {
-  id: string;
-  status: 'pending' | 'completed' | 'failed';
-  destinationTxHash?: string;
-  message?: string;
-}
-
 export class WormholeAdapter extends BaseBridgeAdapter {
   private apiKey: string;
 
   constructor(config: BridgeConfig) {
     super('wormhole', config);
-    this.apiKey = process.env.WORMHOLE_API_KEY || '';
+    this.apiKey = process.env['WORMHOLE_API_KEY']!;
   }
 
   /**
@@ -80,8 +73,6 @@ export class WormholeAdapter extends BaseBridgeAdapter {
       const gasFee = (gasEstimate * gasPrice) / BigInt(1e18);
       const bridgeFee = BigInt(data.bridgeFee || '0');
       const totalFee = gasFee + bridgeFee;
-
-      const outputAmount = BigInt(data.amountOut || request.amount);
       const outputAmountMin = BigInt(data.amountOutMin || '0');
 
       const quote: BridgeQuote = createBaseQuote(

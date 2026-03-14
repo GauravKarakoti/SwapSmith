@@ -49,10 +49,10 @@ export interface OrderMonitorDeps {
 export const TERMINAL_STATUSES = new Set(TERMINAL_STATUSES_LIST);
 
 /** Maximum concurrent API calls to SideShift */
-const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_ORDERS ?? '5', 10);
+const MAX_CONCURRENT = parseInt(process.env['MAX_CONCURRENT_ORDERS']!, 10);
 
 /** How often the tick loop runs (ms) */
-const TICK_INTERVAL = parseInt(process.env.ORDER_MONITOR_TICK_INTERVAL_MS ?? '10000', 10);
+const TICK_INTERVAL = parseInt(process.env['ORDER_MONITOR_TICK_INTERVAL_MS']!, 10);
 
 // --- Backoff Logic ---
 

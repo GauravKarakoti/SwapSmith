@@ -3,21 +3,16 @@
  * This document outlines all the type definitions and guarantees in place
  */
 
-import type { ParsedCommand, Frequency, CommandIntent, Condition } from '../types/ParsedCommand';
-import type { Quote, Order, OrderStatus, PortfolioAllocation } from '../types/Quote';
-import type { ConversationMessage, GroqMessage, TranscriptionResponse } from '../types/Message';
+import type { ParsedCommand } from '../types/ParsedCommand';
+import type { Quote, PortfolioAllocation } from '../types/Quote';
+import type { ConversationMessage } from '../types/Message';
 import type { ErrorDetails, LogContext, ErrorNotificationDetails, LogSeverity } from '../types/Logger';
 import {
   isParsedCommand,
   isQuote,
   isOrder,
-  isOrderStatus,
-  isCondition,
-  isPortfolioAllocation,
-  isConversationMessage,
   safeJsonParse,
   validateQuoteArray,
-  validateOrderArray
 } from '../types/TypeGuards';
 
 /**
@@ -57,11 +52,6 @@ export function exampleCommandParsing(jsonString: string): ParsedCommand | null 
     console.error('LLM response did not match ParsedCommand type');
     return null;
   }
-  
-  // Full type safety guaranteed
-  const intent: CommandIntent = parsed.intent;
-  const amount: number | null = parsed.amount;
-  const conditions: Condition | undefined = parsed.conditions;
   
   return parsed;
 }
@@ -261,7 +251,7 @@ export function parseApiResponse(json: string): ParsedCommand | null {
  */
 export function processQuotes(data: unknown): void {
   const quotes = validateQuoteArray(data);
-  quotes.forEach(quote => {
+  quotes.forEach(_quote => {
     // All quotes are validated and type-safe
   });
 }
@@ -269,10 +259,7 @@ export function processQuotes(data: unknown): void {
 /**
  * Pattern 4: Type-safe function parameters
  */
-export function processCommand(command: ParsedCommand): void {
-  const intent: CommandIntent = command.intent;
-  const conditions: Condition | undefined = command.conditions;
-  const allocations: PortfolioAllocation[] | undefined = command.portfolio;
+export function processCommand(_command: ParsedCommand): void {
   // All accesses are type-safe
 }
 
