@@ -69,8 +69,8 @@ describe('Enhanced AI Parsing - Edge Cases & Ambiguity Handling', () => {
       
       expect(result.intent).toBe('swap');
       expect(result.conditions).toBeDefined();
-      expect(result.conditions?.type).toBe('price_above');
-      expect(result.conditions?.value).toBe(60000);
+      expect((result.conditions as any)?.type).toBe('price_above');
+      expect((result.conditions as any)?.value).toBe(60000);
       expect(result.requiresConfirmation).toBe(true);
     });
 
@@ -79,7 +79,7 @@ describe('Enhanced AI Parsing - Edge Cases & Ambiguity Handling', () => {
       
       expect(result.amount).toBe(50);
       expect(result.amountType).toBe('percentage');
-      expect(result.conditions?.value).toBe(65000);
+      expect((result.conditions as any)?.value).toBe(65000);
       expect(result.validationErrors.length).toBeGreaterThan(0); // Should note unsupported condition
     });
   });

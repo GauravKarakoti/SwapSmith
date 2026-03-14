@@ -1,14 +1,10 @@
 import { parseWithLLM } from './groq-client';
 import type {
   ParsedCommand,
-  ParseResult as ParseResultType,
-  Condition
+  ParseResult as ParseResultType
 } from '../types/ParsedCommand';
 import logger from './logger';
-import { parseDCA } from './nl-dca';
-import { detectLimitOrder } from './nl-limit-orders';
 import {
-  sanitizeInput,
   validateAndSanitizeLLMInput,
   VALIDATION_LIMITS,
   ConversationHistorySchema,
@@ -18,28 +14,11 @@ import {
 export type { ParsedCommand };
 export type ParseResult = ParseResultType;
 
-/* ---------------- REGEX ---------------- */
-
-const REGEX_EXCLUSION =
-/(?:everything|all|entire|max)\s*(?:[A-Z]+\s+)?(?:except|but\s+keep)\s+(\d+(.\d+)?)\s*([A-Z]+)?/i;
-
-const REGEX_PERCENTAGE =
-/(\d+(.\d+)?)\s*(?:%|percent)\s*(?:of\s+(?:my\s+)?)?([A-Z]+)?/i;
-
-const REGEX_HALF = /\b(half)\b\s*(?:of\s+(?:my\s+)?)?([A-Z]+)?/i;
-const REGEX_QUARTER = /\b(quarter)\b\s*(?:of\s+(?:my\s+)?)?([A-Z]+)?/i;
-
-const REGEX_MAX_ALL = /\b(max|all|everything|entire)\b/i;
-const REGEX_ALL_TOKEN = /(max|all|everything|entire)\s+([A-Z]+)/i;
-
 const REGEX_TOKENS = /([A-Z]+)\s+(to|into|for)\s+([A-Z]+)/i;
 const REGEX_FROM_TO = /from\s+([A-Z]+)\s+to\s+([A-Z]+)/i;
 
 const REGEX_AMOUNT_TOKEN =
 /\b(\d+(.\d+)?)\s+(?!to|into|for|from|with|using\b)([A-Z]+)\b/i;
-
-const REGEX_MULTI_SOURCE =
-/(?:^|\s)([A-Z]{2,10}|(?:\d+(?:.\d+)?\s+[A-Z]{2,10}))\s+(?:and|&)\s+([A-Z]{2,10}|(?:\d+(?:.\d+)?\s+[A-Z]{2,10}))\s+(?:to|into|for)/i;
 
 /* Stake / Zap */
 
@@ -174,146 +153,137 @@ export async function parseUserCommand(
     };
   }
 
-const input = preprocessInput(sanitized);
+  const input = preprocessInput(sanitized);
 
-/* ---------------- STAKE ---------------- */
+  /* ---------------- STAKE ---------------- */
 
-if (REGEX_STAKE_COMMAND.test(input) && !REGEX_SWAP_STAKE.test(input)) {
-const providerMatch = input.match(REGEX_LIQUID_STAKING_PROVIDER);
+  if (REGEX_STAKE_COMMAND.test(input) && !REGEX_SWAP_STAKE.test(input)) {
+    const providerMatch = input.match(REGEX_LIQUID_STAKING_PROVIDER);
 
-const stakeProtocol = providerMatch
-  ? providerMatch[1]?.toLowerCase()
-  : 'lido';
+    const stakeProtocol = providerMatch
+      ? providerMatch[1]?.toLowerCase()
+      : 'lido';
 
-let amount: number | null = null;
-let amountType: 'exact' | 'percentage' | 'all' | null = null;
-let stakeAsset: string | null = null;
+    let amount: number | null = null;
+    let amountType: 'exact' | 'percentage' | 'all' | null = null;
+    let stakeAsset: string | null = null;
 
-const allMatch = input.match(REGEX_STAKE_ALL);
-if (allMatch) {
-  stakeAsset = allMatch[1].toUpperCase();
-  amountType = 'all';
-}
+    const allMatch = input.match(REGEX_STAKE_ALL);
+    if (allMatch && allMatch[1]) {
+      stakeAsset = allMatch[1].toUpperCase();
+      amountType = 'all';
+    }
 
-const pctMatch = input.match(REGEX_STAKE_PERCENTAGE);
-if (pctMatch) {
-  amount = parseFloat(pctMatch[1]);
-  stakeAsset = pctMatch[2].toUpperCase();
-  amountType = 'percentage';
-}
+    const pctMatch = input.match(REGEX_STAKE_PERCENTAGE);
+    if (pctMatch && pctMatch[1] && pctMatch[2]) {
+      amount = parseFloat(pctMatch[1]);
+      stakeAsset = pctMatch[2].toUpperCase();
+      amountType = 'percentage';
+    }
 
-const amtMatch = input.match(REGEX_STAKE_AMOUNT);
-if (amtMatch) {
-  if (amtMatch[1]) {
-    amount = parseScaledNumber(amtMatch[1]);
-    amountType = 'exact';
+    const amtMatch = input.match(REGEX_STAKE_AMOUNT);
+    if (amtMatch && amtMatch[2]) {
+      if (amtMatch[1]) {
+        amount = parseScaledNumber(amtMatch[1]);
+        amountType = 'exact';
+      }
+      stakeAsset = amtMatch[2].toUpperCase();
+    }
+
+    if (!stakeAsset) stakeAsset = 'ETH';
+
+    return {
+      success: true,
+      intent: 'stake',
+      fromAsset: stakeAsset,
+      fromChain: 'ethereum',
+      toAsset: 'stETH',
+      toChain: 'ethereum',
+      amount,
+      amountType,
+      excludeAmount: undefined,
+      excludeToken: undefined,
+      quoteAmount: undefined,
+      conditions: undefined,
+      portfolio: undefined,
+      frequency: null,
+      dayOfWeek: null,
+      dayOfMonth: null,
+      settleAsset: null,
+      settleNetwork: null,
+      settleAmount: null,
+      settleAddress: null,
+      fromProject: stakeProtocol,
+      fromYield: null,
+      toProject: null,
+      toYield: null,
+      conditionOperator: undefined,
+      conditionValue: undefined,
+      conditionAsset: undefined,
+      targetPrice: undefined,
+      condition: undefined,
+      confidence: 85,
+      validationErrors: [],
+      parsedMessage: `Parsed: Stake ${amount ?? 'all'} ${stakeAsset}`,
+      requiresConfirmation: true,
+      originalInput: userInput
+    };
   }
-  stakeAsset = amtMatch[2].toUpperCase();
-}
 
-if (!stakeAsset) stakeAsset = 'ETH';
+  /* ---------------- SWAP ---------------- */
 
-return {
-  success: true,
-  intent: 'stake',
-  fromAsset: stakeAsset,
-  fromChain: 'ethereum',
-  toAsset: 'stETH',
-  toChain: 'ethereum',
-  amount,
-  amountType,
-  excludeAmount: undefined,
-  excludeToken: undefined,
-  quoteAmount: undefined,
-  conditions: undefined,
-  portfolio: undefined,
-  frequency: null,
-  dayOfWeek: null,
-  dayOfMonth: null,
-  settleAsset: null,
-  settleNetwork: null,
-  settleAmount: null,
-  settleAddress: null,
-  fromProject: stakeProtocol,
-  fromYield: null,
-  toProject: null,
-  toYield: null,
-  conditionOperator: undefined,
-  conditionValue: undefined,
-  conditionAsset: undefined,
-  targetPrice: undefined,
-  condition: undefined,
-  confidence: 85,
-  validationErrors: [],
-  parsedMessage: `Parsed: Stake ${amount ?? 'all'} ${stakeAsset}`,
-  requiresConfirmation: true,
-  originalInput: userInput
-};
+  const isSwapRelated =
+  /\b(swap|convert|send|transfer|buy|sell|move|exchange)\b/i.test(input);
 
-}
+  if (isSwapRelated) {
+    const fromToMatch = input.match(REGEX_FROM_TO) || input.match(REGEX_TOKENS);
 
-/* ---------------- SWAP ---------------- */
+    let fromAsset: string | null = null;
+    let toAsset: string | null = null;
 
-const isSwapRelated =
-/\b(swap|convert|send|transfer|buy|sell|move|exchange)\b/i.test(input);
+    if (fromToMatch) {
+      fromAsset = fromToMatch[1]?.toUpperCase() ?? null;
+      toAsset = (fromToMatch[3] ?? fromToMatch[2])?.toUpperCase() ?? null;
+    }
 
-if (isSwapRelated) {
+    const amtMatch = input.match(REGEX_AMOUNT_TOKEN);
 
-```
-const fromToMatch = input.match(REGEX_FROM_TO) || input.match(REGEX_TOKENS);
+    let amount: number | null = null;
+    let amountType: ParsedCommand['amountType'] = null;
 
-let fromAsset: string | null = null;
-let toAsset: string | null = null;
+    if (amtMatch && amtMatch[1]) {
+      amount = parseFloat(amtMatch[1]);
+      amountType = 'exact';
+      if (!fromAsset && amtMatch[3]) fromAsset = amtMatch[3].toUpperCase();
+    }
 
-if (fromToMatch) {
-  fromAsset = fromToMatch[1].toUpperCase();
-  toAsset = (fromToMatch[3] ?? fromToMatch[2]).toUpperCase();
-}
+    return buildSwapResult(userInput, {
+      intent: 'swap',
+      fromAsset,
+      toAsset,
+      amount,
+      amountType,
+      confidence: 80
+    });
+  }
 
-const amtMatch = input.match(REGEX_AMOUNT_TOKEN);
+  /* ---------------- LLM FALLBACK ---------------- */
 
-let amount: number | null = null;
-let amountType: ParsedCommand['amountType'] = null;
+  logger.info('Fallback to LLM for:', userInput);
 
-if (amtMatch) {
-  amount = parseFloat(amtMatch[1]);
-  amountType = 'exact';
-  if (!fromAsset) fromAsset = amtMatch[3].toUpperCase();
-}
-
-return buildSwapResult(userInput, {
-  intent: 'swap',
-  fromAsset,
-  toAsset,
-  amount,
-  amountType,
-  confidence: 80
-});
-```
-
-}
-
-/* ---------------- LLM FALLBACK ---------------- */
-
-logger.info('Fallback to LLM for:', userInput);
-
-try {
-const result = await parseWithLLM(userInput, conversationHistory, inputType);
-return { ...result, originalInput: userInput };
-} catch (error) {
-logger.error('LLM Error', error);
-
-```
-return {
-  success: false,
-  intent: 'unknown',
-  confidence: 0,
-  validationErrors: ['Parsing failed'],
-  parsedMessage: '',
-  requiresConfirmation: false,
-  originalInput: userInput
-};
-```
-
-}
+  try {
+    const result = await parseWithLLM(userInput, conversationHistory as any, inputType);
+    return { ...result, originalInput: userInput };
+  } catch (error) {
+    logger.error('LLM Error', error);
+    return {
+      success: false,
+      intent: 'unknown' as ParsedCommand['intent'],
+      confidence: 0,
+      validationErrors: ['Parsing failed'],
+      parsedMessage: '',
+      requiresConfirmation: false,
+      originalInput: userInput
+    };
+  }
 }

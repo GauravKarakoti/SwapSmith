@@ -10,10 +10,10 @@ import {
   sendAdminApprovedEmail,
   sendAdminRejectedEmail,
 } from '@/lib/admin-email';
-import { logAdminAction, AUDIT_ACTIONS, SYSTEM_ADMIN_ID, getIpAddress, getUserAgent } from '../../../../shared/lib/audit-logger';
+import { logAdminAction, AUDIT_ACTIONS, SYSTEM_ADMIN_ID, getIpAddress, getUserAgent } from '../../../../../shared/lib/audit-logger';
 
-const MASTER_ADMIN_EMAIL = process.env.ADMIN_MASTER_EMAIL || '';
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+const MASTER_ADMIN_EMAIL = process.env.ADMIN_MASTER_EMAIL!;
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL;
 
 /**
  * GET /api/admin/approve?token=xxx&action=approve|reject

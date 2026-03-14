@@ -265,6 +265,11 @@ export async function getTopYieldPools(): Promise<YieldPool[]> {
   }
 }
 
+export async function findBestYieldPool(symbol: string, chain: string): Promise<YieldPool | null> {
+  const pools = await getTopYieldPools();
+  return pools.find(p => p.symbol.toUpperCase() === symbol.toUpperCase() && p.chain.toLowerCase() === chain.toLowerCase()) || pools[0] || null;
+}
+
 /* ------------------------------------------------ */
 /* Deposit Address Helpers */
 /* ------------------------------------------------ */
@@ -297,4 +302,8 @@ export function enrichPoolWithDepositAddress(pool: YieldPool): YieldPool {
     rewardToken: protocol?.rewardToken,
     underlyingToken: pool.symbol
   };
+}
+
+export function isPlaceholderAddress(address: string | undefined | null): boolean {
+  return !address || address.includes('placeholder') || address === '0x0000000000000000000000000000000000000000';
 }

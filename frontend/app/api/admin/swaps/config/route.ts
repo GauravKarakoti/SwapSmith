@@ -5,7 +5,7 @@ import {
   getPlatformSwapConfig,
   updatePlatformSwapConfig,
 } from '@/lib/admin-service';
-import { logAdminAction, AUDIT_ACTIONS, getIpAddress, getUserAgent } from '../../../../../shared/lib/audit-logger';
+import { logAdminAction, AUDIT_ACTIONS, getIpAddress, getUserAgent } from '../../../../../../shared/lib/audit-logger';
 
 async function authenticate(req: NextRequest) {
   const authHeader = req.headers.get('authorization');

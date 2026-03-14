@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { verifyAdminToken } from '@/lib/adminAuth';
 import { giftAllUsers } from '@/lib/admin-service';
-import { logAdminAction, AUDIT_ACTIONS, getIpAddress, getUserAgent } from '../../../../../shared/lib/audit-logger';
+import { logAdminAction, AUDIT_ACTIONS, getIpAddress, getUserAgent } from '../../../../../../shared/lib/audit-logger';
 
 export async function POST(req: Request) {
   try {

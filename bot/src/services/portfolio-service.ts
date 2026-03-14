@@ -25,10 +25,10 @@ export async function executePortfolioStrategy(
   let remainingAmount = amount!;
 
   for (let i = 0; i < portfolio.length; i++) {
-    const allocation = portfolio[i];
+    const allocation = portfolio[i]!;
     const isLast = i === portfolio.length - 1;
 
-    let swapAmount = (amount! * allocation!.percentage) / 100;
+    let swapAmount = (amount! * allocation.percentage) / 100;
 
     if (isLast) {
       swapAmount = remainingAmount;
@@ -37,7 +37,7 @@ export async function executePortfolioStrategy(
     }
 
     if (swapAmount <= 0) {
-      throw new Error(`Calculated amount too small for ${allocation!.toAsset}`);
+      throw new Error(`Calculated amount too small for ${allocation.toAsset}`);
     }
 
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -45,22 +45,27 @@ export async function executePortfolioStrategy(
     const quote = await createQuote(
       fromAsset!,
       fromChain!,
-      allocation!.toAsset,
-      allocation!.toChain,
+      allocation.toAsset,
+      allocation.toChain,
       swapAmount
     );
 
     if (quote.error) {
-      throw new Error(`Quote failed for ${allocation!.toAsset}: ${quote.error.message}`);
+      throw new Error(`Quote failed for ${allocation.toAsset}: ${quote.error.message}`);
     }
 
     const order = await createOrder(quote.id!, settleAddress!, settleAddress!);
 
     if (!order.id) {
-      throw new Error(`Order creation failed for ${allocation!.toAsset}`);
+      throw new Error(`Order creation failed for ${allocation.toAsset}`);
     }
 
-    quotesAndOrders.push({ quote, order, allocation, swapAmount });
+    quotesAndOrders.push({ 
+      quote: quote as unknown as Quote, 
+      order: order as unknown as Order, 
+      allocation, 
+      swapAmount 
+    });
   }
 
   await db.transaction(async (tx) => {
@@ -85,13 +90,13 @@ export async function executePortfolioStrategy(
         depositAddress: depositAddr!,
         depositMemo: depositMemo || null,
         status: 'pending'
-      });
+      } as any);
 
       await tx.insert(watchedOrders).values({
         telegramId: userId,
         sideshiftOrderId: order.id,
         lastStatus: 'pending',
-      }).onConflictDoNothing();
+      } as any).onConflictDoNothing();
 
       logger.info('Portfolio swap executed', {
         userId,

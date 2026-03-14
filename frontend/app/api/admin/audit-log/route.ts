@@ -3,9 +3,9 @@ import { adminAuth } from '@/lib/firebase-admin';
 import { getAdminByFirebaseUid } from '@/lib/admin-service';
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { adminAuditLog } from '../../../../shared/schema';
+import { adminAuditLog } from '../../../../../shared/schema';
 import { desc, and, eq, gte, sql } from 'drizzle-orm';
-import { logAdminAction, AUDIT_ACTIONS, getIpAddress, getUserAgent } from '../../../../shared/lib/audit-logger';
+import { logAdminAction, AUDIT_ACTIONS, getIpAddress, getUserAgent } from '../../../../../shared/lib/audit-logger';
 
 const rawSql = neon(process.env.DATABASE_URL!);
 const db = drizzle(rawSql);
@@ -25,13 +25,12 @@ async function authenticate(req: NextRequest) {
  * GET /api/admin/audit-log
  * Returns audit log entries for admin actions.
  * Query params:
- *   page   – default 1
- *   limit  – default 50, max 100
- *   action – optional filter by action type
- *   adminId – optional filter by admin ID
- *   days   – optional filter by number of days (default 30)
- * 
- * Only accessible by super_admin role.
+ * page   – default 1
+ * limit  – default 50, max 100
+ * action – optional filter by action type
+ * adminId – optional filter by admin ID
+ * days   – optional filter by number of days (default 30)
+ * * Only accessible by super_admin role.
  */
 export async function GET(req: NextRequest) {
   try {

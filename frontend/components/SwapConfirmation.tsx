@@ -4,8 +4,6 @@ import { useState, useEffect } from 'react'
 import {
   CheckCircle,
   AlertCircle,
-  Copy,
-  Check,
   ShieldCheck,
   Shield,
   AlertTriangle,
@@ -16,12 +14,14 @@ import {
   ExternalLink
 } from 'lucide-react'
 import { useAccount, useSendTransaction, useSwitchChain, usePublicClient } from 'wagmi'
-import { formatEther, type Chain, erc20Abi, formatUnits, parseUnits, encodeFunctionData, parseEther } from 'viem'
+import { formatEther, type Chain, erc20Abi, parseUnits, encodeFunctionData, parseEther } from 'viem'
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'wagmi/chains'
 import { validateDepositAddressForNetwork } from '@/utils/addressValidation'
 import { getCoins, type Coin, type CoinNetwork } from '@/utils/sideshift-client'
 import { SIDESHIFT_CONFIG } from '../../shared/config/sideshift'
 import CopyButton from './CopyButton'
+import TransactionSecurityScanner from './TransactionSecurityScanner'
+import { type SecurityCheckResult } from '@/utils/security-scanner'
 
 export interface QuoteData {
   depositAmount: string;
@@ -88,7 +88,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
   const [safetyCheck, setSafetyCheck] = useState<SafetyCheckResult | null>(null)
   const [walletBalance, setWalletBalance] = useState<string | null>(null)
   const [isLoadingBalance, setIsLoadingBalance] = useState(false)
-  const [securityScanResult, setSecurityScanResult] = useState<ScannerSecurityCheckResult | null>(null)
+  const [securityScanResult, setSecurityScanResult] = useState<SecurityCheckResult | null>(null)
 
   const { address, isConnected, chain: connectedChain } = useAccount()
   const { switchChainAsync } = useSwitchChain()
@@ -109,61 +109,14 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
   const getNetworkName = (network: string) => {
     return CHAIN_MAP[network.toLowerCase()]?.name || network
   }
-  // Get a public client specifically for the target chain to run simulations
-  const publicClient = usePublicClient({ chainId: depositChainId });
 
-  const handleConfirm = async () => {
-    if (!quote) {
-      alert("Error: Deposit address is missing. Cannot proceed.");
-      return;
+  const handleMaxClick = async () => {
+    if (walletBalance && onAmountChange) {
+      onAmountChange(walletBalance);
+    } else {
+      handleFetchBalance();
     }
-
-    if (!depositChainId) {
-      alert(`The network "${quote.depositNetwork}" is not supported for this transaction.`);
-      return;
-    }
-
-    if (!sendTransaction) {
-      console.error("Transaction function not available.", error);
-      alert("Could not prepare transaction. Make sure your wallet is connected.");
-      return;
-    }
-
-    // Log quote for debugging to verify depositAddress exists
-    console.log("Swap quote:", quote);
-    
-    // Validate depositAddress before proceeding
-    if (!quote.depositAddress) {
-      console.error("depositAddress is missing from quote:", quote);
-      alert("Error: Deposit address is missing. Cannot proceed with swap.");
-      return;
-    }
-    
-    const transactionDetails = {
-      to: quote.depositAddress as `0x${string}`, // SideShift deposit address
-      value: parseEther(quote.depositAmount),
-      chainId: depositChainId,
-    };
-
-    try {
-      if (connectedChain?.id !== depositChainId) {
-        if (!switchChainAsync) {
-          alert("Could not switch network. Please do it manually in your wallet.");
-          return;
-        }
-        await switchChainAsync({ chainId: depositChainId });
-      }
-      sendTransaction(transactionDetails);
-    } catch (e) {
-      const switchError = e as Error;
-      console.error('Failed to switch network or send transaction:', switchError);
-      if (switchError.message.includes('User rejected the request')) {
-        alert('You rejected the network switch request. Please approve it to continue.');
-      } else {
-        alert('Failed to switch network. Please try again.');
-      }
-    }
-  };
+  }
 
   const handleFetchBalance = async () => {
     if (!address || !publicClient) {
@@ -205,7 +158,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
       // Address validation
       const addressCheck = validateDepositAddressForNetwork(
         quote.depositNetwork,
-        quote.depositAddress
+        quote.depositAddress || ''
       )
 
       checks.address = {
@@ -293,7 +246,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
     }
   }
 
-  const handleSecurityScanComplete = (result: ScannerSecurityCheckResult) => {
+  const handleSecurityScanComplete = (result: SecurityCheckResult) => {
     setSecurityScanResult(result)
   }
 
@@ -358,6 +311,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
       data?: `0x${string}`
       chainId?: number
     }
+    
     try {
       const coins = await getCoins()
       const coinInfo = coins.find((c: Coin) => c.coin.toLowerCase() === quote.depositCoin.toLowerCase())
@@ -377,6 +331,8 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
             console.warn('Could not fetch token decimals, defaulting to 18')
           }
         }
+        
+        const amount = parseUnits(quote.depositAmount, decimals);
 
         // CRITICAL: ERC20 transfer - ensure we're sending to SideShift deposit address
         console.log('Preparing ERC20 transfer:', {
@@ -464,12 +420,11 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
   }
 
   const explorerUrl = getExplorerUrl()
+  
   const isTransactionBlocked =
     safetyCheck?.riskLevel === 'unsafe' ||
     securityScanResult?.riskLevel === 'critical' ||
     securityScanResult?.riskLevel === 'high'
-
-  const isTransactionBlocked = safetyCheck?.riskLevel === 'unsafe';
 
   if (isSuccess) {
     return (
@@ -535,11 +490,6 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
               <Wallet className="w-3 h-3" /> {isLoadingBalance ? '...' : 'USE MAX'}
             </button>
           </div>
-          {walletBalance && !isLoadingBalance && (
-            <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded block mb-2">
-              Balance: {parseFloat(walletBalance).toFixed(4)} {quote.depositCoin}
-            </span>
-          )}
           <div className="flex justify-between items-end">
             <span className="text-xl font-bold text-blue-900">{quote.depositAmount}</span>
             <span className="text-sm font-medium text-blue-700">{quote.depositCoin} ({quote.depositNetwork})</span>
@@ -547,7 +497,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
 
           {walletBalance && !isLoadingBalance && (
             <div className="mt-2 text-xs text-gray-600">
-              Balance: {walletBalance ? parseFloat(walletBalance).toFixed(4) : '0.0000'} {quote.depositCoin}
+              Balance: {parseFloat(walletBalance).toFixed(4)} {quote.depositCoin}
             </div>
           )}
         </div>
@@ -564,7 +514,7 @@ export default function SwapConfirmation({ quote, confidence: _confidence, onAmo
           <div className="flex justify-between items-center text-[11px] text-gray-500 mb-1 px-1">
             <span>Deposit Address</span>
             <CopyButton 
-              text={quote.depositAddress} 
+              text={quote.depositAddress || ''} 
               size="sm" 
               variant="ghost"
               toastMessage="Deposit address copied!"

@@ -8,7 +8,7 @@ import {
   VALID_PLANS,
   type PlanValue,
 } from '@/lib/admin-service';
-import { logAdminAction, AUDIT_ACTIONS, getIpAddress, getUserAgent } from '../../../../shared/lib/audit-logger';
+import { logAdminAction, AUDIT_ACTIONS, getIpAddress, getUserAgent } from '../../../../../shared/lib/audit-logger';
 
 // ── Auth helper ───────────────────────────────────────────────────────────
 
@@ -54,9 +54,9 @@ async function enrichWithEmails(
 
 /**
  * Query params:
- *   page   – default 1
- *   limit  – default 20, max 100
- *   search – free-text (walletAddress, firebaseUid, email)
+ * page   – default 1
+ * limit  – default 20, max 100
+ * search – free-text (walletAddress, firebaseUid, email)
  */
 export async function GET(req: NextRequest) {
   try {
@@ -91,9 +91,9 @@ export async function GET(req: NextRequest) {
 
 /**
  * Body:
- *   firebaseUid  – target user's Firebase UID
- *   action       – 'suspend' | 'unsuspend' | 'flag' | 'unflag'
- *   reason       – optional string
+ * firebaseUid  – target user's Firebase UID
+ * action       – 'suspend' | 'unsuspend' | 'flag' | 'unflag'
+ * reason       – optional string
  */
 export async function PATCH(req: NextRequest) {
   try {

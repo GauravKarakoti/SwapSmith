@@ -32,8 +32,7 @@ export class RateLimitError extends Error {
  * The header can be either:
  * - A number of seconds (e.g., "120")
  * - An HTTP date string (e.g., "Wed, 21 Oct 2026 07:28:00 GMT")
- * 
- * @param retryAfterHeader - The value of the Retry-After header
+ * * @param retryAfterHeader - The value of the Retry-After header
  * @returns The number of seconds to wait before retrying, or 60 if invalid/missing
  */
 function parseRetryAfter(retryAfterHeader: string | undefined): number {
@@ -75,7 +74,7 @@ export interface SideShiftQuote {
   id: string;
   depositCoin: string;
   depositNetwork: string;
-  depositAddress: string; // Address where user should send their deposit
+  depositAddress?: string; // Address where user should send their deposit
   settleCoin: string;
   settleNetwork: string;
   depositAmount: string;
@@ -384,11 +383,11 @@ export async function createQuote(
 
     const validated = validateResponse(SideShiftQuoteSchema, response?.data, 'createQuote');
 
-    if (validated.error) {
-      throw new Error(`SideShift quote error: ${validated.error.message}`);
+    if ((validated as any).error) {
+      throw new Error(`SideShift quote error: ${(validated as any).error.message}`);
     }
 
-    return validated;
+    return validated as unknown as SideShiftQuote;
   } catch (error) {
     const message = extractErrorMessage(error, `Failed to create quote for ${fromAsset} to ${toAsset}`);
     throw new Error(message);
@@ -506,11 +505,11 @@ export async function createCheckout(
 
     const validated = validateResponse(SideShiftCheckoutResponseSchema, response?.data, 'createCheckout');
 
-    if (validated.error) {
-      throw new Error(`SideShift checkout error: ${validated.error.message}`);
+    if ((validated as any).error) {
+      throw new Error(`SideShift checkout error: ${(validated as any).error.message}`);
     }
 
-    return validated;
+    return validated as unknown as SideShiftCheckoutResponse;
   } catch (error) {
     const message = extractErrorMessage(error, 'Failed to create checkout');
     throw new Error(message);

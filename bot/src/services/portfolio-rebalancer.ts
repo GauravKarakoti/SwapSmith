@@ -226,14 +226,16 @@ export async function executePortfolioRebalance(
     const status = allSucceeded ? 'completed' : (anySucceeded ? 'partial' : 'failed');
 
     // Update rebalance history
-    await db.update(rebalanceHistory)
-      .set({
-        swapsExecuted: executedSwaps,
-        totalFees: totalFees.toString(),
-        status,
-        completedAt: new Date()
-      })
-      .where(eq(rebalanceHistory.id, rebalanceId));
+    if (rebalanceId) {
+      await db.update(rebalanceHistory)
+        .set({
+          swapsExecuted: executedSwaps,
+          totalFees: totalFees.toString(),
+          status,
+          completedAt: new Date()
+        })
+        .where(eq(rebalanceHistory.id, rebalanceId));
+    }
 
     // Update last rebalanced timestamp
     await db.update(portfolioTargets)

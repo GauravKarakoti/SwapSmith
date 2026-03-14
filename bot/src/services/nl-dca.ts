@@ -64,7 +64,7 @@ export function parseDCA(input: string): Partial<DCAScheduleNLConfig> | null {
   let matchFound = false;
 
   // Pattern 1: "$X per/every [period]"
-  let match = input.match(DCA_PATTERNS[0]);
+  let match = input.match(DCA_PATTERNS[0] as RegExp);
   if (match) {
     config.amount = parseFloat(match[1] as string);
     config.amountType = 'exact';
@@ -74,7 +74,7 @@ export function parseDCA(input: string): Partial<DCAScheduleNLConfig> | null {
 
   // Pattern 2: "invest/buy $X [asset] every..."
   if (!matchFound) {
-    match = input.match(DCA_PATTERNS[1]);
+    match = input.match(DCA_PATTERNS[1] as RegExp);
     if (match) {
       config.amount = parseFloat(match[1] as string);
       config.amountType = 'exact';
@@ -87,7 +87,7 @@ export function parseDCA(input: string): Partial<DCAScheduleNLConfig> | null {
 
   // Pattern 3: "buy X tokens every Y"
   if (!matchFound) {
-    match = input.match(DCA_PATTERNS[2]);
+    match = input.match(DCA_PATTERNS[2] as RegExp);
     if (match) {
       config.amount = parseFloat(match[1] as string);
       config.amountType = 'exact';
@@ -100,7 +100,7 @@ export function parseDCA(input: string): Partial<DCAScheduleNLConfig> | null {
 
   // Pattern 4: "DCA into [asset] - $X [period]"
   if (!matchFound) {
-    match = input.match(DCA_PATTERNS[3]);
+    match = input.match(DCA_PATTERNS[3] as RegExp);
     if (match) {
       config.targetAsset = match[1]!.toUpperCase();
       config.amount = parseFloat(match[2] as string);
@@ -113,7 +113,7 @@ export function parseDCA(input: string): Partial<DCAScheduleNLConfig> | null {
 
   // Pattern 5: "set up recurring buy of $X daily/weekly"
   if (!matchFound) {
-    match = input.match(DCA_PATTERNS[4]);
+    match = input.match(DCA_PATTERNS[4] as RegExp);
     if (match) {
       config.amount = parseFloat(match[1] as string);
       config.amountType = 'exact';

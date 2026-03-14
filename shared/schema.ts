@@ -843,3 +843,30 @@ export type StrategyPerformance = typeof strategyPerformance.$inferSelect;
 export type NewStrategyPerformance = typeof strategyPerformance.$inferInsert;
 export type StrategyTrade = typeof strategyTrades.$inferSelect;
 export type NewStrategyTrade = typeof strategyTrades.$inferInsert;
+
+export const pageVisits = pgTable('page_visits', {
+  id: serial('id').primaryKey(),
+  page: text('page').notNull(),
+  userId: text('user_id'),
+  sessionId: text('session_id'),
+  userAgent: text('user_agent'),
+  referer: text('referer'),
+  visitedAt: timestamp('visited_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("idx_page_visits_user_id").on(table.userId),
+  index("idx_page_visits_visited_at").on(table.visitedAt),
+]);
+
+export const groqUsageLogs = pgTable('groq_usage_logs', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id'),
+  model: text('model').notNull(),
+  endpoint: text('endpoint').notNull().default('chat'),
+  promptTokens: integer('prompt_tokens').notNull().default(0),
+  completionTokens: integer('completion_tokens').notNull().default(0),
+  totalTokens: integer('total_tokens').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("idx_groq_usage_user_id").on(table.userId),
+  index("idx_groq_usage_created_at").on(table.createdAt),
+]);

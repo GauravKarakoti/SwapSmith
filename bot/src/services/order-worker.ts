@@ -50,7 +50,7 @@ export async function checkAndExecuteLimitOrders(): Promise<void> {
   } catch (error) {
     await handleError('LimitOrderCheckError', {
       error: error instanceof Error ? error.message : 'Unknown error'
-    }, null, false, 'medium');
+    }, undefined, false, 'medium');
   }
 }
 
@@ -117,7 +117,7 @@ async function executeLimitOrder(order: DelayedOrder): Promise<void> {
       error: errorMessage,
       orderId: order.id,
       telegramId: order.telegramId
-    }, null, false, 'high');
+    }, undefined, false, 'high');
 
     // Notify user of failure
     await notifyUser(order.telegramId,
@@ -160,7 +160,7 @@ export async function checkAndExecuteDCA(): Promise<void> {
   } catch (error) {
     await handleError('DCACheckError', {
       error: error instanceof Error ? error.message : 'Unknown error'
-    }, null, false, 'medium');
+    }, undefined, false, 'medium');
   }
 }
 
@@ -232,7 +232,7 @@ async function executeDCAPurchase(order: DelayedOrder): Promise<void> {
       error: errorMessage,
       orderId: order.id,
       telegramId: order.telegramId
-    }, null, false, 'high');
+    }, undefined, false, 'high');
 
     // Notify user of failure
     await notifyUser(order.telegramId,
@@ -283,7 +283,7 @@ async function notifyUser(telegramId: number, message: string): Promise<void> {
       error: error instanceof Error ? error.message : 'Unknown error',
       telegramId,
       message: message.substring(0, 100)
-    }, null, false, 'medium');
+    }, undefined, false, 'medium');
   }
 }
 

@@ -20,6 +20,7 @@ export type CommandIntent =
   | 'dca' 
   | 'limit_order' 
   | 'swap_and_stake' 
+  | 'stake'
   | 'unknown';
 
 /**
