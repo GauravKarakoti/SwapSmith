@@ -21,8 +21,8 @@ describe('Limit Order Parsing', () => {
             expect(result.toAsset).toBe('ETH');
             expect(result.amount).toBe(100);
             expect(result.conditions).toBeDefined();
-            expect(result.conditions?.type).toBe('price_below');
-            expect(result.conditions?.value).toBe(2000);
+            expect((result.conditions as any)?.type).toBe('price_below');
+            expect((result.conditions as any)?.value).toBe(2000);
         }
     });
 
@@ -32,8 +32,8 @@ describe('Limit Order Parsing', () => {
         if ('intent' in result) {
             expect(result.intent).toBe('limit_order');
             expect(result.fromAsset).toBe('ETH');
-            expect(result.conditions?.type).toBe('price_above');
-            expect(result.conditions?.value).toBe(3000);
+            expect((result.conditions as any)?.type).toBe('price_above');
+            expect((result.conditions as any)?.value).toBe(3000);
         }
     });
 
@@ -41,8 +41,8 @@ describe('Limit Order Parsing', () => {
         const result = await parseUserCommand('Swap ETH to USDC when price > 4000');
         if ('intent' in result) {
              expect(result.intent).toBe('limit_order');
-             expect(result.conditions?.type).toBe('price_above');
-             expect(result.conditions?.value).toBe(4000);
+             expect((result.conditions as any)?.type).toBe('price_above');
+             expect((result.conditions as any)?.value).toBe(4000);
         }
     });
 });

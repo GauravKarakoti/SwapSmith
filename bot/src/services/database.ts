@@ -904,8 +904,8 @@ export async function createStakeOrder(data: {
     swapStatus: 'pending',
     stakeStatus: 'pending',
   }).returning();
-
-  return result[0];
+  
+  return result[0] || null;
 }
 
 /**

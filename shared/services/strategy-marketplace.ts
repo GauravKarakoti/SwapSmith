@@ -310,7 +310,8 @@ export const recordStrategyTrade = async (input: {
     sideshiftOrderId: input.sideshiftOrderId,
     fromAsset: input.fromAsset,
     fromNetwork: input.fromNetwork,
-    fromAmount: input.fromAmount,
+    amount: input.fromAmount,
+    signal: 'swap',
     toAsset: input.toAsset,
     toNetwork: input.toNetwork,
     settleAmount: input.settleAmount,
@@ -351,6 +352,7 @@ export const recordStrategyPerformance = async (input: {
     executedAt: input.status === 'completed' ? new Date() : undefined,
   }).returning();
 
+  if (!performance) throw new Error("Insert failed");
   return performance;
 };
 

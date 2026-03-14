@@ -352,7 +352,7 @@ export const MessageSchema = z.object({
     .refine(c => c.trim().length > 0, 'Message cannot be empty'),
   timestamp: z.date().default(() => new Date()),
   type: z.enum(['message', 'intent_confirmation', 'swap_confirmation', 'yield_info', 'checkout_link', 'portfolio_summary']).optional(),
-  data: z.record(z.unknown()).optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type Message = z.infer<typeof MessageSchema>;
@@ -385,7 +385,7 @@ export const SaveChatHistorySchema = z.object({
   sessionId: z.string().max(100),
   metadata: z.object({
     type: z.string().optional(),
-    data: z.record(z.unknown()).optional(),
+    data: z.record(z.string(), z.unknown()).optional(),
     timestamp: z.date().optional(),
   }).optional(),
 });
@@ -406,7 +406,7 @@ export function safeParse<T>(schema: z.ZodSchema<T>, data: unknown): { success: 
     return { success: true, data: result.data };
   }
   
-  const errors = result.error.errors
+  const errors = result.error.issues
     .map(err => {
       const path = err.path.join('.');
       return `${path || 'root'}: ${err.message}`;

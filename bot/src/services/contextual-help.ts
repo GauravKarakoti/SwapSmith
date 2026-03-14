@@ -1,4 +1,4 @@
-import { ParsedCommand } from './groq-client';
+import { ParsedCommand } from "./parseUserCommand";
 
 /**
  * Analysis result identifying present, missing, and invalid fields in a parsed command

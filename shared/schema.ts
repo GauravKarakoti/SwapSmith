@@ -477,9 +477,9 @@ export const gasOptimizationHistory = pgTable('gas_optimization_history', {
 
 // --- TRADING STRATEGY MARKETPLACE SCHEMAS ---
 
-export const strategyRiskLevelType = pgEnum('strategy_risk_level', ['low', 'medium', 'high', 'aggressive']);
-export const strategyStatusType = pgEnum('strategy_status', ['active', 'paused', 'archived']);
-export const subscriptionStatusType = pgEnum('subscription_status', ['active', 'paused', 'cancelled']);
+export const strategyRiskLevel = pgEnum('strategy_risk_level', ['low', 'medium', 'high', 'aggressive']);
+export const strategyStatus = pgEnum('strategy_status', ['active', 'paused', 'archived']);
+export const subscriptionStatus = pgEnum('subscription_status', ['active', 'paused', 'cancelled']);
 export const tradeStatusType = pgEnum('trade_status', ['pending', 'completed', 'failed']);
 export const performanceStatusType = pgEnum('performance_status', ['pending', 'completed', 'failed']);
 
@@ -490,13 +490,13 @@ export const tradingStrategies = pgTable('trading_strategies', {
   name: text('name').notNull(),
   description: text('description').notNull(),
   parameters: jsonb('parameters').notNull(),
-  riskLevel: strategyRiskLevelType('risk_level').notNull().default('medium'),
+  riskLevel: strategyRiskLevel('risk_level').notNull().default('medium'),
   subscriptionFee: text('subscription_fee').notNull().default('0'),
   performanceFee: numeric('performance_fee', { precision: 10, scale: 4 }).notNull().default('0'),
   minInvestment: text('min_investment').notNull().default('0'),
   isPublic: boolean('is_public').notNull().default(true),
   tags: text('tags').array(),
-  status: strategyStatusType('status').notNull().default('active'),
+  status: strategyStatus('status').notNull().default('active'),
   totalReturn: numeric('total_return', { precision: 15, scale: 8 }).notNull().default('0'),
   monthlyReturn: numeric('monthly_return', { precision: 15, scale: 8 }).notNull().default('0'),
   maxDrawdown: numeric('max_drawdown', { precision: 15, scale: 8 }).notNull().default('0'),
@@ -666,7 +666,7 @@ export const coinGiftLogs = pgTable('coin_gift_logs', {
   creatorTelegramId: bigint('creator_telegram_id', { mode: 'number' }),
   name: text('name').notNull(),
   description: text('description').notNull(),
-  // Strategy parameters stored as JSON
+  targetUserId: integer('target_user_id').references(() => users.id),
   parameters: jsonb('parameters').notNull().default({}), // { fromAsset, toAsset, allocation[], rebalanceThreshold, etc }
   // Risk and performance metrics
   riskLevel: strategyRiskLevel('risk_level').notNull().default('medium'),

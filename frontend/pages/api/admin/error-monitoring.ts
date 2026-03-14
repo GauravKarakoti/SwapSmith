@@ -1,7 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { withEnhancedCSRF } from '@/lib/enhanced-csrf';
 import { withRateLimit, RATE_LIMITS } from '@/lib/rate-limiter';
-import { applyAPISecurityHeaders } from '@/lib/security-headers';
 import fs from 'fs';
 import path from 'path';
 
@@ -166,8 +165,20 @@ function generateRecommendations(errorStats: any, healthStatus: any): string[] {
   return recommendations;
 }
 
-// Apply security middleware
-export default withRateLimit(
-  withEnhancedCSRF(errorMonitoringHandler),
-  { ...RATE_LIMITS.default, message: 'Too many error monitoring requests' }
-);
+const csrfProtectedHandler = withEnhancedCSRF(errorMonitoringHandler);
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // 1. Check rate limit first
+  const isRateLimited = withRateLimit(req, res, { 
+    ...RATE_LIMITS.default, 
+    message: 'Too many error monitoring requests' 
+  });
+  
+  // If limit is exceeded, withRateLimit already sent the 429 response
+  if (isRateLimited) {
+    return;
+  }
+  
+  // 2. Proceed to CSRF and main handler
+  return csrfProtectedHandler(req, res);
+}

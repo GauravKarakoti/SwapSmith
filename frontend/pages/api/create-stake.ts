@@ -160,7 +160,17 @@ async function createStakeHandler(req: NextApiRequest, res: NextApiResponse) {
   }
 }
 
-export default withRateLimit(
-  withEnhancedCSRF(createStakeHandler),
-  { ...RATE_LIMITS.swap }
-);
+const csrfProtectedHandler = withEnhancedCSRF(createStakeHandler);
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // 1. Check rate limit first
+  const isRateLimited = withRateLimit(req, res, RATE_LIMITS.swap);
+  
+  // If limit is exceeded, withRateLimit already sent the 429 response
+  if (isRateLimited) {
+    return;
+  }
+  
+  // 2. Proceed to CSRF and main handler
+  return csrfProtectedHandler(req, res);
+}

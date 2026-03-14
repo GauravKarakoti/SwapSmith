@@ -148,7 +148,7 @@ export class ErrorRecoveryManager {
         logger.info(`[Recovery] Executing ${context.operationName} (attempt ${context.attempts}/${context.maxAttempts})`);
         return await fn(context);
       } catch (error) {
-        context.lastError = error;
+        context.lastError = error instanceof Error ? error : new Error(String(error));
 
         if (context.attempts < context.maxAttempts && this.isRetryable(error)) {
           const delay = this.calculateBackoffDelay(context.attempts);
@@ -188,10 +188,10 @@ export class ErrorRecoveryManager {
     for (let i = context.rollbackHandlers.length - 1; i >= 0; i--) {
       const handler = context.rollbackHandlers[i];
       try {
-        logger.info(`[Recovery] Rolling back: ${handler.operation}`);
-        await handler.execute();
+        logger.info(`[Recovery] Rolling back: ${handler?.operation}`);
+        await handler?.execute();
       } catch (error) {
-        logger.error(`[Recovery] Rollback failed for ${handler.operation}`, error);
+        logger.error(`[Recovery] Rollback failed for ${handler?.operation}`, error);
         // Continue with other rollbacks even if one fails
       }
     }

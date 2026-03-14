@@ -5,7 +5,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { z, ZodSchema } from 'zod';
+import { ZodSchema } from 'zod';
 import {
   ParseCommandRequestSchema,
   SaveChatHistorySchema,
@@ -33,7 +33,7 @@ export function validateRequest(schema: ZodSchema) {
 
       // Replace body with validated data
       (req as any).validatedBody = validationResult.data;
-      next();
+      return next();
     } catch (error) {
       logger.error('Validation middleware error:', error);
       return res.status(500).json({
@@ -67,7 +67,7 @@ export function sanitizeRequestBody(req: Request, res: Response, next: NextFunct
     if (req.body && typeof req.body === 'object') {
       req.body = sanitizeObjectStrings(req.body);
     }
-    next();
+    return next();
   } catch (error) {
     logger.error('Input sanitization error:', error);
     return res.status(400).json({
@@ -117,7 +117,7 @@ export function enforceInputLimits(req: Request, res: Response, next: NextFuncti
       });
     }
 
-    next();
+    return next();
   } catch (error) {
     logger.error('Input limit enforcement error:', error);
     return res.status(400).json({
@@ -145,11 +145,14 @@ export function rateLimit(
     let clientRequests = requests.get(clientId) || [];
     clientRequests = clientRequests.filter(timestamp => timestamp > windowStart);
 
+    if (!clientRequests || clientRequests.length === 0) return next();
+    const retryAfter = Math.ceil((clientRequests[0]! + windowMs - now) / 1000);
+
     if (clientRequests.length >= maxRequests) {
       return res.status(429).json({
         success: false,
         error: 'Too many requests. Please try again later.',
-        retryAfter: Math.ceil((clientRequests[0] + windowMs - now) / 1000),
+        retryAfter,
       });
     }
 
@@ -209,7 +212,7 @@ export function validateLLMInput(req: Request, res: Response, next: NextFunction
       });
     }
 
-    next();
+    return next();
   } catch (error) {
     logger.error('LLM input validation error:', error);
     return res.status(500).json({
@@ -270,7 +273,7 @@ export function validateConversationSize(req: Request, res: Response, next: Next
       }
     }
 
-    next();
+    return next();
   } catch (error) {
     logger.error('Conversation size validation error:', error);
     return res.status(400).json({

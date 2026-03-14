@@ -16,6 +16,10 @@ import { TERMINAL_STATUSES_LIST } from './constants';
 import { limitOrderWorker } from './workers/limitOrderWorker';
 import { DCAScheduler } from './services/dca-scheduler';
 import { ErrorDetails } from './types/Logger';
+import { resolveAddress } from './services/address-resolver';
+import { isValidAddress } from '../../shared/dist/services/address-validator';
+import { registerProcessHandlers, shutdownManager } from './services/shutdown-manager';
+import { createBotRateLimitMiddleware, getRateLimitConfigFromEnv } from './utils/rate-limit-middleware';
 
 dotenv.config();
 
@@ -159,6 +163,7 @@ bot.command('reputation', async (ctx: Context) => {
     `Success Rate: ${success}/${total} swaps`,
     { parse_mode: 'Markdown' }
   );
+  return;
 });
 
 /* -------------------------------------------------------------------------- */
@@ -176,7 +181,9 @@ const FREQUENCY_TO_HOURS: Record<string, number> = {
 bot.on(message('text'), async (ctx) => {
   if (ctx.message.text.startsWith('/')) return;
 
-  /* ---------------- Address Resolution ---------------- */
+  const userId = ctx.from.id;
+  const userInput = ctx.message.text;
+  const state = await db.getConversationState(userId);
 
   if (
     state?.parsedCommand &&
@@ -185,7 +192,7 @@ bot.on(message('text'), async (ctx) => {
       state.parsedCommand.intent
     )
   ) {
-    const resolved = await resolveAddress(userId, text.trim());
+    const resolved = await resolveAddress(userId, ctx.message.text.trim());
     const targetChain =
       state.parsedCommand.toChain ||
       state.parsedCommand.settleNetwork ||
@@ -208,9 +215,7 @@ bot.on(message('text'), async (ctx) => {
       );
     }
   }
-  const userId = ctx.from.id;
-  const userInput = ctx.message.text;
-
+  
   // Temporary: Retrieve conversation history implementation pending
   const conversationHistory: any[] = [];
 
@@ -357,6 +362,7 @@ bot.on(message('text'), async (ctx) => {
     // Handle other intents or default
     await ctx.reply(`Intent detected: ${parsed.intent}. (Implementation pending)`);
   }
+  return;
 });
 
 /* -------------------------------------------------------------------------- */
@@ -397,6 +403,7 @@ bot.action('confirm_dca', async (ctx) => {
   } finally {
     await db.clearConversationState(userId);
   }
+  return;
 });
 
 bot.action('confirm_stake', async (ctx) => {
@@ -433,6 +440,7 @@ bot.action('confirm_stake', async (ctx) => {
   } finally {
     await db.clearConversationState(userId);
   }
+  return;
 });
 
 bot.action('cancel_action', async (ctx) => {
@@ -522,13 +530,14 @@ bot.action('confirm_swap_and_stake', async (ctx) => {
       { parse_mode: 'Markdown' }
     );
   } catch (error) {
-    handleError('SwapAndStakeError', error as ErrorDetails, null, true, 'high');
+    handleError('SwapAndStakeError', error as ErrorDetails, undefined, true, 'high');
     await ctx.editMessageText(
       '❌ Failed to create swap & stake order. Please try again later.'
     );
   } finally {
     await db.clearConversationState(userId);
   }
+  return;
 });
 
 bot.action('cancel_swap', async (ctx) => {
@@ -589,7 +598,7 @@ async function start() {
 
     logger.info('✅ All services started and shutdown handlers registered');
   } catch(e) {
-    handleError('StartupFailed', e as ErrorDetails, null, true, 'critical');
+    handleError('StartupFailed', e as ErrorDetails, undefined, true, 'critical');
     process.exit(1);
   }
 }

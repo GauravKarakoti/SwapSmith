@@ -4,7 +4,6 @@ import { createQuote, createOrder } from './sideshift-client';
 import logger from './logger';
 import { errorRecoveryManager, DCARecoveryStrategy, type RecoveryContext } from '../utils/error-recovery';
 
-const RETRY_DELAY_MINUTES = parseInt(process.env['DCA_RETRY_DELAY_MINUTES'] ?? '5', 10);
 const MAX_PROCESSING_TIME_MINUTES = parseInt(process.env['DCA_MAX_PROCESSING_TIME_MINUTES'] ?? '10', 10);
 const SCHEDULER_CHECK_INTERVAL_MS = parseInt(process.env['DCA_SCHEDULER_CHECK_INTERVAL_MS'] ?? '60000', 10);
 
@@ -70,10 +69,10 @@ export class DCAScheduler {
     const idempotencyKey = `dca_${schedule.id}_${schedule.nextExecutionAt.getTime()}`;
     
     await errorRecoveryManager.executeWithRecovery(
+      `DCA Schedule ${schedule.id}`,
       async (context: RecoveryContext) => {
         await this.executeSchedule(schedule, context);
       },
-      `DCA Schedule ${schedule.id}`,
       idempotencyKey
     );
   }
@@ -176,7 +175,7 @@ export class DCAScheduler {
         async (scheduleId, nextExecution) => {
           await db.update(dcaSchedules)
             .set({ nextExecutionAt: nextExecution })
-            .where(eq(dcaSchedules.id, scheduleId));
+            .where(eq(dcaSchedules.id, Number(scheduleId)));
         }
       );
 
@@ -194,17 +193,6 @@ export class DCAScheduler {
     await db.update(dcaSchedules)
       .set({ nextExecutionAt: nextExecution })
       .where(eq(dcaSchedules.id, scheduleId));
-  }
-
-  private async scheduleRetry(scheduleId: number): Promise<void> {
-    const retryTime = new Date();
-    retryTime.setMinutes(retryTime.getMinutes() + RETRY_DELAY_MINUTES);
-
-    await db.update(dcaSchedules)
-      .set({ nextExecutionAt: retryTime })
-      .where(eq(dcaSchedules.id, scheduleId));
-
-    logger.info(`Scheduled retry for DCA ${scheduleId} at ${retryTime.toISOString()}`);
   }
 
   private calculateNextExecution(intervalHours: number): Date {

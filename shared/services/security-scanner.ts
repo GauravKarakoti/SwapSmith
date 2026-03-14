@@ -1,15 +1,14 @@
-import { createPublicClient, http, type PublicClient, type Address } from 'viem';
+import { createPublicClient, http, type PublicClient, type Address, Chain } from 'viem';
 import { mainnet, polygon, arbitrum, avalanche, optimism, bsc, base } from 'viem/chains';
 
-// Chain configuration for supported networks
-const CHAIN_CONFIG: Record<string, { chain: typeof mainnet; rpcUrl: string }> = {
-  ethereum: { chain: mainnet, rpcUrl: process.env.ETHEREUM_RPC_URL || 'https://eth.llamarpc.com' },
-  polygon: { chain: polygon, rpcUrl: process.env.POLYGON_RPC_URL || 'https://polygon.llamarpc.com' },
-  arbitrum: { chain: arbitrum, rpcUrl: process.env.ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc' },
-  avalanche: { chain: avalanche, rpcUrl: process.env.AVALANCHE_RPC_URL || 'https://api.avax.network/ext/bc/C/rpc' },
-  optimism: { chain: optimism, rpcUrl: process.env.OPTIMISM_RPC_URL || 'https://mainnet.optimism.io' },
-  bsc: { chain: bsc, rpcUrl: process.env.BSC_RPC_URL || 'https://bsc-dataseed.binance.org' },
-  base: { chain: base, rpcUrl: process.env.BASE_RPC_URL || 'https://mainnet.base.org' },
+const CHAIN_CONFIG: Record<string, { chain: Chain; rpcUrl: string }> = {
+  ethereum: { chain: mainnet, rpcUrl: process.env['ETHEREUM_RPC_URL'] || 'https://eth.llamarpc.com' },
+  polygon: { chain: polygon, rpcUrl: process.env['POLYGON_RPC_URL'] || 'https://polygon.llamarpc.com' },
+  arbitrum: { chain: arbitrum, rpcUrl: process.env['ARBITRUM_RPC_URL'] || 'https://arb1.arbitrum.io/rpc' },
+  avalanche: { chain: avalanche, rpcUrl: process.env['AVALANCHE_RPC_URL'] || 'https://api.avax.network/ext/bc/C/rpc' },
+  optimism: { chain: optimism, rpcUrl: process.env['OPTIMISM_RPC_URL'] || 'https://mainnet.optimism.io' },
+  bsc: { chain: bsc, rpcUrl: process.env['BSC_RPC_URL'] || 'https://bsc-dataseed.binance.org' },
+  base: { chain: base, rpcUrl: process.env['BASE_RPC_URL'] || 'https://mainnet.base.org' },
 };
 
 // Common ERC-20 ABI for token interactions
@@ -219,7 +218,7 @@ export async function analyzeTokenSecurity(
     result.metadata.name = name.status === 'fulfilled' ? name.value as string : null;
     result.metadata.symbol = symbol.status === 'fulfilled' ? symbol.value as string : null;
     result.metadata.decimals = decimals.status === 'fulfilled' ? decimals.value as number : null;
-    result.metadata.totalSupply = totalSupply.status === 'fulfilled' ? totalSupply.value as string : null;
+    result.metadata.totalSupply = totalSupply.status === 'fulfilled' ? totalSupply.value.toString() : null;
     result.contractAnalysis.ownerAddress = owner.status === 'fulfilled' ? owner.value as string : null;
 
     // Check if owner is null (could indicate a honeypot)
@@ -229,7 +228,7 @@ export async function analyzeTokenSecurity(
 
     // Check if total supply is suspiciously round
     if (totalSupply.status === 'fulfilled') {
-      const supply = totalSupply.value as string;
+      const supply = totalSupply.value.toString();
       // Common honeypot pattern: very round numbers like 1 trillion
       if (supply && (BigInt(supply) % BigInt(1e18) === BigInt(0))) {
         const normalized = BigInt(supply) / BigInt(1e18);
@@ -256,7 +255,7 @@ export async function analyzeTokenSecurity(
 // Check if an address is in our known malicious list
 export async function checkAddressReputation(
   address: string,
-  network: string
+  _network: string
 ): Promise<{ isMalicious: boolean; threatType: string | null; confidence: number }> {
   // Check against known malicious patterns
   if (KNOWN_MALICIOUS_PATTERNS.includes(address.toLowerCase())) {
@@ -345,7 +344,7 @@ export async function simulateTransaction(
 
 // Main security scanner function
 export async function performSecurityScan(
-    fromToken: string,
+    _fromToken: string,
     fromNetwork: string,
     toToken: string,
     toNetwork: string,

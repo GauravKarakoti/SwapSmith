@@ -341,7 +341,7 @@ export class LimitOrderWorker {
               orderId: order.id,
               telegramId: order.telegramId,
               message: `Failed to send failure notification for order #${order.id}`
-            }, null, true, 'high');
+            }, undefined, true, 'high');
           }
         }
       }

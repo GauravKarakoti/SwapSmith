@@ -3,7 +3,7 @@ import { drizzle } from 'drizzle-orm/neon-http';
 import { adminAuditLog } from '../schema';
 import type { AdminAuditLog } from '../schema';
 
-const rawSql = neon(process.env.DATABASE_URL!);
+const rawSql = neon(process.env['DATABASE_URL']!);
 const db = drizzle(rawSql);
 
 /**

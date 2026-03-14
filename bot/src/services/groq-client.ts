@@ -21,74 +21,6 @@ function getGroqClient(): Groq {
   });
 }
 
-
-export interface ParsedCommand {
-  success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "yield_deposit" | "yield_migrate" | "dca" | "limit_order" | "stake" | "unknown";
-  
-  // Single Swap Fields
-  fromAsset: string | null;
-  fromChain: string | null;
-  toAsset: string | null;
-  toChain: string | null;
-  amount: number | null;
-  amountType?: "exact" | "absolute" | "percentage" | "all" | "exclude" | null; // Extended with 'absolute'
-
-  excludeAmount?: number;
-  excludeToken?: string;
-  quoteAmount?: number;
-
-  // Conditional Fields
-  conditions?: {
-    type: "price_above" | "price_below";
-    asset: string;
-    value: number;
-  };
-  
-  // Portfolio Fields
-  portfolio?: {
-    toAsset: string;
-    toChain: string;
-    percentage: number;
-  }[];
-  driftThreshold?: number;
-  autoRebalance?: boolean;
-  portfolioName?: string;
-
-  // DCA Fields
-  frequency?: "daily" | "weekly" | "monthly" | string | null;
-  dayOfWeek?: string | null;
-  dayOfMonth?: string | null;
-  totalAmount?: number;
-  numPurchases?: number;
-
-  // Checkout Fields
-  settleAsset: string | null;
-  settleNetwork: string | null;
-  settleAmount: number | null;
-  settleAddress: string | null;
-
-  // Yield Fields
-  fromProject: string | null;
-  fromYield: number | null;
-  toProject: string | null;
-  toYield: number | null;
-
-  // Limit Order Fields (Legacy - kept for compatibility, prefer 'conditions')
-  conditionOperator?: 'gt' | 'lt';
-  conditionValue?: number;
-  conditionAsset?: string;
-  targetPrice?: number;
-  condition?: 'above' | 'below';
-
-  confidence: number;
-  validationErrors: string[];
-  parsedMessage: string;
-  requiresConfirmation?: boolean; 
-  originalInput?: string;        
-}
-
-
 const systemPrompt = `
 You are SwapSmith, an advanced DeFi AI agent specialized in parsing natural language into precise JSON commands.
 Your job is to handle complex, ambiguous, and edge-case trading commands with high accuracy.
@@ -679,6 +611,10 @@ export async function parseWithLLM(
       success: false,
       intent: 'unknown',
       confidence: 0,
+      fromProject: null,
+      fromYield: null,
+      toProject: null,
+      toYield: null,
       validationErrors: errors,
       parsedMessage: 'Invalid input',
       fromAsset: null,
@@ -751,7 +687,7 @@ export async function transcribeAudio(mp3FilePath: string): Promise<string> {
     const errorDetails: ErrorDetails = error instanceof Error
       ? { message: error.message, stack: error.stack }
       : { message: 'Unknown error' };
-    await handleError('TranscriptionError', { ...errorDetails, filePath: mp3FilePath }, null, false, 'low');
+    await handleError('TranscriptionError', { ...errorDetails, filePath: mp3FilePath }, undefined, false, 'low');
     throw error;
   }
 }
