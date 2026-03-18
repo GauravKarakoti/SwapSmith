@@ -213,7 +213,7 @@ export async function parseUserCommand(
       settleNetwork: null,
       settleAmount: null,
       settleAddress: null,
-      fromProject: stakeProtocol,
+      fromProject: stakeProtocol as string,
       fromYield: null,
       toProject: null,
       toYield: null,

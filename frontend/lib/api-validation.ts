@@ -140,28 +140,23 @@ export const strategyQuerySchema = z.object({
   }),
 });
 
-/**
- * Strategy creation body schema
- */
 export const strategyCreateBodySchema = z.object({
   creatorId: z.number().int().positive(),
-  creatorTelegramId: z.string().optional(),
+  creatorTelegramId: z.coerce.number().optional(), // Coerce to number
   name: schemas.shortString,
   description: schemas.mediumString,
   parameters: z.record(z.string(), z.unknown()).optional().default({}),
   riskLevel: z.enum(['low', 'medium', 'high']),
   subscriptionFee: z.string().default('0'),
-  performanceFee: z.number().min(0).max(100).default(0),
+  // Accept string or number, but output a string to match the DB signature
+  performanceFee: z.union([z.number(), z.string()]).transform(val => String(val)).default('0'),
   minInvestment: z.string().default('100'),
   isPublic: z.boolean().default(true),
   tags: z.array(z.string()).optional(),
 });
 
-/**
- * Helper function to safely parse and validate input
- */
 export function validateInput<T>(
-  schema: z.ZodSchema<T>,
+  schema: z.ZodType<T, any, any>, // Allow input and output types to differ
   data: unknown
 ): { success: true; data: T } | { success: false; error: string } {
   try {

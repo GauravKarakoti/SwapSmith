@@ -301,7 +301,7 @@ export class DCARecoveryStrategy {
    */
   static async handleDCAFailure(
     scheduleId: number | string,
-    userId: number | string,
+    _userId: number | string,
     error: unknown,
     updateNextExecution: (scheduleId: number | string, nextExecution: Date) => Promise<void>
   ): Promise<{
@@ -375,7 +375,7 @@ export class OrderRecoveryStrategy {
   static async handleOrderFailure(
     orderId: string,
     error: unknown,
-    maxRetries: number = 3
+    _maxRetries: number = 3
   ): Promise<{
     strategy: RecoveryStrategy;
     shouldRetry: boolean;

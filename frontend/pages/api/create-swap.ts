@@ -77,8 +77,19 @@ async function createSwapHandler(req: NextApiRequest, res: NextApiResponse) {
   }
 }
 
-// Apply comprehensive security: Rate limiting + Enhanced CSRF + Financial security headers
-export default withRateLimit(
-  withEnhancedCSRF(createSwapHandler),
-  { ...RATE_LIMITS.swap, message: 'Too many swap requests. Please wait before trying again.' }
-);
+const csrfProtectedHandler = withEnhancedCSRF(createSwapHandler);
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // 1. Check rate limit first
+  const isRateLimited = withRateLimit(req, res, {
+    ...RATE_LIMITS.swap,
+    message: 'Too many swap requests. Please wait before trying again.'
+  });
+
+  if (isRateLimited) {
+    return;
+  }
+  
+  // 2. Proceed to CSRF and main handler
+  return csrfProtectedHandler(req, res);
+}

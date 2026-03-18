@@ -7,7 +7,7 @@ import cors from 'cors';
 
 import logger, { Sentry, handleError } from './services/logger';
 import { getOrderStatus } from './services/sideshift-client';
-import { getTopStablecoinYields, formatYieldPools } from './services/yield-client';
+import { getTopYieldPools, YieldPool } from './services/yield-client';
 import * as db from './services/database';
 import { OrderMonitor } from './services/order-monitor';
 import { parseUserCommand } from './services/parseUserCommand';
@@ -27,6 +27,8 @@ dotenv.config();
 /* CONFIG */
 /* -------------------------------------------------------------------------- */
 
+const formatYieldPools = (pools: YieldPool[]) => 
+  pools.map(p => `• ${p.project} (${p.chain}): ${p.apy.toFixed(2)}% APR`).join('\n');
 const BOT_TOKEN = process.env['BOT_TOKEN']!;
 const MINI_APP_URL =
   process.env['MINI_APP_URL'] || 'https://swapsmithminiapp.netlify.app/';
@@ -128,7 +130,7 @@ bot.command('yield', async (ctx: Context) => {
   await ctx.reply('📈 Fetching top yield opportunities...');
 
   try {
-    const yields = await getTopStablecoinYields();
+    const yields = await getTopYieldPools();
 
     await ctx.replyWithMarkdown(
       `📈 *Top Stablecoin Yields:*\n\n${formatYieldPools(yields)}`
@@ -230,7 +232,7 @@ bot.on(message('text'), async (ctx) => {
   /* ---------------- Yield Scout ---------------- */
 
   if (parsed.intent === 'yield_scout') {
-    const yields = await getTopStablecoinYields();
+    const yields = await getTopYieldPools();
     return ctx.replyWithMarkdown(
       `📈 *Top Stablecoin Yields:*\n\n${formatYieldPools(yields)}`
     );
@@ -322,7 +324,6 @@ bot.on(message('text'), async (ctx) => {
       await db.setConversationState(userId, { parsedCommand: parsed });
       return ctx.reply('Please provide the destination wallet address.');
     }
-    return;
   }
 
   // Save state for confirmation

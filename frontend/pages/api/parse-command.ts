@@ -87,8 +87,18 @@ async function parseCommandHandler(req: NextApiRequest, res: NextApiResponse) {
   }
 }
 
-// Apply comprehensive security: Rate limiting + Enhanced CSRF
-export default withRateLimit(
-  withEnhancedCSRF(parseCommandHandler),
-  { ...RATE_LIMITS.strict, message: 'Too many command parsing requests. Please wait before trying again.' }
-);
+const csrfProtectedHandler = withEnhancedCSRF(parseCommandHandler);
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // 1. Check rate limit first
+  const isRateLimited = withRateLimit(req, res,
+    { ...RATE_LIMITS.strict, message: 'Too many command parsing requests. Please wait before trying again.' }
+  );
+  
+  if (isRateLimited) {
+    return;
+  }
+  
+  // 2. Proceed to CSRF and main handler
+  return csrfProtectedHandler(req, res);
+}

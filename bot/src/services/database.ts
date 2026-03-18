@@ -885,7 +885,7 @@ export async function createStakeOrder(data: {
   depositAddress: string;
   depositMemo?: string;
   stakeAddress?: string;
-}): Promise<StakeOrder> {
+}): Promise<StakeOrder | null> {
   const result = await db.insert(stakeOrders).values({
     telegramId: data.telegramId,
     sideshiftOrderId: data.sideshiftOrderId,

@@ -32,12 +32,43 @@ export default function ScannerPage() {
     setReport(null);
 
     try {
-      const scanner = new SecurityScanner(selectedChain);
-      const result = await scanner.scanToken(address);
-      setReport(result);
+      // Use the utility function instead of a non-existent class
+      const response = await performSecurityScan(
+        address,       // fromToken
+        selectedChain, // fromNetwork
+        address,       // toToken (using same for standalone token scan)
+        selectedChain, // toNetwork
+        '0',           // fromAmount
+        address        // contractAddress
+      );
+
+      const scanResult = response.scanResult;
+      const tokenDetails = scanResult.checks.tokenSecurity?.details;
+      const simDetails = scanResult.checks.simulation?.details;
+
+      // Map the API response to the SecurityReport structure the UI expects
+      const mappedReport: any = {
+        overallRiskScore: scanResult.riskScore,
+        contractVerified: tokenDetails?.isVerified ?? false,
+        buyTax: tokenDetails?.contractAnalysis?.buyTax ?? 0,
+        sellTax: tokenDetails?.contractAnalysis?.sellTax ?? 0,
+        simulationResult: {
+          canSell: simDetails?.wouldSucceed ?? !(tokenDetails?.contractAnalysis?.cannotSell)
+        },
+        ownershipRenounced: 
+          tokenDetails?.contractAnalysis?.ownerAddress === null || 
+          tokenDetails?.contractAnalysis?.ownerAddress === '0x0000000000000000000000000000000000000000',
+        holderAnalysis: {
+          totalHolders: 0, // Fallback if API doesn't provide exact total
+          topHoldersShare: tokenDetails?.holderAnalysis?.top10HoldersPercent ?? 0,
+        },
+        details: scanResult.flags || []
+      };
+
+      setReport(mappedReport);
     } catch (err: any) {
       console.error(err);
-      setError('Failed to scan token. Please check address and network.');
+      setError(err.message || 'Failed to scan token. Please check address and network.');
     } finally {
       setLoading(false);
     }

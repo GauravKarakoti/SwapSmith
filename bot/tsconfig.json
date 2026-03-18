@@ -27,7 +27,7 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    
+    "types": ["jest"],
     "paths": {
       "@/*": [
         "./*"
@@ -58,6 +58,9 @@
       ],
       "viem": [
         "./node_modules/viem"
+      ],
+      "vitest": [
+        "./node_modules/vitest"
       ]
     }
   },

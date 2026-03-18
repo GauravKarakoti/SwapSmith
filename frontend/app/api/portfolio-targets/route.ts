@@ -27,8 +27,8 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const queryParams = {
-      id: searchParams.get('id'),
-      history: searchParams.get('history')
+      id: searchParams.get('id') ?? undefined,
+      history: searchParams.get('history') ?? undefined
     };
 
     const validation = validateInput(portfolioTargetsQuerySchema, queryParams);

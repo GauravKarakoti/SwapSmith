@@ -14,7 +14,11 @@ import {
   Info,
   TrendingUp,
   DollarSign,
+  Zap 
+} from 'lucide-react';
+
 interface BridgeQuote {
+  bridge: string;
   displayName: string;
   fromChain: string;
   toChain: string;

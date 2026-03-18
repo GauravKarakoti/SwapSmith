@@ -5,7 +5,7 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { BarChart2, Users, ArrowLeftRight, Coins, RefreshCw, LogOut, Menu, X, Shield } from 'lucide-react'
 
-export type AdminPage = 'dashboard' | 'users' | 'swaps' | 'coins' | 'audit-log'
+export type AdminPage = 'dashboard' | 'users' | 'swaps' | 'coins' | 'audit-log' | 'database' | 'sql' | 'stats'
 
 export interface AdminNavbarProps {
   activePage: AdminPage
@@ -18,11 +18,11 @@ export interface AdminNavbarProps {
 }
 
 const NAV_ITEMS = [
-  { label: 'Analytics',  icon: BarChart2,      path: '/admin/dashboard', key: 'dashboard' },
-  { label: 'Users',      icon: Users,           path: '/admin/users',     key: 'users'     },
-  { label: 'Swaps',      icon: ArrowLeftRight,  path: '/admin/swaps',     key: 'swaps'     },
-  { label: 'Test Coins', icon: Coins,           path: '/admin/coins',     key: 'coins'     },
-  { label: 'Audit Log',  icon: Shield,          path: '/admin/audit-log', key: 'audit-log', superAdminOnly: true },
+  { label: 'Analytics',  icon: BarChart2,      path: '/admin/dashboard', key: 'dashboard', superAdminOnly: false },
+  { label: 'Users',      icon: Users,          path: '/admin/users',     key: 'users',     superAdminOnly: false },
+  { label: 'Swaps',      icon: ArrowLeftRight, path: '/admin/swaps',     key: 'swaps',     superAdminOnly: false },
+  { label: 'Test Coins', icon: Coins,          path: '/admin/coins',     key: 'coins',     superAdminOnly: false },
+  { label: 'Audit Log',  icon: Shield,         path: '/admin/audit-log', key: 'audit-log', superAdminOnly: true },
 ] as const
 
 export default function AdminNavbar({ activePage, adminInfo, onLogout, onRefresh, lastRefresh }: AdminNavbarProps) {

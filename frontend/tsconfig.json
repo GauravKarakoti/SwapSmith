@@ -33,6 +33,7 @@
       "@neondatabase/serverless": ["./node_modules/@neondatabase/serverless"],
       "zod": ["./node_modules/zod"],
       "viem": ["./node_modules/viem"],
+      "vitest": ["./node_modules/vitest"],
     },
     "types": ["vitest", "vitest/globals"]
   },

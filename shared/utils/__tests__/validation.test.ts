@@ -15,14 +15,13 @@ import {
   SwapCommandSchema,
   TokenSymbolSchema,
   AmountSchema,
-  WalletAddressSchema,
-  EmailSchema,
   safeParse,
   validateAndSanitizeLLMInput,
   validateAPIResponse,
   SideShiftQuoteResponseSchema,
   VALIDATION_LIMITS,
 } from '../validation';
+import { describe, it, expect } from 'vitest';
 
 describe('Input Validation & Security Tests', () => {
   

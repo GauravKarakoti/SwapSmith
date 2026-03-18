@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserSettings, createOrUpdateUserSettings } from '@/lib/database';
 import { adminAuth } from '@/lib/firebase-admin';
-import { rateLimiters } from '@/lib/rate-limiter';
+import { rateLimitMiddleware, RATE_LIMITS } from '@/lib/rate-limiter';
 import { applyAPISecurityHeaders } from '@/lib/security-headers';
 
 // GET /api/user/settings - Get user settings
@@ -88,12 +88,10 @@ export async function GET(request: NextRequest) {
 // POST /api/user/settings - Create or update user settings
 export async function POST(request: NextRequest) {
   try {
-    // 🔐 Rate limiting
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rateLimitResponse = rateLimiters.profile(request as any, {} as any);
-    if (!rateLimitResponse) {
-      const response = NextResponse.json({ error: 'Too many profile requests' }, { status: 429 });
-      return applyAPISecurityHeaders(response);
+    const rateLimitResponse = rateLimitMiddleware(request, RATE_LIMITS.profile);
+    if (rateLimitResponse) {
+      // rateLimitMiddleware returns a 429 response directly if limited, otherwise it returns null
+      return applyAPISecurityHeaders(rateLimitResponse);
     }
 
     // 🔐 Firebase authentication

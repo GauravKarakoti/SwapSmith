@@ -39,7 +39,7 @@ export async function logAdminAction(params: AuditLogParams): Promise<AdminAudit
       userAgent: params.userAgent ?? null,
     }).returning();
 
-    return auditLogEntry;
+    return auditLogEntry || null;
   } catch (error) {
     console.error('[Audit Logger] Failed to log admin action:', error);
     // Don't throw - audit logging should not break the main operation
@@ -51,7 +51,7 @@ export async function logAdminAction(params: AuditLogParams): Promise<AdminAudit
  * Helper function to extract IP address from request headers
  */
 export function getIpAddress(headers: Headers): string | undefined {
-  return headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+  return headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
          headers.get('x-real-ip') ||
          undefined;
 }

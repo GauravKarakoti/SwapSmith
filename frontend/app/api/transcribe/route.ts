@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
-import { getRateLimitStatus } from '@/lib/rate-limiter';
+import { rateLimitMiddleware, RATE_LIMITS } from '@/lib/rate-limiter';
 import { applyAPISecurityHeaders } from '@/lib/security-headers';
 import { loadSecret } from '../../../../shared/utils/secrets-loader';
 
@@ -97,12 +97,13 @@ async function transcribeHandler(request: NextRequest) {
   }
 }
 
-// Apply rate limiting and CSRF protection
 export async function POST(req: NextRequest) {
-  const { isLimited } = getRateLimitStatus(req);
-  if (isLimited) {
-    const response = NextResponse.json({ error: 'Too many requests' }, { status: 429 });
-    return applyAPISecurityHeaders(response);
+  // Use rateLimitMiddleware with a specific config (e.g., strict or default)
+  const rateLimitResponse = rateLimitMiddleware(req, RATE_LIMITS.strict);
+  
+  // If the user is rate-limited, rateLimitResponse will be a 429 NextResponse
+  if (rateLimitResponse) {
+    return applyAPISecurityHeaders(rateLimitResponse);
   }
 
   const response = await transcribeHandler(req);

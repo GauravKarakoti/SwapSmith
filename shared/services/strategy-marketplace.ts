@@ -66,7 +66,8 @@ export const createStrategy = async (input: CreateStrategyInput): Promise<Tradin
     tags: input.tags,
     status: 'active',
   }).returning();
-
+  
+  if (!strategy) throw new Error('Failed to create strategy');
   return strategy;
 };
 
@@ -106,7 +107,6 @@ export const subscribeToStrategy = async (input: SubscribeToStrategyInput): Prom
     throw new Error('Already subscribed to this strategy');
   }
 
-  // Create subscription
   const [subscription] = await db.insert(strategySubscriptions).values({
     strategyId: input.strategyId,
     subscriberId: input.subscriberId,
@@ -116,7 +116,7 @@ export const subscribeToStrategy = async (input: SubscribeToStrategyInput): Prom
     autoRebalance: input.autoRebalance ?? true,
     stopLossPercent: input.stopLossPercent,
     status: 'active',
-  }).returning();
+  } as any).returning();
 
   // Increment subscriber count
   await db
@@ -127,6 +127,7 @@ export const subscribeToStrategy = async (input: SubscribeToStrategyInput): Prom
     })
     .where(eq(tradingStrategies.id, input.strategyId));
 
+  if (!subscription) throw new Error('Failed to subscribe');
   return subscription;
 };
 
@@ -332,6 +333,7 @@ export const recordStrategyTrade = async (input: {
     })
     .where(eq(tradingStrategies.id, input.strategyId));
 
+  if (!trade) throw new Error('Failed to record trade');
   return trade;
 };
 
@@ -347,7 +349,7 @@ export const recordStrategyPerformance = async (input: {
   const [performance] = await db.insert(strategyPerformance).values({
     strategyId: input.strategyId,
     pnl: input.pnl,
-    pnlPercent: input.pnlPercent,
+    pnlPercent: Number(input.pnlPercent),
     status: input.status,
     executedAt: input.status === 'completed' ? new Date() : undefined,
   }).returning();
@@ -393,7 +395,7 @@ export const getUserSubscribedStrategies = async (userId: number): Promise<Tradi
   const subscribed = await getSubscribedStrategies(userId);
   return subscribed.map((s) => {
     const { subscription, ...strategy } = s;
-    return strategy;
+    return strategy || null;
   });
 };
 

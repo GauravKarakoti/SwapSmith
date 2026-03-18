@@ -235,6 +235,17 @@ function TerminalPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const addMessage = useCallback((msg: Omit<Message, "timestamp">) => {
+    const newMessage = { ...msg, timestamp: new Date() };
+
+    // If history is still loading, add to pending queue
+    if (isHistoryLoading) {
+      setPendingMessages(prev => [...prev, newMessage]);
+    } else {
+      setMessages(prev => [...prev, newMessage]);
+    }
+  }, [isHistoryLoading]);
+
   // Auto-focus text input on voice error
   useEffect(() => {
     if (audioError) {
@@ -252,17 +263,6 @@ function TerminalPage() {
   /* ------------------------------------------------------------------------ */
   /* Handlers                                   */
   /* ------------------------------------------------------------------------ */
-
-  const addMessage = useCallback((msg: Omit<Message, "timestamp">) => {
-    const newMessage = { ...msg, timestamp: new Date() };
-
-    // If history is still loading, add to pending queue
-    if (isHistoryLoading) {
-      setPendingMessages(prev => [...prev, newMessage]);
-    } else {
-      setMessages(prev => [...prev, newMessage]);
-    }
-  }, [isHistoryLoading]);
 
   const handleStartRecording = () => {
     if (isInputDisabled) {

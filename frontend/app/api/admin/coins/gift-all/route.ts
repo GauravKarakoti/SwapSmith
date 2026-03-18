@@ -34,7 +34,7 @@ export async function POST(req: Request) {
       metadata: {
         amount,
         note: body.note ?? `Broadcast gift of ${amount} coins`,
-        usersAffected: result.usersAffected,
+        usersAffected: result.usersGifted, // <-- Change this to result.usersGifted
       },
       ipAddress: getIpAddress(req.headers),
       userAgent: getUserAgent(req.headers),
