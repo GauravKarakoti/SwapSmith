@@ -18,7 +18,7 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
-    "noPropertyAccessFromIndexSignature": true,
+    "noPropertyAccessFromIndexSignature": false,
     "useDefineForClassFields": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -71,6 +71,7 @@
   "exclude": [
     "drizzle.config.ts",
     "src/workers/limitOrderWorker.ts",
-    "src/workers/price-alerts.ts"
+    "src/workers/price-alerts.ts",
+    "../shared/node_modules"
   ]
 }

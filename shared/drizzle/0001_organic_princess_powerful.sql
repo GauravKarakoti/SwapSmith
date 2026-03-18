@@ -1,0 +1,1 @@
+ALTER TABLE "portfolio_targets" ALTER COLUMN "name" SET DEFAULT 'My Portfolio!!';

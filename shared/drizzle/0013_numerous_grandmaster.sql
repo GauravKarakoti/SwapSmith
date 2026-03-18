@@ -1,1 +1,0 @@
-ALTER TABLE "strategy_subscriptions" ADD COLUMN "id" serial PRIMARY KEY NOT NULL;

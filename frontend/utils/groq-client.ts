@@ -30,7 +30,7 @@ function getGroqClient(): Groq {
 // Type definition for the parsed command object
 export interface ParsedCommand {
   success: boolean;
-  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "dca" | "swap_and_stake" | "unknown";
+  intent: "swap" | "checkout" | "portfolio" | "yield_scout" | "dca" | "swap_and_stake" | "stake" | "unknown";
 
   // Single Swap Fields
   fromAsset: string | null;
@@ -503,9 +503,6 @@ export async function parseUserCommand(
   }
 }
 
-/**
- * Transcribe audio file using Groq's Whisper API
- */
 export async function transcribeAudio(file: File): Promise<string> {
   const groq = getGroqClient();
 
@@ -519,16 +516,6 @@ export async function transcribeAudio(file: File): Promise<string> {
       temperature: 0.0,
     });
 
-    if (!parsed.settleAsset) errors.push("Asset to receive/send not specified");
-    if (!parsed.settleAmount || parsed.settleAmount <= 0) {
-      errors.push("Invalid amount specified");
-    } else if (parsed.intent === "stake") {
-      if (!parsed.fromAsset) errors.push("Token to stake not specified");
-      // Amount can be null for "stake all" scenarios, so only validate if provided
-      if (parsed.amount !== null && parsed.amount !== undefined && parsed.amount <= 0) {
-        errors.push("Invalid amount specified");
-      }
-    }
     // Log usage for monitoring
     await logGroqUsage({
       userId: 'anonymous',

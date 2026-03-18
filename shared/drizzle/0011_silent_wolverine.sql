@@ -1,1 +1,0 @@
-ALTER TABLE "checkouts" ALTER COLUMN "settle_amount" SET DATA TYPE numeric(30, 18);

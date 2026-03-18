@@ -720,6 +720,7 @@ Ready to sign the transaction?`,
             depositAmount: command.amount?.toString() || 'All',
             depositCoin: command.fromAsset!,
             depositNetwork: result.chain,
+            depositAddress: result.depositAddress || result.contractAddress || '', // <-- Add this line
             rate: '1',
             settleAmount: result.stakingToken,
             settleCoin: result.stakingToken,

@@ -15,18 +15,6 @@ export interface UseSpeechRecognitionReturn {
   };
 }
 
-// Helper to detect browser
-function detectBrowser(): string {
-  if (typeof navigator === 'undefined') return 'unknown';
-  const userAgent = navigator.userAgent;
-  
-  if (userAgent.includes('Chrome') && !userAgent.includes('Edg')) return 'chrome';
-  if (userAgent.includes('Firefox')) return 'firefox';
-  if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) return 'safari';
-  if (userAgent.includes('Edg')) return 'edge';
-  return 'unknown';
-}
-
 // Helper to get best MIME type for MediaRecorder
 function getBestMimeType(): string {
   const mimeTypes = [
@@ -87,11 +75,16 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const browserInfo = detectBrowser();
+      const currentBrowserInfo = detectBrowser();
       const capabilities = checkVoiceCapabilities();
 
+      setBrowserInfo({
+        browser: currentBrowserInfo.name || 'unknown',
+        isUsingFallback: false
+      });
+
       // Firefox doesn't support Speech Recognition API well
-      if (browserInfo.isFirefox) {
+      if (currentBrowserInfo.isFirefox) {
         setIsSupported(false);
         setError("Firefox: Voice input requires audio recording mode. Please use the advanced voice input feature.");
         return;
@@ -129,8 +122,6 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
               if (event.results[i].isFinal) {
                 finalTranscript += event.results[i][0].transcript;
               } else {
-                // Handle interim results if needed, but for now we focus on final
-                // You might want to update a live preview here
                 finalTranscript += event.results[i][0].transcript;
               }
             }
@@ -148,18 +139,18 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
             }
 
             // Use enhanced error messaging
-            const errorMessage = getVoiceErrorMessage(event.error, browserInfo);
+            const errorMessage = getVoiceErrorMessage(event.error, currentBrowserInfo);
             setError(errorMessage);
             setIsListening(false);
           };
         } catch (initError) {
           console.error('Failed to initialize Speech Recognition:', initError);
           setIsSupported(false);
-          setError(`${browserInfo.name}: Speech recognition initialization failed. Please try refreshing the page.`);
+          setError(`${currentBrowserInfo.name}: Speech recognition initialization failed. Please try refreshing the page.`);
         }
       }
       setIsListening(false);
-    };
+    } // Fixed stray semicolon and correct closing brace here
 
     return () => {
       if (recognitionRef.current) {
@@ -177,28 +168,7 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
     };
   }, []);
 
-  const startRecording = useCallback(() => {
-    const browserInfo = detectBrowser();
-    
-    if (!isSupported || !recognitionRef.current) {
-        const errorMessage = browserInfo.isFirefox 
-          ? "Firefox: Please use the advanced voice input feature for audio recording."
-          : "Voice input is not supported in this browser.";
-        setError(errorMessage);
-        return;
-    }
-    
-    try {
-        setTranscript('');
-        setError(null);
-        recognitionRef.current.start();
-      } catch (err) {
-        console.warn('Speech recognition already started or failed to start', err);
-      }
-    }
-  }, [isSupported, isFallbackMode]);
-
-  const startMediaRecorder = async () => {
+  const startMediaRecorder = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -249,7 +219,34 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
       }
       setIsListening(false);
     }
-  };
+  }, []);
+
+  const startRecording = useCallback(() => {
+    const currentBrowserInfo = detectBrowser();
+    
+    // Check fallback mode logic
+    if (isFallbackMode) {
+      startMediaRecorder();
+      return;
+    }
+
+    if (!isSupported || !recognitionRef.current) {
+        const errorMessage = currentBrowserInfo.isFirefox 
+          ? "Firefox: Please use the advanced voice input feature for audio recording."
+          : "Voice input is not supported in this browser.";
+        setError(errorMessage);
+        return;
+    }
+    
+    try {
+        setTranscript('');
+        setError(null);
+        recognitionRef.current.start();
+      } catch (err) {
+        console.warn('Speech recognition already started or failed to start', err);
+      }
+      // Fixed extra closing brace that was here 
+  }, [isSupported, isFallbackMode, startMediaRecorder]);
 
   const stopRecording = useCallback(async (): Promise<string | null> => {
     if (isFallbackMode && mediaRecorderRef.current) {

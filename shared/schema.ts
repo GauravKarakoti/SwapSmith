@@ -219,7 +219,7 @@ export const portfolioTargets = pgTable('portfolio_targets', {
   id: serial('id').primaryKey(),
   userId: text('user_id').notNull(),
   telegramId: bigint('telegram_id', { mode: 'number' }),
-  name: text('name').notNull().default('My Portfolio'), // Added name column
+  name: text('name').notNull().default('My Portfolio!!'),
   assets: jsonb('assets').notNull(),
   driftThreshold: numeric('drift_threshold', { precision: 10, scale: 4 }).notNull().default('5'),
   autoRebalance: boolean('auto_rebalance').notNull().default(false),
@@ -662,40 +662,19 @@ export const coinGiftActionType = pgEnum('coin_gift_action_type', ['gift', 'dedu
 
 export const coinGiftLogs = pgTable('coin_gift_logs', {
   id: serial('id').primaryKey(),
-  creatorId: integer('creator_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  creatorTelegramId: bigint('creator_telegram_id', { mode: 'number' }),
-  name: text('name').notNull(),
-  description: text('description').notNull(),
-  targetUserId: integer('target_user_id').references(() => users.id),
-  parameters: jsonb('parameters').notNull().default({}), // { fromAsset, toAsset, allocation[], rebalanceThreshold, etc }
-  // Risk and performance metrics
-  riskLevel: strategyRiskLevel('risk_level').notNull().default('medium'),
-  status: strategyStatus('status').notNull().default('active'),
-  // Pricing
-  subscriptionFee: numeric('subscription_fee', { precision: 20, scale: 8 }).notNull().default('0'), // Monthly fee in tokens
-  performanceFee: real('performance_fee').notNull().default(0), // Percentage of profits (e.g., 10 = 10%)
-  // Statistics
-  subscriberCount: integer('subscriber_count').notNull().default(0),
-  totalTrades: integer('total_trades').notNull().default(0),
-  successfulTrades: integer('successful_trades').notNull().default(0),
-  // Performance metrics
-  totalReturn: real('total_return').notNull().default(0), // Percentage return
-  monthlyReturn: real('monthly_return').notNull().default(0), // Monthly average
-  sharpeRatio: real('sharpe_ratio').notNull().default(0),
-  maxDrawdown: real('max_drawdown').notNull().default(0), // Maximum drawdown percentage
-  volatility: real('volatility').notNull().default(0),
-  // Metadata
-  tags: text('tags').array().default(sql`ARRAY[]::text[]`),
-  minInvestment: numeric('min_investment', { precision: 20, scale: 8 }).notNull().default('100'), // Min $100
-  isPublic: boolean('is_public').notNull().default(true),
-  // Timestamps
+  adminId: text('admin_id').notNull(),
+  adminEmail: text('admin_email').notNull(),
+  targetUserId: integer('target_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  walletAddress: text('wallet_address'),
+  action: coinGiftActionType('action').notNull(),
+  amount: text('amount').notNull(),
+  balanceBefore: text('balance_before').notNull(),
+  balanceAfter: text('balance_after').notNull(),
+  note: text('note'),
   createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => [
-  index("idx_trading_strategies_creator_id").on(table.creatorId),
-  index("idx_trading_strategies_status").on(table.status),
-  index("idx_trading_strategies_risk_level").on(table.riskLevel),
-  index("idx_trading_strategies_total_return").on(table.totalReturn),
+  index("idx_coin_gift_logs_target_user").on(table.targetUserId),
+  index("idx_coin_gift_logs_created_at").on(table.createdAt),
 ]);
 
 export const coinGiftLogsRelations = relations(coinGiftLogs, ({ one }) => ({
