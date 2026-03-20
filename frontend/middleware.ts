@@ -38,33 +38,17 @@ function validateInputSize(request: NextRequest): NextResponse | null {
     return null;
   }
 }
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 🔐 Input Validation: Check request size before processing
+  // 1. Input Validation
   const inputValidationResponse = validateInputSize(request);
-  if (inputValidationResponse) {
-    return inputValidationResponse;
-  }
+  if (inputValidationResponse) return inputValidationResponse;
 
-  // 🔐 CSRF Protection: Validate and set CSRF tokens for API routes.
-  // Skip for /api/admin/* — those use Firebase ID token auth (inherently CSRF-safe).
-  // Also validates Origin/Referer via enhanced csrfProtectionMiddleware.
-  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/admin/')) {
-    const csrfResponse = csrfProtectionMiddleware(request);
-    // If validation failed (403), return error response immediately.
-    // If validation succeeded (200 with cookie), we return it here because for API routes
-    // there are no further checks (Admin Dashboard is disjoint).
-    // Note: If we had further logic for /api/ we would need to merge headers/cookies.
-    // Currently we assume csrfProtectionMiddleware is the primary guard for /api/.
-    if (csrfResponse) {
-      return csrfResponse;
-    }
-  }
-  // 🔐 Admin Dashboard Protection
+  // 2. Admin Dashboard Protection
   if (pathname.startsWith('/admin/dashboard')) {
     const adminSession = request.cookies.get('admin-session');
-
     if (!adminSession?.value) {
       const loginUrl = new URL('/admin/login', request.url);
       loginUrl.searchParams.set('from', pathname);
@@ -72,30 +56,39 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // 🔐 API Route Security
   if (pathname.startsWith('/api/')) {
-    let response: NextResponse | null = null;
+    // Routes that use raw fetch() and don't require strict CSRF protection
+    const csrfExemptPaths = [
+      '/api/track', 
+      '/api/user/ensure', 
+      '/api/rewards/wallet-connected',
+      '/api/rewards/daily-login',
+      '/api/security-scan' // <-- Added this endpoint
+    ];
 
-    // 1. Unified CSRF Protection (blocks invalid state-changing requests)
-    response = csrfMiddleware(request);
-    if (response) return response; // CSRF validation failed
+    const isExempt = csrfExemptPaths.some(path => pathname.startsWith(path));
 
-    // 2. Rate Limiting (apply before allowing request processing)
+    // A. Unified CSRF Protection
+    if (!isExempt) {
+      const csrfResponse = csrfMiddleware(request);
+      if (csrfResponse) return csrfResponse; 
+    }
+
+    // B. Rate Limiting
     const rateLimitConfig = getRateLimitConfig(pathname);
-    response = rateLimitMiddleware(request, rateLimitConfig);
-    if (response) return response; // Rate limit exceeded
+    const rateLimitResponse = rateLimitMiddleware(request, rateLimitConfig);
+    if (rateLimitResponse) return rateLimitResponse; 
 
-    // 3. Create response and ensure CSRF token is set
+    // C. Create response and ensure CSRF token is attached
     let finalResponse = NextResponse.next();
     finalResponse = ensureCSRFToken(finalResponse, request);
     
-    // 4. Apply security headers
+    // D. Apply security headers
     return securityMiddleware(finalResponse);
   }
 
-  // 🔐 Apply security headers to all other routes
-  const response = NextResponse.next();
-  return securityMiddleware(response);
+  // 4. Apply security headers to all other (non-API) routes
+  return securityMiddleware(NextResponse.next());
 }
 
 /**

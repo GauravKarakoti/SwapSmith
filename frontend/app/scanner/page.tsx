@@ -6,6 +6,8 @@ import { isAddress } from 'viem';
 import { mainnet, bsc, polygon, base } from 'viem/chains';
 import { SecurityReport } from '@/types/security';
 import { AlertTriangle, ShieldCheck, ShieldAlert, BadgeCheck, FileWarning, Search, Loader } from 'lucide-react';
+import Navbar from '@/components/Navbar';
+import Footer from '@/components/Footer';
 
 const CHAINS = [
   { id: 'ethereum', name: 'Ethereum', chain: mainnet },
@@ -88,7 +90,8 @@ export default function ScannerPage() {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white p-6 md:p-12">
-      <div className="max-w-4xl mx-auto">
+      <Navbar />
+      <div className="mt-20 max-w-4xl mx-auto">
         <header className="mb-12 text-center">
           <h1 className="text-3xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-600 mb-4">
             Transaction Security Scanner
@@ -243,6 +246,7 @@ export default function ScannerPage() {
           </div>
         )}
       </div>
+      <Footer />
     </div>
   );
 }

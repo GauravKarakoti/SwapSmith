@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { performSecurityScan } from '@/utils/security-scanner';
+import { performSecurityScan } from '../../../shared/services/security-scanner';
 import { csrfGuard } from '@/lib/csrf';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
