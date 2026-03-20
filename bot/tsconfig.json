@@ -59,6 +59,9 @@
       "viem": [
         "./node_modules/viem"
       ],
+      "viem/*": [
+        "./node_modules/viem/*"
+      ],
       "vitest": [
         "./node_modules/vitest"
       ]
