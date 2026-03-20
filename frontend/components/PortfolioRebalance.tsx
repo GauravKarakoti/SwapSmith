@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom'; // <-- Add this import
 import { 
   PieChart, 
   TrendingUp, 
@@ -367,7 +368,6 @@ export default function PortfolioRebalance() {
   );
 }
 
-// Add Portfolio Modal Component
 function AddPortfolioModal({
   isOpen,
   onClose,
@@ -379,6 +379,7 @@ function AddPortfolioModal({
   onSubmit: (name: string, assets: PortfolioAsset[], driftThreshold: number, autoRebalance: boolean) => void;
   isSubmitting: boolean;
 }) {
+  const [mounted, setMounted] = useState(false); // <-- Add mounted state for Next.js SSR
   const [name, setName] = useState('');
   const [assets, setAssets] = useState<PortfolioAsset[]>([
     { coin: 'BTC', network: 'bitcoin', targetPercentage: 50 },
@@ -388,16 +389,19 @@ function AddPortfolioModal({
   const [driftThreshold, setDriftThreshold] = useState(5);
   const [autoRebalance, setAutoRebalance] = useState(false);
 
+  // <-- Ensure component is mounted before using portal to avoid hydration errors
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
     // Validate percentages sum to 100
     const total = assets.reduce((sum, a) => sum + a.targetPercentage, 0);
     if (Math.abs(total - 100) > 0.1) {
       alert(`Asset percentages must sum to 100% (Current: ${total}%)`);
       return;
     }
-
     onSubmit(name, assets, driftThreshold, autoRebalance);
   };
 
@@ -415,10 +419,11 @@ function AddPortfolioModal({
     setAssets(assets.filter((_, i) => i !== index));
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null; // <-- Check mounted
 
-  return (
-    <>
+  // <-- Wrap the return in createPortal
+  return createPortal(
+    <div className="relative z-[9999]">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -432,7 +437,7 @@ function AddPortfolioModal({
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
         className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
       >
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg my-8">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg my-8 relative z-50">
           <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
               Create Portfolio Target
@@ -446,7 +451,6 @@ function AddPortfolioModal({
           </div>
 
           <form onSubmit={handleSubmit} className="p-6 space-y-5">
-            {/* Portfolio Name */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Portfolio Name
@@ -477,19 +481,24 @@ function AddPortfolioModal({
               </div>
               <div className="space-y-3">
                 {assets.map((asset, index) => (
-                  <div key={index} className="flex items-center gap-3">
+                  <div key={index} className="flex items-center gap-2 sm:gap-3">
+                    {/* 1. COIN INPUT */}
                     <input
                       type="text"
                       value={asset.coin}
                       onChange={(e) => updateAsset(index, 'coin', e.target.value.toUpperCase())}
                       placeholder="BTC"
-                      className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 border-0 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500"
+                      // Added min-w-[60px] and min-w-0 so it can shrink cleanly on mobile
+                      className="min-w-[60px] flex-1 px-2 sm:px-3 py-2 bg-gray-100 dark:bg-gray-700 border-0 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
                       required
                     />
+                    
+                    {/* 2. NETWORK SELECT */}
                     <select
                       value={asset.network}
                       onChange={(e) => updateAsset(index, 'network', e.target.value)}
-                      className="px-3 py-2 bg-gray-100 dark:bg-gray-700 border-0 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                      // Added w-24 sm:w-auto to prevent the longest word from stretching the row
+                      className="w-24 sm:w-auto px-1 sm:px-3 py-2 bg-gray-100 dark:bg-gray-700 border-0 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
                     >
                       <option value="bitcoin">Bitcoin</option>
                       <option value="ethereum">Ethereum</option>
@@ -499,25 +508,36 @@ function AddPortfolioModal({
                       <option value="avalanche">Avalanche</option>
                       <option value="solana">Solana</option>
                     </select>
-                    <div className="flex items-center gap-1 w-24">
+                    
+                    {/* 3. PERCENTAGE INPUT */}
+                    {/* Shrunk to w-20 on mobile, w-24 on larger screens */}
+                    <div className="relative w-20 sm:w-24 flex-shrink-0">
                       <input
-                        type="number"
-                        value={asset.targetPercentage}
-                        onChange={(e) => updateAsset(index, 'targetPercentage', parseFloat(e.target.value) || 0)}
-                        min="0"
-                        max="100"
-                        className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border-0 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                        type="text"
+                        inputMode="numeric"
+                        value={asset.targetPercentage === 0 ? '' : asset.targetPercentage.toString()}
+                        onChange={(e) => {
+                          const cleanValue = e.target.value.replace(/[^0-9]/g, '');
+                          updateAsset(index, 'targetPercentage', cleanValue === '' ? 0 : parseInt(cleanValue, 10));
+                        }}
+                        placeholder="0"
+                        className="w-full pl-2 sm:pl-3 pr-6 sm:pr-7 py-2 bg-gray-100 dark:bg-gray-700 border-0 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-left text-sm sm:text-base"
                         required
                       />
-                      <span className="text-gray-400">%</span>
+                      <span className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium pointer-events-none text-sm sm:text-base">
+                        %
+                      </span>
                     </div>
+
+                    {/* 4. DELETE BUTTON */}
                     {assets.length > 1 && (
                       <button
                         type="button"
                         onClick={() => removeAsset(index)}
-                        className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg"
+                        // Added flex-shrink-0 so the trash can is NEVER pushed off screen
+                        className="flex-shrink-0 p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
                       </button>
                     )}
                   </div>
@@ -590,11 +610,11 @@ function AddPortfolioModal({
           </form>
         </div>
       </motion.div>
-    </>
+    </div>,
+    document.body // <-- Render to document.body
   );
 }
 
-// Portfolio Details Modal Component
 function PortfolioDetailsModal({
   portfolio,
   history,
@@ -604,8 +624,17 @@ function PortfolioDetailsModal({
   history: RebalanceHistory[];
   onClose: () => void;
 }) {
-  return (
-    <>
+  const [mounted, setMounted] = useState(false); // <-- Add mounted state
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return null;
+
+  // <-- Wrap the return in createPortal
+  return createPortal(
+    <div className="relative z-[9999]">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -619,7 +648,7 @@ function PortfolioDetailsModal({
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
         className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
       >
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl my-8">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl my-8 relative z-50">
           <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
             <div>
               <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -710,6 +739,7 @@ function PortfolioDetailsModal({
           </div>
         </div>
       </motion.div>
-    </>
+    </div>,
+    document.body // <-- Render to document.body
   );
 }

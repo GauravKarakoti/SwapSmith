@@ -14,7 +14,7 @@ import { ParsedCommand } from '@/utils/groq-client';
 import { useErrorHandler, ErrorType } from '@/hooks/useErrorHandler';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { useAuth } from '@/hooks/useAuth';
-
+import axiosClient from '@/lib/axios-client'; // ADD THIS
 
 // Export QuoteData to be used in PortfolioSummary
 export interface QuoteData {
@@ -88,6 +88,16 @@ export default function ChatInterface() {
   const hasLoadedPersistenceRef = useRef(false);
   const saveSequenceRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetch('/api/csrf-token', { 
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    }).catch(() => console.warn('Failed to pre-fetch CSRF token'));
+  }, []);
 
   // Use unified voice input with fallback
   const {
@@ -322,14 +332,13 @@ export default function ChatInterface() {
     fromChain: string,
     toChain: string
   ): Promise<QuoteData> => {
-    const quoteResponse = await fetch('/api/create-swap', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fromAsset, toAsset, amount, fromChain, toChain }),
+    // CHANGED: authenticatedFetch -> axiosClient.post
+    const response = await axiosClient.post<QuoteData>('/api/create-swap', {
+      fromAsset, toAsset, amount, fromChain, toChain
     });
-    const quote = await quoteResponse.json();
-    if (quote.error) throw new Error(quote.error);
-    return quote;
+    
+    // We don't need `if (quote.error) throw new Error` because axios throws on 400/500s automatically
+    return response.data;
   };
 
   const handlePortfolioRetry = (failedItems: PortfolioItem[], originalCommand: ParsedCommand) => {
@@ -411,13 +420,12 @@ export default function ChatInterface() {
     if (!isLoading) setIsLoading(true);
 
     try {
-      const response = await fetch('/api/parse-command', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text }),
+      // CHANGED: authenticatedFetch -> axiosClient.post
+      const response = await axiosClient.post<ParsedCommand>('/api/parse-command', {
+        message: text
       });
 
-      const command: ParsedCommand = await response.json();
+      const command = response.data; // Axios puts the JSON in .data
 
       if (!command.success && command.intent !== 'yield_scout') {
         addMessage({
@@ -462,17 +470,13 @@ export default function ChatInterface() {
           finalAddress = address;
         }
 
-        const checkoutRes = await fetch('/api/create-checkout', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            settleAsset: command.settleAsset,
-            settleNetwork: command.settleNetwork,
-            settleAmount: command.settleAmount,
-            settleAddress: finalAddress
-          })
+        const response = await axiosClient.post('/api/create-checkout', {
+          settleAsset: command.settleAsset,
+          settleNetwork: command.settleNetwork,
+          settleAmount: command.settleAmount,
+          settleAddress: finalAddress
         });
-        const checkoutData = await checkoutRes.json();
+        const checkoutData = response.data;
 
         if (checkoutData.error) throw new Error(checkoutData.error);
 
@@ -496,7 +500,7 @@ export default function ChatInterface() {
         }
 
         // Prepare Portfolio Items
-        const items: PortfolioItem[] = command.portfolio.map((item, index) => ({
+        const items: PortfolioItem[] = command.portfolio.map((item: any, index: any) => ({
           id: `${item.toAsset}-${index}`,
           fromAsset: command.fromAsset || 'ETH',
           toAsset: item.toAsset,
@@ -583,20 +587,16 @@ export default function ChatInterface() {
 
   const executeSwap = async (command: ParsedCommand) => {
     try {
-      const quoteResponse = await fetch('/api/create-swap', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fromAsset: command.fromAsset,
-          toAsset: command.toAsset,
-          amount: command.amount,
-          fromChain: command.fromChain,
-          toChain: command.toChain
-        }),
+      // CHANGED: authenticatedFetch -> axiosClient.post
+      const response = await axiosClient.post<QuoteData>('/api/create-swap', {
+        fromAsset: command.fromAsset,
+        toAsset: command.toAsset,
+        amount: command.amount,
+        fromChain: command.fromChain,
+        toChain: command.toChain
       });
 
-      const quote = await quoteResponse.json();
-      if (quote.error) throw new Error(quote.error);
+      const quote = response.data;
 
       addMessage({
         role: 'assistant',
@@ -615,23 +615,20 @@ export default function ChatInterface() {
 
   const executeDCA = async (command: ParsedCommand) => {
     try {
-      const dcaResponse = await fetch('/api/create-dca', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fromAsset: command.fromAsset,
-          fromChain: command.fromChain,
-          toAsset: command.toAsset,
-          toChain: command.toChain,
-          amount: command.amount,
-          frequency: command.frequency,
-          dayOfWeek: command.dayOfWeek,
-          dayOfMonth: command.dayOfMonth,
-          settleAddress: address // Use connected wallet address
-        }),
+      // CHANGED: authenticatedFetch -> axiosClient.post
+      const dcaResponse = await axiosClient.post('/api/create-dca', {
+        fromAsset: command.fromAsset,
+        fromChain: command.fromChain,
+        toAsset: command.toAsset,
+        toChain: command.toChain,
+        amount: command.amount,
+        frequency: command.frequency,
+        dayOfWeek: command.dayOfWeek,
+        dayOfMonth: command.dayOfMonth,
+        settleAddress: address
       });
 
-      const result = await dcaResponse.json();
+      const result = await dcaResponse.data;
       if (result.error) throw new Error(result.error);
 
       addMessage({
@@ -650,23 +647,20 @@ export default function ChatInterface() {
 
   const executeLimitOrder = async (command: ParsedCommand) => {
     try {
-      const limitOrderResponse = await fetch('/api/create-limit-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fromAsset: command.fromAsset,
-          fromChain: command.fromChain,
-          toAsset: command.toAsset,
-          toChain: command.toChain,
-          amount: command.amount,
-          conditionOperator: command.conditionOperator,
-          conditionValue: command.conditionValue,
-          conditionAsset: command.conditionAsset,
-          settleAddress: address // Use connected wallet address
-        }),
+      // CHANGED: authenticatedFetch -> axiosClient.post
+      const limitOrderResponse = await axiosClient.post('/api/create-limit-order', {
+        fromAsset: command.fromAsset,
+        fromChain: command.fromChain,
+        toAsset: command.toAsset,
+        toChain: command.toChain,
+        amount: command.amount,
+        conditionOperator: command.conditionOperator,
+        conditionValue: command.conditionValue,
+        conditionAsset: command.conditionAsset,
+        settleAddress: address 
       });
 
-      const result = await limitOrderResponse.json();
+      const result = await limitOrderResponse.data;
       if (result.error) throw new Error(result.error);
 
       const operatorText = command.conditionOperator === 'gt' ? 'above' : 'below';
@@ -686,18 +680,15 @@ export default function ChatInterface() {
 
   const executeStake = async (command: ParsedCommand) => {
     try {
-      const stakeResponse = await fetch('/api/create-stake', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token: command.fromAsset,
-          amount: command.amount,
-          chain: command.fromChain,
-          settleAddress: address // Use connected wallet address
-        }),
+      // CHANGED: authenticatedFetch -> axiosClient.post
+      const response = await axiosClient.post('/api/create-stake', {
+        token: command.fromAsset,
+        amount: command.amount,
+        chain: command.fromChain,
+        settleAddress: address 
       });
       
-      const result = await stakeResponse.json();
+      const result = response.data;
       if (result.error) throw new Error(result.error);
       
       const amountText = command.amount ? `${command.amount} ${command.fromAsset}` : `All ${command.fromAsset}`;
@@ -798,12 +789,9 @@ Ready to sign the transaction?`,
           const formData = new FormData();
           formData.append('file', audioFile);
 
-          const response = await fetch('/api/transcribe', {
-            method: 'POST',
-            body: formData
-          });
+          const response = await axiosClient.post('/api/transcribe', formData);
 
-          const data = await response.json();
+          const data = response.data;
 
           if (data.error) throw new Error(data.error);
 
