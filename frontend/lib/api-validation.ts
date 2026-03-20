@@ -70,14 +70,12 @@ export const userSettingsBodySchema = z.object({
   emailNotifications: z.string().optional(),
 });
 
-/**
- * Portfolio target body schema
- */
 export const portfolioTargetBodySchema = z.object({
   name: schemas.shortString,
   assets: z.array(z.object({
-    symbol: z.string().min(1).max(20),
-    allocation: z.number().min(0).max(100),
+    coin: z.string().min(1).max(20),
+    network: z.string().min(1).max(50),
+    targetPercentage: z.number().min(0).max(100),
   })).min(1),
   driftThreshold: z.number().min(0).max(100).optional(),
   autoRebalance: z.boolean().optional(),

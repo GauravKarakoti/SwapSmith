@@ -9,10 +9,12 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle,
-  X
+  X,
+  Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { authenticatedFetch } from '@/lib/api-client';
+import { useAuth } from '@/hooks/useAuth';
 
 interface PortfolioAsset {
   coin: string;
@@ -53,27 +55,57 @@ export default function PortfolioRebalance() {
   const [submitting, setSubmitting] = useState(false);
   const [selectedPortfolio, setSelectedPortfolio] = useState<PortfolioTarget | null>(null);
   const [history, setHistory] = useState<RebalanceHistory[]>([]);
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   useEffect(() => {
-    fetchPortfolios();
-  }, []);
+    // Only fetch if we are sure the user is authenticated
+    if (isAuthenticated) {
+      fetchPortfolios();
+    } else if (!authLoading) {
+      // If we finished checking auth and they aren't logged in, stop loading
+      setLoading(false);
+    }
+  }, [isAuthenticated, authLoading]);
 
   const fetchPortfolios = async () => {
     try {
       setLoading(true);
       const response = await authenticatedFetch('/api/portfolio-targets');
+      
+      // Since we guard with useAuth, we should rarely hit this, but handle gracefully just in case
+      if (response.status === 401) {
+        setPortfolios([]);
+        return; 
+      }
+      
       if (!response.ok) throw new Error('Failed to fetch portfolios');
+      
       const data = await response.json();
       setPortfolios(data);
-
       setError(null);
     } catch (err) {
-      setError('Failed to load portfolios');
+      setError(err instanceof Error ? err.message : 'Failed to load portfolios');
       console.error(err);
     } finally {
       setLoading(false);
     }
   };
+
+  if (!authLoading && !isAuthenticated) {
+    return (
+      <div className="w-full max-w-6xl mx-auto text-center py-20 bg-gray-50 dark:bg-gray-800/50 rounded-2xl">
+        <div className="w-20 h-20 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-6">
+          <Lock className="w-10 h-10 text-gray-400" />
+        </div>
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
+          Authentication Required
+        </h3>
+        <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
+          Please log in to manage your portfolio targets and set up automatic rebalancing.
+        </p>
+      </div>
+    );
+  }
 
   const createPortfolio = async (
     name: string,

@@ -1,8 +1,6 @@
 import { toast } from 'react-hot-toast';
+import { auth } from './firebase';
 
-/**
- * Helper function to make authenticated API calls
- */
 export async function authenticatedFetch(
   url: string,
   options: RequestInit & { suppressErrorToast?: boolean } = {}
@@ -41,14 +39,42 @@ export async function authenticatedFetch(
   
   const headers = new Headers(requestOptions.headers);
   
+  // 1. Attach Database User ID
   if (userId) {
     headers.set('x-user-id', userId);
+  }
+  
+  // 2. Attach Firebase Authorization Token (THIS IS WHAT WAS MISSING)
+  if (auth && auth.currentUser) {
+    try {
+      // Force refresh if necessary to ensure it's valid
+      const idToken = await auth.currentUser.getIdToken();
+      headers.set('Authorization', `Bearer ${idToken}`);
+    } catch (tokenError) {
+      console.error('Error getting Firebase ID token:', tokenError);
+    }
+  }
+  
+  // 3. Attach CSRF Token for state-changing requests (from our previous fix)
+  const method = options.method?.toUpperCase() || 'GET';
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+    if (typeof document !== 'undefined') {
+      const cookies = document.cookie.split(';');
+      const csrfCookie = cookies.find(c => c.trim().startsWith('csrf-token='));
+      
+      if (csrfCookie) {
+        const token = csrfCookie.split('=')[1]?.trim();
+        if (token) {
+          headers.set('x-csrf-token', token);
+        }
+      }
+    }
   }
   
   try {
     const response = await fetch(url, {
       ...requestOptions,
-      headers,
+      headers, // <-- Now contains Authorization, x-user-id, and x-csrf-token
     });
 
     if (!response.ok && !suppressErrorToast) {
@@ -56,7 +82,7 @@ export async function authenticatedFetch(
       try {
         const errorData = await clone.json();
         const errorMessage = errorData.message || errorData.error || `Error ${response.status}`;
-        toast.error(errorMessage, { id: url }); // Prevent duplicates for same URL
+        toast.error(errorMessage, { id: url }); 
       } catch {
         toast.error(`Request failed details: ${response.statusText}`, { id: url });
       }
