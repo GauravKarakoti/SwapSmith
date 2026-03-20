@@ -151,9 +151,6 @@ export async function incrementChatUsage(userId: number): Promise<{ count: numbe
   const plan = (userResult[0].plan ?? 'free') as Plan;
   const dailyChatLimit = PLAN_CONFIGS[plan].dailyChatLimit;
 
-  // 🔒 ATOMIC OPERATION: Check limit and increment in a single query
-  // This prevents TOCTOU race conditions by performing the check atomically in the database
-  // The WHERE clause ensures the update only succeeds if count < limit
   const result = await db.update(users)
     .set({
       dailyChatCount: drizzleSql`${users.dailyChatCount} + 1`,
@@ -161,7 +158,10 @@ export async function incrementChatUsage(userId: number): Promise<{ count: numbe
     })
     .where(and(
       eq(users.id, userId),
-      drizzleSql`${users.dailyChatCount} < ${dailyChatLimit}` // Atomic check: only increment if under limit
+      // Fix: Skip the limit check if the plan is unlimited (-1)
+      dailyChatLimit === -1 
+        ? undefined 
+        : drizzleSql`${users.dailyChatCount} < ${dailyChatLimit}`
     ))
     .returning({ dailyChatCount: users.dailyChatCount });
 
@@ -193,8 +193,6 @@ export async function incrementTerminalUsage(userId: number): Promise<{ count: n
   const plan = (userResult[0].plan ?? 'free') as Plan;
   const dailyTerminalLimit = PLAN_CONFIGS[plan].dailyTerminalLimit;
 
-  // 🔒 ATOMIC OPERATION: Check limit and increment in a single query
-  // This prevents TOCTOU race conditions by performing the check atomically in the database
   const result = await db.update(users)
     .set({
       dailyTerminalCount: drizzleSql`${users.dailyTerminalCount} + 1`,
@@ -202,7 +200,10 @@ export async function incrementTerminalUsage(userId: number): Promise<{ count: n
     })
     .where(and(
       eq(users.id, userId),
-      drizzleSql`${users.dailyTerminalCount} < ${dailyTerminalLimit}` // Atomic check: only increment if under limit
+      // Fix: Skip the limit check if the plan is unlimited (-1)
+      dailyTerminalLimit === -1 
+        ? undefined 
+        : drizzleSql`${users.dailyTerminalCount} < ${dailyTerminalLimit}`
     ))
     .returning({ dailyTerminalCount: users.dailyTerminalCount });
 

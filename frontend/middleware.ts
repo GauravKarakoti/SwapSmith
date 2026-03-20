@@ -63,7 +63,8 @@ export function middleware(request: NextRequest) {
       '/api/user/ensure', 
       '/api/rewards/wallet-connected',
       '/api/rewards/daily-login',
-      '/api/security-scan' // <-- Added this endpoint
+      '/api/security-scan',
+      '/api/parse-command'
     ];
 
     const isExempt = csrfExemptPaths.some(path => pathname.startsWith(path));

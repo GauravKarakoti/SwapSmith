@@ -124,14 +124,10 @@ export function validateCSRF(request: NextRequest): CSRFValidationResult {
   const xRequestedWithHeader = request.headers.get('x-requested-with');
   const hasValidCustomHeader = xRequestedWithHeader === 'XMLHttpRequest';
 
-  // If no custom header, require CSRF token
   if (!hasValidCustomHeader) {
-    if (!headerToken || !cookieToken) {
-      return {
-        isValid: false,
-        reason: 'Missing CSRF token in header or cookie'
-      };
-    }
+  if (!headerToken || !cookieToken) {
+    return { isValid: false, reason: 'Missing CSRF token in header or cookie' };
+  }
 
     // Verify token match using constant-time comparison
     if (!constantTimeEqual(headerToken, cookieToken)) {
