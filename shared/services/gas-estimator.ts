@@ -95,7 +95,6 @@ export function setDatabase(database: Database): void {
 async function getDatabaseCache(chain: string, network: string): Promise<GasEstimate | null> {
   if (typeof db === 'undefined' || !db) return null;
 
-  
   try {
     const results = await db
       .select()
@@ -136,7 +135,6 @@ async function getDatabaseCache(chain: string, network: string): Promise<GasEsti
 async function saveToDatabaseCache(estimate: GasEstimate): Promise<void> {
   if (typeof db === 'undefined' || !db) return;
 
-  
   try {
     await db.insert(gasEstimates).values({
       chain: estimate.chain,
@@ -155,39 +153,7 @@ async function saveToDatabaseCache(estimate: GasEstimate): Promise<void> {
   }
 }
 
-// Gas price fetching from various sources
-async function fetchFromEthGasStation(): Promise<Partial<GasEstimate> | null> {
-  try {
-    // Dynamic import to avoid module resolution issues
-    const axios = await import('axios').then(m => m.default || m);
-    const apiKey = process.env['ETH_GAS_STATION_API_KEY'];
-    const headers: Record<string, string> = {};
-    
-    if (apiKey) {
-      headers[GAS_CONFIG.APIS.ETH_GAS_STATION.API_KEY_HEADER] = apiKey;
-    }
-    
-    const response = await axios.get(
-      `${GAS_CONFIG.APIS.ETH_GAS_STATION.BASE_URL}${GAS_CONFIG.APIS.ETH_GAS_STATION.ENDPOINTS.GAS_PRICE}`,
-      { headers, timeout: 5000 }
-    );
-    
-    const data = response.data as { average: number; safeLow: number };
-    
-    // EthGasStation returns prices in deci-gwei (divide by 10)
-    return {
-      gasPrice: (data.average / 10).toString(),
-      priorityFee: (data.average - data.safeLow / 10).toString(),
-      confidence: 90,
-      source: 'ethgasstation',
-      estimatedTimeSeconds: 60,
-    };
-  } catch (error) {
-    console.warn('EthGasStation API error:', error);
-    return null;
-  }
-}
-
+// Gas price fetching from Gelato
 async function fetchFromGelato(chain: string): Promise<Partial<GasEstimate> | null> {
   try {
     // Dynamic import to avoid module resolution issues
@@ -220,7 +186,7 @@ async function fetchFromGelato(chain: string): Promise<Partial<GasEstimate> | nu
 
 
 async function fetchFromProvider(_chain: string, _network: string): Promise<Partial<GasEstimate> | null> {
-  // This would integrate with your existing provider (e.g., Infura, Alchemy)
+  // This would integrate with your existing provider (e.g., Infura, Alchemy, viem, ethers.js)
   // For now, return null to use fallback
   return null;
 }
@@ -249,11 +215,6 @@ export async function getGasEstimate(
   const estimates: Partial<GasEstimate>[] = [];
   
   // Try multiple sources in order of priority
-  if (chain === 'ethereum') {
-    const ethGasStation = await fetchFromEthGasStation();
-    if (ethGasStation) estimates.push(ethGasStation);
-  }
-  
   const gelato = await fetchFromGelato(chain);
   if (gelato) estimates.push(gelato);
   
@@ -533,7 +494,6 @@ export async function recordGasOptimization(
 ): Promise<void> {
   if (typeof db === 'undefined' || !db) return;
 
-  
   try {
     await db.insert(gasOptimizationHistory).values({
       userId,

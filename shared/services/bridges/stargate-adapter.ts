@@ -39,11 +39,8 @@ interface StargateQuoteResponse {
 }
 
 export class StargateAdapter extends BaseBridgeAdapter {
-  private apiKey: string;
-
   constructor(config: BridgeConfig) {
     super('stargate', config);
-    this.apiKey = process.env['STARGATE_API_KEY']!;
   }
 
   /**
@@ -224,13 +221,9 @@ export class StargateAdapter extends BaseBridgeAdapter {
    * Get HTTP headers
    */
   private getHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {
+    return {
       'Content-Type': 'application/json',
     };
-    if (this.apiKey) {
-      headers['x-api-key'] = this.apiKey;
-    }
-    return headers;
   }
 
   /**
