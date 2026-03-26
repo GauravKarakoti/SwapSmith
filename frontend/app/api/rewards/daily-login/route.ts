@@ -7,14 +7,21 @@ const DAILY_LOGIN_TOKENS = '0.1';
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify Firebase authentication token
     const authResult = await verifyAuth(request);
     if (!authResult.success) {
       return authResult.error!;
     }
 
-    const userIdNum = authResult.userId!;
+    const userIdNum = authResult.userId;
     
+    // Add this safety check to prevent the TypeError
+    if (!userIdNum) {
+      return NextResponse.json(
+        { error: 'Bad Request: x-user-id header is missing' },
+        { status: 400 }
+      );
+    }
+
     // Check if user already logged in today
     const user = await getUserByWalletOrId(userIdNum.toString());
     if (!user) {
