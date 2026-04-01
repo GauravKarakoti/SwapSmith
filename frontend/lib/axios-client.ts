@@ -1,7 +1,5 @@
-import axios, { AxiosError } from 'axios';
-// 1. Change the import to use the async getCSRFToken
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { getCSRFToken } from './csrf-client'; 
-// 2. Import your firebase auth (adjust path if necessary)
 import { auth } from './firebase'; 
 
 const apiClient = axios.create({
@@ -9,17 +7,32 @@ const apiClient = axios.create({
   withCredentials: true, 
   headers: {
     'Content-Type': 'application/json',
-    'X-Requested-With': 'XMLHttpRequest', // <--- ADD THIS LINE
+    // Use strictly lowercase to prevent Axios/Node normalization drops
+    'x-requested-with': 'XMLHttpRequest', 
   },
 });
 
-// 3. Make the interceptor async
-apiClient.interceptors.request.use(async (config) => {
+apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  // 1. Force the custom header on every request using proper AxiosHeaders API
+  config.headers.set('x-requested-with', 'XMLHttpRequest');
+
   // --- A. Attach CSRF Token ---
   if (['post', 'put', 'delete', 'patch'].includes(config.method?.toLowerCase() || '')) {
-    const token = await getCSRFToken(); // <--- Awaits the smart token fetcher
-    if (token) {
-      config.headers['x-csrf-token'] = token; 
+    try {
+      const token = await getCSRFToken();
+      if (token) {
+        config.headers.set('x-csrf-token', token);
+      } else {
+        // Fallback: If async fetcher fails or returns empty, grab directly from document
+        if (typeof document !== 'undefined') {
+          const match = document.cookie.match(/(?:^|;\s*)csrf-token=([^;]*)/);
+          if (match && match[1]) {
+            config.headers.set('x-csrf-token', match[1]);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to retrieve CSRF token via fetcher, skipping header assignment:', e);
     }
   }
 
@@ -27,15 +40,15 @@ apiClient.interceptors.request.use(async (config) => {
   if (typeof window !== 'undefined') {
     const userId = localStorage.getItem('user-db-id');
     if (userId) {
-      config.headers['x-user-id'] = userId;
+      config.headers.set('x-user-id', userId);
     }
   }
 
   // --- C. Attach Firebase Auth Token ---
-  if (auth && auth.currentUser) {
+  if (auth?.currentUser) {
     try {
       const idToken = await auth.currentUser.getIdToken();
-      config.headers['Authorization'] = `Bearer ${idToken}`;
+      config.headers.set('Authorization', `Bearer ${idToken}`);
     } catch (error) {
       console.error('Failed to attach Firebase token to request:', error);
     }
