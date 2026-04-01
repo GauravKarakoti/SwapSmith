@@ -16,6 +16,8 @@ COPY shared/package*.json ./shared/
 WORKDIR /usr/src/app/bot
 RUN npm ci
 
+COPY . .
+
 # Stage 2: Build the application
 FROM node:20-slim AS builder
 WORKDIR /usr/src/app
