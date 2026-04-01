@@ -460,7 +460,7 @@ function TerminalPage() {
     try {
       const response = await fetch("/api/parse-command", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-requested-with": "XMLHttpRequest" },
         body: JSON.stringify({ message: text }),
       });
       const command: ParsedCommand = await response.json();
