@@ -14,9 +14,7 @@ COPY shared/package*.json ./shared/
 
 # Install dependencies
 WORKDIR /usr/src/app/bot
-RUN npm ci
-
-COPY . .
+RUN npm install
 
 # Stage 2: Build the application
 FROM node:20-slim AS builder
