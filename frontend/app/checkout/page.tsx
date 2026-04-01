@@ -26,7 +26,7 @@ import { PLAN_CONFIGS } from '../../../shared/config/plans'
 import type { Plan } from '../../../shared/config/plans'
 
 /* -------------------------------------------------------------------------- */
-/* Helpers & constants                                                          */
+/* Helpers & constants                                                        */
 /* -------------------------------------------------------------------------- */
 
 const PLAN_ICONS: Record<string, React.ElementType> = {
@@ -36,20 +36,20 @@ const PLAN_ICONS: Record<string, React.ElementType> = {
 }
 
 const PLAN_GRADIENTS: Record<string, string> = {
-  free: 'from-gray-900/80 via-gray-800/60 to-gray-900/80',
-  premium: 'from-blue-950/80 via-blue-900/50 to-indigo-950/80',
-  pro: 'from-purple-950/80 via-violet-900/50 to-purple-950/80',
+  free: 'from-gray-50 via-white to-gray-50 dark:from-gray-900/80 dark:via-gray-800/60 dark:to-gray-900/80',
+  premium: 'from-blue-50 via-white to-indigo-50 dark:from-blue-950/80 dark:via-blue-900/50 dark:to-indigo-950/80',
+  pro: 'from-purple-50 via-white to-violet-50 dark:from-purple-950/80 dark:via-violet-900/50 dark:to-purple-950/80',
 }
 
 const PLAN_BORDER: Record<string, string> = {
-  free: 'border-gray-700/50',
-  premium: 'border-blue-500/40',
-  pro: 'border-purple-500/40',
+  free: 'border-gray-200 dark:border-gray-700/50',
+  premium: 'border-blue-200 dark:border-blue-500/40',
+  pro: 'border-purple-200 dark:border-purple-500/40',
 }
 
 const PLAN_BADGE_STYLE: Record<string, string> = {
-  premium: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
-  pro: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+  premium: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30',
+  pro: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-500/30',
 }
 
 const PLAN_BUTTON_STYLE: Record<string, string> = {
@@ -58,7 +58,7 @@ const PLAN_BUTTON_STYLE: Record<string, string> = {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Plan Card Component                                                          */
+/* Plan Card Component                                                        */
 /* -------------------------------------------------------------------------- */
 
 interface PlanCardProps {
@@ -75,12 +75,13 @@ function PlanCard({ planKey, currentPlan, userCoins, onPurchase, purchasing }: P
   const isCurrentPlan = currentPlan === planKey
   const isFree = planKey === 'free'
   const canAfford = userCoins >= config.coinsCost
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: planKey === 'free' ? 0 : planKey === 'premium' ? 0.1 : 0.2 }}
-      className={`relative rounded-2xl border backdrop-blur-xl overflow-hidden ${PLAN_BORDER[planKey]} bg-gradient-to-br ${PLAN_GRADIENTS[planKey]}`}
+      className={`relative rounded-2xl border backdrop-blur-xl overflow-hidden ${PLAN_BORDER[planKey]} bg-gradient-to-br ${PLAN_GRADIENTS[planKey]} transition-colors`}
     >
       {/* Popular / Best Value badge */}
       {config.badge && (
@@ -93,15 +94,15 @@ function PlanCard({ planKey, currentPlan, userCoins, onPurchase, purchasing }: P
         {/* Header */}
         <div className="flex items-center gap-3 mb-4">
           <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${
-            planKey === 'free' ? 'bg-gray-700/60' :
-            planKey === 'premium' ? 'bg-blue-500/20 border border-blue-500/30' :
-            'bg-purple-500/20 border border-purple-500/30'
+            planKey === 'free' ? 'bg-gray-100 dark:bg-gray-700/60' :
+            planKey === 'premium' ? 'bg-blue-100 border-blue-200 dark:bg-blue-500/20 dark:border-blue-500/30' :
+            'bg-purple-100 border-purple-200 dark:bg-purple-500/20 dark:border-purple-500/30'
           }`}>
             <PlanIcon className={`w-5 h-5 ${config.color}`} />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-white">{config.displayName}</h3>
-            <p className="text-xs text-gray-400">{config.description}</p>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">{config.displayName}</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{config.description}</p>
           </div>
         </div>
 
@@ -109,14 +110,14 @@ function PlanCard({ planKey, currentPlan, userCoins, onPurchase, purchasing }: P
         <div className="mb-5">
           {isFree ? (
             <div className="flex items-baseline gap-1">
-              <span className="text-3xl font-black text-white">Free</span>
-              <span className="text-sm text-gray-400">forever</span>
+              <span className="text-3xl font-black text-gray-900 dark:text-white">Free</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400">forever</span>
             </div>
           ) : (
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-white">{config.coinsCost.toLocaleString()}</span>
-              <span className="text-sm font-semibold text-gray-400">coins</span>
-              <span className="text-xs text-gray-500">/ {config.durationDays} days</span>
+              <span className="text-3xl font-black text-gray-900 dark:text-white">{config.coinsCost.toLocaleString()}</span>
+              <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">coins</span>
+              <span className="text-xs text-gray-500 dark:text-gray-500">/ {config.durationDays} days</span>
             </div>
           )}
         </div>
@@ -124,19 +125,19 @@ function PlanCard({ planKey, currentPlan, userCoins, onPurchase, purchasing }: P
         {/* Limits highlight */}
         {!isFree && (
           <div className="flex gap-3 mb-5">
-            <div className={`flex-1 rounded-xl p-3 text-center ${planKey === 'premium' ? 'bg-blue-500/10 border border-blue-500/20' : 'bg-purple-500/10 border border-purple-500/20'}`}>
+            <div className={`flex-1 rounded-xl p-3 text-center ${planKey === 'premium' ? 'bg-blue-50 border-blue-100 dark:bg-blue-500/10 dark:border-blue-500/20' : 'bg-purple-50 border-purple-100 dark:bg-purple-500/10 dark:border-purple-500/20'}`}>
               <MessageSquare className={`w-4 h-4 mx-auto mb-1 ${config.color}`} />
-              <div className="text-sm font-bold text-white">
+              <div className="text-sm font-bold text-gray-900 dark:text-white">
                 {config.dailyChatLimit === -1 ? '∞' : config.dailyChatLimit}
               </div>
-              <div className="text-[10px] text-gray-400">chats/day</div>
+              <div className="text-[10px] text-gray-500 dark:text-gray-400">chats/day</div>
             </div>
-            <div className={`flex-1 rounded-xl p-3 text-center ${planKey === 'premium' ? 'bg-blue-500/10 border border-blue-500/20' : 'bg-purple-500/10 border border-purple-500/20'}`}>
+            <div className={`flex-1 rounded-xl p-3 text-center ${planKey === 'premium' ? 'bg-blue-50 border-blue-100 dark:bg-blue-500/10 dark:border-blue-500/20' : 'bg-purple-50 border-purple-100 dark:bg-purple-500/10 dark:border-purple-500/20'}`}>
               <Terminal className={`w-4 h-4 mx-auto mb-1 ${config.color}`} />
-              <div className="text-sm font-bold text-white">
+              <div className="text-sm font-bold text-gray-900 dark:text-white">
                 {config.dailyTerminalLimit === -1 ? '∞' : config.dailyTerminalLimit}
               </div>
-              <div className="text-[10px] text-gray-400">terminal/day</div>
+              <div className="text-[10px] text-gray-500 dark:text-gray-400">terminal/day</div>
             </div>
           </div>
         )}
@@ -145,19 +146,19 @@ function PlanCard({ planKey, currentPlan, userCoins, onPurchase, purchasing }: P
         <ul className="space-y-2.5 mb-6">
           {config.features.map((feature) => (
             <li key={feature} className="flex items-start gap-2.5">
-              <Check className={`w-4 h-4 mt-0.5 shrink-0 ${isFree ? 'text-gray-400' : config.color}`} />
-              <span className="text-sm text-gray-300">{feature}</span>
+              <Check className={`w-4 h-4 mt-0.5 shrink-0 ${isFree ? 'text-gray-400 dark:text-gray-400' : config.color}`} />
+              <span className="text-sm text-gray-600 dark:text-gray-300">{feature}</span>
             </li>
           ))}
         </ul>
 
         {/* CTA */}
         {isFree ? (
-          <div className="w-full py-3 rounded-xl border border-gray-600/50 text-gray-400 text-sm font-semibold text-center cursor-default">
+          <div className="w-full py-3 rounded-xl border border-gray-300 dark:border-gray-600/50 text-gray-500 dark:text-gray-400 text-sm font-semibold text-center cursor-default transition-colors">
             {isCurrentPlan ? 'Current Plan' : 'Free Forever'}
           </div>
         ) : isCurrentPlan ? (
-          <div className="w-full py-3 rounded-xl bg-green-500/10 border border-green-500/30 text-green-400 text-sm font-semibold text-center flex items-center justify-center gap-2">
+          <div className="w-full py-3 rounded-xl bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/30 text-green-700 dark:text-green-400 text-sm font-semibold text-center flex items-center justify-center gap-2 transition-colors">
             <Check className="w-4 h-4" />
             Active Plan
           </div>
@@ -189,7 +190,7 @@ function PlanCard({ planKey, currentPlan, userCoins, onPurchase, purchasing }: P
         {!isFree && !canAfford && (
           <Link
             href="/rewards"
-            className="mt-2 w-full py-2 rounded-xl border border-gray-600/40 text-gray-400 text-xs font-semibold text-center hover:border-gray-500/60 hover:text-gray-300 transition-all flex items-center justify-center gap-1.5"
+            className="mt-2 w-full py-2 rounded-xl border border-gray-200 dark:border-gray-600/40 text-gray-600 dark:text-gray-400 text-xs font-semibold text-center hover:border-gray-300 dark:hover:border-gray-500/60 hover:text-gray-900 dark:hover:text-gray-300 transition-all flex items-center justify-center gap-1.5"
           >
             <Star className="w-3.5 h-3.5" />
             Earn Coins via Rewards
@@ -201,7 +202,7 @@ function PlanCard({ planKey, currentPlan, userCoins, onPurchase, purchasing }: P
 }
 
 /* -------------------------------------------------------------------------- */
-/* Main Checkout Page                                                           */
+/* Main Checkout Page                                                         */
 /* -------------------------------------------------------------------------- */
 
 export default function CheckoutPage() {
@@ -231,10 +232,10 @@ export default function CheckoutPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#0a0a0f]">
+      <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-[#0a0a0f] transition-colors">
         <div className="text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-500 mx-auto mb-3" />
-          <p className="text-gray-400 text-sm">Loading…</p>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">Loading…</p>
         </div>
       </div>
     )
@@ -251,12 +252,12 @@ export default function CheckoutPage() {
 
       {/* Ambient backgrounds */}
       <div className="fixed inset-0 z-[-1] overflow-hidden pointer-events-none">
-        <div className="absolute top-[-15%] left-[-10%] w-[45%] h-[45%] rounded-full bg-purple-600/10 blur-[140px]" />
-        <div className="absolute bottom-[-15%] right-[-10%] w-[45%] h-[45%] rounded-full bg-blue-600/10 blur-[140px]" />
-        <div className="absolute top-[50%] left-[50%] -translate-x-1/2 -translate-y-1/2 w-[30%] h-[30%] rounded-full bg-indigo-600/8 blur-[120px]" />
+        <div className="absolute top-[-15%] left-[-10%] w-[45%] h-[45%] rounded-full bg-purple-600/5 dark:bg-purple-600/10 blur-[140px]" />
+        <div className="absolute bottom-[-15%] right-[-10%] w-[45%] h-[45%] rounded-full bg-blue-600/5 dark:bg-blue-600/10 blur-[140px]" />
+        <div className="absolute top-[50%] left-[50%] -translate-x-1/2 -translate-y-1/2 w-[30%] h-[30%] rounded-full bg-indigo-600/5 dark:bg-indigo-600/8 blur-[120px]" />
       </div>
 
-      <div className="min-h-screen bg-[#0a0a0f] text-white pt-20 sm:pt-24 pb-20">
+      <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0f] text-gray-900 dark:text-white pt-20 sm:pt-24 pb-20 transition-colors">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
 
           {/* Header */}
@@ -268,21 +269,21 @@ export default function CheckoutPage() {
           >
             <button
               onClick={() => router.back()}
-              className="group flex items-center gap-2 text-sm text-gray-500 hover:text-gray-300 mb-6 transition-colors"
+              className="group flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 mb-6 transition-colors"
             >
               <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
               Back
             </button>
 
             <div className="text-center">
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-purple-500/30 bg-purple-500/10 text-purple-300 text-xs font-semibold mb-4">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-300 text-xs font-semibold mb-4">
                 <Crown className="w-3.5 h-3.5" />
                 Plan Upgrade
               </div>
-              <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white mb-3">
+              <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-gray-900 dark:text-white mb-3">
                 Upgrade Your Plan
               </h1>
-              <p className="text-gray-400 max-w-xl mx-auto text-sm leading-relaxed">
+              <p className="text-gray-600 dark:text-gray-400 max-w-xl mx-auto text-sm leading-relaxed">
                 Use your SwapSmith coins earned from completing courses, daily logins, and swaps to unlock more power.
               </p>
             </div>
@@ -295,20 +296,20 @@ export default function CheckoutPage() {
             transition={{ duration: 0.4, delay: 0.05 }}
             className="mb-8 max-w-md mx-auto"
           >
-            <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-950/50 via-orange-950/30 to-amber-900/20 backdrop-blur-xl p-5">
+            <div className="rounded-2xl border border-amber-200 dark:border-amber-500/30 bg-gradient-to-br from-amber-50 via-orange-50/50 to-amber-100/50 dark:from-amber-950/50 dark:via-orange-950/30 dark:to-amber-900/20 backdrop-blur-xl p-5 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/20 border border-amber-500/30">
-                    <Star className="w-5 h-5 text-amber-400" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-500/20 border border-amber-200 dark:border-amber-500/30">
+                    <Star className="w-5 h-5 text-amber-500 dark:text-amber-400" />
                   </div>
                   <div>
-                    <p className="text-xs text-amber-400/70 font-medium uppercase tracking-wider">Your Balance</p>
-                    <p className="text-2xl font-black text-amber-300">{userCoins.toLocaleString()}</p>
+                    <p className="text-xs text-amber-700/70 dark:text-amber-400/70 font-medium uppercase tracking-wider">Your Balance</p>
+                    <p className="text-2xl font-black text-amber-600 dark:text-amber-300">{userCoins.toLocaleString()}</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-gray-500">SwapSmith Coins</p>
-                  <Link href="/rewards" className="text-xs text-amber-400 hover:text-amber-300 font-semibold transition-colors flex items-center gap-1 justify-end mt-1">
+                  <p className="text-xs text-gray-600 dark:text-gray-500">SwapSmith Coins</p>
+                  <Link href="/rewards" className="text-xs text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 font-semibold transition-colors flex items-center gap-1 justify-end mt-1">
                     <Zap className="w-3 h-3" />
                     Earn more
                   </Link>
@@ -325,22 +326,22 @@ export default function CheckoutPage() {
               transition={{ duration: 0.4, delay: 0.1 }}
               className="mb-8 max-w-md mx-auto"
             >
-              <div className="rounded-2xl border border-gray-700/50 bg-gray-900/50 backdrop-blur-xl p-5">
+              <div className="rounded-2xl border border-gray-200 dark:border-gray-700/50 bg-white/80 dark:bg-gray-900/50 backdrop-blur-xl p-5 transition-colors">
                 <div className="flex items-center gap-2 mb-4">
-                  <Clock className="w-4 h-4 text-gray-400" />
-                  <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Today&apos;s Usage</span>
+                  <Clock className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Today&apos;s Usage</span>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs text-gray-400 flex items-center gap-1">
+                      <span className="text-xs text-gray-600 dark:text-gray-400 flex items-center gap-1">
                         <MessageSquare className="w-3 h-3" /> Chat
                       </span>
-                      <span className="text-xs font-semibold text-gray-300">
+                      <span className="text-xs font-semibold text-gray-900 dark:text-gray-300">
                         {status.dailyChatCount}/{status.dailyChatLimit === -1 ? '∞' : status.dailyChatLimit}
                       </span>
                     </div>
-                    <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                    <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all ${
                           status.chatLimitExceeded ? 'bg-red-500' : 'bg-blue-500'
@@ -355,14 +356,14 @@ export default function CheckoutPage() {
                   </div>
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs text-gray-400 flex items-center gap-1">
+                      <span className="text-xs text-gray-600 dark:text-gray-400 flex items-center gap-1">
                         <Terminal className="w-3 h-3" /> Terminal
                       </span>
-                      <span className="text-xs font-semibold text-gray-300">
+                      <span className="text-xs font-semibold text-gray-900 dark:text-gray-300">
                         {status.dailyTerminalCount}/{status.dailyTerminalLimit === -1 ? '∞' : status.dailyTerminalLimit}
                       </span>
                     </div>
-                    <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                    <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all ${
                           status.terminalLimitExceeded ? 'bg-red-500' : 'bg-purple-500'
@@ -387,7 +388,7 @@ export default function CheckoutPage() {
                 initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                className="mb-6 max-w-md mx-auto p-4 rounded-2xl bg-green-500/10 border border-green-500/30 text-green-400 text-sm flex items-center gap-3"
+                className="mb-6 max-w-md mx-auto p-4 rounded-2xl bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/30 text-green-700 dark:text-green-400 text-sm flex items-center gap-3 transition-colors"
               >
                 <Check className="w-5 h-5 shrink-0" />
                 {successMessage}
@@ -398,7 +399,7 @@ export default function CheckoutPage() {
                 initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                className="mb-6 max-w-md mx-auto p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-center gap-3"
+                className="mb-6 max-w-md mx-auto p-4 rounded-2xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-400 text-sm flex items-center gap-3 transition-colors"
               >
                 <AlertCircle className="w-5 h-5 shrink-0" />
                 {purchaseError}
@@ -425,10 +426,10 @@ export default function CheckoutPage() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.35 }}
-            className="rounded-2xl border border-gray-700/50 bg-gray-900/40 backdrop-blur-xl p-6 mb-8"
+            className="rounded-2xl border border-gray-200 dark:border-gray-700/50 bg-white/80 dark:bg-gray-900/40 backdrop-blur-xl p-6 mb-8 transition-colors"
           >
-            <h2 className="text-base font-bold text-white mb-5 flex items-center gap-2">
-              <Shield className="w-4 h-4 text-blue-400" />
+            <h2 className="text-base font-bold text-gray-900 dark:text-white mb-5 flex items-center gap-2">
+              <Shield className="w-4 h-4 text-blue-500 dark:text-blue-400" />
               How Plan Purchases Work
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -437,25 +438,25 @@ export default function CheckoutPage() {
                   step: '01',
                   title: 'Earn Coins',
                   desc: 'Complete courses, log in daily, connect your wallet, and make swaps to earn SwapSmith coins.',
-                  color: 'text-amber-400',
+                  color: 'text-amber-500 dark:text-amber-400',
                 },
                 {
                   step: '02',
                   title: 'Purchase Plan',
                   desc: 'Spend your coins to activate a Premium or Pro plan for 30 days. No credit card needed.',
-                  color: 'text-blue-400',
+                  color: 'text-blue-500 dark:text-blue-400',
                 },
                 {
                   step: '03',
                   title: 'Enjoy Benefits',
                   desc: 'Access higher daily limits, ad-free experience, and priority features immediately.',
-                  color: 'text-purple-400',
+                  color: 'text-purple-500 dark:text-purple-400',
                 },
               ].map(({ step, title, desc, color }) => (
                 <div key={step} className="flex flex-col gap-2">
                   <span className={`text-3xl font-black ${color} opacity-40`}>{step}</span>
-                  <h3 className="text-sm font-bold text-white">{title}</h3>
-                  <p className="text-xs text-gray-400 leading-relaxed">{desc}</p>
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">{title}</h3>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">{desc}</p>
                 </div>
               ))}
             </div>
@@ -466,9 +467,9 @@ export default function CheckoutPage() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.4 }}
-            className="rounded-2xl border border-gray-700/50 bg-gray-900/40 backdrop-blur-xl p-6"
+            className="rounded-2xl border border-gray-200 dark:border-gray-700/50 bg-white/80 dark:bg-gray-900/40 backdrop-blur-xl p-6 transition-colors"
           >
-            <h2 className="text-base font-bold text-white mb-5">Frequently Asked Questions</h2>
+            <h2 className="text-base font-bold text-gray-900 dark:text-white mb-5">Frequently Asked Questions</h2>
             <div className="space-y-4">
               {[
                 {
@@ -488,9 +489,9 @@ export default function CheckoutPage() {
                   a: 'Coin purchases are final. Make sure you have enough coins before upgrading.',
                 },
               ].map(({ q, a }) => (
-                <div key={q} className="border-b border-gray-800/60 pb-4 last:border-0 last:pb-0">
-                  <p className="text-sm font-semibold text-gray-200 mb-1">{q}</p>
-                  <p className="text-xs text-gray-400 leading-relaxed">{a}</p>
+                <div key={q} className="border-b border-gray-200 dark:border-gray-800/60 pb-4 last:border-0 last:pb-0">
+                  <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">{q}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">{a}</p>
                 </div>
               ))}
             </div>
