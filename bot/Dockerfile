@@ -55,6 +55,9 @@ RUN apt-get update && apt-get install -y \
 # Create a non-root user
 RUN groupadd -r nodejs && useradd -r -g nodejs botuser
 
+# FIX: Create the logs directory and give botuser ownership of the working directory
+RUN mkdir -p /usr/src/app/bot/logs && chown -R botuser:nodejs /usr/src/app/bot
+
 # Copy built artifacts and production dependencies
 COPY --from=builder --chown=botuser:nodejs /usr/src/app/bot/package.json ./
 COPY --from=builder --chown=botuser:nodejs /usr/src/app/bot/dist ./dist
