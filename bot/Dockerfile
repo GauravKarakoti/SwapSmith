@@ -12,7 +12,11 @@ RUN apt-get update && apt-get install -y \
 COPY bot/package*.json ./bot/
 COPY shared/package*.json ./shared/
 
-# Install dependencies
+# Install shared dependencies (ADDED)
+WORKDIR /usr/src/app/shared
+RUN npm install
+
+# Install bot dependencies
 WORKDIR /usr/src/app/bot
 RUN npm install
 
@@ -21,9 +25,16 @@ FROM node:20-slim AS builder
 WORKDIR /usr/src/app
 
 COPY --from=deps /usr/src/app/bot/node_modules ./bot/node_modules
+# Copy shared node_modules (ADDED)
+COPY --from=deps /usr/src/app/shared/node_modules ./shared/node_modules 
 COPY shared ./shared
 COPY bot ./bot
 
+# Build the shared directory first to generate the dist folder (ADDED)
+WORKDIR /usr/src/app/shared
+RUN npm run build
+
+# Then build the bot directory
 WORKDIR /usr/src/app/bot
 RUN npm run build
 RUN npm prune --production
@@ -50,14 +61,14 @@ COPY --from=builder --chown=botuser:nodejs /usr/src/app/bot/dist ./dist
 COPY --from=builder --chown=botuser:nodejs /usr/src/app/bot/node_modules ./node_modules
 COPY --from=builder --chown=botuser:nodejs /usr/src/app/bot/scripts ./scripts
 
-# Copy shared directory for secrets loading
+# Copy shared directory for runtime
 COPY --from=builder --chown=botuser:nodejs /usr/src/app/shared ../shared
 
 USER botuser
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/health || exit 1
+  CMD curl -f https://swapsmith-5e8y.onrender.com/health || exit 1
 
 # Your app's start command
 CMD [ "npm", "run", "start:render" ]
