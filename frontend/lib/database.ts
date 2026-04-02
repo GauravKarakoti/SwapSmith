@@ -1,6 +1,6 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { eq, desc, and, inArray, sql as drizzleSql, count } from 'drizzle-orm';
+import { eq, desc, and, inArray, sql as drizzleSql, count, or } from 'drizzle-orm';
 
 // Import all table schemas from shared schema file
 import {
@@ -533,17 +533,26 @@ export async function likeDiscussion(id: number) {
   }
 }
 
-// --- REWARDS SYSTEM FUNCTIONS ---
-
 export async function getUserByWalletOrId(identifier: string): Promise<User | undefined> {
   if (!db) {
     console.warn('Database not configured');
     return undefined;
   }
   
+  // Try to parse the identifier as a numeric ID
+  const parsedId = parseInt(identifier, 10);
+  const isValidId = !isNaN(parsedId) && parsedId.toString() === identifier;
+  
   const result = await db.select().from(users)
-    .where(eq(users.walletAddress, identifier))
+    .where(
+      isValidId 
+        // If it's a number, check both id OR walletAddress
+        ? or(eq(users.walletAddress, identifier), eq(users.id, parsedId))
+        // If it's not a number, only check walletAddress
+        : eq(users.walletAddress, identifier)
+    )
     .limit(1);
+    
   return result[0];
 }
 
