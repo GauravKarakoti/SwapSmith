@@ -63,9 +63,7 @@ COPY --from=builder --chown=botuser:nodejs /usr/src/app/bot/package.json ./
 COPY --from=builder --chown=botuser:nodejs /usr/src/app/bot/dist ./dist
 COPY --from=builder --chown=botuser:nodejs /usr/src/app/bot/node_modules ./node_modules
 COPY --from=builder --chown=botuser:nodejs /usr/src/app/bot/scripts ./scripts
-
-# Copy shared directory for runtime
-COPY --from=builder --chown=botuser:nodejs /usr/src/app/shared ../shared
+COPY --from=builder --chown=botuser:nodejs /usr/src/app/shared ./dist/shared
 
 USER botuser
 
