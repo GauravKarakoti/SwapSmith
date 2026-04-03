@@ -515,11 +515,11 @@ bot.action('confirm_swap_and_stake', async (ctx) => {
     const depositAddress =
       typeof swapOrderStatus.depositAddress === 'string'
         ? swapOrderStatus.depositAddress
-        : swapOrderStatus.depositAddress.address;
+        : swapOrderStatus.depositAddress?.address;
 
     const depositMemo =
       typeof swapOrderStatus.depositAddress === 'object'
-        ? swapOrderStatus.depositAddress.memo
+        ? swapOrderStatus.depositAddress?.memo
         : null;
 
     await ctx.reply(
