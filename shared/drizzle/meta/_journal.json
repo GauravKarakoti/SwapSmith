@@ -15,6 +15,13 @@
       "when": 1775194672192,
       "tag": "0002_lonely_silver_sable",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1775236699893,
+      "tag": "0003_low_saracen",
+      "breakpoints": true
     }
   ]
 }

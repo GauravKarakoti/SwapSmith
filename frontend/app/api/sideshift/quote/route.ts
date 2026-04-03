@@ -5,6 +5,7 @@ import { rateLimitMiddleware, RATE_LIMITS } from '@/lib/rate-limiter';
 
 const API_KEY = process.env.SIDESHIFT_API_KEY; // Server-side only, no NEXT_PUBLIC_
 const AFFILIATE_ID = process.env.AFFILIATE_ID;
+const FALLBACK_IP = process.env.SIDESHIFT_CLIENT_IP || '127.0.0.1';
 
 /**
  * POST /api/sideshift/quote
@@ -34,10 +35,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get user IP from headers
-    const userIP = req.headers.get('x-forwarded-for') || 
+    // Safely extract the primary user IP from headers
+    const forwardedFor = req.headers.get('x-forwarded-for');
+    const userIP = forwardedFor?.split(',')[0]?.trim() || 
                    req.headers.get('x-real-ip') || 
-                   '127.0.0.1';
+                   FALLBACK_IP;
 
     // Make request to SideShift API with server-side API key
     const response = await axios.post(

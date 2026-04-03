@@ -147,6 +147,7 @@ export const limitOrders = pgTable('limit_orders', {
   conditionValue: numeric('condition_value', { precision: 30, scale: 18 }),
   conditionAsset: text('condition_asset'),
   status: text('status').notNull().default('pending'),
+  settleAddress: text('settle_address'),
   sideshiftOrderId: text('sideshift_order_id'),
   error: text('error'),
   executedAt: timestamp('executed_at'),

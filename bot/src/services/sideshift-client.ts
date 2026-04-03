@@ -113,20 +113,16 @@ export interface SideShiftOrderStatus {
   depositNetwork: string;
   settleCoin: string;
   settleNetwork: string;
-  depositAddress: {
-    address: string;
-    memo: string | null;
-  };
-  settleAddress: {
-    address: string;
-    memo: string | null;
-  };
-  depositAmount: string | null;
-  settleAmount: string | null;
-  depositHash: string | null;
-  settleHash: string | null;
+  // FIX: Added '?' to memo to match z.string().nullable().optional()
+  depositAddress: string | { address: string; memo?: string | null; };
+  settleAddress: string | { address: string; memo?: string | null; };
+  // FIX: Make these optional as SideShift sometimes omits them when null
+  depositAmount?: string | null;
+  settleAmount?: string | null;
+  depositHash?: string | null;
+  settleHash?: string | null;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
   error?: { code: string; message: string; };
 }
 
@@ -237,6 +233,14 @@ const SideShiftOrderSchema = z.object({
   status: z.string().optional(),
 });
 
+const SideShiftFlexibleAddressSchema = z.union([
+  z.string(),
+  z.object({
+    address: z.string(),
+    memo: z.string().nullable().optional(),
+  }),
+]);
+
 const SideShiftOrderStatusSchema = z.object({
   id: z.string(),
   status: z.string(),
@@ -244,22 +248,17 @@ const SideShiftOrderStatusSchema = z.object({
   depositNetwork: z.string(),
   settleCoin: z.string(),
   settleNetwork: z.string(),
-  depositAddress: z.object({
-    address: z.string(),
-    memo: z.string().nullable(),
-  }),
-  settleAddress: z.object({
-    address: z.string(),
-    memo: z.string().nullable(),
-  }),
-  depositAmount: z.string().nullable(),
-  settleAmount: z.string().nullable(),
-  depositHash: z.string().nullable(),
-  settleHash: z.string().nullable(),
+  // FIX: Use the flexible address schema
+  depositAddress: SideShiftFlexibleAddressSchema,
+  settleAddress: SideShiftFlexibleAddressSchema,
+  depositAmount: z.string().nullable().optional(),
+  settleAmount: z.string().nullable().optional(),
+  depositHash: z.string().nullable().optional(),
+  settleHash: z.string().nullable().optional(),
   createdAt: z.string(),
-  updatedAt: z.string(),
+  updatedAt: z.string().optional(),
   error: SideShiftErrorSchema.optional(),
-});
+}).passthrough(); // FIX: Allow SideShift to add extra undocumented fields without breaking the bot
 
 // ============================================
 // Validation Helper Functions
@@ -442,29 +441,19 @@ export async function getOrderStatus(orderId: string, userIP?: string): Promise<
   } catch (error) {
     // Handle Axios-specific errors
     if (axios.isAxiosError(error)) {
-
-      // Handle HTTP 429 (Too Many Requests)
       if (error.response?.status === 429) {
         const rawRetryAfter = error.response.headers?.['retry-after'];
-
-        const retryAfterHeader =
-          Array.isArray(rawRetryAfter)
-            ? rawRetryAfter[0]
-            : rawRetryAfter != null
-            ? String(rawRetryAfter)
-            : undefined;
-
-        const retryAfter = parseRetryAfter(retryAfterHeader);
-
-        throw new RateLimitError(retryAfter);
+        const retryAfterHeader = Array.isArray(rawRetryAfter) ? rawRetryAfter[0] : rawRetryAfter != null ? String(rawRetryAfter) : undefined;
+        throw new RateLimitError(parseRetryAfter(retryAfterHeader));
       }
 
-      const message = extractErrorMessage(
-        error,
-        `Failed to get order status for ${orderId}`
-      );
-
+      const message = extractErrorMessage(error, `Failed to get order status for ${orderId}`);
       throw new Error(message);
+    }
+
+    // FIX: Do not swallow Zod validation errors or other standard errors
+    if (error instanceof Error) {
+      throw error;
     }
 
     throw new Error(`Failed to get order status for ${orderId}`);
