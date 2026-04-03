@@ -14,7 +14,7 @@ dotenv.config();
 
 const AFFILIATE_ID = process.env['AFFILIATE_ID'];
 const API_KEY = process.env['SIDESHIFT_API_KEY'];
-const DEFAULT_USER_IP = process.env['SIDESHIFT_CLIENT_IP'];
+const DEFAULT_USER_IP = process.env['SIDESHIFT_CLIENT_IP'] || '127.0.0.1';
 
 // Bridge API URL for aggregated quotes (optional)
 const BRIDGE_API_URL = process.env['BRIDGE_API_URL'] || '';

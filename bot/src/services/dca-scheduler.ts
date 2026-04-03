@@ -31,23 +31,19 @@ export class DCAScheduler {
     try {
       const now = new Date();
 
-      const dueSchedules = await db.transaction(async (tx) => {
-        const schedules = await tx.select().from(dcaSchedules)
-          .where(and(eq(dcaSchedules.isActive, 1), lte(dcaSchedules.nextExecutionAt, now)))
-          .for('update', { skipLocked: true });
+      const schedules = await db.select().from(dcaSchedules)
+        .where(and(eq(dcaSchedules.isActive, 1), lte(dcaSchedules.nextExecutionAt, now)));
 
-        if (schedules.length > 0) {
-          const lockTime = new Date();
-          lockTime.setMinutes(lockTime.getMinutes() + MAX_PROCESSING_TIME_MINUTES);
-
-          const ids = schedules.map(s => s.id);
-          await tx.update(dcaSchedules)
-            .set({ nextExecutionAt: lockTime })
-            .where(inArray(dcaSchedules.id, ids));
-        }
-
-        return schedules;
-      });
+      if (schedules.length > 0) {
+        const lockTime = new Date();
+        lockTime.setMinutes(lockTime.getMinutes() + MAX_PROCESSING_TIME_MINUTES);
+        const ids = schedules.map(s => s.id);
+        
+        await db.update(dcaSchedules)
+          .set({ nextExecutionAt: lockTime })
+          .where(inArray(dcaSchedules.id, ids));
+      }
+      const dueSchedules = schedules;
 
       logger.info(`Checking DCA schedules: found ${dueSchedules.length} due.`);
 

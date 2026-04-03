@@ -8,6 +8,13 @@
       "when": 1773852954397,
       "tag": "0001_organic_princess_powerful",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775194672192,
+      "tag": "0002_lonely_silver_sable",
+      "breakpoints": true
     }
   ]
 }
