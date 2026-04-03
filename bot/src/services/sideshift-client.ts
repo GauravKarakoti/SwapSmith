@@ -113,9 +113,8 @@ export interface SideShiftOrderStatus {
   depositNetwork: string;
   settleCoin: string;
   settleNetwork: string;
-  // FIX: Added '?' to memo to match z.string().nullable().optional()
-  depositAddress: string | { address: string; memo?: string | null; };
-  settleAddress: string | { address: string; memo?: string | null; };
+  depositAddress?: string | { address?: string | null; memo?: string | null; } | null;
+  settleAddress?: string | { address?: string | null; memo?: string | null; } | null;
   // FIX: Make these optional as SideShift sometimes omits them when null
   depositAmount?: string | null;
   settleAmount?: string | null;
@@ -236,10 +235,10 @@ const SideShiftOrderSchema = z.object({
 const SideShiftFlexibleAddressSchema = z.union([
   z.string(),
   z.object({
-    address: z.string(),
+    address: z.string().nullable().optional(),
     memo: z.string().nullable().optional(),
-  }),
-]);
+  }).passthrough(),
+]).nullable().optional();
 
 const SideShiftOrderStatusSchema = z.object({
   id: z.string(),
