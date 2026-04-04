@@ -548,10 +548,6 @@ bot.action('cancel_swap', async (ctx) => {
   await ctx.editMessageText('❌ Cancelled');
 });
 
-/* -------------------------------------------------------------------------- */
-/* STARTUP */
-/* -------------------------------------------------------------------------- */
-
 async function start() {
   try {
     if (process.env['SENTRY_DSN']) {
@@ -573,10 +569,23 @@ async function start() {
       timeout: 15000
     });
 
-    await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+    const WEBHOOK_URL = process.env['WEBHOOK_URL'];
 
-    await bot.launch();
-    logger.info('🤖 Bot launched');
+    if (WEBHOOK_URL) {
+      // --- WEBHOOK MODE (Production) ---
+      const webhookPath = `/webhook/${BOT_TOKEN}`; // Use token in path for security
+      app.use(bot.webhookCallback(webhookPath));
+      
+      await bot.telegram.setWebhook(`${WEBHOOK_URL}${webhookPath}`, {
+        drop_pending_updates: true
+      });
+      logger.info(`🤖 Bot launched in Webhook mode at ${WEBHOOK_URL}`);
+    } else {
+      // --- POLLING MODE (Local Development) ---
+      await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+      bot.launch();
+      logger.info('🤖 Bot launched in Polling mode');
+    }
 
     app.listen(PORT, () =>
       logger.info(`🌍 Server running on port ${PORT}`)
