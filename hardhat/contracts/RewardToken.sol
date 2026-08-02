@@ -2,23 +2,25 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import "@openzeppelin/contracts/access/Ownable2Step.sol";
 
 /**
  * @title RewardToken (SMTH)
- * @notice SwapSmith ERC20 reward token with capped supply and secure governance.
+ * @notice SwapSmith ERC20 reward token with capped supply, secure governance, and gasless approvals.
  *         Users earn points on the SwapSmith rewards page; the backend
  *         (owner wallet) calls rewardUser() to convert those points into
  *         on-chain SMTH tokens.
  *
- * Security features:
+ * Security & UX features:
  * - Maximum supply cap to prevent unlimited minting
  * - Two-step ownership transfer for safer governance transitions
  * - Governance-controlled minting cap updates
- *
- * Deployed on Sepolia testnet (free / no mainnet usage).
+ * - ERC20Permit for gasless approvals (EIP-2612)
+ * - Custom errors for maximum gas efficiency
  */
-contract RewardToken is ERC20, Ownable2Step {
+contract RewardToken is ERC20, ERC20Permit, ERC20Burnable, Ownable2Step {
     // -----------------------------------------------------------------------
     // Constants
     // -----------------------------------------------------------------------
@@ -35,17 +37,18 @@ contract RewardToken is ERC20, Ownable2Step {
     uint256 public mintingCap;
 
     // -----------------------------------------------------------------------
-    // Events
+    // Events & Errors
     // -----------------------------------------------------------------------
 
-    /// @notice Emitted whenever the owner rewards a user with tokens.
     event UserRewarded(address indexed user, uint256 amount);
-
-    /// @notice Emitted when minting reaches the maximum supply cap.
     event MaxSupplyReached(uint256 totalSupply, uint256 cap);
-
-    /// @notice Emitted when the minting cap is updated by governance.
     event MintingCapUpdated(uint256 oldCap, uint256 newCap);
+
+    error RewardToken__InvalidAddress();
+    error RewardToken__ZeroAmount();
+    error RewardToken__InsufficientTreasuryBalance();
+    error RewardToken__CapExceeded();
+    error RewardToken__InvalidCap();
 
     // -----------------------------------------------------------------------
     // Constructor
@@ -57,6 +60,7 @@ contract RewardToken is ERC20, Ownable2Step {
      */
     constructor(address initialOwner)
         ERC20("SwapSmith", "SMTH")
+        ERC20Permit("SwapSmith")
         Ownable(initialOwner)
     {
         // Set initial minting cap to 10M SMTH (10x initial supply).
@@ -79,19 +83,16 @@ contract RewardToken is ERC20, Ownable2Step {
      * @param amount  Token amount in wei (e.g. 10 * 10**18 for 10 SMTH).
      */
     function rewardUser(address user, uint256 amount) external onlyOwner {
-        require(user != address(0), "RewardToken: reward to zero address");
-        require(amount > 0, "RewardToken: amount must be > 0");
-        require(
-            balanceOf(owner()) >= amount,
-            "RewardToken: insufficient owner balance"
-        );
+        if (user == address(0)) revert RewardToken__InvalidAddress();
+        if (amount == 0) revert RewardToken__ZeroAmount();
+        if (balanceOf(owner()) < amount) revert RewardToken__InsufficientTreasuryBalance();
 
         _transfer(owner(), user, amount);
         emit UserRewarded(user, amount);
     }
 
     // -----------------------------------------------------------------------
-    // Optional: allow owner to mint more tokens if the treasury runs low
+    // Treasury & Minting
     // -----------------------------------------------------------------------
 
     /**
@@ -102,13 +103,10 @@ contract RewardToken is ERC20, Ownable2Step {
      * @param amount Amount to mint (in wei).
      */
     function mintToTreasury(uint256 amount) external onlyOwner {
-        require(amount > 0, "RewardToken: amount must be > 0");
+        if (amount == 0) revert RewardToken__ZeroAmount();
         
         uint256 newTotalSupply = totalSupply() + amount;
-        require(
-            newTotalSupply <= mintingCap,
-            "RewardToken: minting would exceed cap"
-        );
+        if (newTotalSupply > mintingCap) revert RewardToken__CapExceeded();
         
         _mint(owner(), amount);
         
@@ -130,10 +128,7 @@ contract RewardToken is ERC20, Ownable2Step {
      * @param newCap The new minting cap (in wei).
      */
     function setMintingCap(uint256 newCap) external onlyOwner {
-        require(
-            newCap >= totalSupply(),
-            "RewardToken: new cap below current supply"
-        );
+        if (newCap < totalSupply()) revert RewardToken__InvalidCap();
         
         uint256 oldCap = mintingCap;
         mintingCap = newCap;

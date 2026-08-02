@@ -1,32 +1,49 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
 
 /**
  * @title AgentReputation
  * @notice Trust score system for trading bots executing swaps on behalf of users.
  *         The backend wallet tracks the success and failure rates and stores the aggregated values on-chain.
+ *
+ * Security & Gas Optimization features:
+ * - Two-step ownership transfer for safer governance transitions.
+ * - Custom errors for maximum gas efficiency.
+ * - Struct packing (uint64) to fit agent stats into a single storage slot.
+ * - Batch recording capabilities to drastically reduce backend gas overhead.
  */
-contract AgentReputation is Ownable {
+contract AgentReputation is Ownable2Step {
     // -----------------------------------------------------------------------
-    // Struts & State
+    // Structs & State
     // -----------------------------------------------------------------------
 
+    /**
+     * @dev Using uint64 allows us to pack all three variables into a single 
+     *      256-bit storage slot (64 + 64 + 64 = 192 bits). This saves massive 
+     *      amounts of gas during state reads and writes.
+     *      Max uint64 is ~1.8e19, which is practically infinite for swap counts.
+     */
     struct Reputation {
-        uint256 totalSwaps;
-        uint256 successSwaps;
+        uint64 totalSwaps;
+        uint64 successSwaps;
+        uint64 slashCount;
     }
 
     /// @notice Maps a bot/agent address to their reputation statistics.
     mapping(address => Reputation) public reputations;
 
     // -----------------------------------------------------------------------
-    // Events
+    // Events & Errors
     // -----------------------------------------------------------------------
 
-    /// @notice Emitted whenever a bot's swap is recorded.
-    event SwapRecorded(address indexed agent, bool success, uint256 newTotal, uint256 newSuccess);
+    event SwapRecorded(address indexed agent, bool success, uint64 newTotal, uint64 newSuccess);
+    event AgentSlashed(address indexed agent, uint64 newSlashCount);
+    event BatchSwapsRecorded(uint256 count);
+
+    error AgentReputation__InvalidAddress();
+    error AgentReputation__ArrayLengthMismatch();
 
     // -----------------------------------------------------------------------
     // Constructor
@@ -34,7 +51,7 @@ contract AgentReputation is Ownable {
 
     /**
      * @param initialOwner Address that will own the contract (usually the deployer).
-     *                     The owner determines which backend addresses can call recordSwap.
+     *                     The owner determines which backend addresses can call recording functions.
      */
     constructor(address initialOwner) Ownable(initialOwner) {}
 
@@ -48,8 +65,8 @@ contract AgentReputation is Ownable {
      * @param agent   Address of the agent/bot that executed the swap.
      * @param success Boolean indicating if the swap was ultimately successful or failed/refunded.
      */
-    function recordSwap(address agent, bool success) external onlyOwner {
-        require(agent != address(0), "AgentReputation: Agent address cannot be zero");
+    function recordSwap(address agent, bool success) public onlyOwner {
+        if (agent == address(0)) revert AgentReputation__InvalidAddress();
 
         Reputation storage rep = reputations[agent];
         
@@ -61,6 +78,36 @@ contract AgentReputation is Ownable {
         emit SwapRecorded(agent, success, rep.totalSwaps, rep.successSwaps);
     }
 
+    /**
+     * @notice Records multiple swap outcomes in a single transaction to save on gas overhead.
+     * @dev    Only callable by the contract owner.
+     * @param agents    Array of agent addresses.
+     * @param successes Array of booleans indicating swap outcomes.
+     */
+    function batchRecordSwaps(address[] calldata agents, bool[] calldata successes) external onlyOwner {
+        if (agents.length != successes.length) revert AgentReputation__ArrayLengthMismatch();
+
+        for (uint256 i = 0; i < agents.length; i++) {
+            recordSwap(agents[i], successes[i]);
+        }
+
+        emit BatchSwapsRecorded(agents.length);
+    }
+
+    /**
+     * @notice Slashes an agent for malicious behavior (e.g., severe slippage, MEV exploitation).
+     * @dev    Only callable by the contract owner.
+     * @param agent Address of the offending agent/bot.
+     */
+    function slashAgent(address agent) external onlyOwner {
+        if (agent == address(0)) revert AgentReputation__InvalidAddress();
+
+        Reputation storage rep = reputations[agent];
+        rep.slashCount += 1;
+
+        emit AgentSlashed(agent, rep.slashCount);
+    }
+
     // -----------------------------------------------------------------------
     // Reading Reputation
     // -----------------------------------------------------------------------
@@ -70,9 +117,10 @@ contract AgentReputation is Ownable {
      * @param agent Address of the agent/bot.
      * @return totalSwaps   Total number of swaps attempted.
      * @return successSwaps Number of successful swaps.
+     * @return slashCount   Number of severe infractions.
      */
-    function getReputation(address agent) external view returns (uint256 totalSwaps, uint256 successSwaps) {
+    function getReputation(address agent) external view returns (uint64 totalSwaps, uint64 successSwaps, uint64 slashCount) {
         Reputation storage rep = reputations[agent];
-        return (rep.totalSwaps, rep.successSwaps);
+        return (rep.totalSwaps, rep.successSwaps, rep.slashCount);
     }
 }

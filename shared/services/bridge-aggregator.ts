@@ -1,6 +1,6 @@
 /**
  * Bridge Aggregator Service
- * Aggregates quotes from multiple bridge protocols
+ * Aggregates, normalizes, scores, and routes quotes across multiple bridge protocols.
  */
 
 import {
@@ -8,6 +8,7 @@ import {
   BridgeQuoteRequest,
   BridgeOrderRequest,
   BridgeOrder,
+  BaseBridgeAdapter,
   createAdapter,
 } from './bridges';
 import {
@@ -36,11 +37,20 @@ export interface BridgeQuoteRequestWithPrefs extends BridgeQuoteRequest {
 }
 
 /**
+ * Safely converts string/number amounts to Number for float comparisons
+ */
+function safeParseFloat(val: string | number | undefined | null, fallback = 0): number {
+  if (val === undefined || val === null) return fallback;
+  const parsed = typeof val === 'number' ? val : parseFloat(val);
+  return isNaN(parsed) ? fallback : parsed;
+}
+
+/**
  * Bridge Aggregator Class
  * Collects and normalizes quotes from multiple bridge protocols
  */
 export class BridgeAggregator {
-  private adapters: Map<string, any>;
+  private adapters: Map<string, BaseBridgeAdapter>;
   private defaultPreferences: BridgePreferences;
 
   constructor() {
@@ -54,11 +64,11 @@ export class BridgeAggregator {
    */
   private initializeAdapters(): void {
     const bridgeNames = ['across', 'stargate', 'layerzero', 'wormhole'];
-    
+
     for (const name of bridgeNames) {
       const adapter = createAdapter(name);
       if (adapter) {
-        this.adapters.set(name, adapter);
+        this.adapters.set(name.toLowerCase(), adapter);
       }
     }
   }
@@ -72,11 +82,11 @@ export class BridgeAggregator {
 
     // Determine which bridges to query
     const bridgesToQuery = this.getBridgesToQuery(request);
-    
+
     // Get quotes from all bridges in parallel
     const quotePromises = bridgesToQuery.map(async (bridgeName) => {
       try {
-        const adapter = this.adapters.get(bridgeName);
+        const adapter = this.adapters.get(bridgeName.toLowerCase());
         if (!adapter) {
           throw new Error(`Adapter not found for ${bridgeName}`);
         }
@@ -99,15 +109,20 @@ export class BridgeAggregator {
       }
     }
 
-    // Sort quotes by different criteria
+    // Sort quotes by output amount
     const sortedByOutput = this.sortByOutput(quotes);
 
-    // Get best quote based on preferences
-    const bestQuote = sortedByOutput[0] || this.createFallbackQuote(request);
-    const recommendedQuote = this.getRecommendedQuote(
-      quotes,
-      request.preferences || this.defaultPreferences
-    );
+    // Create fallback if no quotes retrieved
+    const fallbackQuote = this.createFallbackQuote(request);
+    const bestQuote = sortedByOutput[0] || fallbackQuote;
+
+    const recommendedQuote =
+      quotes.length > 0
+        ? this.getRecommendedQuote(
+            quotes,
+            request.preferences || this.defaultPreferences
+          )
+        : fallbackQuote;
 
     const availableBridges = getAvailableBridges(request.fromChain, request.toChain);
 
@@ -129,9 +144,9 @@ export class BridgeAggregator {
     request: BridgeQuoteRequest
   ): Promise<BridgeQuote> {
     const adapter = this.adapters.get(bridgeName.toLowerCase());
-    
+
     if (!adapter) {
-      throw new Error(`Bridge ${bridgeName} is not supported`);
+      throw new Error(`Bridge ${bridgeName} is not supported or adapter missing`);
     }
 
     return adapter.getQuote(request);
@@ -145,9 +160,9 @@ export class BridgeAggregator {
     request: BridgeOrderRequest
   ): Promise<BridgeOrder> {
     const adapter = this.adapters.get(bridgeName.toLowerCase());
-    
+
     if (!adapter) {
-      throw new Error(`Bridge ${bridgeName} is not supported`);
+      throw new Error(`Bridge ${bridgeName} is not supported or adapter missing`);
     }
 
     return adapter.createOrder(request);
@@ -158,13 +173,13 @@ export class BridgeAggregator {
    */
   getSupportedBridges(fromChain: string, toChain: string): string[] {
     const bridges: string[] = [];
-    
+
     for (const [name, adapter] of this.adapters) {
       if (adapter.supportsRoute(fromChain, toChain)) {
         bridges.push(name);
       }
     }
-    
+
     return bridges;
   }
 
@@ -179,34 +194,41 @@ export class BridgeAggregator {
    * Determine which bridges to query
    */
   private getBridgesToQuery(request: BridgeQuoteRequestWithPrefs): string[] {
-    // If specific bridges are requested, use those
+    // If specific bridges are explicitly included, use those
     if (request.includeBridges && request.includeBridges.length > 0) {
-      return request.includeBridges;
+      return request.includeBridges.map((b) => b.toLowerCase());
     }
 
-    // If specific bridges are excluded, filter them out
+    // Otherwise get standard available bridges for this route
     let bridges = getAvailableBridges(request.fromChain, request.toChain);
-    
+
+    // If specific bridges are excluded, filter them out
     if (request.excludeBridges && request.excludeBridges.length > 0) {
-      bridges = bridges.filter(b => !request.excludeBridges!.includes(b));
+      const excluded = new Set(request.excludeBridges.map((b) => b.toLowerCase()));
+      bridges = bridges.filter((b) => !excluded.has(b.toLowerCase()));
     }
 
     // Apply user preferences
     const prefs = request.preferences || this.defaultPreferences;
-    
-    if (prefs.preferredBridges.length > 0) {
-      bridges = bridges.filter(b => prefs.preferredBridges.includes(b));
-    }
-    
-    if (prefs.avoidBridges.length > 0) {
-      bridges = bridges.filter(b => !prefs.avoidBridges.includes(b));
+
+    if (prefs.preferredBridges && prefs.preferredBridges.length > 0) {
+      const preferred = new Set(prefs.preferredBridges.map((b) => b.toLowerCase()));
+      const filtered = bridges.filter((b) => preferred.has(b.toLowerCase()));
+      if (filtered.length > 0) {
+        bridges = filtered;
+      }
     }
 
-    // Filter by instant if requested
+    if (prefs.avoidBridges && prefs.avoidBridges.length > 0) {
+      const avoided = new Set(prefs.avoidBridges.map((b) => b.toLowerCase()));
+      bridges = bridges.filter((b) => !avoided.has(b.toLowerCase()));
+    }
+
+    // Filter by instant execution if requested
     if (prefs.instantOnly) {
-      bridges = bridges.filter(b => {
-        const config = BRIDGE_CONFIGS[b];
-        return config?.features.instantExecution;
+      bridges = bridges.filter((b) => {
+        const config = BRIDGE_CONFIGS[b.toLowerCase()];
+        return config?.features?.instantExecution ?? false;
       });
     }
 
@@ -218,9 +240,9 @@ export class BridgeAggregator {
    */
   private sortByOutput(quotes: BridgeQuote[]): BridgeQuote[] {
     return [...quotes].sort((a, b) => {
-      const aAmount = BigInt(a.toAmount);
-      const bAmount = BigInt(b.toAmount);
-      return bAmount > aAmount ? 1 : bAmount < aAmount ? -1 : 0;
+      const aAmount = safeParseFloat(a.toAmount);
+      const bAmount = safeParseFloat(b.toAmount);
+      return bAmount - aAmount;
     });
   }
 
@@ -229,9 +251,9 @@ export class BridgeAggregator {
    */
   private sortByFee(quotes: BridgeQuote[]): BridgeQuote[] {
     return [...quotes].sort((a, b) => {
-      const aFee = BigInt(a.totalFee || '0');
-      const bFee = BigInt(b.totalFee || '0');
-      return aFee < bFee ? -1 : aFee > bFee ? 1 : 0;
+      const aFee = safeParseFloat(a.totalFee);
+      const bFee = safeParseFloat(b.totalFee);
+      return aFee - bFee;
     });
   }
 
@@ -240,14 +262,14 @@ export class BridgeAggregator {
    */
   private sortByTime(quotes: BridgeQuote[]): BridgeQuote[] {
     return [...quotes].sort((a, b) => {
-      const aTime = a.estimatedTime?.max || 60;
-      const bTime = b.estimatedTime?.max || 60;
+      const aTime = a.estimatedTime?.max ?? 60;
+      const bTime = b.estimatedTime?.max ?? 60;
       return aTime - bTime;
     });
   }
 
   /**
-   * Get recommended quote based on preferences
+   * Get recommended quote based on preferences priority
    */
   private getRecommendedQuote(
     quotes: BridgeQuote[],
@@ -259,61 +281,71 @@ export class BridgeAggregator {
 
     switch (preferences.priority) {
       case 'cost':
-        return this.sortByFee(quotes)[0] as BridgeQuote;
-      
+        return this.sortByFee(quotes)[0];
+
       case 'speed':
-        return this.sortByTime(quotes)[0] as BridgeQuote;
-      
+        return this.sortByTime(quotes)[0];
+
       case 'reliability':
-        return [...quotes].sort((a, b) => b.confidence - a.confidence)[0] as BridgeQuote;
-      
+        return [...quotes].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0];
+
       case 'balanced':
       default:
-        // Score based on multiple factors
-        return this.scoreQuotes(quotes, preferences)[0] as BridgeQuote;
+        return this.scoreQuotes(quotes, preferences)[0];
     }
   }
 
   /**
-   * Score quotes based on multiple factors
+   * Score quotes based on balanced criteria
    */
   private scoreQuotes(
     quotes: BridgeQuote[],
     _preferences: BridgePreferences
   ): BridgeQuote[] {
-    const scored = quotes.map(quote => {
+    if (quotes.length === 0) return [];
+
+    const outputs = quotes.map((q) => safeParseFloat(q.toAmount));
+    const fees = quotes.map((q) => safeParseFloat(q.totalFee));
+    const times = quotes.map((q) => q.estimatedTime?.max ?? 60);
+
+    const maxOutput = Math.max(...outputs);
+    const minFee = Math.min(...fees);
+    const maxFee = Math.max(...fees);
+    const minTime = Math.min(...times);
+    const maxTime = Math.max(...times);
+
+    const scored = quotes.map((quote) => {
       let score = 0;
-      
-      // Output amount score (0-40 points)
-      const maxOutput = Math.max(...quotes.map(q => Number(q.toAmount)));
-      const outputScore = maxOutput > 0 
-        ? (Number(quote.toAmount) / maxOutput) * 40 
-        : 0;
+
+      // 1. Output amount score (0-40 points)
+      const currentOutput = safeParseFloat(quote.toAmount);
+      const outputScore = maxOutput > 0 ? (currentOutput / maxOutput) * 40 : 0;
       score += outputScore;
-      
-      // Fee score (0-25 points)
-      const minFee = Math.min(...quotes.map(q => Number(q.totalFee || '0')));
-      const feeScore = quote.totalFee && Number(quote.totalFee) > 0
-        ? (1 - Number(quote.totalFee) / Math.max(Number(quote.totalFee), minFee)) * 25
-        : 25;
-      score += feeScore;
-      
-      // Speed score (0-20 points)
-      const minTime = Math.min(...quotes.map(q => q.estimatedTime?.max || 60));
-      const timeScore = quote.estimatedTime?.max
-        ? (1 - quote.estimatedTime.max / Math.max(quote.estimatedTime.max, minTime)) * 20
-        : 10;
-      score += timeScore;
-      
-      // Reliability score (0-15 points)
-      score += (quote.confidence / 100) * 15;
+
+      // 2. Fee score (0-25 points - lower is better)
+      const currentFee = safeParseFloat(quote.totalFee);
+      let feeScore = 25;
+      if (maxFee > minFee) {
+        feeScore = (1 - (currentFee - minFee) / (maxFee - minFee)) * 25;
+      }
+      score += Math.max(0, feeScore);
+
+      // 3. Speed score (0-20 points - lower is better)
+      const currentTime = quote.estimatedTime?.max ?? 60;
+      let timeScore = 20;
+      if (maxTime > minTime) {
+        timeScore = (1 - (currentTime - minTime) / (maxTime - minTime)) * 20;
+      }
+      score += Math.max(0, timeScore);
+
+      // 4. Reliability score (0-15 points)
+      const confidence = quote.confidence ?? 100;
+      score += (confidence / 100) * 15;
 
       return { quote, score };
     });
 
-    return scored
-      .sort((a, b) => b.score - a.score)
-      .map(s => s.quote);
+    return scored.sort((a, b) => b.score - a.score).map((s) => s.quote);
   }
 
   /**
@@ -344,7 +376,7 @@ export class BridgeAggregator {
 // Export singleton instance
 export const bridgeAggregator = new BridgeAggregator();
 
-// Export convenience functions
+// Export convenience helper functions
 export async function getAggregatedQuotes(
   request: BridgeQuoteRequestWithPrefs
 ): Promise<AggregatedQuote> {

@@ -1,9 +1,10 @@
 /**
  * Route Optimizer Service
- * Optimizes cross-chain routes based on user preferences and market conditions
+ * Optimizes cross-chain routes based on user preferences, market conditions,
+ * and historical bridge reliability.
  */
 
-import { BridgeQuote } from './bridges/base-bridge-adapter';
+import { BridgeQuote } from './bridges';
 import { BridgePreferences, DEFAULT_BRIDGE_PREFERENCES } from '../config/bridge-config';
 
 // Route optimization result
@@ -37,8 +38,17 @@ export interface RouteOptimizationOptions {
 }
 
 /**
+ * Safely parses values to prevent NaN propagation during scoring calculations
+ */
+function safeParseFloat(val: string | number | undefined | null, fallback = 0): number {
+  if (val === undefined || val === null) return fallback;
+  const parsed = typeof val === 'number' ? val : parseFloat(val);
+  return isNaN(parsed) ? fallback : parsed;
+}
+
+/**
  * Route Optimizer Class
- * Analyzes and optimizes cross-chain routes
+ * Analyzes, filters, and ranks cross-chain routes
  */
 export class RouteOptimizer {
   /**
@@ -51,11 +61,11 @@ export class RouteOptimizer {
     const prefs = options.preferences || DEFAULT_BRIDGE_PREFERENCES;
     
     // Filter quotes based on options
-    let filteredQuotes = this.filterQuotes(quotes, options);
+    const filteredQuotes = this.filterQuotes(quotes, options);
     
     // Score each route
     const scoredRoutes = filteredQuotes.map(quote => 
-      this.scoreRoute(quote, quotes, prefs)
+      this.scoreRoute(quote, filteredQuotes, prefs)
     );
     
     // Sort by score (descending)
@@ -71,34 +81,26 @@ export class RouteOptimizer {
   ): RouteComparison {
     const optimizedRoutes = this.optimizeRoutes(quotes, options);
     
+    // Graceful fallback for empty arrays to prevent frontend crashes
     if (optimizedRoutes.length === 0) {
+      const fallbackRoute = this.createFallbackRoute(quotes[0]);
       return {
         routes: [],
-        fastestRoute: optimizedRoutes[0] as OptimizedRoute,
-        cheapestRoute: optimizedRoutes[0] as OptimizedRoute,
-        bestValueRoute: optimizedRoutes[0] as OptimizedRoute,
-        recommendedRoute: optimizedRoutes[0] as OptimizedRoute,
+        fastestRoute: fallbackRoute,
+        cheapestRoute: fallbackRoute,
+        bestValueRoute: fallbackRoute,
+        recommendedRoute: fallbackRoute,
       };
     }
 
-    // Find fastest route
-    const fastestRoute = this.findFastestRoute(quotes);
-    
-    // Find cheapest route
-    const cheapestRoute = this.findCheapestRoute(quotes);
-    
-    // Find best value (output vs fee)
-    const bestValueRoute = this.findBestValueRoute(quotes);
-    
-    // Recommended is the highest scored
-    const recommendedRoute = optimizedRoutes[0] as OptimizedRoute;
+    const validQuotes = optimizedRoutes.map(opt => opt.quote);
 
     return {
       routes: optimizedRoutes,
-      fastestRoute,
-      cheapestRoute,
-      bestValueRoute,
-      recommendedRoute,
+      fastestRoute: this.findFastestRoute(validQuotes),
+      cheapestRoute: this.findCheapestRoute(validQuotes),
+      bestValueRoute: this.findBestValueRoute(validQuotes),
+      recommendedRoute: optimizedRoutes[0],
     };
   }
 
@@ -140,15 +142,16 @@ export class RouteOptimizer {
    * Calculate output amount score (0-100)
    */
   private calculateOutputScore(quote: BridgeQuote, allQuotes: BridgeQuote[]): number {
-    if (allQuotes.length === 0) return 50;
+    if (allQuotes.length <= 1) return 100;
     
-    const amounts = allQuotes.map(q => Number(q.toAmount));
+    const amounts = allQuotes.map(q => safeParseFloat(q.toAmount));
     const maxAmount = Math.max(...amounts);
     const minAmount = Math.min(...amounts);
     
-    if (maxAmount === minAmount) return 50;
+    if (maxAmount === minAmount) return 100;
     
-    const score = ((Number(quote.toAmount) - minAmount) / (maxAmount - minAmount)) * 100;
+    const currentAmount = safeParseFloat(quote.toAmount);
+    const score = ((currentAmount - minAmount) / (maxAmount - minAmount)) * 100;
     return Math.max(0, Math.min(100, score));
   }
 
@@ -156,15 +159,15 @@ export class RouteOptimizer {
    * Calculate fee score (0-100) - lower fees = higher score
    */
   private calculateFeeScore(quote: BridgeQuote, allQuotes: BridgeQuote[]): number {
-    if (allQuotes.length === 0) return 50;
+    if (allQuotes.length <= 1) return 100;
     
-    const fees = allQuotes.map(q => Number(q.totalFee || '0'));
+    const fees = allQuotes.map(q => safeParseFloat(q.totalFee));
     const maxFee = Math.max(...fees);
     const minFee = Math.min(...fees);
     
-    if (maxFee === minFee) return 50;
+    if (maxFee === minFee) return 100;
     
-    const currentFee = Number(quote.totalFee || '0');
+    const currentFee = safeParseFloat(quote.totalFee);
     const score = ((maxFee - currentFee) / (maxFee - minFee)) * 100;
     return Math.max(0, Math.min(100, score));
   }
@@ -173,13 +176,13 @@ export class RouteOptimizer {
    * Calculate speed score (0-100) - faster = higher score
    */
   private calculateSpeedScore(quote: BridgeQuote, allQuotes: BridgeQuote[]): number {
-    if (allQuotes.length === 0) return 50;
+    if (allQuotes.length <= 1) return 100;
     
     const times = allQuotes.map(q => q.estimatedTime?.max || 60);
     const maxTime = Math.max(...times);
     const minTime = Math.min(...times);
     
-    if (maxTime === minTime) return 50;
+    if (maxTime === minTime) return 100;
     
     const currentTime = quote.estimatedTime?.max || 60;
     const score = ((maxTime - currentTime) / (maxTime - minTime)) * 100;
@@ -226,30 +229,30 @@ export class RouteOptimizer {
 
     // Filter by include list
     if (options.includeBridges && options.includeBridges.length > 0) {
-      filtered = filtered.filter(q => 
-        options.includeBridges!.includes(q.bridge)
-      );
+      const includes = new Set(options.includeBridges);
+      filtered = filtered.filter(q => includes.has(q.bridge));
     }
 
     // Filter by exclude list
     if (options.excludeBridges && options.excludeBridges.length > 0) {
-      filtered = filtered.filter(q => 
-        !options.excludeBridges!.includes(q.bridge)
-      );
+      const excludes = new Set(options.excludeBridges);
+      filtered = filtered.filter(q => !excludes.has(q.bridge));
     }
 
-    // Filter by slippage
-    if (options.maxSlippage) {
+    // Filter by max acceptable slippage
+    if (options.maxSlippage !== undefined) {
       filtered = filtered.filter(q => {
-        const rate = parseFloat(q.rate || '0');
-        const expected = parseFloat(q.fromAmount);
-        if (expected === 0) return true;
-        const slippage = Math.abs((Number(q.toAmount) / expected - rate) / rate) * 100;
+        const rate = safeParseFloat(q.rate);
+        const expected = safeParseFloat(q.fromAmount);
+        if (expected === 0 || rate === 0) return true;
+        
+        const output = safeParseFloat(q.toAmount);
+        const slippage = Math.abs((output / expected - rate) / rate) * 100;
         return slippage <= options.maxSlippage!;
       });
     }
 
-    // Filter by instant if preferred
+    // Filter by instant execution if preferred
     const prefs = options.preferences || DEFAULT_BRIDGE_PREFERENCES;
     if (prefs.instantOnly) {
       filtered = filtered.filter(q => q.instant);
@@ -266,17 +269,7 @@ export class RouteOptimizer {
       (a.estimatedTime?.max || 60) - (b.estimatedTime?.max || 60)
     );
     
-    return {
-      quote: sorted[0] as BridgeQuote,
-      score: 100,
-      breakdown: {
-        outputScore: 0,
-        feeScore: 0,
-        speedScore: 100,
-        reliabilityScore: 0,
-      },
-      reasons: ['Fastest execution time'],
-    };
+    return this.createMockOptimizedRoute(sorted[0], ['Fastest execution time'], { speedScore: 100 });
   }
 
   /**
@@ -284,20 +277,10 @@ export class RouteOptimizer {
    */
   private findCheapestRoute(quotes: BridgeQuote[]): OptimizedRoute {
     const sorted = [...quotes].sort((a, b) => 
-      Number(a.totalFee || '0') - Number(b.totalFee || '0')
+      safeParseFloat(a.totalFee) - safeParseFloat(b.totalFee)
     );
     
-    return {
-      quote: sorted[0] as BridgeQuote,
-      score: 100,
-      breakdown: {
-        outputScore: 0,
-        feeScore: 100,
-        speedScore: 0,
-        reliabilityScore: 0,
-      },
-      reasons: ['Lowest fees'],
-    };
+    return this.createMockOptimizedRoute(sorted[0], ['Lowest fees'], { feeScore: 100 });
   }
 
   /**
@@ -305,24 +288,37 @@ export class RouteOptimizer {
    */
   private findBestValueRoute(quotes: BridgeQuote[]): OptimizedRoute {
     const withValue = quotes.map(q => {
-      const output = Number(q.toAmount);
-      const fee = Number(q.totalFee || '1');
-      const value = output / fee;
-      return { quote: q, value: isFinite(value) ? value : 0 };
+      const output = safeParseFloat(q.toAmount);
+      const fee = safeParseFloat(q.totalFee);
+      // Clamp fee to a minimum > 0 to prevent division by zero / Infinity
+      const clampedFee = Math.max(fee, 0.000001); 
+      return { quote: q, value: output / clampedFee };
     });
     
     const sorted = withValue.sort((a, b) => b.value - a.value);
     
+    return this.createMockOptimizedRoute(sorted[0].quote, ['Best value for money'], { outputScore: 50, feeScore: 50 });
+  }
+
+  /**
+   * Helper to build manual OptimizedRoutes for the comparators
+   */
+  private createMockOptimizedRoute(
+    quote: BridgeQuote, 
+    reasons: string[], 
+    overrides: Partial<OptimizedRoute['breakdown']>
+  ): OptimizedRoute {
     return {
-      quote: sorted[0]!.quote,
+      quote,
       score: 100,
       breakdown: {
-        outputScore: 50,
-        feeScore: 50,
+        outputScore: 0,
+        feeScore: 0,
         speedScore: 0,
         reliabilityScore: 0,
+        ...overrides
       },
-      reasons: ['Best value for money'],
+      reasons,
     };
   }
 
@@ -335,23 +331,12 @@ export class RouteOptimizer {
   ): string[] {
     const reasons: string[] = [];
 
-    if (breakdown.outputScore >= 80) {
-      reasons.push('Best output amount');
-    }
-    
-    if (breakdown.feeScore >= 80) {
-      reasons.push('Lowest fees');
-    }
-    
-    if (breakdown.speedScore >= 80) {
-      reasons.push('Fastest execution');
-    }
-    
-    if (breakdown.reliabilityScore >= 90) {
-      reasons.push('Most reliable bridge');
-    }
+    if (breakdown.outputScore >= 80) reasons.push('Best output amount');
+    if (breakdown.feeScore >= 80) reasons.push('Lowest fees');
+    if (breakdown.speedScore >= 80) reasons.push('Fastest execution');
+    if (breakdown.reliabilityScore >= 90) reasons.push('Highly reliable bridge');
 
-    // Add preference-based reason
+    // Add preference-based context
     switch (preferences.priority) {
       case 'cost':
         if (!reasons.includes('Lowest fees')) reasons.push('Optimized for cost');
@@ -360,7 +345,7 @@ export class RouteOptimizer {
         if (!reasons.includes('Fastest execution')) reasons.push('Optimized for speed');
         break;
       case 'reliability':
-        if (!reasons.includes('Most reliable bridge')) reasons.push('Optimized for reliability');
+        if (!reasons.includes('Highly reliable bridge')) reasons.push('Optimized for reliability');
         break;
       default:
         reasons.push('Balanced optimization');
@@ -377,7 +362,6 @@ export class RouteOptimizer {
     averageFee: string;
     averageTime: number;
     bestBridge: string;
-    popularRoutes: Array<{ from: string; to: string; count: number }>;
   } {
     if (quotes.length === 0) {
       return {
@@ -385,25 +369,51 @@ export class RouteOptimizer {
         averageFee: '0',
         averageTime: 0,
         bestBridge: 'N/A',
-        popularRoutes: [],
       };
     }
 
-    const totalOutput = quotes.reduce((sum, q) => sum + Number(q.toAmount), 0);
-    const totalFee = quotes.reduce((sum, q) => sum + Number(q.totalFee || '0'), 0);
+    const totalOutput = quotes.reduce((sum, q) => sum + safeParseFloat(q.toAmount), 0);
+    const totalFee = quotes.reduce((sum, q) => sum + safeParseFloat(q.totalFee), 0);
     const totalTime = quotes.reduce((sum, q) => sum + (q.estimatedTime?.max || 0), 0);
 
-    // Find most reliable bridge
     const bestBridge = [...quotes].sort((a, b) => 
       (b.confidence || 0) - (a.confidence || 0)
     )[0]?.bridge || 'N/A';
 
     return {
-      averageOutput: (totalOutput / quotes.length).toFixed(2),
+      averageOutput: (totalOutput / quotes.length).toFixed(4),
       averageFee: (totalFee / quotes.length).toFixed(6),
       averageTime: Math.round(totalTime / quotes.length),
       bestBridge,
-      popularRoutes: [],
+    };
+  }
+
+  /**
+   * Fallback empty state for RouteComparison gracefully.
+   */
+  private createFallbackRoute(seedQuote?: BridgeQuote): OptimizedRoute {
+    return {
+      quote: seedQuote || {
+        bridge: 'none',
+        displayName: 'No Routes Available',
+        fromChain: '0',
+        toChain: '0',
+        fromToken: '',
+        toToken: '',
+        fromAmount: '0',
+        toAmount: '0',
+        rate: '0',
+        gasEstimate: '0',
+        gasFee: '0',
+        bridgeFee: '0',
+        totalFee: '0',
+        estimatedTime: { min: 0, max: 0 },
+        instant: false,
+        confidence: 0,
+      },
+      score: 0,
+      breakdown: { outputScore: 0, feeScore: 0, speedScore: 0, reliabilityScore: 0 },
+      reasons: ['No viable routes found matching criteria'],
     };
   }
 }

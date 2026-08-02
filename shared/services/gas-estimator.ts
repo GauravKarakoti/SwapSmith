@@ -1,20 +1,23 @@
-// Gas Estimator Service
-// Provides real-time gas price estimation and optimization recommendations
+/**
+ * Gas Estimator Service
+ * Provides real-time gas price estimation, historical trend prediction, 
+ * and cost optimization recommendations for SwapSmith routing.
+ */
 
 import { GAS_CONFIG, calculateGasSavings } from '../config/gas-config';
 import { gasEstimates, gasOptimizationHistory } from '../schema';
 import { eq, and, desc, gt } from 'drizzle-orm';
 import { createHash } from 'crypto';
 
-// Database type
+// ---------------------------------------------------------------------------
+// Types & Interfaces
+// ---------------------------------------------------------------------------
 
-interface Database {
+export interface Database {
   select: () => any;
-  insert: (table: any) => { values: (data: any) => Promise<any> };
+  insert: (table: any) => { values: (data: Record<string, unknown>) => Promise<unknown> };
 }
 
-
-// Types
 export interface GasEstimate {
   chain: string;
   network: string;
@@ -56,7 +59,10 @@ export interface GasOptimizationResult {
   estimatedExecutionTime?: Date;
 }
 
-// Cache management
+// ---------------------------------------------------------------------------
+// Cache Management
+// ---------------------------------------------------------------------------
+
 const memoryCache = new Map<string, { data: GasEstimate; expires: Date }>();
 
 function getCacheKey(chain: string, network: string): string {
@@ -67,11 +73,11 @@ function getCachedEstimate(chain: string, network: string): GasEstimate | null {
   const key = getCacheKey(chain, network);
   const cached = memoryCache.get(key);
   
-  if (cached && cached.expires > new Date()) {
-    return cached.data;
-  }
-  
   if (cached) {
+    if (cached.expires > new Date()) {
+      return cached.data;
+    }
+    // Purge expired entry to prevent memory leaks
     memoryCache.delete(key);
   }
   
@@ -84,16 +90,18 @@ function setCachedEstimate(estimate: GasEstimate): void {
   memoryCache.set(key, { data: estimate, expires });
 }
 
-// Database instance - will be injected
+// ---------------------------------------------------------------------------
+// Database Operations
+// ---------------------------------------------------------------------------
+
 let db: Database | null = null;
 
 export function setDatabase(database: Database): void {
   db = database;
 }
 
-// Database cache operations
 async function getDatabaseCache(chain: string, network: string): Promise<GasEstimate | null> {
-  if (typeof db === 'undefined' || !db) return null;
+  if (!db) return null;
 
   try {
     const results = await db
@@ -109,7 +117,7 @@ async function getDatabaseCache(chain: string, network: string): Promise<GasEsti
       .orderBy(desc(gasEstimates.createdAt))
       .limit(1);
     
-    if (results.length > 0) {
+    if (results && results.length > 0) {
       const row = results[0];
       return {
         chain: row.chain,
@@ -126,14 +134,14 @@ async function getDatabaseCache(chain: string, network: string): Promise<GasEsti
       };
     }
   } catch (error) {
-    console.error('Error fetching gas estimate from database:', error);
+    console.error(`[DB Cache] Error fetching gas estimate for ${chain}:`, error);
   }
   
   return null;
 }
 
 async function saveToDatabaseCache(estimate: GasEstimate): Promise<void> {
-  if (typeof db === 'undefined' || !db) return;
+  if (!db) return;
 
   try {
     await db.insert(gasEstimates).values({
@@ -149,14 +157,16 @@ async function saveToDatabaseCache(estimate: GasEstimate): Promise<void> {
       expiresAt: estimate.expiresAt,
     });
   } catch (error) {
-    console.error('Error saving gas estimate to database:', error);
+    console.error(`[DB Cache] Error saving gas estimate for ${estimate.chain}:`, error);
   }
 }
 
-// Gas price fetching from Gelato
+// ---------------------------------------------------------------------------
+// External API Fetchers
+// ---------------------------------------------------------------------------
+
 async function fetchFromGelato(chain: string): Promise<Partial<GasEstimate> | null> {
   try {
-    // Dynamic import to avoid module resolution issues
     const axios = await import('axios').then(m => m.default || m);
     const response = await axios.get(
       `${GAS_CONFIG.APIS.GELATO.BASE_URL}${GAS_CONFIG.APIS.GELATO.ENDPOINTS.GAS_PRICE}/${chain}`,
@@ -179,32 +189,30 @@ async function fetchFromGelato(chain: string): Promise<Partial<GasEstimate> | nu
       estimatedTimeSeconds: data.estimatedTime || 30,
     };
   } catch (error) {
-    console.warn('Gelato API error:', error);
+    console.warn(`[API Fetch] Gelato API error for ${chain}:`, error instanceof Error ? error.message : String(error));
     return null;
   }
 }
 
-
 async function fetchFromProvider(_chain: string, _network: string): Promise<Partial<GasEstimate> | null> {
-  // This would integrate with your existing provider (e.g., Infura, Alchemy, viem, ethers.js)
-  // For now, return null to use fallback
+  // Placeholder for direct RPC provider integration (Infura/Alchemy/Viem)
   return null;
 }
 
-// Main gas estimation function
+// ---------------------------------------------------------------------------
+// Core Estimation Logic
+// ---------------------------------------------------------------------------
+
 export async function getGasEstimate(
   chain: string,
   network: string = 'mainnet',
   useCache: boolean = true
 ): Promise<GasEstimate> {
-  // Check memory cache first
+  
   if (useCache) {
     const cached = getCachedEstimate(chain, network);
     if (cached) return cached;
-  }
-  
-  // Check database cache
-  if (useCache) {
+
     const dbCached = await getDatabaseCache(chain, network);
     if (dbCached) {
       setCachedEstimate(dbCached);
@@ -214,14 +222,13 @@ export async function getGasEstimate(
   
   const estimates: Partial<GasEstimate>[] = [];
   
-  // Try multiple sources in order of priority
   const gelato = await fetchFromGelato(chain);
   if (gelato) estimates.push(gelato);
   
   const provider = await fetchFromProvider(chain, network);
   if (provider) estimates.push(provider);
   
-  // If no estimates fetched, use fallback
+  // Fallback if APIs fail
   if (estimates.length === 0) {
     const fallbackPrice = GAS_CONFIG.GAS_PRICE_THRESHOLDS[chain as keyof typeof GAS_CONFIG.GAS_PRICE_THRESHOLDS]?.medium || 50;
     estimates.push({
@@ -232,12 +239,11 @@ export async function getGasEstimate(
     });
   }
   
-  // Use the best estimate (highest confidence)
+  // Select highest confidence estimate
   const bestEstimate = estimates.reduce((best, current) => 
     (current.confidence || 0) > (best.confidence || 0) ? current : best
   );
   
-  // Build full estimate
   const fullEstimate: GasEstimate = {
     chain,
     network,
@@ -252,20 +258,16 @@ export async function getGasEstimate(
     expiresAt: new Date(Date.now() + GAS_CONFIG.CACHE_TTL_SECONDS * 1000),
   };
   
-  // Cache the result
   setCachedEstimate(fullEstimate);
   await saveToDatabaseCache(fullEstimate);
   
   return fullEstimate;
 }
 
-// Get gas estimates for multiple chains
-export async function getMultiChainGasEstimates(
-  chains: string[]
-): Promise<GasEstimate[]> {
+export async function getMultiChainGasEstimates(chains: string[]): Promise<GasEstimate[]> {
   const promises = chains.map(chain => 
     getGasEstimate(chain).catch(error => {
-      console.error(`Error fetching gas estimate for ${chain}:`, error);
+      console.error(`[Gas Estimator] Failed multichain fetch for ${chain}:`, error);
       return null;
     })
   );
@@ -274,11 +276,11 @@ export async function getMultiChainGasEstimates(
   return results.filter((estimate): estimate is GasEstimate => estimate !== null);
 }
 
-// Compare gas prices across chains
-export async function compareGasPrices(
-  fromChain: string,
-  toChain: string
-): Promise<GasComparison> {
+// ---------------------------------------------------------------------------
+// Analysis & Optimization
+// ---------------------------------------------------------------------------
+
+export async function compareGasPrices(fromChain: string, toChain: string): Promise<GasComparison> {
   const [fromEstimate, toEstimate] = await Promise.all([
     getGasEstimate(fromChain),
     getGasEstimate(toChain),
@@ -297,15 +299,15 @@ export async function compareGasPrices(
   }
   
   let recommendation: GasComparison['recommendation'] = 'execute_now';
-  let reason = 'Gas prices are optimal for execution';
+  let reason = 'Gas prices are optimal for execution.';
   
   if (savings.percent > 20) {
     if (fromPrice > toPrice) {
       recommendation = 'wait';
-      reason = `Gas prices on ${fromChain} are ${savings.percent.toFixed(1)}% higher than ${toChain}. Consider waiting for lower prices.`;
+      reason = `Gas prices on ${fromChain} are ${savings.percent.toFixed(1)}% higher than ${toChain}. Consider waiting for a drop.`;
     } else {
       recommendation = 'execute_now';
-      reason = `Gas prices on ${fromChain} are ${savings.percent.toFixed(1)}% lower than ${toChain}. Good time to execute!`;
+      reason = `Gas prices on ${fromChain} are ${savings.percent.toFixed(1)}% lower than ${toChain}. Optimal execution window.`;
     }
   }
   
@@ -322,7 +324,6 @@ export async function compareGasPrices(
   };
 }
 
-// Get optimization recommendations
 export async function getOptimizationRecommendation(
   chain: string,
   userGasToken?: string,
@@ -331,7 +332,6 @@ export async function getOptimizationRecommendation(
   const currentEstimate = await getGasEstimate(chain);
   const currentPrice = parseFloat(currentEstimate.gasPrice);
   
-  // Get chain thresholds
   const thresholds = GAS_CONFIG.GAS_PRICE_THRESHOLDS[chain as keyof typeof GAS_CONFIG.GAS_PRICE_THRESHOLDS];
   
   if (!thresholds) {
@@ -344,17 +344,15 @@ export async function getOptimizationRecommendation(
     };
   }
   
-  // Check if current gas is high
   const isHighGas = currentPrice > thresholds.high;
   const isMediumGas = currentPrice > thresholds.medium;
   
-  // Calculate potential savings
   let optimizedPrice = currentPrice;
   let method: GasOptimizationResult['method'] = 'none';
   let gasToken: string | undefined;
   let batchId: string | undefined;
   
-  // Check gas token optimization
+  // 1. Check gas token discounts (e.g., CHI, native protocol tokens)
   if (userGasToken) {
     const tokenConfig = GAS_CONFIG.GAS_TOKENS[userGasToken as keyof typeof GAS_CONFIG.GAS_TOKENS];
     if (tokenConfig && tokenConfig.supportedChains.includes(chain)) {
@@ -365,14 +363,13 @@ export async function getOptimizationRecommendation(
     }
   }
   
-  // Check timing optimization
+  // 2. Check timing optimization (Wait for congestion drop)
   if (isHighGas && method === 'none') {
-    // Predict that gas will drop in the next hour
-    optimizedPrice = currentPrice * 0.8; // Assume 20% drop
+    optimizedPrice = currentPrice * 0.8; // Assume a conservative 20% drop post-congestion
     method = 'timing';
   }
   
-  // Check batching optimization
+  // 3. Check batching capability 
   if (allowBatching && isMediumGas) {
     const batchSavings = GAS_CONFIG.BATCHING.GAS_SAVINGS_PERCENT / 100;
     const batchedPrice = currentPrice * (1 - batchSavings);
@@ -384,7 +381,6 @@ export async function getOptimizationRecommendation(
     }
   }
   
-  // Calculate savings
   const savings = calculateGasSavings(currentPrice, optimizedPrice);
   
   return {
@@ -402,27 +398,18 @@ export async function getOptimizationRecommendation(
     gasToken,
     batchId,
     estimatedExecutionTime: method === 'timing' 
-      ? new Date(Date.now() + 60 * 60 * 1000) // 1 hour later
+      ? new Date(Date.now() + 60 * 60 * 1000) 
       : undefined,
   };
 }
 
-// Predict gas price trends
-export async function predictGasPrice(
-  chain: string,
-  _hoursAhead: number = 1
-): Promise<{
+export async function predictGasPrice(chain: string, _hoursAhead: number = 1): Promise<{
   predictedPrice: string;
   confidence: number;
   trend: 'rising' | 'falling' | 'stable';
 }> {
-  // Get historical data
-  if (typeof db === 'undefined' || !db) {
-    return {
-      predictedPrice: '0',
-      confidence: 0,
-      trend: 'stable',
-    };
+  if (!db) {
+    return { predictedPrice: '0', confidence: 0, trend: 'stable' };
   }
   
   try {
@@ -431,56 +418,50 @@ export async function predictGasPrice(
       .from(gasEstimates)
       .where(eq(gasEstimates.chain, chain))
       .orderBy(desc(gasEstimates.createdAt))
-      .limit(24); // Last 24 data points
+      .limit(24); 
     
+    // Require sufficient data points for a meaningful prediction
     if (history.length < 6) {
-      return {
-        predictedPrice: '0',
-        confidence: 0,
-        trend: 'stable',
-      };
+      return { predictedPrice: '0', confidence: 0, trend: 'stable' };
     }
     
-    // Simple moving average prediction
     const prices: number[] = history.map((h: { gasPrice: string }) => parseFloat(h.gasPrice));
-    const avg: number = prices.reduce((a: number, b: number): number => a + b, 0) / prices.length;
+    const avg: number = prices.reduce((a, b) => a + b, 0) / prices.length;
     
-    // Calculate trend
-    const recent: number[] = prices.slice(0, 6);
-    const older: number[] = prices.slice(-6);
-    const recentAvg: number = recent.reduce((a: number, b: number): number => a + b, 0) / recent.length;
-    const olderAvg: number = older.reduce((a: number, b: number): number => a + b, 0) / older.length;
-
+    // Compare most recent quadrant to oldest quadrant
+    const splitIndex = Math.max(Math.floor(prices.length / 4), 1);
+    const recent: number[] = prices.slice(0, splitIndex);
+    const older: number[] = prices.slice(-splitIndex);
+    
+    const recentAvg: number = recent.reduce((a, b) => a + b, 0) / recent.length;
+    const olderAvg: number = older.reduce((a, b) => a + b, 0) / older.length;
     
     let trend: 'rising' | 'falling' | 'stable';
-    const change = ((recentAvg - olderAvg) / olderAvg) * 100;
+    const percentChange = ((recentAvg - olderAvg) / olderAvg) * 100;
     
-    if (change > 10) trend = 'rising';
-    else if (change < -10) trend = 'falling';
+    if (percentChange > 10) trend = 'rising';
+    else if (percentChange < -10) trend = 'falling';
     else trend = 'stable';
     
-    // Predict based on trend
     let predictedMultiplier = 1;
-    if (trend === 'rising') predictedMultiplier = 1.1;
-    else if (trend === 'falling') predictedMultiplier = 0.9;
+    if (trend === 'rising') predictedMultiplier = 1.15;
+    else if (trend === 'falling') predictedMultiplier = 0.85;
     
     return {
       predictedPrice: (avg * predictedMultiplier).toFixed(2),
-      confidence: Math.min(history.length * 4, 95), // Higher confidence with more data
+      confidence: Math.min(history.length * 4, 95), 
       trend,
     };
   } catch (error) {
-    console.error('Error predicting gas price:', error);
-    return {
-      predictedPrice: '0',
-      confidence: 0,
-      trend: 'stable',
-    };
+    console.error(`[Trend Predictor] Error predicting gas price for ${chain}:`, error);
+    return { predictedPrice: '0', confidence: 0, trend: 'stable' };
   }
 }
 
+// ---------------------------------------------------------------------------
+// Telemetry & Formatting Utils
+// ---------------------------------------------------------------------------
 
-// Record gas optimization in history
 export async function recordGasOptimization(
   userId: string,
   swapId: string,
@@ -492,7 +473,7 @@ export async function recordGasOptimization(
   optimizationType: string,
   metadata?: Record<string, unknown>
 ): Promise<void> {
-  if (typeof db === 'undefined' || !db) return;
+  if (!db) return;
 
   try {
     await db.insert(gasOptimizationHistory).values({
@@ -507,19 +488,14 @@ export async function recordGasOptimization(
       metadata: metadata || {},
     });
   } catch (error) {
-    console.error('Error recording gas optimization:', error);
+    console.error('[Telemetry] Error recording gas optimization:', error);
   }
 }
 
-// Format gas price for display
-export function formatGasPrice(
-  gasPrice: string,
-  unit: string = 'gwei',
-  _nativeCurrency: string = 'ETH'
-): string {
+export function formatGasPrice(gasPrice: string, unit: string = 'gwei', _nativeCurrency: string = 'ETH'): string {
   const price = parseFloat(gasPrice);
   
-  if (unit === 'gwei') {
+  if (unit.toLowerCase() === 'gwei') {
     if (price < 0.01) {
       return `${(price * 1000).toFixed(2)} wei`;
     } else if (price > 1000) {
@@ -531,14 +507,20 @@ export function formatGasPrice(
   return `${price} ${unit}`;
 }
 
-// Convert gas price to USD
 export function gasPriceToUsd(
   gasPrice: string,
   gasLimit: number = 21000,
-  nativePriceUsd: number
+  nativePriceUsd: number,
+  unit: 'gwei' | 'wei' | 'ether' = 'gwei'
 ): string {
   const price = parseFloat(gasPrice);
-  const costEth = (price * gasLimit) / 1e9;
+  
+  // Normalize everything to Ether mathematically
+  let costEth = 0;
+  if (unit === 'gwei') costEth = (price * gasLimit) / 1e9;
+  else if (unit === 'wei') costEth = (price * gasLimit) / 1e18;
+  else if (unit === 'ether') costEth = price * gasLimit;
+  
   const costUsd = costEth * nativePriceUsd;
   
   if (costUsd < 0.01) {
