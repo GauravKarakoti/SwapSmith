@@ -72,9 +72,6 @@ export class RouteOptimizer {
     return scoredRoutes.sort((a, b) => b.score - a.score);
   }
 
-  /**
-   * Compare multiple routes and provide recommendations
-   */
   compareRoutes(
     quotes: BridgeQuote[],
     options: RouteOptimizationOptions = {}
@@ -100,7 +97,7 @@ export class RouteOptimizer {
       fastestRoute: this.findFastestRoute(validQuotes),
       cheapestRoute: this.findCheapestRoute(validQuotes),
       bestValueRoute: this.findBestValueRoute(validQuotes),
-      recommendedRoute: optimizedRoutes[0],
+      recommendedRoute: optimizedRoutes[0]!, // <-- Add assertion here
     };
   }
 
@@ -261,15 +258,13 @@ export class RouteOptimizer {
     return filtered;
   }
 
-  /**
-   * Find fastest route
-   */
   private findFastestRoute(quotes: BridgeQuote[]): OptimizedRoute {
     const sorted = [...quotes].sort((a, b) => 
       (a.estimatedTime?.max || 60) - (b.estimatedTime?.max || 60)
     );
     
-    return this.createMockOptimizedRoute(sorted[0], ['Fastest execution time'], { speedScore: 100 });
+    // Add assertion here
+    return this.createMockOptimizedRoute(sorted[0]!, ['Fastest execution time'], { speedScore: 100 });
   }
 
   /**
@@ -280,7 +275,8 @@ export class RouteOptimizer {
       safeParseFloat(a.totalFee) - safeParseFloat(b.totalFee)
     );
     
-    return this.createMockOptimizedRoute(sorted[0], ['Lowest fees'], { feeScore: 100 });
+    // Add assertion here
+    return this.createMockOptimizedRoute(sorted[0]!, ['Lowest fees'], { feeScore: 100 });
   }
 
   /**
@@ -297,7 +293,8 @@ export class RouteOptimizer {
     
     const sorted = withValue.sort((a, b) => b.value - a.value);
     
-    return this.createMockOptimizedRoute(sorted[0].quote, ['Best value for money'], { outputScore: 50, feeScore: 50 });
+    // Add assertion here
+    return this.createMockOptimizedRoute(sorted[0]!.quote, ['Best value for money'], { outputScore: 50, feeScore: 50 });
   }
 
   /**

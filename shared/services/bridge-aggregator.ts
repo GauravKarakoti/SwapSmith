@@ -268,9 +268,6 @@ export class BridgeAggregator {
     });
   }
 
-  /**
-   * Get recommended quote based on preferences priority
-   */
   private getRecommendedQuote(
     quotes: BridgeQuote[],
     preferences: BridgePreferences
@@ -281,17 +278,17 @@ export class BridgeAggregator {
 
     switch (preferences.priority) {
       case 'cost':
-        return this.sortByFee(quotes)[0];
+        return this.sortByFee(quotes)[0]!;
 
       case 'speed':
-        return this.sortByTime(quotes)[0];
+        return this.sortByTime(quotes)[0]!;
 
       case 'reliability':
-        return [...quotes].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0];
+        return [...quotes].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0]!;
 
       case 'balanced':
       default:
-        return this.scoreQuotes(quotes, preferences)[0];
+        return this.scoreQuotes(quotes, preferences)[0]!;
     }
   }
 
