@@ -5,7 +5,6 @@ import { getPlatformAnalytics } from '@/lib/admin-service';
 
 export async function GET(req: NextRequest) {
   try {
-    // Authenticate via Firebase ID token
     const authHeader = req.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -28,7 +27,6 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Check admin role in DB
     const admin = await getAdminByFirebaseUid(decoded.uid);
     if (!admin) {
       return NextResponse.json({ error: 'Forbidden: Admin access required.' }, { status: 403 });

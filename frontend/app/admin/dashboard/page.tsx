@@ -76,7 +76,6 @@ function StatCard({ icon: Icon, label, value, sub, color }: {
   )
 }
 
-/** Simple horizontal bar chart rendered with CSS */
 function BarChartSimple({ data }: { data: { label: string; value: number }[] }) {
   const max = Math.max(...data.map(d => d.value), 1)
   return (
@@ -99,7 +98,6 @@ function BarChartSimple({ data }: { data: { label: string; value: number }[] }) 
   )
 }
 
-/** Simple sparkline for swaps-by-day */
 function SwapSparkline({ data }: { data: { date: string; count: number }[] }) {
   if (data.length < 2) return <div style={{ color: '#52525b', fontSize: 13 }}>Not enough data yet.</div>
   const max = Math.max(...data.map(d => d.count), 1)
@@ -163,11 +161,9 @@ export default function AdminDashboardPage() {
   }, [router])
 
   useEffect(() => {
-    // Load cached admin info immediately
     const cached = sessionStorage.getItem('admin-info')
     if (cached) { try { setAdminInfo(JSON.parse(cached)) } catch (error) { console.error('Error parsing cached admin info:', error) } }
     fetchAnalytics()
-    // Auto-refresh every 60 s
     const t = setInterval(fetchAnalytics, 60_000)
     return () => clearInterval(t)
   }, [fetchAnalytics])
@@ -175,7 +171,6 @@ export default function AdminDashboardPage() {
   const handleLogout = async () => {
     sessionStorage.removeItem('admin-token')
     sessionStorage.removeItem('admin-info')
-    // Clear the middleware cookie
     document.cookie = 'admin-session=; path=/; max-age=0; SameSite=Lax'
     if (auth) await signOut(auth)
     router.push('/admin/login')
@@ -187,7 +182,6 @@ export default function AdminDashboardPage() {
       : 0
     : 0
 
-  // ── Loading ────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: '#070710', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -200,7 +194,6 @@ export default function AdminDashboardPage() {
     )
   }
 
-  // ── Error ──────────────────────────────────────────────────────────────
   if (error) {
     return (
       <div style={{ minHeight: '100vh', background: '#070710', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -232,13 +225,11 @@ export default function AdminDashboardPage() {
 
       <div className="admin-content" style={{ maxWidth: '100%', margin: '0 auto', padding: '32px 24px' }}>
 
-        {/* ── Section title ─────────────────────────────────────────────── */}
         <div style={{ marginBottom: 28 }}>
           <h2 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Platform Analytics</h2>
           <p style={{ color: '#52525b', fontSize: 13, marginTop: 4 }}>Real-time overview of SwapSmith activity</p>
         </div>
 
-        {/* ── Top KPI cards ─────────────────────────────────────────────── */}
         <div className="admin-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 16, marginBottom: 32 }}>
           <StatCard icon={ArrowLeftRight} label="Total Swaps"         value={a.totalSwaps}        color="#2563eb" />
           <StatCard icon={Zap}             label="Swaps Today"         value={a.totalSwapsToday}   color="#7c3aed" sub={`${a.totalSwapsWeek} this week`} />
@@ -248,7 +239,6 @@ export default function AdminDashboardPage() {
           <StatCard icon={XCircle}         label="Failed Swaps"        value={a.failedCount}        color="#dc2626" />
         </div>
 
-        {/* ── Success / Fail rate bar ────────────────────────────────────── */}
         <div style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: 12, padding: '20px 24px', marginBottom: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>
@@ -268,7 +258,6 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* ── Swaps over time sparkline ─────────────────────────────────── */}
         <div style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: 12, padding: '20px 24px', marginBottom: 24 }}>
           <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 600 }}>
             <Activity size={16} style={{ display: 'inline', marginRight: 6, color: '#2563eb', verticalAlign: 'middle' }} />
@@ -285,7 +274,6 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* ── 2-col: top assets + top chains ───────────────────────────── */}
         <div className="admin-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
           <div style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: 12, padding: '20px 24px' }}>
             <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 600 }}>
@@ -310,7 +298,6 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* ── Recent swap activity log ──────────────────────────────────── */}
         <div style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: 12, padding: '20px 24px', marginBottom: 24 }}>
           <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 600 }}>
             <Clock size={16} style={{ display: 'inline', marginRight: 6, color: '#d97706', verticalAlign: 'middle' }} />
