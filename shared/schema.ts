@@ -553,46 +553,6 @@ export const rewardsLogRelations = relations(rewardsLog, ({ one }) => ({
   }),
 }));
 
-// --- TRADING STRATEGY RELATIONS ---
-// All strategy relations commented out until tables are implemented
-
-/*
-export const tradingStrategiesRelations = relations(tradingStrategies, ({ one, many }) => ({
-  creator: one(users, {
-    fields: [tradingStrategies.creatorId],
-    references: [users.id],
-  }),
-  subscriptions: many(strategySubscriptions),
-  trades: many(strategyTrades),
-  performance: many(strategyPerformance),
-}));
-
-export const strategySubscriptionsRelations = relations(strategySubscriptions, ({ one }) => ({
-  strategy: one(tradingStrategies, {
-    fields: [strategySubscriptions.strategyId],
-    references: [tradingStrategies.id],
-  }),
-  subscriber: one(users, {
-    fields: [strategySubscriptions.subscriberId],
-    references: [users.id],
-  }),
-}));
-
-export const strategyTradesRelations = relations(strategyTrades, ({ one }) => ({
-  strategy: one(tradingStrategies, {
-    fields: [strategyTrades.strategyId],
-    references: [tradingStrategies.id],
-  }),
-}));
-
-export const strategyPerformanceRelations = relations(strategyPerformance, ({ one }) => ({
-  strategy: one(tradingStrategies, {
-    fields: [strategyPerformance.strategyId],
-    references: [tradingStrategies.id],
-  }),
-}));
-*/
-
 // --- PLAN PURCHASES TABLE ---
 
 export const planPurchases = pgTable('plan_purchases', {
@@ -782,15 +742,17 @@ export const strategyTrades = pgTable('strategy_trades', {
   index("idx_strategy_trades_status").on(table.status),
 ]);
 
-// --- RELATIONS ---
-
-export const tradingStrategiesRelations = relations(tradingStrategies, ({many}) => ({
+export const tradingStrategiesRelations = relations(tradingStrategies, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [tradingStrategies.creatorId],
+    references: [users.id],
+  }),
   subscriptions: many(strategySubscriptions),
-  performance: many(strategyPerformance),
   trades: many(strategyTrades),
+  performance: many(strategyPerformance),
 }));
 
-export const strategySubscriptionsRelations = relations(strategySubscriptions, ({one}) => ({
+export const strategySubscriptionsRelations = relations(strategySubscriptions, ({ one }) => ({
   strategy: one(tradingStrategies, {
     fields: [strategySubscriptions.strategyId],
     references: [tradingStrategies.id],
@@ -801,16 +763,16 @@ export const strategySubscriptionsRelations = relations(strategySubscriptions, (
   }),
 }));
 
-export const strategyPerformanceRelations = relations(strategyPerformance, ({one}) => ({
+export const strategyTradesRelations = relations(strategyTrades, ({ one }) => ({
   strategy: one(tradingStrategies, {
-    fields: [strategyPerformance.strategyId],
+    fields: [strategyTrades.strategyId],
     references: [tradingStrategies.id],
   }),
 }));
 
-export const strategyTradesRelations = relations(strategyTrades, ({one}) => ({
+export const strategyPerformanceRelations = relations(strategyPerformance, ({ one }) => ({
   strategy: one(tradingStrategies, {
-    fields: [strategyTrades.strategyId],
+    fields: [strategyPerformance.strategyId],
     references: [tradingStrategies.id],
   }),
 }));

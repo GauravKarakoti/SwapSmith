@@ -21,8 +21,7 @@ contract AgentReputation is Ownable2Step {
 
     /**
      * @dev Using uint64 allows us to pack all three variables into a single 
-     *      256-bit storage slot (64 + 64 + 64 = 192 bits). This saves massive 
-     *      amounts of gas during state reads and writes.
+     *      256-bit storage slot (64 + 64 + 64 = 192 bits).
      *      Max uint64 is ~1.8e19, which is practically infinite for swap counts.
      */
     struct Reputation {
@@ -50,8 +49,7 @@ contract AgentReputation is Ownable2Step {
     // -----------------------------------------------------------------------
 
     /**
-     * @param initialOwner Address that will own the contract (usually the deployer).
-     *                     The owner determines which backend addresses can call recording functions.
+     * @param initialOwner Address that will own the contract (usually the SwapSmith backend).
      */
     constructor(address initialOwner) Ownable(initialOwner) {}
 
@@ -61,9 +59,8 @@ contract AgentReputation is Ownable2Step {
 
     /**
      * @notice Records the outcome of a swap executed by an agent.
-     * @dev    Only callable by the contract owner (SwapSmith backend wallet).
      * @param agent   Address of the agent/bot that executed the swap.
-     * @param success Boolean indicating if the swap was ultimately successful or failed/refunded.
+     * @param success Boolean indicating if the swap was ultimately successful.
      */
     function recordSwap(address agent, bool success) public onlyOwner {
         if (agent == address(0)) revert AgentReputation__InvalidAddress();
@@ -80,7 +77,6 @@ contract AgentReputation is Ownable2Step {
 
     /**
      * @notice Records multiple swap outcomes in a single transaction to save on gas overhead.
-     * @dev    Only callable by the contract owner.
      * @param agents    Array of agent addresses.
      * @param successes Array of booleans indicating swap outcomes.
      */
@@ -96,7 +92,6 @@ contract AgentReputation is Ownable2Step {
 
     /**
      * @notice Slashes an agent for malicious behavior (e.g., severe slippage, MEV exploitation).
-     * @dev    Only callable by the contract owner.
      * @param agent Address of the offending agent/bot.
      */
     function slashAgent(address agent) external onlyOwner {

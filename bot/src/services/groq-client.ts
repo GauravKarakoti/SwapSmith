@@ -1,8 +1,8 @@
 import Groq from "groq-sdk";
 import fs from 'fs';
 import logger, { handleError } from './logger';
-import { loadSecret } from '../../../shared/utils/secrets-loader';
-import { sanitizeLLMPrompt, validateAndSanitizeLLMInput } from '../../../shared/utils/validation';
+import { loadSecret } from '@shared/utils/secrets-loader';
+import { sanitizeLLMPrompt, validateAndSanitizeLLMInput } from '@shared/utils/validation';
 import type { ParsedCommand } from '../types/ParsedCommand';
 import type { ConversationMessage, GroqMessage } from '../types/Message';
 import { analyzeCommand, generateContextualHelp } from './contextual-help';
@@ -16,20 +16,23 @@ const SYSTEM_PROMPT = `
 You are SwapSmith, a highly deterministic DeFi AI agent. Parse natural language into strictly valid JSON.
 Do not include conversational filler, markdown formatting, or explanations. 
 
-SUPPORTED INTENTS: "swap", "portfolio", "checkout", "yield_scout", "yield_deposit", "yield_migrate", "dca", "limit_order", "swap_and_stake", "stake", "unknown".
+SUPPORTED INTENTS: "swap", "portfolio", "checkout", "yield_scout", "yield_deposit", "yield_migrate", "dca", "limit_order", "swap_and_stake", "stake", "bridge", "unknown".
 
 RULES:
 1. PRECISION: If ambiguous, set low confidence and requiresConfirmation: true.
 2. CONDITIONS: If "when", "if", "above", "below" are used, map to "conditions" object.
 3. STAKING AUTO-MAPPING: ETH->stETH (lido), SOL->mSOL (marinade), MATIC->stMATIC (lido). Default protocol is "lido".
-4. ADDRESS RESOLUTION: Addresses ending in .eth, .lens, or starting with 0x mapped to "settleAddress". E.g., "Swap 1 ETH to vitalik.eth" -> Keep ETH, send to vitalik.eth.
+4. CROSS-CHAIN: If the user mentions distinct source and destination networks (e.g., "Arbitrum to Optimism"), map them to fromNetwork and toNetwork.
+5. ADDRESS RESOLUTION: Addresses ending in .eth, .lens, or starting with 0x mapped to "settleAddress".
 
 RESPONSE SCHEMA:
 {
   "success": boolean,
   "intent": "string",
   "fromAsset": "string | null",
+  "fromNetwork": "string | null",
   "toAsset": "string | null",
+  "toNetwork": "string | null",
   "amount": "number | null",
   "amountType": "exact | percentage | all | null",
   "conditions": {
@@ -38,7 +41,7 @@ RESPONSE SCHEMA:
     "value": "number",
     "operator": "gt | lt | gte | lte | eq"
   } | null,
-  "portfolio": [{"toAsset": "string", "percentage": "number"}] | null,
+  "portfolio": [{"toAsset": "string", "percentage": "number", "network": "string"}] | null,
   "frequency": "daily | weekly | monthly | null",
   "settleAddress": "string | null",
   "stakeProtocol": "string | null",
